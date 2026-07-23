@@ -2100,3 +2100,16 @@ git commit -m "chore: Firebase Hosting config"
 - Render `barrio`/`descripcionSemana` is a stand-in for the missing dirección/teléfono/horario —
   revisit `ClienteCard` once the warehouse's real `DIAVISITA`/contact fields ship (see backend's
   `docs/superpowers/plans/2026-07-22-backend-findings.md` Step 2).
+- No runtime response validation exists anywhere in the API layer (`src/api/planificacion.ts`
+  trusts the backend's shape as-is) — `zod` is a dependency but has zero imports. Given the
+  backend contract already changed once mid-project (Tasks 7/8/14's correction), a future shape
+  drift would silently produce `undefined` fields rather than a clear error. Either wire `zod`
+  schemas into the unwrap layer, or drop the unused dependency.
+- `VersusView.tsx` is currently 100% unreachable — `AgendaSemanaPage` never passes `onVerVersus`
+  to `PropuestaSheet`, so the "Versus" button never renders. Wire it up when `VersusView` is
+  fleshed out against `/sale/analytics` (see the follow-up above).
+- `useGeolocation()` (the stateful hook wrapper in `src/hooks/useGeolocation.ts`) is tested but
+  unused — `AgendaSemanaPage` calls the underlying `getCurrentCoord()` directly. Keep or remove
+  depending on whether a future screen needs the `capturing` loading state.
+- `DIAS: Dia[]` is duplicated verbatim in `AgendaSemanaPage.tsx` and `DiaTabs.tsx` — worth
+  hoisting into a shared constant if a third place needs it.
