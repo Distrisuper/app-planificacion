@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
-import { useIniciarVisita } from './useVisitas'
+import { useIniciarVisita, useCerrarVisita } from './useVisitas'
 import * as api from '@/api/planificacion'
 
 vi.mock('@/api/planificacion')
@@ -23,4 +23,22 @@ it('useIniciarVisita calls the API and returns the visitaId', async () => {
         })
     })
     expect(out.visitaId).toBe(42)
+})
+
+it('useCerrarVisita calls cerrarVisita with the visitaId and body, and returns the result', async () => {
+    ;(api.cerrarVisita as any).mockResolvedValue({ seguimientoPendiente: false })
+    const { result } = renderHook(() => useCerrarVisita(), { wrapper })
+    let out: any
+    await waitFor(async () => {
+        out = await result.current.mutateAsync({
+            visitaId: 42,
+            coordFinal: '-34.6,-58.6',
+            motivoIds: [1, 4],
+        })
+    })
+    expect(api.cerrarVisita).toHaveBeenCalledWith(42, {
+        coordFinal: '-34.6,-58.6',
+        motivoIds: [1, 4],
+    })
+    expect(out.seguimientoPendiente).toBe(false)
 })

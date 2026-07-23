@@ -55,8 +55,8 @@ describe('apiClient response interceptor', () => {
         expect(reloadSpy).toHaveBeenCalledTimes(1)
     })
 
-    it('clears the token but does not reload when already on /login (avoids reload loop)', async () => {
-        window.location.pathname = '/login'
+    it('clears the token but does not reload when already on /sin-acceso (avoids reload loop)', async () => {
+        window.location.pathname = '/sin-acceso'
         const error = { response: { status: 401 } }
         const removeSpy = vi.spyOn(Storage.prototype, 'removeItem')
 

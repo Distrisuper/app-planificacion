@@ -24,7 +24,10 @@ apiClient.interceptors.response.use(
                 return Promise.reject(error)
             }
             localStorage.removeItem('access_token')
-            if (window.location.pathname !== '/login') {
+            // This app has no /login route — an expired/missing token routes to
+            // /sin-acceso (see ProtectedRoute.tsx). Avoid reloading there to prevent
+            // a reload loop if that screen ever makes an authenticated request.
+            if (window.location.pathname !== '/sin-acceso') {
                 window.location.reload()
             }
         }
