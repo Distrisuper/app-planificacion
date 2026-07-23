@@ -17,10 +17,12 @@ export function useVisitaActiva() {
 export function useIniciarVisita() {
     const qc = useQueryClient()
     return useMutation({
-        // iniciarVisita(dto) takes exactly one argument, matching what useMutation's
-        // mutationFn receives (the variables passed to mutate()/mutateAsync() — React
-        // Query v5 does NOT inject a context object into mutationFn the way it does
-        // for queryFn), so passing it directly is safe.
+        // iniciarVisita(dto) takes exactly one argument. React Query v5 does call
+        // mutationFn with a second MutationFunctionContext argument, but the first
+        // argument is always the real `variables` passed to mutate()/mutateAsync(),
+        // so a single-param function like this one just ignores the extra second
+        // arg — safe to pass directly (unlike queryFn, which gets ONLY a
+        // QueryFunctionContext as its one argument — see useAgenda.ts).
         mutationFn: iniciarVisita,
         onSuccess: () => qc.invalidateQueries({ queryKey: ['visita-activa'] }),
     })
