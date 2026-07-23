@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import BottomSheet from './ui/BottomSheet'
 import type { IMotivo } from '@/types/planificacion'
 
@@ -9,17 +9,35 @@ interface ResolucionSheetProps {
     onConfirm: (motivoIds: number[]) => void
     onClose: () => void
     submitting?: boolean
+    title?: string
+    eyebrow?: string
 }
 
-export default function ResolucionSheet({ open, motivos, confirmLabel, onConfirm, onClose, submitting }: ResolucionSheetProps) {
+export default function ResolucionSheet({
+    open,
+    motivos,
+    confirmLabel,
+    onConfirm,
+    onClose,
+    submitting,
+    title = 'Resolución',
+    eyebrow = 'Propuesta comercial',
+}: ResolucionSheetProps) {
     const [selected, setSelected] = useState<number[]>([])
+
+    // The sheet stays mounted across separate open sessions (callers toggle `open`
+    // rather than unmount it), so without this the previous visit's motivo
+    // selection would bleed into the next one.
+    useEffect(() => {
+        if (!open) setSelected([])
+    }, [open])
 
     function toggle(id: number) {
         setSelected(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]))
     }
 
     return (
-        <BottomSheet open={open} onClose={onClose} title="Resolución" eyebrow="Propuesta comercial">
+        <BottomSheet open={open} onClose={onClose} title={title} eyebrow={eyebrow}>
             <div className="flex flex-col gap-2">
                 {motivos.map(m => {
                     const on = selected.includes(m.motivoId)
