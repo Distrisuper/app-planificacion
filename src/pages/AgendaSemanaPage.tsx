@@ -6,7 +6,7 @@ import PropuestaSheet from '@/components/PropuestaSheet'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useMotivos } from '@/hooks/useMotivos'
-import { useIniciarVisita, useCerrarVisita, useVisitaActiva } from '@/hooks/useVisitas'
+import { useIniciarVisita, useCerrarVisita, useVisitaActiva, useNoVisita } from '@/hooks/useVisitas'
 import { getCurrentCoord } from '@/hooks/useGeolocation'
 import type { Dia, IAgendaClient } from '@/types/planificacion'
 
@@ -18,10 +18,12 @@ export default function AgendaSemanaPage() {
     const { data: visitaActiva } = useVisitaActiva()
     const iniciar = useIniciarVisita()
     const cerrar = useCerrarVisita()
+    const noVisita = useNoVisita()
 
     const [diaActivo, setDiaActivo] = useState<Dia>('LUN')
     const [propuestaCliente, setPropuestaCliente] = useState<IAgendaClient | null>(null)
     const [resolviendo, setResolviendo] = useState(false)
+    const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     // Captured directly from iniciarVisita's response rather than re-read from
     // useVisitaActiva: that query only refetches because iniciarVisita's onSuccess
     // invalidates it, and if that refetch itself fails (network blip, transient 401),
@@ -75,13 +77,36 @@ export default function AgendaSemanaPage() {
         }
     }
 
+    async function onNoVisita(codigo: string) {
+        const cliente = clientesDia.find(c => c.codigoParticularCliente === codigo) ?? null
+        setNoVisitaCliente(cliente)
+    }
+
+    async function onConfirmNoVisita(motivoIds: number[]) {
+        if (!noVisitaCliente) return
+        const res = await noVisita.mutateAsync({
+            codigoParticularCliente: noVisitaCliente.codigoParticularCliente,
+            nombreCliente: noVisitaCliente.nombreCliente,
+            motivoIds,
+        })
+        setNoVisitaCliente(null)
+        if (res.seguimientoPendiente) {
+            window.alert('Registrado. El seguimiento en Cromo quedó pendiente de sincronizar.')
+        }
+    }
+
     return (
         <div className="min-h-full">
             <AppHeader vendedorNombre="" completadas={totalDone} total={totalClientes} rangoSemana="" />
             <DiaTabs activo={diaActivo} counts={counts} onSelect={setDiaActivo} />
             <div className="flex flex-col gap-3 px-3 pb-24">
                 {clientesDia.map(c => (
-                    <ClienteCard key={c.codigoParticularCliente} cliente={c} onAbrir={abrirCliente} />
+                    <ClienteCard
+                        key={c.codigoParticularCliente}
+                        cliente={c}
+                        onAbrir={abrirCliente}
+                        onNoVisita={onNoVisita}
+                    />
                 ))}
                 {clientesDia.length === 0 && (
                     <div className="mt-8 text-center text-sm text-dsmuted">Sin clientes para {diaActivo}.</div>
@@ -102,6 +127,15 @@ export default function AgendaSemanaPage() {
                 submitting={cerrar.isPending}
                 onConfirm={onCerrar}
                 onClose={() => setResolviendo(false)}
+            />
+            <ResolucionSheet
+                open={!!noVisitaCliente}
+                motivos={motivos}
+                confirmLabel="Registrar"
+                eyebrow="No visita"
+                submitting={noVisita.isPending}
+                onConfirm={onConfirmNoVisita}
+                onClose={() => setNoVisitaCliente(null)}
             />
         </div>
     )

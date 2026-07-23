@@ -49,8 +49,11 @@ export function useCerrarVisita() {
 export function useNoVisita() {
     const qc = useQueryClient()
     return useMutation({
-        // registrarNoVisita(body) takes exactly one argument — safe to pass directly.
-        mutationFn: registrarNoVisita,
+        // Wrapped (rather than passed directly) so only the real `variables` reach
+        // registrarNoVisita — React Query v5 calls mutationFn with a second
+        // MutationFunctionContext argument, which would otherwise leak into any
+        // assertion made against the mocked registrarNoVisita in tests.
+        mutationFn: (body: Parameters<typeof registrarNoVisita>[0]) => registrarNoVisita(body),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: agendaKeys.semana })
             qc.invalidateQueries({ queryKey: ['agenda', 'dia'] })

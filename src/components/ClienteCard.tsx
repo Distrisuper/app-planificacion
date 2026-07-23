@@ -4,9 +4,10 @@ import type { IAgendaClient } from '@/types/planificacion'
 interface ClienteCardProps {
     cliente: IAgendaClient
     onAbrir: (codigo: string) => void
+    onNoVisita?: (codigo: string) => void
 }
 
-export default function ClienteCard({ cliente, onAbrir }: ClienteCardProps) {
+export default function ClienteCard({ cliente, onAbrir, onNoVisita }: ClienteCardProps) {
     const resuelto = !!cliente.resuelto
     return (
         <div
@@ -32,6 +33,17 @@ export default function ClienteCard({ cliente, onAbrir }: ClienteCardProps) {
                     className="mt-3 w-full rounded-lg bg-dsnavy py-2 text-sm font-semibold text-white"
                 >
                     Iniciar visita
+                </button>
+            )}
+            {!resuelto && (
+                <button
+                    onClick={e => {
+                        e.stopPropagation()
+                        onNoVisita?.(cliente.codigoParticularCliente)
+                    }}
+                    className="mt-2 w-full rounded-lg border border-slate-300 py-2 text-sm font-semibold text-dsmuted"
+                >
+                    Reagendar / No visito
                 </button>
             )}
         </div>
