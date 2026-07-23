@@ -22,6 +22,12 @@ export default function AgendaSemanaPage() {
     const [diaActivo, setDiaActivo] = useState<Dia>('LUN')
     const [propuestaCliente, setPropuestaCliente] = useState<IAgendaClient | null>(null)
     const [resolviendo, setResolviendo] = useState(false)
+    // Captured directly from iniciarVisita's response rather than re-read from
+    // useVisitaActiva: that query only refetches because iniciarVisita's onSuccess
+    // invalidates it, and if that refetch itself fails (network blip, transient 401),
+    // visitaActiva would still be null/stale here — silently no-op'ing onCerrar on a
+    // visit that was actually created server-side.
+    const [visitaActivaId, setVisitaActivaId] = useState<number | null>(null)
 
     const counts = useMemo(() => {
         const c = {} as Record<Dia, { done: number; total: number }>
@@ -44,18 +50,24 @@ export default function AgendaSemanaPage() {
     async function onIniciarVisita() {
         if (!propuestaCliente) return
         const coord = await getCurrentCoord()
-        await iniciar.mutateAsync({
+        const { visitaId } = await iniciar.mutateAsync({
             codigoParticularCliente: propuestaCliente.codigoParticularCliente,
             nombreCliente: propuestaCliente.nombreCliente,
             coordInicio: coord,
         })
+        setVisitaActivaId(visitaId)
         setResolviendo(true)
     }
 
     async function onCerrar(motivoIds: number[]) {
-        if (!visitaActiva) return
+        // Prefer the id captured directly from iniciarVisita's response; fall back to
+        // the useVisitaActiva query for the case where the page was reloaded mid-visit
+        // (visitaActivaId resets on remount, but the server still has one open).
+        const visitaId = visitaActivaId ?? visitaActiva?.visitaId
+        if (!visitaId) return
         const coord = await getCurrentCoord()
-        const res = await cerrar.mutateAsync({ visitaId: visitaActiva.visitaId, coordFinal: coord, motivoIds })
+        const res = await cerrar.mutateAsync({ visitaId, coordFinal: coord, motivoIds })
+        setVisitaActivaId(null)
         setResolviendo(false)
         setPropuestaCliente(null)
         if (res.seguimientoPendiente) {
