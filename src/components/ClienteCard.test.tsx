@@ -8,8 +8,7 @@ const cliente = {
     codigoParticularCliente: '10034',
     nombreCliente: 'Almacén Don José',
     barrio: 'Centro',
-    diaVisita: 's1d1',
-    descripcionSemana: 'ALMIRANTE BROWN',
+    visit: 's1d1',
 }
 
 it('shows resolved styling and hides the actions when resuelto', () => {

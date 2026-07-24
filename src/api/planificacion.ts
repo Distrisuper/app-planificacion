@@ -12,10 +12,11 @@ import type {
     SemanaAgenda,
 } from '@/types/planificacion'
 
-// `semana` is an optional rotation key (e.g. "s1") the backend currently defaults to 's1' —
-// there is no resolved "current week" business rule yet (see AgendaService.DEFAULT_SEMANA).
-// Accept it as an optional param now so callers aren't blocked later; the UI doesn't need to
-// pass it for the MVP.
+// `semana` is the rotation key (e.g. "s1") of the 5-week cycle. The backend does NOT resolve
+// "current week": it defaults to 's1' when omitted and otherwise returns exactly the week asked
+// for. Resolving which cycle week today falls in (mod-5 over a fixed anchor) is the FRONT's job
+// and is still pending — until then callers omit it and get s1. Param accepted now so the
+// week-picker can pass it without a later API change.
 export const getAgendaSemana = async (semana?: string): Promise<SemanaAgenda> => {
     const res = await apiClient.get('/planificacion/agenda/semana', {
         params: semana ? { semana } : undefined,

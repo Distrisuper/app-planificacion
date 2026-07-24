@@ -5,22 +5,52 @@ export interface IMotivo {
     descripcion: string
 }
 
+export interface IBrandDiscount {
+    code: string
+    value: number
+    description: string
+}
+
+// Espeja el "visit card" que devuelve /planificacion/agenda/{semana,dia}
+// (api-vendedores → analytics.fct_clients + campo `visit`). Los campos marcados
+// "siempre presente" vienen 1:1 del backend en cada respuesta; se dejan opcionales
+// porque esta app es un consumidor parcial/defensivo y no todos se muestran aún.
 export interface IAgendaClient {
-    codigoParticularCliente: string
-    nombreCliente: string
+    codigoParticularCliente: string // clave de join (particular_code); la usa todo el flujo de visita
+    nombreCliente: string // business_name
     // trade_name real (cartel del local) cuando difiere de nombreCliente —
     // el vendedor reconoce el local por esto, no por la razón social.
     nombreFantasia?: string
-    barrio?: string
-    diaVisita: string // e.g. "s1d1" — semana 1, día 1 (lunes)
-    resuelto?: boolean // undefined in weekly view (only /agenda/dia populates it)
-    descripcionSemana?: string // temporary mock-era zone/rotation label
-    // direccion/telefono: reales cuando la agenda los expone (ver
-    // fct_clients: address/phone), con mock de respaldo mientras no estén.
+    barrio?: string // neighborhood
+    // direccion/telefono ahora son REALES desde fct_clients (address/phone).
     // telefono llega tal cual como string — el dato es inconsistente entre
     // clientes (a veces trae más de un número), así que no se parsea.
     direccion?: string
     telefono?: string
+    // Slot de visita semana+día, e.g. "s1d1". La semana actual la resuelve el
+    // front (ciclo mód-5) y la pasa como `semana`; el backend no la calcula.
+    visit: string
+    resuelto?: boolean // undefined in weekly view (only /agenda/dia populates it)
+
+    // ── Resto del card real (siempre presente desde el backend; aún sin UI dedicada) ──
+    codigoCliente?: string // client_code
+    localidad?: string // city
+    codigoZona?: string // zone_code
+    comentario?: string // comment (notas de visita: contacto, horario, etc.)
+    latitud?: number | null
+    longitud?: number | null
+    isActive?: boolean
+    bonusDiscount?: number | null
+    generalDiscount?: number | null
+    gmDiscount?: number | null
+    brandDiscounts?: IBrandDiscount[]
+    paymentCondition?: string | null
+    paymentTermDays?: number | null
+    paymentCreditLimit?: number | null
+    paymentAmount?: number | null
+    paymentPlan?: number | null
+
+    // ── Solo-front (sin campo backend todavía) ──
     // horaVisita sigue sin backend real — mock hasta que la agenda asigne
     // horarios de visita (problema aparte del dato de cliente).
     horaVisita?: string

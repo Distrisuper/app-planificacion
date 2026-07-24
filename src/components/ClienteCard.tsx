@@ -25,7 +25,9 @@ function hasTimePassed(hora: string): boolean {
 
 export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: ClienteCardProps) {
     const resuelto = !!cliente.resuelto
-    const nombre = titleCaseNombre(cliente.nombreFantasia ?? cliente.nombreCliente)
+    // `||` (no `??`): nombreFantasia real puede venir como '' (sin cartel) — en ese
+    // caso hay que caer a la razón social, no mostrar un nombre vacío.
+    const nombre = titleCaseNombre(cliente.nombreFantasia || cliente.nombreCliente)
     const atrasado = !resuelto && !cliente.enCurso && !!isToday && !!cliente.horaVisita && hasTimePassed(cliente.horaVisita)
     const telefonoLimpio = cliente.telefono && TELEFONO_LIMPIO.test(cliente.telefono) ? cliente.telefono : null
 
@@ -89,7 +91,7 @@ export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: 
             {(cliente.direccion || cliente.barrio) && (
                 <div className="mt-2 flex items-start gap-1.5 pl-[38px] text-xs leading-tight text-dsmuted">
                     <MapPin className="mt-0.5 h-[13px] w-[13px] shrink-0" strokeWidth={2} />
-                    <span>{cliente.direccion ?? cliente.barrio}</span>
+                    <span>{cliente.direccion || cliente.barrio}</span>
                 </div>
             )}
 

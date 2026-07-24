@@ -78,7 +78,7 @@ describe('planificacion API', () => {
 
     it('getAgendaDia gets with dia + fecha params', async () => {
         ;(apiClient.get as any).mockResolvedValue({
-            data: { ok: 1, data: [{ codigoParticularCliente: '1', nombreCliente: 'A', diaVisita: 's1d1' }] },
+            data: { ok: 1, data: [{ codigoParticularCliente: '1', nombreCliente: 'A', visit: 's1d1' }] },
         })
         const res = await getAgendaDia('LUN', '2026-07-27')
         expect(apiClient.get).toHaveBeenCalledWith('/planificacion/agenda/dia', {

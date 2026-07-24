@@ -27,7 +27,7 @@ it('useAgendaSemana returns the weekly agenda', async () => {
 
 it('useAgendaDia returns the daily agenda for the given dia/fecha', async () => {
     ;(api.getAgendaDia as any).mockResolvedValue([
-        { codigoParticularCliente: '2', nombreCliente: 'B', diaVisita: 's1d1', resuelto: false },
+        { codigoParticularCliente: '2', nombreCliente: 'B', visit: 's1d1', resuelto: false },
     ])
     const { result } = renderHook(() => useAgendaDia('LUN', '2026-07-27'), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
