@@ -1,17 +1,17 @@
-import { render, screen } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
-import PropuestaSheet from './PropuestaSheet'
+import { usePropuesta } from './usePropuesta'
 import * as api from '@/api/planificacion'
 
 vi.mock('@/api/planificacion')
 
-function wrap(ui: React.ReactNode) {
+function wrapper({ children }: { children: React.ReactNode }) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
+    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
 }
 
-it('shows the rubros returned by the proposal endpoint', async () => {
+it('usePropuesta unwraps the matched client and maps rubros for the UI', async () => {
     ;(api.getPropuesta as any).mockResolvedValue({
         currentYM: '2026-07',
         daysElapsed: 24,
@@ -21,13 +21,13 @@ it('shows the rubros returned by the proposal endpoint', async () => {
             {
                 clientCode: '10034',
                 particularCode: '10034',
-                clientName: 'Don José',
+                clientName: 'LA MITRE SRL',
                 sellerCode: '1',
                 sellerName: 'Vendedor',
                 rubros: [
                     {
                         rubroCode: 'R1',
-                        rubroDescription: 'Amortiguadores',
+                        rubroDescription: 'Golosinas',
                         rubroMinUnits: 100,
                         gapUnits: 40,
                         projection: {
@@ -39,16 +39,32 @@ it('shows the rubros returned by the proposal endpoint', async () => {
                         },
                         lookback: { months: [], activeMonths: 3, avgUnits: 55 },
                         articlesToOffer: [],
-                        reason: 'Lleva 60% del mínimo',
+                        reason: 'Lleva 60% del mínimo (faltan ~40 ud. de Golosinas)',
                     },
                 ],
             },
         ],
     })
-    render(
-        wrap(
-            <PropuestaSheet open codigoCliente="10034" nombreCliente="Don José" onIniciarVisita={vi.fn()} onClose={vi.fn()} />,
-        ),
-    )
-    expect(await screen.findByText('Amortiguadores')).toBeInTheDocument()
+
+    const { result } = renderHook(() => usePropuesta('10034'), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data).toEqual({
+        rubros: [{ nombre: 'Golosinas', gapPct: 40 }],
+    })
+})
+
+it('usePropuesta returns no rubros when the client has no matching entry', async () => {
+    ;(api.getPropuesta as any).mockResolvedValue({
+        currentYM: '2026-07',
+        daysElapsed: 24,
+        totalDays: 31,
+        total: 0,
+        clients: [],
+    })
+
+    const { result } = renderHook(() => usePropuesta('10034'), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.data).toEqual({ rubros: [] })
 })

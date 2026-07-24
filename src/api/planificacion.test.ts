@@ -120,12 +120,13 @@ describe('planificacion API', () => {
         expect(res.seguimientoPendiente).toBe(false)
     })
 
-    it('getPropuesta posts clientCode and unwraps data.data', async () => {
-        ;(apiClient.post as any).mockResolvedValue({ data: { ok: 1, data: { rubros: [] } } })
+    it('getPropuesta posts particularCode and unwraps data.data', async () => {
+        const response = { currentYM: '2026-07', daysElapsed: 24, totalDays: 31, clients: [], total: 0 }
+        ;(apiClient.post as any).mockResolvedValue({ data: { ok: 1, data: response } })
         const res = await getPropuesta('10034')
         expect(apiClient.post).toHaveBeenCalledWith('/sale/rubro/recommendations', {
-            clientCode: '10034',
+            particularCode: '10034',
         })
-        expect(res).toEqual({ rubros: [] })
+        expect(res).toEqual(response)
     })
 })

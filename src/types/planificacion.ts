@@ -1,15 +1,5 @@
 export type Dia = 'LUN' | 'MAR' | 'MIE' | 'JUE' | 'VIE'
 
-export type CategoriaCliente =
-    | 'Almacén'
-    | 'Kiosco'
-    | 'Autoservicio'
-    | 'Supermercado'
-    | 'Despensa'
-    | 'Minimercado'
-    | 'Fiambrería'
-    | 'Panadería'
-
 export interface IMotivo {
     motivoId: number
     descripcion: string
@@ -18,29 +8,87 @@ export interface IMotivo {
 export interface IAgendaClient {
     codigoParticularCliente: string
     nombreCliente: string
+    // trade_name real (cartel del local) cuando difiere de nombreCliente —
+    // el vendedor reconoce el local por esto, no por la razón social.
+    nombreFantasia?: string
     barrio?: string
     diaVisita: string // e.g. "s1d1" — semana 1, día 1 (lunes)
     resuelto?: boolean // undefined in weekly view (only /agenda/dia populates it)
     descripcionSemana?: string // temporary mock-era zone/rotation label
-    // Visual-only fields not yet exposed by the agenda backend. Filled in by
-    // `withMockVisualData` (src/lib/mockAgendaData.ts) so the card design can
-    // exist ahead of the real data — delete both once the backend adds them.
-    categoria?: CategoriaCliente
+    // direccion/telefono: reales cuando la agenda los expone (ver
+    // fct_clients: address/phone), con mock de respaldo mientras no estén.
+    // telefono llega tal cual como string — el dato es inconsistente entre
+    // clientes (a veces trae más de un número), así que no se parsea.
     direccion?: string
     telefono?: string
+    // horaVisita sigue sin backend real — mock hasta que la agenda asigne
+    // horarios de visita (problema aparte del dato de cliente).
     horaVisita?: string
-    nota?: string
     enCurso?: boolean
 }
 
 export interface IRubroPropuesta {
     nombre: string
-    // Real fields from /sale/rubro/recommendations — optional because the
-    // endpoint response isn't fully typed yet; the comparison UI hides
-    // itself gracefully when they're missing instead of inventing numbers.
+    // Mapped from IRubroRecommendation by usePropuesta — optional because the
+    // real /sale/rubro/recommendations service has no "zone average" concept
+    // (it compares against the client's own rubro minimum), so clientUnits/
+    // zoneUnits stay undefined and the comparison UI hides itself gracefully
+    // instead of inventing numbers.
     gapPct?: number
     clientUnits?: number
     zoneUnits?: number
+}
+
+// ── Raw shape of POST /sale/rubro/recommendations (RubroRecommendationService,
+// api-vendedores) — mirrors RubroRecommendationsResponse there. Mapped to
+// IRubroPropuesta by usePropuesta for the UI. ──
+export interface IArticleToOffer {
+    articleCode: string
+    articleParticularCode: string
+    articleDescription: string
+    brandCode: string
+    brandName: string
+    kind: 'gap' | 'habitual'
+    lookbackAvgUnits: number
+    currentMonthUnits: number
+}
+
+export interface IRubroRecommendation {
+    rubroCode: string
+    rubroDescription: string
+    rubroMinUnits: number
+    gapUnits: number
+    projection: {
+        currentMonthUnits: number
+        projectedUnits: number
+        rubroRatio: number
+        daysElapsed: number
+        totalDays: number
+    }
+    lookback: {
+        months: string[]
+        activeMonths: number
+        avgUnits: number
+    }
+    articlesToOffer: IArticleToOffer[]
+    reason: string
+}
+
+export interface IClientRecommendation {
+    clientCode: string
+    particularCode: string
+    clientName: string
+    sellerCode: string
+    sellerName: string
+    rubros: IRubroRecommendation[]
+}
+
+export interface IRubroRecommendationsResponse {
+    currentYM: string
+    daysElapsed: number
+    totalDays: number
+    clients: IClientRecommendation[]
+    total: number
 }
 
 export type SemanaAgenda = Record<Dia, IAgendaClient[]>

@@ -1,7 +1,5 @@
-import { useState } from 'react'
-import { Calendar, Check, Clock, MapPin, Phone, Pencil, Zap } from 'lucide-react'
+import { Calendar, Check, Clock, MapPin, Phone, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { CATEGORIA_COLORS, CATEGORIA_COLOR_DEFAULT, CATEGORIA_ICONS } from '@/lib/categoriaColors'
 import { titleCaseNombre, initialsOfCliente } from '@/lib/textFormat'
 import type { IAgendaClient } from '@/types/planificacion'
 
@@ -12,6 +10,13 @@ interface ClienteCardProps {
     onReagendar: (codigo: string) => void
 }
 
+const ACCENT = '#213D82'
+
+// El teléfono llega como string crudo y a veces trae más de un número
+// ("1171473562 / 46641751") — solo se linkea cuando es un único número limpio,
+// para no armar un tel: inválido concatenando ambos.
+const TELEFONO_LIMPIO = /^[\d\s()+-]+$/
+
 function hasTimePassed(hora: string): boolean {
     const now = new Date()
     const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
@@ -19,12 +24,10 @@ function hasTimePassed(hora: string): boolean {
 }
 
 export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: ClienteCardProps) {
-    const [notaAbierta, setNotaAbierta] = useState(false)
     const resuelto = !!cliente.resuelto
-    const accent = cliente.categoria ? CATEGORIA_COLORS[cliente.categoria] : CATEGORIA_COLOR_DEFAULT
-    const CategoriaIcon = cliente.categoria ? CATEGORIA_ICONS[cliente.categoria] : null
-    const nombre = titleCaseNombre(cliente.nombreCliente)
+    const nombre = titleCaseNombre(cliente.nombreFantasia ?? cliente.nombreCliente)
     const atrasado = !resuelto && !cliente.enCurso && !!isToday && !!cliente.horaVisita && hasTimePassed(cliente.horaVisita)
+    const telefonoLimpio = cliente.telefono && TELEFONO_LIMPIO.test(cliente.telefono) ? cliente.telefono : null
 
     return (
         <div
@@ -34,7 +37,7 @@ export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: 
                 background: resuelto ? '#F3FAF5' : '#FFFFFF',
             }}
         >
-            <div className="absolute inset-y-3 left-0 w-[3px] rounded-r-sm" style={{ background: accent }} />
+            <div className="absolute inset-y-3 left-0 w-[3px] rounded-r-sm" style={{ background: ACCENT }} />
 
             <div className="mb-1.5 flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -69,7 +72,7 @@ export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: 
             <div className="flex items-start gap-2.5">
                 <span
                     className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-extrabold"
-                    style={{ background: `${accent}1A`, color: accent }}
+                    style={{ background: `${ACCENT}1A`, color: ACCENT }}
                 >
                     {initialsOfCliente(nombre)}
                 </span>
@@ -80,14 +83,6 @@ export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: 
                     >
                         {nombre}
                     </div>
-                    {cliente.categoria && (
-                        <div className="mt-1 flex items-center gap-1.5">
-                            {CategoriaIcon && <CategoriaIcon className="h-3 w-3" style={{ color: accent }} strokeWidth={2.2} />}
-                            <span className="text-[11px] font-bold" style={{ color: accent }}>
-                                {cliente.categoria}
-                            </span>
-                        </div>
-                    )}
                 </div>
             </div>
 
@@ -98,9 +93,9 @@ export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: 
                 </div>
             )}
 
-            {cliente.telefono && (
+            {cliente.telefono && telefonoLimpio && (
                 <a
-                    href={`tel:+54${cliente.telefono.replace(/\D/g, '')}`}
+                    href={`tel:+54${telefonoLimpio.replace(/\D/g, '')}`}
                     onClick={e => e.stopPropagation()}
                     className="mt-1 inline-flex items-center gap-1.5 pl-[38px] text-xs font-semibold text-dsnavy"
                 >
@@ -109,17 +104,11 @@ export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: 
                 </a>
             )}
 
-            {cliente.nota && (
-                <button
-                    onClick={e => {
-                        e.stopPropagation()
-                        setNotaAbierta(o => !o)
-                    }}
-                    className="mt-2 flex w-full gap-1.5 rounded-[9px] border border-[#F3E1B4] bg-[#FFF7E6] px-2.5 py-1.5 text-left text-[11.5px] leading-snug text-[#7A5B12]"
-                >
-                    <Pencil className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2} />
-                    <span className={notaAbierta ? '' : 'line-clamp-2'}>{cliente.nota}</span>
-                </button>
+            {cliente.telefono && !telefonoLimpio && (
+                <span className="mt-1 inline-flex items-center gap-1.5 pl-[38px] text-xs font-semibold text-dsnavy">
+                    <Phone className="h-[13px] w-[13px]" strokeWidth={2} />
+                    {cliente.telefono}
+                </span>
             )}
 
             {!resuelto && (

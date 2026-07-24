@@ -6,6 +6,7 @@ import type {
     INoVisitaResult,
     ICerrarVisitaResult,
     IReintentarSeguimientoDTO,
+    IRubroRecommendationsResponse,
     ISeguimientoResult,
     IVisita,
     SemanaAgenda,
@@ -78,9 +79,9 @@ export const reintentarSeguimiento = async (
 /** Reused endpoint: commercial proposal (rubros below average). */
 export const getPropuesta = async (
     codigoParticularCliente: string,
-): Promise<any> => {
+): Promise<IRubroRecommendationsResponse> => {
     const res = await apiClient.post('/sale/rubro/recommendations', {
-        clientCode: codigoParticularCliente,
+        particularCode: codigoParticularCliente,
     })
     return res.data.data ?? res.data
 }

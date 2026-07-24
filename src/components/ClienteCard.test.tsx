@@ -32,3 +32,32 @@ it('fires onReagendar when the Reagendar button is tapped', async () => {
     await userEvent.click(screen.getByRole('button', { name: /reagendar/i }))
     expect(onReagendar).toHaveBeenCalledWith('10034')
 })
+
+it('shows nombreFantasia instead of nombreCliente when present', () => {
+    render(
+        <ClienteCard
+            cliente={{ ...cliente, nombreFantasia: 'Distribuidora Os Car' }}
+            onAbrir={vi.fn()}
+            onReagendar={vi.fn()}
+        />,
+    )
+    expect(screen.getByText('Distribuidora Os Car')).toBeInTheDocument()
+    expect(screen.queryByText('Almacén Don José')).not.toBeInTheDocument()
+})
+
+it('links a clean phone number as tel: but shows a dirty one as plain text', () => {
+    const { rerender } = render(
+        <ClienteCard cliente={{ ...cliente, telefono: '3511234567' }} onAbrir={vi.fn()} onReagendar={vi.fn()} />,
+    )
+    expect(screen.getByRole('link', { name: /3511234567/ })).toHaveAttribute('href', 'tel:+543511234567')
+
+    rerender(
+        <ClienteCard
+            cliente={{ ...cliente, telefono: '1171473562 / 46641751' }}
+            onAbrir={vi.fn()}
+            onReagendar={vi.fn()}
+        />,
+    )
+    expect(screen.queryByRole('link', { name: /1171473562/ })).not.toBeInTheDocument()
+    expect(screen.getByText('1171473562 / 46641751')).toBeInTheDocument()
+})
