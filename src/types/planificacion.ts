@@ -1,5 +1,15 @@
 export type Dia = 'LUN' | 'MAR' | 'MIE' | 'JUE' | 'VIE'
 
+export type CategoriaCliente =
+    | 'Almacén'
+    | 'Kiosco'
+    | 'Autoservicio'
+    | 'Supermercado'
+    | 'Despensa'
+    | 'Minimercado'
+    | 'Fiambrería'
+    | 'Panadería'
+
 export interface IMotivo {
     motivoId: number
     descripcion: string
@@ -12,6 +22,25 @@ export interface IAgendaClient {
     diaVisita: string // e.g. "s1d1" — semana 1, día 1 (lunes)
     resuelto?: boolean // undefined in weekly view (only /agenda/dia populates it)
     descripcionSemana?: string // temporary mock-era zone/rotation label
+    // Visual-only fields not yet exposed by the agenda backend. Filled in by
+    // `withMockVisualData` (src/lib/mockAgendaData.ts) so the card design can
+    // exist ahead of the real data — delete both once the backend adds them.
+    categoria?: CategoriaCliente
+    direccion?: string
+    telefono?: string
+    horaVisita?: string
+    nota?: string
+    enCurso?: boolean
+}
+
+export interface IRubroPropuesta {
+    nombre: string
+    // Real fields from /sale/rubro/recommendations — optional because the
+    // endpoint response isn't fully typed yet; the comparison UI hides
+    // itself gracefully when they're missing instead of inventing numbers.
+    gapPct?: number
+    clientUnits?: number
+    zoneUnits?: number
 }
 
 export type SemanaAgenda = Record<Dia, IAgendaClient[]>

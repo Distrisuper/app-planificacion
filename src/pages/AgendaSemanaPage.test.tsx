@@ -7,6 +7,9 @@ import AgendaSemanaPage from './AgendaSemanaPage'
 import * as api from '@/api/planificacion'
 
 vi.mock('@/api/planificacion')
+vi.mock('@/context/AuthContext', () => ({
+    useAuth: () => ({ user: { name: 'Martín Rossi', rol: 'vendedor' }, logout: vi.fn() }),
+}))
 
 function wrap(ui: React.ReactNode) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -38,8 +41,8 @@ it('closes a visit using the visitaId captured from iniciarVisita, not a separat
 
     render(wrap(<AgendaSemanaPage />))
 
-    await userEvent.click(await screen.findByText('Almacén Don José'))
-    await userEvent.click((await screen.findAllByRole('button', { name: /iniciar visita/i }))[1])
+    await userEvent.click(await screen.findByRole('button', { name: /propuesta/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
     await userEvent.click(await screen.findByText('Precio'))
     await userEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
 

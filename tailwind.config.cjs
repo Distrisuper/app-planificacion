@@ -4,10 +4,12 @@ module.exports = {
     theme: {
         extend: {
             colors: {
-                dsnavy: '#182645',
-                dsgreen: '#16a34a',
+                dsnavy: '#213D82',
+                dsnavytext: '#182645',
+                dsgreen: '#009E4F',
                 dsred: '#B42318',
                 dsmuted: '#697585',
+                dsline: '#E7E9F0',
             },
         },
     },

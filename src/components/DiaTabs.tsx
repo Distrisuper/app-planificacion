@@ -10,7 +10,7 @@ interface DiaTabsProps {
 
 export default function DiaTabs({ activo, counts, onSelect }: DiaTabsProps) {
     return (
-        <div className="flex gap-2 overflow-x-auto px-3 py-3">
+        <div className="flex shrink-0 gap-1.5 border-b border-dsline bg-white px-3 py-2.5">
             {DIAS.map(d => {
                 const c = counts[d]
                 const isActive = d === activo
@@ -18,12 +18,12 @@ export default function DiaTabs({ activo, counts, onSelect }: DiaTabsProps) {
                     <button
                         key={d}
                         onClick={() => onSelect(d)}
-                        className={`flex min-w-[64px] flex-col items-center rounded-lg border px-3 py-2 text-xs font-semibold ${
-                            isActive ? 'border-dsnavy bg-dsnavy text-white' : 'border-slate-200 bg-white text-dsnavy'
+                        className={`flex flex-1 flex-col items-center gap-0.5 rounded-[11px] border py-1.5 text-[11.5px] font-extrabold tracking-wide transition-colors ${
+                            isActive ? 'border-dsnavy bg-dsnavy text-white' : 'border-dsline bg-[#F4F6FA] text-[#3B4560]'
                         }`}
                     >
                         <span>{d}</span>
-                        <span className={isActive ? 'text-white/70' : 'text-dsmuted'}>
+                        <span className={`text-[10px] font-bold ${isActive ? 'text-white/70' : 'text-dsmuted'}`}>
                             {c.done}/{c.total}
                         </span>
                     </button>
