@@ -42,10 +42,15 @@ Esta app **reemplaza al flujo de "Visitas" que hoy vive en Lupa** (botón "Visit
 `lupa.disturisuper.com`, respaldado por `api-mobiliza`), que se va a deprecar. No reemplaza los
 datos — reusa la misma base de datos y tablas.
 
-El diseño completo, con todas las decisiones y su razón, está en
-`docs/superpowers/specs/2026-07-22-app-planificacion-design.md`. Léelo antes de tocar el flujo de
-agenda, geolocalización o el manejo de visitas/motivos/Cromo — ahí está el "por qué" de decisiones
-no obvias.
+El diseño general de la app (flujo, geolocalización, alcance) está en
+`docs/superpowers/specs/2026-07-22-app-planificacion-design.md`.
+
+El **diseño del backend del dominio de planificación** (tablas, endpoints, ciclo de visitas) vive
+en el repo de api-vendedores, rama `feature/planificacion-backend`:
+`docs/superpowers/specs/2026-07-27-planificacion-visitas-design.md` + su plan de implementación
+en `docs/superpowers/plans/2026-07-27-planificacion-visitas.md`. **Ese spec es el que manda sobre
+el modelo de datos y los endpoints** — revierte dos decisiones del spec del 22/07 (ver "Decisiones
+no obvias" abajo). Léelos antes de tocar agenda, ciclo o el manejo de visitas/motivos/Cromo.
 
 Prototipo visual de referencia (mockups ya validados con el usuario): `Prototipo/` — screenshots
 en `Prototipo/screenshots/` y prototipo interactivo en `Prototipo/Agenda Vendedor.dc.html`.
@@ -59,33 +64,44 @@ nuevo dominio `planificacion`.
 ```
 app-planificacion  ──Bearer token──►  api-vendedores (dominio nuevo "planificacion")
                                              │
-                                             ├─► PostgreSQL warehouse (read-only)
-                                             │     agenda base (día/semana por cliente)
+                                             ├─► Asignación cliente → sNdM  (INSUMO EXTERNO)
+                                             │     hoy: src/mocks/agendaMock.json
+                                             │     mañana: campo "visita" que carga otra área
+                                             │     seam: AgendaRepository.findVisitAssignments
+                                             │
+                                             ├─► PostgreSQL warehouse (read-only, SIN cambios)
+                                             │     fct_clients → card del cliente (dirección,
+                                             │       teléfono, coords, descuentos, pago)
                                              │     propuesta comercial (RubroRecommendationService)
                                              │
                                              ├─► MySQL distriap_distri (MISMA conexión existente
                                              │     sequelizeWrite, la que ya usa para Notas —
                                              │     NO es conexión nueva)
-                                             │     Visitas (existente, ÚNICA que se escribe:
-                                             │       inicio/fin + coords 2 puntos, alimenta efectiv.)
+                                             │     TABLAS PROPIAS (prefijo pl_, las escribimos):
+                                             │       pl_ciclo_semana    la vuelta concreta
+                                             │       pl_ciclo_cliente ★ plan congelado + resolución
+                                             │       pl_visita          inicio/fin + coords 2 puntos
+                                             │       pl_resolucion_motivo  motivo estructurado
                                              │     Motivos (existente, SOLO LECTURA, picklist)
-                                             │     (sin tablas nuevas)
+                                             │     Visitas (existente, YA NO se escribe — se deprecia
+                                             │       junto con api-mobiliza)
                                              │
                                              └─► CRM Cromo (POST /crm/events, ya existente)
-                                                   ÚNICA fuente de verdad del motivo/objeción/
-                                                   resultado — se llama automático al cerrar visita
+                                                   canal narrativo para el resto de la organización
+                                                   — se llama automático al cerrar visita, best-effort
 ```
 
-- **No se crea un modelo de datos propio para el ciclo de vida de la visita.** Se reutiliza la
-  tabla `Visitas` de la base MySQL `distriap_distri` (la misma que api-vendedores ya usa para
-  `Notas`) que hoy también usa `api-mobiliza`. Motivo: ese mismo dato lo
-  consume un dashboard de efectividad ya en producción (`mobiliza/app-mobiliza`, Firebase
-  `appvendedores-3e943`) — si se migra a tablas nuevas, ese dashboard se rompe. Se agrega, no se
-  reemplaza el schema.
-- **El motivo/objeción/resultado de la visita NO se persiste en MySQL.** Va 100% a Cromo como
-  seguimiento (`POST /crm/events`). La tabla `Motivos` se sigue leyendo (solo lectura) como
-  catálogo de opciones para el picklist, pero la selección del vendedor no se vuelve a escribir en
-  ninguna tabla propia — no hay `Motivos_visitas` en este diseño.
+- **El ciclo de visitas es un dominio propio con sus propias tablas** (`pl_ciclo_semana`,
+  `pl_ciclo_cliente`, `pl_visita`, `pl_resolucion_motivo`), en la misma base MySQL
+  `distriap_distri` y reusando la conexión existente `sequelizeWrite`. Motivo: sin persistir **el
+  plan** (a quién había que visitar) no hay denominador, y la cobertura/efectividad —el objetivo
+  del proyecto— es incalculable. El dashboard de efectividad de `app-mobiliza` que leía `Visitas`
+  se deprecia junto con `api-mobiliza`, así que no hay doble escritura ni migración.
+- **El motivo SÍ se persiste estructurado**, en `pl_resolucion_motivo` (`ciclo_cliente_id` ×
+  `motivo_id`), **además** de enviarse a Cromo como texto. Motivo: Cromo recibe una frase armada
+  por `buildSeguimientoDescripcion`, y sobre texto libre no se puede hacer un `GROUP BY` — no se
+  puede responder "cuál es la objeción más frecuente en la zona norte". La tabla `Motivos` sigue
+  siendo solo lectura (catálogo del picklist).
 - **api-mobiliza se está deprecando** (por eso existe este proyecto), pero su base de datos sigue
   viva — api-vendedores se convierte en el nuevo cliente que escribe/lee `Visitas` directamente,
   sin pasar por el servicio api-mobiliza.
@@ -99,14 +115,29 @@ app-planificacion  ──Bearer token──►  api-vendedores (dominio nuevo "p
 
 ## Decisiones no obvias (no las repitas sin releer el spec)
 
-- **Se reutiliza la tabla `Visitas` de `distriap_distri` tal cual**, reusando la conexión existente
-  `sequelizeWrite` (la misma DB que ya usa para `Notas` — NO se agrega conexión nueva; confirmado
-  que `AWS_DISTRI_DB_WRITE_HOST` == `MYSQL_HOST` de Mobiliza). No se migra el schema ni se crea uno
-  propio — solo para inicio/fin/coords.
+- **La entidad central es el ciclo, no la visita.** Un ciclo (`pl_ciclo_semana`) es una vuelta
+  concreta del vendedor por una semana de su rotación: no la etiqueta `s2` en abstracto, sino "la
+  vez que V 2 pasó por la semana 2 arrancando el 27/07". Hace falta porque **la etiqueta `s2` se
+  repite cada 5 semanas**: guardar el string `"s2d3"` en la visita haría que en la próxima vuelta
+  el sistema creyera que el cliente ya fue resuelto.
+- **Al abrir el ciclo se congela el plan** (snapshot desde el insumo externo hacia
+  `pl_ciclo_cliente`). La asignación cliente→`sNdM` la mantiene otra área sobre un Excel; si se
+  leyera en vivo, un cambio ajeno un miércoles movería la agenda a mitad de semana y reescribiría
+  la cobertura histórica hacia atrás.
+- **La asignación cliente→`sNdM` NO es nuestra.** La va a cargar otra área en el campo "visita" del
+  cliente. Se consume por el seam `AgendaRepository.findVisitAssignments`, hoy respaldado por
+  `src/mocks/agendaMock.json` (solo tiene el vendedor `V 2`). **No se agregan campos al warehouse**
+  — eso crearía una dependencia con `sync-dagster`, que vive en otro repo.
 - **El gap real del sistema actual** (`PUT /Mobiliza/visita` recibe `motivos`/`resultado` del
   frontend pero no los persiste — por eso hoy redirigen al vendedor a Cromo a mano) se resuelve
-  automatizando el envío a Cromo al cerrar la visita, NO agregando persistencia de motivos en
-  MySQL. No existe una tabla `Motivos_visitas` en este diseño.
+  persistiendo el motivo estructurado **y** automatizando el envío a Cromo. El orden importa:
+  **primero se persiste el hecho, después se notifica a Cromo**. Así un Cromo caído deja de ser
+  pérdida de datos y pasa a ser solo un mensaje demorado.
+- **La "semana actual" la resuelve el backend, no el front.** Es el ciclo abierto del vendedor
+  (`GET /planificacion/ciclo/actual`). Se descartó el cálculo mod-5 sobre un ancla local porque se
+  desincroniza al reinstalar la app o cambiar de dispositivo, sin que nadie lo detecte.
+- **Cerrar la semana exige que no queden clientes pendientes** en plan. Si faltan, el backend
+  devuelve 409 con la lista.
 - **El catálogo de motivos es la tabla `Motivos` ya existente, pero solo de lectura** (picklist).
   El prototipo visual sugiere 9 opciones de referencia — hay que confirmar contra
   `SELECT * FROM Motivos` si ya están cargadas o faltan agregar filas.
@@ -118,11 +149,15 @@ app-planificacion  ──Bearer token──►  api-vendedores (dominio nuevo "p
   plugin background-geolocation + OTA (Capgo) — está en el backlog del spec.
 - **Al cerrar visita se genera un seguimiento en Cromo automáticamente** (`POST /crm/events`),
   reemplazando el redirect manual a Cromo que existe hoy en el flujo de Lupa.
-- **La vista semanal completa NO consulta el estado de visitas** (evita ~40 consultas por carga de
-  pantalla). Solo la vista diaria (∼8 clientes) lo hace.
+- **La vista semanal SÍ muestra el estado de cada cliente**, y es gratis: el estado vive en la
+  misma fila de `pl_ciclo_cliente` que ya se lee. (La restricción vieja de "no consultar estado en
+  la semanal para evitar ~40 consultas" desapareció con el snapshot.)
 - **No se editan/reabren visitas ya cerradas.** Si el vendedor necesita corregir algo, se genera
   una visita nueva de ajuste.
-- **Reagendar no mueve estructuralmente al cliente de día** — es informativo/histórico.
+- **Reagendar dentro del ciclo mueve el `dia` y deja al cliente PENDIENTE.** No lo resuelve: si lo
+  resolviera, mover un cliente de martes a jueves lo sacaría del pendiente y la semana cerraría sin
+  haberlo visitado — el cumplimiento sería inflable con dos clicks. El estado `reagendada` se
+  reserva para cuando se reagenda más allá del ciclo actual.
 
 ## Fuera de alcance (no implementar salvo pedido explícito)
 
