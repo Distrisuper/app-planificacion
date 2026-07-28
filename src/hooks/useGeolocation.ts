@@ -1,36 +1,18 @@
 import { useState } from 'react'
+import { capturarUbicacion, type GeoResult } from '@/lib/geolocation'
 
-/**
- * Captures ONE position as "lat,lng". Returns null if geolocation is
- * unavailable or the user denies permission — never rejects, so the visit
- * flow is never blocked by a location issue (spec §6/§10).
- */
-export function getCurrentCoord(): Promise<string | null> {
-    return new Promise(resolve => {
-        if (!navigator.geolocation) {
-            resolve(null)
-            return
-        }
-        navigator.geolocation.getCurrentPosition(
-            pos => resolve(`${pos.coords.latitude},${pos.coords.longitude}`),
-            () => resolve(null),
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-        )
-    })
-}
-
-/** Hook wrapper: exposes a `capture()` action + the last captured coord + loading state. */
+/** Hook wrapper: expone `capture()` + el último resultado + estado de carga. */
 export function useGeolocation() {
-    const [coord, setCoord] = useState<string | null>(null)
+    const [resultado, setResultado] = useState<GeoResult | null>(null)
     const [capturing, setCapturing] = useState(false)
 
-    async function capture(): Promise<string | null> {
+    async function capture(): Promise<GeoResult> {
         setCapturing(true)
-        const c = await getCurrentCoord()
-        setCoord(c)
+        const r = await capturarUbicacion()
+        setResultado(r)
         setCapturing(false)
-        return c
+        return r
     }
 
-    return { coord, capturing, capture }
+    return { resultado, capturing, capture }
 }
