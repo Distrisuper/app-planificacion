@@ -180,8 +180,8 @@ export default function AgendaSemanaPage() {
                 completadas={totalDone}
                 total={totalClientes}
                 tituloSemana={
-                    semanaEfectiva
-                        ? `Semana ${semanaEfectiva}${operable ? ` · ${getWeekRangeLabel()}` : ''}`
+                    semanaBase
+                        ? `Semana ${semanaBase}${operable ? ` · ${getWeekRangeLabel()}` : ''}`
                         : 'Cargando…'
                 }
                 modo={operable ? 'operable' : 'preview'}

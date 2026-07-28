@@ -47,14 +47,17 @@ it('sin vuelta abierta NO pide la agenda y ofrece abrir', async () => {
 it('sin vuelta abierta muestra la semana propuesta por el backend', async () => {
     ;(api.getCicloActual as any).mockResolvedValue(null)
     renderPage()
-    expect(await screen.findByText(/semana 3/i)).toBeInTheDocument()
+    // El título del header y el CTA de CicloVacio ambos dicen "Semana 3" (a propósito:
+    // Task 9 fix-round — el título usa semanaBase para no quedarse en "Cargando…"), así
+    // que se apunta al botón puntualmente para no depender de cuál de los dos matchea.
+    expect(await screen.findByRole('button', { name: /abrir semana 3/i })).toBeInTheDocument()
     expect(api.getCicloPreview).toHaveBeenCalledWith(undefined)
 })
 
 it('las flechas navegan las semanas de la rotación', async () => {
     ;(api.getCicloActual as any).mockResolvedValue(null)
     renderPage()
-    await screen.findByText(/semana 3/i)
+    await screen.findByRole('button', { name: /abrir semana 3/i })
     fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
     await waitFor(() => expect(api.getCicloPreview).toHaveBeenCalledWith(4))
 })
@@ -65,7 +68,7 @@ it('las flechas hacen wrap de 5 a 1', async () => {
         semana: 5, clientes: 47, omitidos: [], dias: semanaVacia,
     })
     renderPage()
-    await screen.findByText(/semana 5/i)
+    await screen.findByRole('button', { name: /abrir semana 5/i })
     fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
     await waitFor(() => expect(api.getCicloPreview).toHaveBeenCalledWith(1))
 })
