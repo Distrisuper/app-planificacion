@@ -3,119 +3,173 @@ import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
 import DiaTabs from '@/components/DiaTabs'
 import AgendaBoard from '@/components/AgendaBoard'
-import PropuestaSheet from '@/components/PropuestaSheet'
+import CicloVacio from '@/components/CicloVacio'
+import VisitaFlow from '@/components/VisitaFlow'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import ReagendarSheet from '@/components/ReagendarSheet'
+import CerrarSemanaSheet from '@/components/CerrarSemanaSheet'
 import { useAgendaSemana } from '@/hooks/useAgenda'
+import { useCicloActual, useCicloPreview, useAbrirCiclo, useReagendar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
-import { useIniciarVisita, useCerrarVisita, useVisitaActiva, useNoVisita } from '@/hooks/useVisitas'
-import { getCurrentCoord } from '@/hooks/useGeolocation'
+import { useNoVisita } from '@/hooks/useVisitas'
 import { useToast } from '@/hooks/useToast'
 import { Toast } from '@/components/ui/toast'
+import { estaResuelto } from '@/lib/estadoCiclo'
+import { errorCode } from '@/lib/apiError'
 import { getWeekRangeLabel } from '@/lib/weekDates'
-import type { Dia, IAgendaClient } from '@/types/planificacion'
+import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
+const SEMANAS = 5
+
+const MENSAJE_GEO = {
+    denegado:
+        'Necesitamos tu ubicación para registrar la visita. Activá el permiso de ubicación y volvé a intentar.',
+    sin_senal:
+        'No pudimos tomar tu ubicación. Salí a un lugar con señal y volvé a intentar.',
+    no_soportado:
+        'Este dispositivo no puede tomar la ubicación. Avisá a sistemas.',
+} as const
+
+/**
+ * Problema de configuración de la cuenta, no algo que el vendedor pueda resolver
+ * reintentando: su usuario no tiene un código de vendedor resoluble. Merece un mensaje
+ * distinto para que no siga tocando el botón.
+ */
+function mensajeDeCuenta(code: string | null): string | null {
+    if (code === 'SELLER_CODE_UNRESOLVED')
+        return 'Tu usuario no tiene un código de vendedor asignado. Avisá a sistemas.'
+    if (code === 'SELLER_CODE_AMBIGUOUS')
+        return 'Tu usuario tiene más de un código de vendedor. Avisá a sistemas.'
+    return null
+}
 
 export default function AgendaSemanaPage() {
     const { user, logout } = useAuth()
-    const { data: semana } = useAgendaSemana()
-    const { data: motivos = [] } = useMotivos()
-    const { data: visitaActiva } = useVisitaActiva()
-    const iniciar = useIniciarVisita()
-    const cerrar = useCerrarVisita()
-    // Kept for the "no visité" flow (registrarNoVisita), not currently reachable
-    // from the UI: the mock this screen was translated from only models
-    // Propuesta/Reagendar per card, so this action has no card entry point yet.
+    const { data: ciclo } = useCicloActual()
+    const abrir = useAbrirCiclo()
+    const reagendar = useReagendar()
     const noVisita = useNoVisita()
+    const { data: motivosVisita = [] } = useMotivos('visita')
     const { message: toastMessage, showToast } = useToast()
 
+    // La semana que se está MIRANDO. null hasta que se sepa cuál: con vuelta abierta es
+    // la suya; sin vuelta, la que proponga el preview.
+    const [semanaVista, setSemanaVista] = useState<number | null>(null)
+    const semanaEfectiva = semanaVista ?? ciclo?.semana ?? null
+    const operable = ciclo != null && semanaEfectiva === ciclo.semana
+
+    const { data: agenda } = useAgendaSemana(operable)
+    const { data: preview } = useCicloPreview(
+        semanaEfectiva ?? undefined,
+        ciclo !== undefined && !operable,
+    )
+
+    // Sin vuelta abierta y sin haber tocado las flechas todavía, semanaEfectiva es null:
+    // no hay `ciclo.semana` de dónde arrancar. La única semana conocida en ese momento es
+    // la que el backend ya propuso en el preview "propuesta" (sin filtro). Se usa SOLO
+    // como base para calcular hacia dónde moverse — no se vuelca a semanaVista, porque
+    // eso cambiaría la query key de useCicloPreview (de "propuesta" a un número) y
+    // tumbaría el preview ya cargado durante el refetch, ocultando momentáneamente el CTA.
+    const semanaBase = semanaEfectiva ?? preview?.semana ?? null
+
     const [diaActivo, setDiaActivo] = useState<Dia>('LUN')
-    const [propuestaCliente, setPropuestaCliente] = useState<IAgendaClient | null>(null)
-    const [resolviendo, setResolviendo] = useState(false)
+    const [visitaCliente, setVisitaCliente] = useState<IAgendaClient | null>(null)
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [reagendarCliente, setReagendarCliente] = useState<IAgendaClient | null>(null)
-    // Captured directly from iniciarVisita's response rather than re-read from
-    // useVisitaActiva: that query only refetches because iniciarVisita's onSuccess
-    // invalidates it, and if that refetch itself fails (network blip, transient 401),
-    // visitaActiva would still be null/stale here — silently no-op'ing onCerrar on a
-    // visit that was actually created server-side.
-    const [visitaActivaId, setVisitaActivaId] = useState<number | null>(null)
+    const [cerrandoSemana, setCerrandoSemana] = useState(false)
+
+    // Las cards del preview no tienen cicloClienteId ni estado, así que se adaptan a la
+    // forma de la agenda SOLO para render. El board queda en modo preview, sin acciones,
+    // de modo que estos valores de relleno nunca llegan a una mutación.
+    const semana: SemanaAgenda | undefined = useMemo(() => {
+        if (operable) return agenda
+        if (!preview) return undefined
+        const out = {} as SemanaAgenda
+        for (const d of DIAS) {
+            out[d] = (preview.dias[d] ?? []).map(c => ({
+                ...c,
+                cicloClienteId: -1,
+                estado: 'pendiente' as const,
+                visitaId: null,
+                rubrosPendientes: 0,
+            }))
+        }
+        return out
+    }, [operable, agenda, preview])
 
     const counts = useMemo(() => {
         const c = {} as Record<Dia, { done: number; total: number }>
         for (const d of DIAS) {
             const clientes = semana?.[d] ?? []
-            c[d] = { done: clientes.filter(x => x.resuelto).length, total: clientes.length }
+            c[d] = {
+                done: operable ? clientes.filter(x => estaResuelto(x.estado)).length : 0,
+                total: clientes.length,
+            }
         }
         return c
-    }, [semana])
+    }, [semana, operable])
 
     const totalClientes = DIAS.reduce((n, d) => n + (semana?.[d]?.length ?? 0), 0)
-    const totalDone = DIAS.reduce((n, d) => n + (semana?.[d]?.filter(x => x.resuelto).length ?? 0), 0)
+    const totalDone = DIAS.reduce((n, d) => n + counts[d].done, 0)
 
-    function findCliente(codigo: string): IAgendaClient | null {
-        for (const d of DIAS) {
-            const found = semana?.[d]?.find(c => c.codigoParticularCliente === codigo)
-            if (found) return found
+    function moverSemana(delta: number) {
+        const base = semanaBase ?? 1
+        // Wrap 1..5: la rotación es circular, así que las flechas nunca quedan sin salida.
+        setSemanaVista(((base - 1 + delta + SEMANAS) % SEMANAS) + 1)
+    }
+
+    async function onAbrirSemana() {
+        try {
+            const res = await abrir.mutateAsync(semanaBase ?? undefined)
+            setSemanaVista(res.semana)
+            showToast(`Semana ${res.semana} abierta con ${res.clientes} clientes`)
+        } catch (err) {
+            const code = errorCode(err)
+            if (code === 'CICLO_ABIERTO_EXISTENTE') {
+                // Otra pestaña o un doble tap ganaron: el hook ya invalidó cicloActual.
+                setSemanaVista(null)
+                return
+            }
+            const deCuenta = mensajeDeCuenta(code)
+            showToast(
+                deCuenta ??
+                    (code === 'CICLO_SIN_CLIENTES'
+                        ? 'Esa semana ya no tiene clientes asignados.'
+                        : 'No se pudo abrir la semana. Volvé a intentar.'),
+            )
         }
-        return null
     }
 
-    function abrirCliente(codigo: string) {
-        setPropuestaCliente(findCliente(codigo))
-    }
-
-    function abrirReagendar(codigo: string) {
-        setReagendarCliente(findCliente(codigo))
-    }
-
-    function onPickReagendar() {
-        // No hay mutación de reagendado en el backend todavía (ver CLAUDE.md:
-        // "Reagendar no mueve estructuralmente al cliente de día"). El componente
-        // existe y es funcional en su UI, pero la acción real queda pendiente.
+    async function onPickReagendar(dia: Dia) {
+        const cliente = reagendarCliente
         setReagendarCliente(null)
-        showToast('Reagendar aún no está disponible')
-    }
-
-    async function onIniciarVisita() {
-        if (!propuestaCliente) return
-        const coord = await getCurrentCoord()
-        const { visitaId } = await iniciar.mutateAsync({
-            codigoParticularCliente: propuestaCliente.codigoParticularCliente,
-            nombreCliente: propuestaCliente.nombreCliente,
-            coordInicio: coord,
-        })
-        setVisitaActivaId(visitaId)
-        setResolviendo(true)
-    }
-
-    async function onCerrar(motivoIds: number[]) {
-        // Prefer the id captured directly from iniciarVisita's response; fall back to
-        // the useVisitaActiva query for the case where the page was reloaded mid-visit
-        // (visitaActivaId resets on remount, but the server still has one open).
-        const visitaId = visitaActivaId ?? visitaActiva?.visitaId
-        if (!visitaId) return
-        const coord = await getCurrentCoord()
-        const res = await cerrar.mutateAsync({ visitaId, coordFinal: coord, motivoIds })
-        setVisitaActivaId(null)
-        setResolviendo(false)
-        setPropuestaCliente(null)
-        if (res.seguimientoPendiente) {
-            window.alert('Visita cerrada. El seguimiento en Cromo quedó pendiente de sincronizar.')
+        if (!cliente) return
+        try {
+            await reagendar.mutateAsync({
+                cicloClienteId: cliente.cicloClienteId,
+                dia: DIAS.indexOf(dia) + 1,
+            })
+            // Reagendar mueve el día y deja al cliente PENDIENTE: no lo resuelve.
+            showToast('Cliente reagendado')
+        } catch {
+            showToast('No se pudo reagendar. Volvé a intentar.')
         }
     }
 
     async function onConfirmNoVisita(motivoIds: number[]) {
-        if (!noVisitaCliente) return
-        const res = await noVisita.mutateAsync({
-            codigoParticularCliente: noVisitaCliente.codigoParticularCliente,
-            nombreCliente: noVisitaCliente.nombreCliente,
-            motivoIds,
-        })
+        const cliente = noVisitaCliente
         setNoVisitaCliente(null)
-        if (res.seguimientoPendiente) {
-            window.alert('Registrado. El seguimiento en Cromo quedó pendiente de sincronizar.')
+        if (!cliente) return
+        try {
+            await noVisita.mutateAsync({ cicloClienteId: cliente.cicloClienteId, motivoIds })
+            showToast('Registrado')
+        } catch (err) {
+            showToast(
+                errorCode(err) === 'CICLO_CLIENTE_YA_RESUELTO'
+                    ? 'Este cliente ya estaba resuelto. Actualizamos tu agenda.'
+                    : 'No se pudo registrar. Volvé a intentar.',
+            )
         }
     }
 
@@ -125,40 +179,50 @@ export default function AgendaSemanaPage() {
                 vendedorNombre={user?.name ?? ''}
                 completadas={totalDone}
                 total={totalClientes}
-                rangoSemana={getWeekRangeLabel()}
+                tituloSemana={
+                    semanaEfectiva
+                        ? `Semana ${semanaEfectiva}${operable ? ` · ${getWeekRangeLabel()}` : ''}`
+                        : 'Cargando…'
+                }
+                modo={operable ? 'operable' : 'preview'}
                 onLogout={logout}
-                onPrevWeek={() => showToast('Estás en la semana en curso')}
-                onNextWeek={() => showToast('Planificación disponible sólo para esta semana')}
+                onCerrarSemana={operable ? () => setCerrandoSemana(true) : undefined}
+                onPrevWeek={() => moverSemana(-1)}
+                onNextWeek={() => moverSemana(1)}
             />
             <DiaTabs activo={diaActivo} counts={counts} onSelect={setDiaActivo} />
             <AgendaBoard
                 semana={semana}
                 activo={diaActivo}
+                modo={operable ? 'operable' : 'preview'}
                 onActivoChange={setDiaActivo}
-                onAbrir={abrirCliente}
-                onReagendar={abrirReagendar}
+                onAbrir={setVisitaCliente}
+                onReagendar={setReagendarCliente}
+                onNoVisita={setNoVisitaCliente}
+                onCargarRubros={setVisitaCliente}
             />
 
-            <PropuestaSheet
-                open={!!propuestaCliente && !resolviendo}
-                codigoCliente={propuestaCliente?.codigoParticularCliente ?? null}
-                nombreCliente={propuestaCliente?.nombreCliente ?? ''}
-                onIniciarVisita={onIniciarVisita}
-                onClose={() => setPropuestaCliente(null)}
-            />
-            <ResolucionSheet
-                open={resolviendo}
-                motivos={motivos}
-                confirmLabel="Cerrar visita"
-                submitting={cerrar.isPending}
-                onConfirm={onCerrar}
-                onClose={() => setResolviendo(false)}
+            {ciclo === null && preview && (
+                <CicloVacio
+                    semana={preview.semana}
+                    clientes={preview.clientes}
+                    omitidos={preview.omitidos}
+                    abriendo={abrir.isPending}
+                    onAbrir={onAbrirSemana}
+                />
+            )}
+
+            <VisitaFlow
+                cliente={visitaCliente}
+                onClose={() => setVisitaCliente(null)}
+                onGeoBloqueada={motivo => showToast(MENSAJE_GEO[motivo])}
+                onAviso={showToast}
             />
             <ResolucionSheet
                 open={!!noVisitaCliente}
-                motivos={motivos}
+                motivos={motivosVisita}
                 confirmLabel="Registrar"
-                eyebrow="No visita"
+                eyebrow="No visité"
                 submitting={noVisita.isPending}
                 onConfirm={onConfirmNoVisita}
                 onClose={() => setNoVisitaCliente(null)}
@@ -166,9 +230,18 @@ export default function AgendaSemanaPage() {
             <ReagendarSheet
                 open={!!reagendarCliente}
                 nombreCliente={reagendarCliente?.nombreCliente ?? ''}
-                diaActual={diaActivo}
+                diaActual={reagendarCliente ? DIAS[reagendarCliente.dia - 1] : null}
                 onPick={onPickReagendar}
                 onClose={() => setReagendarCliente(null)}
+            />
+            <CerrarSemanaSheet
+                open={cerrandoSemana}
+                onClose={() => setCerrandoSemana(false)}
+                onCerrado={() => {
+                    setCerrandoSemana(false)
+                    setSemanaVista(null)
+                    showToast('Semana cerrada')
+                }}
             />
             <Toast message={toastMessage} />
         </div>

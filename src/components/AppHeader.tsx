@@ -7,8 +7,12 @@ interface AppHeaderProps {
     vendedorNombre: string
     completadas: number
     total: number
-    rangoSemana: string
+    /** Texto central: "Semana 3 · 13 – 17 Jul" o similar. */
+    tituloSemana: string
+    /** 'preview' = hojeando una semana que no es la abierta. */
+    modo?: 'operable' | 'preview'
     onLogout?: () => void
+    onCerrarSemana?: () => void
     onPrevWeek?: () => void
     onNextWeek?: () => void
 }
@@ -27,12 +31,15 @@ export default function AppHeader({
     vendedorNombre,
     completadas,
     total,
-    rangoSemana,
+    tituloSemana,
+    modo,
     onLogout,
+    onCerrarSemana,
     onPrevWeek,
     onNextWeek,
 }: AppHeaderProps) {
     const pct = total > 0 ? Math.round((completadas / total) * 100) : 0
+    const preview = modo === 'preview'
 
     return (
         <header className="bg-dsnavy text-white px-4 pt-3 pb-3.5">
@@ -47,52 +54,65 @@ export default function AppHeader({
                 </div>
                 <div className="flex shrink-0 items-center">
                     {onLogout ? (
-                        <AccountMenu nombre={vendedorNombre} onLogout={onLogout} />
+                        <AccountMenu nombre={vendedorNombre} onLogout={onLogout} onCerrarSemana={onCerrarSemana} />
                     ) : (
                         <Avatar initials={initialsOf(vendedorNombre)} />
                     )}
                 </div>
             </div>
 
-            <div className="mt-1.5 flex items-center justify-between">
+            {/* Las flechas ya no son decorativas: son el navegador de ciclos. aria-label porque
+                los tests (y el lector de pantalla) las identifican por nombre accesible, no por
+                el ícono. */}
+            <div className="mt-2.5 flex items-center justify-between gap-2">
                 <Button
                     variant="ghost"
                     size="icon"
                     aria-label="Semana anterior"
                     onClick={onPrevWeek}
-                    className="h-9 w-9 text-white hover:bg-white/15"
+                    className="h-7 w-7 shrink-0 text-white/70 hover:bg-white/10 hover:text-white"
                 >
-                    <ChevronLeft className="h-5 w-5" strokeWidth={2.4} />
+                    <ChevronLeft className="h-[18px] w-[18px]" strokeWidth={2.4} />
                 </Button>
-                <div className="flex flex-1 flex-col items-center whitespace-nowrap leading-tight">
-                    <span className="text-[14.5px] font-extrabold">Semana {rangoSemana}</span>
-                    <span className="text-[10.5px] text-white/60">Clientes a visitar</span>
+                <div className="min-w-0 text-center">
+                    <div className="truncate text-[13.5px] font-extrabold">{tituloSemana}</div>
+                    {preview ? (
+                        <span className="mt-0.5 inline-block rounded-full bg-white/15 px-2 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-white/80">
+                            Vista previa
+                        </span>
+                    ) : (
+                        <div className="text-[10.5px] font-semibold text-white/60">Clientes a visitar</div>
+                    )}
                 </div>
                 <Button
                     variant="ghost"
                     size="icon"
                     aria-label="Semana siguiente"
                     onClick={onNextWeek}
-                    className="h-9 w-9 text-white hover:bg-white/15"
+                    className="h-7 w-7 shrink-0 text-white/70 hover:bg-white/10 hover:text-white"
                 >
-                    <ChevronRight className="h-5 w-5" strokeWidth={2.4} />
+                    <ChevronRight className="h-[18px] w-[18px]" strokeWidth={2.4} />
                 </Button>
             </div>
 
-            <div className="mt-2.5">
-                <div className="mb-1.5 flex justify-between text-[11.5px] font-semibold text-white/70">
-                    <span>Visitas completadas</span>
-                    <span className="font-extrabold text-white">
-                        {completadas} / {total}
-                    </span>
+            {/* Sin barra de progreso en preview: no hay progreso de una semana que no se trabaja,
+                y mostrar 0/39 se leería como "no hiciste nada" en vez de "no es tu semana". */}
+            {!preview && (
+                <div className="mt-2.5">
+                    <div className="mb-1.5 flex justify-between text-[11.5px] font-semibold text-white/70">
+                        <span>Visitas completadas</span>
+                        <span className="font-extrabold text-white">
+                            {completadas} / {total}
+                        </span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
+                        <div
+                            className="h-full rounded-full bg-dsgreen transition-[width] duration-300 ease-out"
+                            style={{ width: `${pct}%` }}
+                        />
+                    </div>
                 </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/20">
-                    <div
-                        className="h-full rounded-full bg-dsgreen transition-[width] duration-300 ease-out"
-                        style={{ width: `${pct}%` }}
-                    />
-                </div>
-            </div>
+            )}
         </header>
     )
 }
