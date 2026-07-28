@@ -23,12 +23,20 @@ const cliente: IAgendaClient = {
 function renderFlow(over: Record<string, unknown> = {}) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onGeoBloqueada = vi.fn()
+    const onClose = vi.fn()
+    const onAviso = vi.fn()
     render(
         <QueryClientProvider client={qc}>
-            <VisitaFlow cliente={cliente} onClose={() => {}} onGeoBloqueada={onGeoBloqueada} {...over} />
+            <VisitaFlow
+                cliente={cliente}
+                onClose={onClose}
+                onGeoBloqueada={onGeoBloqueada}
+                onAviso={onAviso}
+                {...over}
+            />
         </QueryClientProvider>,
     )
-    return { onGeoBloqueada }
+    return { onGeoBloqueada, onClose, onAviso }
 }
 
 beforeEach(() => {
@@ -98,4 +106,65 @@ it('cerrar visita con la ubicación bloqueada no cierra', async () => {
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
     await waitFor(() => expect(onGeoBloqueada).toHaveBeenCalledWith('sin_senal'))
     expect(api.cerrarVisita).not.toHaveBeenCalled()
+})
+
+it('si iniciar falla porque el cliente ya estaba resuelto, avisa y cierra el flujo', async () => {
+    ;(api.iniciarVisita as any).mockRejectedValue({
+        response: { data: { code: 'VISITA_ACTIVA_EXISTENTE' } },
+    })
+    const { onAviso, onClose } = renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith('Este cliente ya fue resuelto. Actualizamos tu agenda.'),
+    )
+    expect(onClose).toHaveBeenCalled()
+})
+
+it('si iniciar falla porque el ciclo cliente ya estaba resuelto, avisa y cierra el flujo', async () => {
+    ;(api.iniciarVisita as any).mockRejectedValue({
+        response: { data: { code: 'CICLO_CLIENTE_YA_RESUELTO' } },
+    })
+    const { onAviso, onClose } = renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith('Este cliente ya fue resuelto. Actualizamos tu agenda.'),
+    )
+    expect(onClose).toHaveBeenCalled()
+})
+
+it('si iniciar falla por un error genérico, avisa y NO cierra el flujo', async () => {
+    ;(api.iniciarVisita as any).mockRejectedValue({
+        response: { data: { code: 'ALGO_INESPERADO' } },
+    })
+    const { onAviso, onClose } = renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith('No se pudo iniciar la visita. Volvé a intentar.'),
+    )
+    expect(onClose).not.toHaveBeenCalled()
+    // El flujo sigue abierto en la propuesta: el botón de iniciar visita sigue disponible.
+    expect(screen.getByRole('button', { name: /iniciar visita/i })).toBeInTheDocument()
+})
+
+it('si cerrar falla porque la visita ya estaba cerrada, lo trata como éxito y cierra el flujo', async () => {
+    ;(api.cerrarVisita as any).mockRejectedValue({
+        response: { data: { code: 'VISITA_YA_CERRADA' } },
+    })
+    const { onClose } = renderFlow({ cliente: { ...cliente, estado: 'en_curso', visitaId: 55 } })
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalled())
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+})
+
+it('si cerrar falla por un error genérico, avisa y NO cierra el flujo', async () => {
+    ;(api.cerrarVisita as any).mockRejectedValue({
+        response: { data: { code: 'ALGO_INESPERADO' } },
+    })
+    const { onAviso, onClose } = renderFlow({ cliente: { ...cliente, estado: 'en_curso', visitaId: 55 } })
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith('No se pudo cerrar la visita. Volvé a intentar.'),
+    )
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /cerrar visita/i })).toBeInTheDocument()
 })
