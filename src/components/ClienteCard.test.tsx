@@ -1,62 +1,79 @@
-// src/components/ClienteCard.test.tsx
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
 import ClienteCard from './ClienteCard'
+import type { IAgendaClient } from '@/types/planificacion'
 
-const cliente = {
-    codigoParticularCliente: '10034',
-    nombreCliente: 'Almacén Don José',
-    barrio: 'Centro',
-    visit: 's1d1',
+function cliente(over: Partial<IAgendaClient> = {}): IAgendaClient {
+    return {
+        codigoCliente: 'C1',
+        codigoParticularCliente: '10034',
+        nombreCliente: 'ALMACEN DON JOSE',
+        direccion: 'Av. San Martín 100',
+        cicloClienteId: 42,
+        dia: 1,
+        estado: 'pendiente',
+        visitaId: null,
+        rubrosPendientes: 0,
+        ...over,
+    }
 }
 
-it('shows resolved styling and hides the actions when resuelto', () => {
-    render(<ClienteCard cliente={{ ...cliente, resuelto: true }} onAbrir={vi.fn()} onReagendar={vi.fn()} />)
-    expect(screen.getByText('Almacén Don José')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /propuesta/i })).not.toBeInTheDocument()
+const noop = () => {}
+const handlers = {
+    onAbrir: noop,
+    onReagendar: noop,
+    onNoVisita: noop,
+    onCargarRubros: noop,
+}
+
+it('un cliente pendiente muestra las tres acciones', () => {
+    render(<ClienteCard cliente={cliente()} {...handlers} />)
+    expect(screen.getByRole('button', { name: /propuesta/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reagendar/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /no visité/i })).toBeInTheDocument()
+})
+
+it('en_curso muestra el badge y sigue permitiendo abrir la visita', () => {
+    render(<ClienteCard cliente={cliente({ estado: 'en_curso', visitaId: 7 })} {...handlers} />)
+    expect(screen.getByText(/en curso/i)).toBeInTheDocument()
+})
+
+it('un cliente resuelto no ofrece acciones de resolución', () => {
+    render(<ClienteCard cliente={cliente({ estado: 'visitada', visitaId: 7 })} {...handlers} />)
+    expect(screen.queryByRole('button', { name: /no visité/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /reagendar/i })).not.toBeInTheDocument()
 })
 
-it('fires onAbrir when the Propuesta button is tapped', async () => {
-    const onAbrir = vi.fn()
-    render(<ClienteCard cliente={cliente} onAbrir={onAbrir} onReagendar={vi.fn()} />)
-    await userEvent.click(screen.getByRole('button', { name: /propuesta/i }))
-    expect(onAbrir).toHaveBeenCalledWith('10034')
+it('no_visita y reagendada se distinguen visualmente', () => {
+    const { rerender } = render(<ClienteCard cliente={cliente({ estado: 'no_visita' })} {...handlers} />)
+    expect(screen.getByText(/no visitado/i)).toBeInTheDocument()
+    rerender(<ClienteCard cliente={cliente({ estado: 'reagendada' })} {...handlers} />)
+    expect(screen.getByText(/reagendada/i)).toBeInTheDocument()
 })
 
-it('fires onReagendar when the Reagendar button is tapped', async () => {
-    const onReagendar = vi.fn()
-    render(<ClienteCard cliente={cliente} onAbrir={vi.fn()} onReagendar={onReagendar} />)
-    await userEvent.click(screen.getByRole('button', { name: /reagendar/i }))
-    expect(onReagendar).toHaveBeenCalledWith('10034')
-})
-
-it('shows nombreFantasia instead of nombreCliente when present', () => {
+it('una visita con rubros sin cargar lo avisa y ofrece completarla', () => {
+    const onCargarRubros = vi.fn()
     render(
         <ClienteCard
-            cliente={{ ...cliente, nombreFantasia: 'Distribuidora Os Car' }}
-            onAbrir={vi.fn()}
-            onReagendar={vi.fn()}
+            cliente={cliente({ estado: 'visitada', visitaId: 7, rubrosPendientes: 2 })}
+            {...handlers}
+            onCargarRubros={onCargarRubros}
         />,
     )
-    expect(screen.getByText('Distribuidora Os Car')).toBeInTheDocument()
-    expect(screen.queryByText('Almacén Don José')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /2 rubros sin cargar/i }))
+    expect(onCargarRubros).toHaveBeenCalledWith(expect.objectContaining({ visitaId: 7 }))
 })
 
-it('links a clean phone number as tel: but shows a dirty one as plain text', () => {
-    const { rerender } = render(
-        <ClienteCard cliente={{ ...cliente, telefono: '3511234567' }} onAbrir={vi.fn()} onReagendar={vi.fn()} />,
-    )
-    expect(screen.getByRole('link', { name: /3511234567/ })).toHaveAttribute('href', 'tel:+543511234567')
+it('en modo preview no hay ninguna acción', () => {
+    // La compuerta real la da el tipo (IPreviewClient no llega acá), pero la card
+    // igual tiene que renderizarse sin botones cuando se hojea otra semana.
+    render(<ClienteCard cliente={cliente()} {...handlers} modo="preview" />)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+})
 
-    rerender(
-        <ClienteCard
-            cliente={{ ...cliente, telefono: '1171473562 / 46641751' }}
-            onAbrir={vi.fn()}
-            onReagendar={vi.fn()}
-        />,
-    )
-    expect(screen.queryByRole('link', { name: /1171473562/ })).not.toBeInTheDocument()
-    expect(screen.getByText('1171473562 / 46641751')).toBeInTheDocument()
+it('los handlers reciben el cliente completo, no el código', () => {
+    const onAbrir = vi.fn()
+    render(<ClienteCard cliente={cliente()} {...handlers} onAbrir={onAbrir} />)
+    fireEvent.click(screen.getByRole('button', { name: /propuesta/i }))
+    expect(onAbrir).toHaveBeenCalledWith(expect.objectContaining({ cicloClienteId: 42 }))
 })

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import ClienteCard from './ClienteCard'
 import { getWeekDates, formatDayDate, isSameDay } from '@/lib/weekDates'
-import type { Dia, SemanaAgenda } from '@/types/planificacion'
+import { estaResuelto } from '@/lib/estadoCiclo'
+import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 const DIA_NOMBRE: Record<Dia, string> = { LUN: 'Lunes', MAR: 'Martes', MIE: 'Mi√©rcoles', JUE: 'Jueves', VIE: 'Viernes' }
@@ -9,12 +10,24 @@ const DIA_NOMBRE: Record<Dia, string> = { LUN: 'Lunes', MAR: 'Martes', MIE: 'Mi√
 interface AgendaBoardProps {
     semana: SemanaAgenda | undefined
     activo: Dia
+    modo?: 'operable' | 'preview'
     onActivoChange: (dia: Dia) => void
-    onAbrir: (codigo: string) => void
-    onReagendar: (codigo: string) => void
+    onAbrir: (cliente: IAgendaClient) => void
+    onReagendar: (cliente: IAgendaClient) => void
+    onNoVisita: (cliente: IAgendaClient) => void
+    onCargarRubros: (cliente: IAgendaClient) => void
 }
 
-export default function AgendaBoard({ semana, activo, onActivoChange, onAbrir, onReagendar }: AgendaBoardProps) {
+export default function AgendaBoard({
+    semana,
+    activo,
+    modo,
+    onActivoChange,
+    onAbrir,
+    onReagendar,
+    onNoVisita,
+    onCargarRubros,
+}: AgendaBoardProps) {
     const boardRef = useRef<HTMLDivElement>(null)
     const columnRefs = useRef<Partial<Record<Dia, HTMLDivElement>>>({})
     const weekDates = useMemo(() => getWeekDates(), [])
@@ -61,7 +74,7 @@ export default function AgendaBoard({ semana, activo, onActivoChange, onAbrir, o
         >
             {DIAS.map(d => {
                 const clientes = semana?.[d] ?? []
-                const done = clientes.filter(c => c.resuelto).length
+                const done = clientes.filter(c => estaResuelto(c.estado)).length
                 const total = clientes.length
                 const allDone = total > 0 && done === total
                 const isToday = isSameDay(weekDates[d], today)
@@ -104,8 +117,11 @@ export default function AgendaBoard({ semana, activo, onActivoChange, onAbrir, o
                                     key={c.codigoParticularCliente}
                                     cliente={c}
                                     isToday={isToday}
+                                    modo={modo}
                                     onAbrir={onAbrir}
                                     onReagendar={onReagendar}
+                                    onNoVisita={onNoVisita}
+                                    onCargarRubros={onCargarRubros}
                                 />
                             ))}
                             {clientes.length === 0 && (

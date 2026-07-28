@@ -1,13 +1,18 @@
-import { Calendar, Check, Clock, MapPin, Phone, Zap } from 'lucide-react'
+import { AlertCircle, Ban, Calendar, CalendarClock, Check, Clock, MapPin, Phone, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { titleCaseNombre, initialsOfCliente } from '@/lib/textFormat'
+import { estaResuelto } from '@/lib/estadoCiclo'
 import type { IAgendaClient } from '@/types/planificacion'
 
 interface ClienteCardProps {
     cliente: IAgendaClient
     isToday?: boolean
-    onAbrir: (codigo: string) => void
-    onReagendar: (codigo: string) => void
+    /** 'preview' = hojeando otra semana: se ve, no se opera. */
+    modo?: 'operable' | 'preview'
+    onAbrir: (cliente: IAgendaClient) => void
+    onReagendar: (cliente: IAgendaClient) => void
+    onNoVisita: (cliente: IAgendaClient) => void
+    onCargarRubros: (cliente: IAgendaClient) => void
 }
 
 const ACCENT = '#213D82'
@@ -23,13 +28,26 @@ function hasTimePassed(hora: string): boolean {
     return hora < current
 }
 
-export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: ClienteCardProps) {
-    const resuelto = !!cliente.resuelto
+export default function ClienteCard({
+    cliente,
+    isToday,
+    modo = 'operable',
+    onAbrir,
+    onReagendar,
+    onNoVisita,
+    onCargarRubros,
+}: ClienteCardProps) {
+    const resuelto = estaResuelto(cliente.estado)
+    const enCurso = cliente.estado === 'en_curso'
+    const operable = modo === 'operable'
     // `||` (no `??`): nombreFantasia real puede venir como '' (sin cartel) — en ese
     // caso hay que caer a la razón social, no mostrar un nombre vacío.
     const nombre = titleCaseNombre(cliente.nombreFantasia || cliente.nombreCliente)
-    const atrasado = !resuelto && !cliente.enCurso && !!isToday && !!cliente.horaVisita && hasTimePassed(cliente.horaVisita)
-    const telefonoLimpio = cliente.telefono && TELEFONO_LIMPIO.test(cliente.telefono) ? cliente.telefono : null
+    const atrasado =
+        !resuelto && !enCurso && !!isToday && !!cliente.horaVisita && hasTimePassed(cliente.horaVisita)
+    const telefonoLimpio =
+        cliente.telefono && TELEFONO_LIMPIO.test(cliente.telefono) ? cliente.telefono : null
+    const pendientes = cliente.rubrosPendientes
 
     return (
         <div
@@ -49,10 +67,22 @@ export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: 
                             {cliente.horaVisita}
                         </span>
                     )}
-                    {cliente.enCurso && (
+                    {enCurso && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#FEF0E1] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-[#B45309]">
                             <span className="h-1.5 w-1.5 rounded-full bg-[#F97316]" />
                             En curso
+                        </span>
+                    )}
+                    {cliente.estado === 'no_visita' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F3F7] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-[#54607A]">
+                            <Ban className="h-2.5 w-2.5" strokeWidth={2.6} />
+                            No visitado
+                        </span>
+                    )}
+                    {cliente.estado === 'reagendada' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#EEF3FB] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-dsnavy">
+                            <CalendarClock className="h-2.5 w-2.5" strokeWidth={2.6} />
+                            Reagendada
                         </span>
                     )}
                     {atrasado && (
@@ -61,7 +91,7 @@ export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: 
                         </span>
                     )}
                 </div>
-                {resuelto && (
+                {cliente.estado === 'visitada' && (
                     <span
                         aria-label="Visitado"
                         className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-dsgreen text-white"
@@ -113,26 +143,51 @@ export default function ClienteCard({ cliente, isToday, onAbrir, onReagendar }: 
                 </span>
             )}
 
-            {!resuelto && (
-                <div className="mt-2.5 flex gap-1.5 border-t border-[#EDEFF4] pt-2.5">
+            {/* Rubros sin cargar: traban el cierre de la semana, así que el aviso va
+                donde el vendedor ya está mirando y no recién al final. */}
+            {operable && pendientes > 0 && cliente.visitaId !== null && (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onCargarRubros(cliente)}
+                    className="mt-2.5 h-10 w-full border-[#F0D8A8] bg-[#FEF8EC] text-[12.5px] font-bold text-[#B45309]"
+                >
+                    <AlertCircle className="h-[14px] w-[14px]" strokeWidth={2.2} />
+                    {pendientes} {pendientes === 1 ? 'rubro' : 'rubros'} sin cargar
+                </Button>
+            )}
+
+            {operable && !resuelto && (
+                <div className="mt-2.5 flex flex-col gap-1.5 border-t border-[#EDEFF4] pt-2.5">
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onAbrir(cliente.codigoParticularCliente)}
-                        className="h-11 flex-1 border-[#D8DEEA] text-[13px] text-dsnavy"
+                        onClick={() => onAbrir(cliente)}
+                        className="h-11 w-full border-[#D8DEEA] text-[13px] text-dsnavy"
                     >
                         <Zap className="h-[14px] w-[14px]" strokeWidth={2} />
                         Propuesta
                     </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onReagendar(cliente.codigoParticularCliente)}
-                        className="h-11 flex-1 border-[#D8DEEA] text-[13px] text-dsnavy"
-                    >
-                        <Calendar className="h-[14px] w-[14px]" strokeWidth={2} />
-                        Reagendar
-                    </Button>
+                    <div className="flex gap-1.5">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onReagendar(cliente)}
+                            className="h-11 flex-1 border-[#D8DEEA] text-[12.5px] text-dsnavy"
+                        >
+                            <Calendar className="h-[14px] w-[14px]" strokeWidth={2} />
+                            Reagendar
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onNoVisita(cliente)}
+                            className="h-11 flex-1 border-[#D8DEEA] text-[12.5px] text-dsnavy"
+                        >
+                            <Ban className="h-[14px] w-[14px]" strokeWidth={2} />
+                            No visité
+                        </Button>
+                    </div>
                 </div>
             )}
         </div>
