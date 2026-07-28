@@ -5,14 +5,17 @@ import type { Dia, SemanaAgenda } from '@/types/planificacion'
 
 export const agendaKeys = {
     semana: ['agenda', 'semana'] as const,
-    dia: (dia: string, fecha: string) => ['agenda', 'dia', dia, fecha] as const,
+    dia: (dia: string) => ['agenda', 'dia', dia] as const,
 }
 
-export function useAgendaSemana() {
+/**
+ * `enabled` sale de tener una vuelta abierta. Sin ella el endpoint responde
+ * 409 CICLO_NO_ABIERTO, y ramificar la pantalla sobre un error HTTP sería frágil:
+ * GET /ciclo/actual ya devuelve null, así que se sabe ANTES de preguntar.
+ */
+export function useAgendaSemana(enabled: boolean) {
     return useQuery({
         queryKey: agendaKeys.semana,
-        // Wrapped (not passed directly) so React Query's QueryFunctionContext isn't
-        // forwarded as the optional `semana` argument of getAgendaSemana.
         queryFn: async () => {
             const semana = await getAgendaSemana()
             const out = {} as SemanaAgenda
@@ -21,13 +24,14 @@ export function useAgendaSemana() {
             }
             return out
         },
+        enabled,
     })
 }
 
-export function useAgendaDia(dia: string, fecha: string, enabled = true) {
+export function useAgendaDia(dia: Dia, enabled = true) {
     return useQuery({
-        queryKey: agendaKeys.dia(dia, fecha),
-        queryFn: async () => (await getAgendaDia(dia, fecha)).map(withMockVisualData),
+        queryKey: agendaKeys.dia(dia),
+        queryFn: async () => (await getAgendaDia(dia)).map(withMockVisualData),
         enabled,
     })
 }

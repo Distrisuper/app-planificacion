@@ -1,61 +1,46 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+    cerrarVisita,
     getVisitaActiva,
     iniciarVisita,
-    cerrarVisita,
     registrarNoVisita,
 } from '@/api/planificacion'
 import { agendaKeys } from './useAgenda'
+import { cicloKeys } from './useCiclo'
+import type { ICerrarVisitaDTO, IIniciarVisitaDTO, INoVisitaDTO } from '@/types/planificacion'
+
+export const visitaKeys = { activa: ['visita-activa'] as const }
 
 export function useVisitaActiva() {
-    // getVisitaActiva takes zero args, so passing it directly as queryFn is safe —
-    // React Query's injected QueryFunctionContext argument is simply ignored (same
-    // reasoning as getMotivos in useMotivos.ts).
-    return useQuery({ queryKey: ['visita-activa'], queryFn: getVisitaActiva })
+    return useQuery({ queryKey: visitaKeys.activa, queryFn: getVisitaActiva })
+}
+
+function useMutacionDeVisita<TVars, TData>(fn: (vars: TVars) => Promise<TData>) {
+    const qc = useQueryClient()
+    return useMutation({
+        // Envuelta (no pasada directo) para que solo las `variables` reales lleguen a la
+        // función: React Query v5 llama a mutationFn con un segundo argumento de contexto,
+        // que si no se filtraría en los toHaveBeenCalledWith de los tests.
+        mutationFn: fn,
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: visitaKeys.activa })
+            qc.invalidateQueries({ queryKey: agendaKeys.semana })
+            qc.invalidateQueries({ queryKey: cicloKeys.actual })
+        },
+    })
 }
 
 export function useIniciarVisita() {
-    const qc = useQueryClient()
-    return useMutation({
-        // Wrapped (rather than passed directly) so only the real `variables` reach
-        // iniciarVisita — React Query v5 calls mutationFn with a second
-        // MutationFunctionContext argument, which would otherwise leak into any
-        // assertion made against a mocked iniciarVisita in tests (see useNoVisita
-        // below, and useVisitas.test.tsx's own toHaveBeenCalledWith assertion).
-        mutationFn: (dto: Parameters<typeof iniciarVisita>[0]) => iniciarVisita(dto),
-        onSuccess: () => qc.invalidateQueries({ queryKey: ['visita-activa'] }),
-    })
+    return useMutacionDeVisita((dto: IIniciarVisitaDTO) => iniciarVisita(dto))
 }
 
+/** Sin motivoIds: el resultado comercial vive en los rubros. */
 export function useCerrarVisita() {
-    const qc = useQueryClient()
-    return useMutation({
-        // cerrarVisita takes two args (visitaId, body); mutationFn only ever gets a
-        // single variables argument, so it must be wrapped.
-        mutationFn: (args: {
-            visitaId: number
-            coordFinal: string | null
-            motivoIds: number[]
-        }) => cerrarVisita(args.visitaId, { coordFinal: args.coordFinal, motivoIds: args.motivoIds }),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ['visita-activa'] })
-            qc.invalidateQueries({ queryKey: agendaKeys.semana })
-            qc.invalidateQueries({ queryKey: ['agenda', 'dia'] })
-        },
-    })
+    return useMutacionDeVisita((args: { visitaId: number } & ICerrarVisitaDTO) =>
+        cerrarVisita(args.visitaId, { coordFinal: args.coordFinal }),
+    )
 }
 
 export function useNoVisita() {
-    const qc = useQueryClient()
-    return useMutation({
-        // Wrapped (rather than passed directly) so only the real `variables` reach
-        // registrarNoVisita — React Query v5 calls mutationFn with a second
-        // MutationFunctionContext argument, which would otherwise leak into any
-        // assertion made against the mocked registrarNoVisita in tests.
-        mutationFn: (body: Parameters<typeof registrarNoVisita>[0]) => registrarNoVisita(body),
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: agendaKeys.semana })
-            qc.invalidateQueries({ queryKey: ['agenda', 'dia'] })
-        },
-    })
+    return useMutacionDeVisita((dto: INoVisitaDTO) => registrarNoVisita(dto))
 }
