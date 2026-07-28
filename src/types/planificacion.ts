@@ -1,8 +1,29 @@
 export type Dia = 'LUN' | 'MAR' | 'MIE' | 'JUE' | 'VIE'
 
+export type NivelMotivo = 'visita' | 'rubro'
+
+/** Qué significa comercialmente el motivo. Solo los de nivel 'rubro' lo tienen. */
+export type ResultadoMotivo = 'ganado' | 'diferido' | 'perdido' | 'no_ofrecido'
+
+export type TipoResolucion = 'visita' | 'no_visita' | 'reagendada'
+
+export type EstadoCiclo = 'abierta' | 'cerrada'
+
+/** DERIVADO en el backend de la resolución del cliente — no existe como columna. */
+export type EstadoCicloCliente =
+    | 'pendiente'
+    | 'en_curso'
+    | 'visitada'
+    | 'no_visita'
+    | 'reagendada'
+
 export interface IMotivo {
     motivoId: number
+    nivel: NivelMotivo
     descripcion: string
+    resultado: ResultadoMotivo | null
+    /** Si es true, resolver un rubro con este motivo exige marca/competidor/pctDiferencia. */
+    requiereDetalle: boolean
 }
 
 export interface IBrandDiscount {
@@ -11,34 +32,21 @@ export interface IBrandDiscount {
     description: string
 }
 
-// Espeja el "visit card" que devuelve /planificacion/agenda/{semana,dia}
-// (api-vendedores → analytics.fct_clients + campo `visit`). Los campos marcados
-// "siempre presente" vienen 1:1 del backend en cada respuesta; se dejan opcionales
-// porque esta app es un consumidor parcial/defensivo y no todos se muestran aún.
-export interface IAgendaClient {
-    codigoParticularCliente: string // clave de join (particular_code); la usa todo el flujo de visita
-    nombreCliente: string // business_name
-    // trade_name real (cartel del local) cuando difiere de nombreCliente —
-    // el vendedor reconoce el local por esto, no por la razón social.
+/** Datos del cliente que vienen de fct_clients. Los comparten la agenda y el preview.
+ *  Solo los tres primeros son `required` en el OpenAPI; el resto puede faltar. */
+export interface IVisitClientCard {
+    codigoCliente: string
+    codigoParticularCliente: string
+    nombreCliente: string
     nombreFantasia?: string
-    barrio?: string // neighborhood
-    // direccion/telefono ahora son REALES desde fct_clients (address/phone).
-    // telefono llega tal cual como string — el dato es inconsistente entre
-    // clientes (a veces trae más de un número), así que no se parsea.
+    barrio?: string
+    localidad?: string
     direccion?: string
     telefono?: string
-    // Slot de visita semana+día, e.g. "s1d1". La semana actual la resuelve el
-    // front (ciclo mód-5) y la pasa como `semana`; el backend no la calcula.
-    visit: string
-    resuelto?: boolean // undefined in weekly view (only /agenda/dia populates it)
-
-    // ── Resto del card real (siempre presente desde el backend; aún sin UI dedicada) ──
-    codigoCliente?: string // client_code
-    localidad?: string // city
-    codigoZona?: string // zone_code
-    comentario?: string // comment (notas de visita: contacto, horario, etc.)
     latitud?: number | null
     longitud?: number | null
+    codigoZona?: string
+    comentario?: string
     isActive?: boolean
     bonusDiscount?: number | null
     generalDiscount?: number | null
@@ -50,12 +58,99 @@ export interface IAgendaClient {
     paymentAmount?: number | null
     paymentPlan?: number | null
 
-    // ── Solo-front (sin campo backend todavía) ──
-    // horaVisita sigue sin backend real — mock hasta que la agenda asigne
-    // horarios de visita (problema aparte del dato de cliente).
+    /** Solo-front: el backend todavía no asigna horarios (ver lib/mockAgendaData.ts). */
     horaVisita?: string
-    enCurso?: boolean
 }
+
+/** Card de la VUELTA ABIERTA. Los cinco campos del ciclo son requeridos a propósito:
+ *  con cicloClienteId opcional, iniciarVisita({ cicloClienteId: undefined }) compilaría. */
+export interface IAgendaClient extends IVisitClientCard {
+    cicloClienteId: number
+    dia: number
+    estado: EstadoCicloCliente
+    /** Id de la resolución si es una visita (para retomar la carga de rubros). */
+    visitaId: number | null
+    /** Rubros de esa visita todavía sin motivos. 0 si no hay visita. */
+    rubrosPendientes: number
+}
+
+/** Card de una semana NO abierta. Deliberadamente NO extiende IAgendaClient: sin ciclo
+ *  no hay cicloClienteId ni estado, y que sea otro tipo es lo que impide que una card
+ *  de preview llegue a una mutación. */
+export interface IPreviewClient extends IVisitClientCard {
+    dia: number
+}
+
+export interface IPreviewCiclo {
+    /** La semana previsualizada. Si el request la omitió, es la que propuso el backend. */
+    semana: number
+    clientes: number
+    omitidos: string[]
+    dias: Record<Dia, IPreviewClient[]>
+}
+
+export interface ICicloSemana {
+    id: number
+    codigoParticularVendedor: string
+    semana: number
+    fechaApertura: string
+    fechaCierre: string | null
+    estado: EstadoCiclo
+}
+
+export interface IAbrirCicloResult {
+    cicloId: number
+    semana: number
+    clientes: number
+    omitidos: string[]
+}
+
+export interface IVisitaConRubrosPendientes {
+    visitaId: number
+    codigoParticularCliente: string
+    rubros: number
+}
+
+export interface ICerrarCicloResult {
+    cerrado: boolean
+    clientesPendientes: string[]
+    visitasConRubrosPendientes: IVisitaConRubrosPendientes[]
+}
+
+/** La visita activa: el backend devuelve la resolución cruda. */
+export interface IResolucion {
+    id: number
+    cicloClienteId: number
+    tipo: TipoResolucion
+    fechaInicio: string
+    fechaFin: string | null
+    coordInicio: string | null
+    coordFinal: string | null
+    coordCliente: string | null
+}
+
+/** Un motivo aplicado a un rubro. marca/competidor/pctDiferencia solo se usan cuando el
+ *  motivo tiene requiereDetalle; en el resto van null. */
+export interface IRubroMotivo {
+    motivoId: number
+    marca: string | null
+    competidor: string | null
+    pctDiferencia: number | null
+}
+
+/** Un rubro de la propuesta congelada. `resuelto` lo deriva el backend de motivos.length. */
+export interface IVisitaRubro {
+    id: number
+    resolucionId: number
+    rubroCode: string
+    rubroDescripcion: string
+    gapUnits: number | null
+    esPropuesto: boolean
+    resuelto: boolean
+    motivos: IRubroMotivo[]
+}
+
+export type SemanaAgenda = Record<Dia, IAgendaClient[]>
 
 export interface IRubroPropuesta {
     nombre: string
@@ -121,41 +216,46 @@ export interface IRubroRecommendationsResponse {
     total: number
 }
 
-export type SemanaAgenda = Record<Dia, IAgendaClient[]>
-
-export interface IVisita {
-    visitaId: number
-    codigoParticularVendedor: string
-    codigoParticularCliente: string
-    nombreCliente: string
-    fechaInicio: string
-    fechaFin: string | null
-    coordInicio: string | null
-    coordFinal: string | null
-    coordCliente: string | null
-    seguimientoPendiente: boolean
-    seguimientoMotivoPendiente: string | null
-    seguimientoDescripcionPendiente: string | null
-}
-
 export interface IIniciarVisitaDTO {
-    codigoParticularCliente: string
-    nombreCliente: string
-    coordInicio: string | null
+    cicloClienteId: number
+    /** Obligatoria: el backend rechaza null con COORD_REQUERIDA. */
+    coordInicio: string
 }
 
-export interface ISeguimientoResult {
-    seguimientoPendiente: boolean
-    motivoPendiente?: string // CRM_NOT_LINKED | CRM_TOKEN_EXPIRED | CRM_CLIENT_NOT_FOUND | CRM_UNAVAILABLE | CRM_UNKNOWN
-    descripcionParaReintentar?: string
+/** Sin motivoIds: al cerrar una visita el resultado comercial vive en los rubros. */
+export interface ICerrarVisitaDTO {
+    coordFinal: string
 }
 
-export interface ICerrarVisitaResult extends ISeguimientoResult {}
-
-export interface INoVisitaResult extends ISeguimientoResult {
+export interface ICerrarVisitaResult {
     visitaId: number
+    /** Si es > 0, la visita cerró pero falta cargar resoluciones. */
+    rubrosPendientes: number
 }
 
-export interface IReintentarSeguimientoDTO {
-    motivoIds?: number[] // optional override; if omitted, backend retries with the persisted descripcion
+/** Único lugar donde se piden motivos a nivel visita. */
+export interface INoVisitaDTO {
+    cicloClienteId: number
+    motivoIds: number[]
+}
+
+export interface INoVisitaResult {
+    cicloClienteId: number
+}
+
+export interface IResolverRubroDTO {
+    motivos: IRubroMotivo[]
+}
+
+export interface IResolverRubroResult {
+    rubrosPendientes: number
+}
+
+export interface IAgregarRubroDTO {
+    rubroCode: string
+    rubroDescripcion: string
+}
+
+export interface IAgregarRubroResult {
+    visitaRubroId: number
 }
