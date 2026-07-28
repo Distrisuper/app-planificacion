@@ -1,83 +1,157 @@
 import { apiClient } from './apiClient'
 import type {
+    Dia,
+    IAbrirCicloResult,
     IAgendaClient,
+    IAgregarRubroDTO,
+    IAgregarRubroResult,
+    ICerrarCicloResult,
+    ICerrarVisitaDTO,
+    ICerrarVisitaResult,
+    ICicloSemana,
     IIniciarVisitaDTO,
     IMotivo,
+    INoVisitaDTO,
     INoVisitaResult,
-    ICerrarVisitaResult,
-    IReintentarSeguimientoDTO,
+    IPreviewCiclo,
+    IResolucion,
+    IResolverRubroDTO,
+    IResolverRubroResult,
     IRubroRecommendationsResponse,
-    ISeguimientoResult,
-    IVisita,
+    IVisitaRubro,
+    NivelMotivo,
     SemanaAgenda,
 } from '@/types/planificacion'
 
-// `semana` is the rotation key (e.g. "s1") of the 5-week cycle. The backend does NOT resolve
-// "current week": it defaults to 's1' when omitted and otherwise returns exactly the week asked
-// for. Resolving which cycle week today falls in (mod-5 over a fixed anchor) is the FRONT's job
-// and is still pending — until then callers omit it and get s1. Param accepted now so the
-// week-picker can pass it without a later API change.
-export const getAgendaSemana = async (semana?: string): Promise<SemanaAgenda> => {
-    const res = await apiClient.get('/planificacion/agenda/semana', {
-        params: semana ? { semana } : undefined,
+// ── Ciclo ──────────────────────────────────────────────────────────────────────
+
+/** La vuelta abierta del vendedor, o null. Devuelve 200 con data:null cuando no hay
+ *  ninguna, así que el front sabe ANTES de pedir la agenda (que tiraría 409). */
+export const getCicloActual = async (): Promise<ICicloSemana | null> => {
+    const res = await apiClient.get('/planificacion/ciclo/actual')
+    return res.data.data
+}
+
+/** El plan de una semana SIN abrirla. Sin `semana`, el backend previsualiza la que
+ *  propone y devuelve cuál eligió. */
+export const getCicloPreview = async (semana?: number): Promise<IPreviewCiclo> => {
+    const res = await apiClient.get('/planificacion/ciclo/preview', {
+        params: semana === undefined ? undefined : { semana },
     })
     return res.data.data
 }
 
-export const getAgendaDia = async (
-    dia: string,
-    fecha: string,
-): Promise<IAgendaClient[]> => {
-    const res = await apiClient.get('/planificacion/agenda/dia', {
-        params: { dia, fecha },
+export const abrirCiclo = async (semana?: number): Promise<IAbrirCicloResult> => {
+    const res = await apiClient.post(
+        '/planificacion/ciclo/abrir',
+        semana === undefined ? {} : { semana },
+    )
+    return res.data.data
+}
+
+/** Ojo: con 409 el backend devuelve ok:0 pero CON data (las dos listas de bloqueo).
+ *  El llamador lo lee de err.response.data.data — ver CerrarSemanaSheet. */
+export const cerrarCiclo = async (): Promise<ICerrarCicloResult> => {
+    const res = await apiClient.post('/planificacion/ciclo/cerrar')
+    return res.data.data
+}
+
+/** Mueve el día del cliente dentro de la vuelta. NO lo resuelve: queda pendiente. */
+export const reagendarCicloCliente = async (
+    cicloClienteId: number,
+    dia: number,
+): Promise<void> => {
+    await apiClient.patch(`/planificacion/ciclo-cliente/${cicloClienteId}/reagendar`, {
+        dia,
+    })
+}
+
+// ── Agenda ─────────────────────────────────────────────────────────────────────
+
+/** Sin parámetro `semana`: la vuelta es la que el vendedor tiene abierta. */
+export const getAgendaSemana = async (): Promise<SemanaAgenda> => {
+    const res = await apiClient.get('/planificacion/agenda/semana')
+    return res.data.data
+}
+
+export const getAgendaDia = async (dia: Dia): Promise<IAgendaClient[]> => {
+    const res = await apiClient.get('/planificacion/agenda/dia', { params: { dia } })
+    return res.data.data
+}
+
+// ── Motivos ────────────────────────────────────────────────────────────────────
+
+export const getMotivos = async (nivel?: NivelMotivo): Promise<IMotivo[]> => {
+    const res = await apiClient.get('/planificacion/motivos', {
+        params: nivel === undefined ? undefined : { nivel },
     })
     return res.data.data
 }
 
-export const getMotivos = async (): Promise<IMotivo[]> => {
-    const res = await apiClient.get('/planificacion/motivos')
-    return res.data.data
-}
+// ── Visitas ────────────────────────────────────────────────────────────────────
 
-export const getVisitaActiva = async (): Promise<IVisita | null> => {
+export const getVisitaActiva = async (): Promise<IResolucion | null> => {
     const res = await apiClient.get('/planificacion/visitas/activa')
     return res.data.data
 }
 
 export const iniciarVisita = async (
     dto: IIniciarVisitaDTO,
-): Promise<{ visitaId: number }> => {
+): Promise<{ visitaId: number; rubros: number }> => {
     const res = await apiClient.post('/planificacion/visitas', dto)
     return res.data.data
 }
 
+/** Sin motivoIds: el resultado comercial vive en los rubros y se puede cargar después. */
 export const cerrarVisita = async (
     visitaId: number,
-    body: { coordFinal: string | null; motivoIds: number[] },
+    body: ICerrarVisitaDTO,
 ): Promise<ICerrarVisitaResult> => {
     const res = await apiClient.put(`/planificacion/visitas/${visitaId}/cerrar`, body)
     return res.data.data
 }
 
-export const registrarNoVisita = async (body: {
-    codigoParticularCliente: string
-    nombreCliente: string
-    motivoIds: number[]
-}): Promise<INoVisitaResult> => {
-    const res = await apiClient.post('/planificacion/visitas/no-visita', body)
+export const registrarNoVisita = async (dto: INoVisitaDTO): Promise<INoVisitaResult> => {
+    const res = await apiClient.post('/planificacion/visitas/no-visita', dto)
     return res.data.data
 }
 
-/** Retries a failed Cromo sync for a visita that has `seguimientoPendiente: true`. */
-export const reintentarSeguimiento = async (
+// ── Rubros de la visita ────────────────────────────────────────────────────────
+
+/** La propuesta CONGELADA al iniciar la visita (más los agregados a mano). */
+export const getRubros = async (visitaId: number): Promise<IVisitaRubro[]> => {
+    const res = await apiClient.get(`/planificacion/visitas/${visitaId}/rubros`)
+    return res.data.data
+}
+
+export const agregarRubro = async (
     visitaId: number,
-    body: IReintentarSeguimientoDTO = {},
-): Promise<ISeguimientoResult> => {
-    const res = await apiClient.post(`/planificacion/visitas/${visitaId}/seguimiento`, body)
+    dto: IAgregarRubroDTO,
+): Promise<IAgregarRubroResult> => {
+    const res = await apiClient.post(`/planificacion/visitas/${visitaId}/rubros`, dto)
     return res.data.data
 }
 
-/** Reused endpoint: commercial proposal (rubros below average). */
+/** Reemplaza los motivos del rubro, no acumula. No exige la visita abierta. */
+export const resolverRubro = async (
+    visitaId: number,
+    rubroId: number,
+    dto: IResolverRubroDTO,
+): Promise<IResolverRubroResult> => {
+    const res = await apiClient.put(
+        `/planificacion/visitas/${visitaId}/rubros/${rubroId}`,
+        dto,
+    )
+    return res.data.data
+}
+
+/** Solo rubros agregados a mano: los de la propuesta fallan con RUBRO_DE_PROPUESTA. */
+export const eliminarRubro = async (visitaId: number, rubroId: number): Promise<void> => {
+    await apiClient.delete(`/planificacion/visitas/${visitaId}/rubros/${rubroId}`)
+}
+
+// ── Propuesta comercial (endpoint reusado, fuera del dominio de planificación) ──
+
 export const getPropuesta = async (
     codigoParticularCliente: string,
 ): Promise<IRubroRecommendationsResponse> => {

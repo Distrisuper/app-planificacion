@@ -19,10 +19,6 @@ apiClient.interceptors.response.use(
     response => response,
     error => {
         if (error.response?.status === 401) {
-            const code: string | undefined = error.response?.data?.code
-            if (code?.startsWith('CRM_')) {
-                return Promise.reject(error)
-            }
             localStorage.removeItem('access_token')
             // An expired/missing token routes to /login (see ProtectedRoute.tsx).
             // Avoid reloading there to prevent a reload loop if that screen ever

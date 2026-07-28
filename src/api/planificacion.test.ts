@@ -1,6 +1,11 @@
 import { vi } from 'vitest'
 import { apiClient } from './apiClient'
 import {
+    getCicloActual,
+    getCicloPreview,
+    abrirCiclo,
+    cerrarCiclo,
+    reagendarCicloCliente,
     getAgendaSemana,
     getAgendaDia,
     getMotivos,
@@ -8,125 +13,187 @@ import {
     iniciarVisita,
     cerrarVisita,
     registrarNoVisita,
-    reintentarSeguimiento,
+    getRubros,
+    agregarRubro,
+    resolverRubro,
+    eliminarRubro,
     getPropuesta,
 } from './planificacion'
 
 vi.mock('./apiClient', () => ({
-    apiClient: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
+    apiClient: {
+        get: vi.fn(),
+        post: vi.fn(),
+        put: vi.fn(),
+        patch: vi.fn(),
+        delete: vi.fn(),
+    },
 }))
 
-describe('planificacion API', () => {
-    beforeEach(() => vi.clearAllMocks())
+const ok = (data: unknown) => ({ data: { ok: 1, data } })
 
-    it('getMotivos unwraps data.data', async () => {
-        ;(apiClient.get as any).mockResolvedValue({
-            data: { ok: 1, data: [{ motivoId: 1, descripcion: 'Precio' }] },
-        })
-        const motivos = await getMotivos()
-        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/motivos')
-        expect(motivos).toEqual([{ motivoId: 1, descripcion: 'Precio' }])
+beforeEach(() => vi.clearAllMocks())
+
+describe('ciclo', () => {
+    it('getCicloActual devuelve null cuando no hay vuelta abierta', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok(null))
+        await expect(getCicloActual()).resolves.toBeNull()
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/ciclo/actual')
     })
 
-    it('iniciarVisita posts the DTO and returns { visitaId }', async () => {
-        ;(apiClient.post as any).mockResolvedValue({ data: { ok: 1, data: { visitaId: 42 } } })
-        const res = await iniciarVisita({
-            codigoParticularCliente: '10034',
-            nombreCliente: 'GIONTO',
-            coordInicio: '-34.6,-58.6',
-        })
-        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas', {
-            codigoParticularCliente: '10034',
-            nombreCliente: 'GIONTO',
-            coordInicio: '-34.6,-58.6',
-        })
-        expect(res.visitaId).toBe(42)
-    })
-
-    it('cerrarVisita PUTs to the visita id with coordFinal + motivoIds', async () => {
-        ;(apiClient.put as any).mockResolvedValue({
-            data: { ok: 1, data: { seguimientoPendiente: false } },
-        })
-        const res = await cerrarVisita(42, { coordFinal: null, motivoIds: [1, 2] })
-        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/visitas/42/cerrar', {
-            coordFinal: null,
-            motivoIds: [1, 2],
-        })
-        expect(res.seguimientoPendiente).toBe(false)
-    })
-
-    it('getAgendaSemana gets without params when semana is omitted', async () => {
-        ;(apiClient.get as any).mockResolvedValue({
-            data: { ok: 1, data: { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] } },
-        })
-        const res = await getAgendaSemana()
-        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/agenda/semana', {
+    it('getCicloPreview sin semana no manda params', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok({ semana: 3 }))
+        await getCicloPreview()
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/ciclo/preview', {
             params: undefined,
         })
-        expect(res.LUN).toEqual([])
     })
 
-    it('getAgendaSemana passes semana as a query param when given', async () => {
-        ;(apiClient.get as any).mockResolvedValue({
-            data: { ok: 1, data: { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] } },
-        })
-        await getAgendaSemana('s2')
-        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/agenda/semana', {
-            params: { semana: 's2' },
+    it('getCicloPreview con semana la manda como param', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok({ semana: 4 }))
+        await getCicloPreview(4)
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/ciclo/preview', {
+            params: { semana: 4 },
         })
     })
 
-    it('getAgendaDia gets with dia + fecha params', async () => {
-        ;(apiClient.get as any).mockResolvedValue({
-            data: { ok: 1, data: [{ codigoParticularCliente: '1', nombreCliente: 'A', visit: 's1d1' }] },
-        })
-        const res = await getAgendaDia('LUN', '2026-07-27')
+    it('abrirCiclo sin semana manda un body vacío', async () => {
+        ;(apiClient.post as any).mockResolvedValue(ok({ cicloId: 1 }))
+        await abrirCiclo()
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/ciclo/abrir', {})
+    })
+
+    it('cerrarCiclo postea sin body', async () => {
+        ;(apiClient.post as any).mockResolvedValue(ok({ cerrado: true }))
+        await cerrarCiclo()
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/ciclo/cerrar')
+    })
+
+    it('reagendarCicloCliente usa PATCH sobre el cicloClienteId', async () => {
+        ;(apiClient.patch as any).mockResolvedValue({ data: { ok: 1 } })
+        await reagendarCicloCliente(42, 3)
+        expect(apiClient.patch).toHaveBeenCalledWith(
+            '/planificacion/ciclo-cliente/42/reagendar',
+            { dia: 3 },
+        )
+    })
+})
+
+describe('agenda', () => {
+    it('getAgendaSemana NO manda semana: la vuelta es la abierta', async () => {
+        // Regresión del contrato viejo, que pedía ?semana=s1.
+        ;(apiClient.get as any).mockResolvedValue(ok({ LUN: [] }))
+        await getAgendaSemana()
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/agenda/semana')
+    })
+
+    it('getAgendaDia manda solo dia, sin fecha', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok([]))
+        await getAgendaDia('MIE')
         expect(apiClient.get).toHaveBeenCalledWith('/planificacion/agenda/dia', {
-            params: { dia: 'LUN', fecha: '2026-07-27' },
+            params: { dia: 'MIE' },
         })
-        expect(res).toHaveLength(1)
+    })
+})
+
+describe('motivos', () => {
+    it('getMotivos sin nivel no manda params', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok([]))
+        await getMotivos()
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/motivos', {
+            params: undefined,
+        })
     })
 
-    it('getVisitaActiva unwraps data.data (null when no active visit)', async () => {
-        ;(apiClient.get as any).mockResolvedValue({ data: { ok: 1, data: null } })
+    it('getMotivos filtra por nivel', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok([]))
+        await getMotivos('rubro')
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/motivos', {
+            params: { nivel: 'rubro' },
+        })
+    })
+})
+
+describe('visitas', () => {
+    it('getVisitaActiva devuelve la resolución cruda o null', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok({ id: 5, cicloClienteId: 11 }))
         const res = await getVisitaActiva()
-        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/visitas/activa')
-        expect(res).toBeNull()
+        expect(res?.id).toBe(5)
     })
 
-    it('registrarNoVisita posts the body and unwraps the result', async () => {
-        ;(apiClient.post as any).mockResolvedValue({
-            data: { ok: 1, data: { visitaId: 7, seguimientoPendiente: false } },
+    it('iniciarVisita manda cicloClienteId, NO codigoParticularCliente', async () => {
+        // Regresión del contrato viejo, que mandaba código + nombre del cliente.
+        ;(apiClient.post as any).mockResolvedValue(ok({ visitaId: 42, rubros: 3 }))
+        const res = await iniciarVisita({ cicloClienteId: 11, coordInicio: '-34.6,-58.4' })
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas', {
+            cicloClienteId: 11,
+            coordInicio: '-34.6,-58.4',
         })
-        const res = await registrarNoVisita({
-            codigoParticularCliente: '10034',
-            nombreCliente: 'GIONTO',
-            motivoIds: [3],
+        expect(res).toEqual({ visitaId: 42, rubros: 3 })
+    })
+
+    it('cerrarVisita manda SOLO coordFinal, nunca motivoIds', async () => {
+        // Regresión del contrato viejo: el resultado comercial ahora vive en los rubros.
+        ;(apiClient.put as any).mockResolvedValue(ok({ visitaId: 42, rubrosPendientes: 2 }))
+        const res = await cerrarVisita(42, { coordFinal: '-34.7,-58.4' })
+        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/visitas/42/cerrar', {
+            coordFinal: '-34.7,-58.4',
         })
+        expect(res.rubrosPendientes).toBe(2)
+    })
+
+    it('registrarNoVisita manda cicloClienteId y motivoIds', async () => {
+        ;(apiClient.post as any).mockResolvedValue(ok({ cicloClienteId: 11 }))
+        await registrarNoVisita({ cicloClienteId: 11, motivoIds: [1, 3] })
         expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas/no-visita', {
-            codigoParticularCliente: '10034',
-            nombreCliente: 'GIONTO',
-            motivoIds: [3],
+            cicloClienteId: 11,
+            motivoIds: [1, 3],
         })
-        expect(res.visitaId).toBe(7)
+    })
+})
+
+describe('rubros', () => {
+    it('getRubros lee los de la visita', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok([{ id: 1 }]))
+        await getRubros(42)
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/visitas/42/rubros')
     })
 
-    it('reintentarSeguimiento posts to the visita seguimiento endpoint with default body', async () => {
-        ;(apiClient.post as any).mockResolvedValue({
-            data: { ok: 1, data: { seguimientoPendiente: false } },
+    it('agregarRubro postea code y descripción', async () => {
+        ;(apiClient.post as any).mockResolvedValue(ok({ visitaRubroId: 7 }))
+        await agregarRubro(42, { rubroCode: 'FILTROS', rubroDescripcion: 'Filtros' })
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas/42/rubros', {
+            rubroCode: 'FILTROS',
+            rubroDescripcion: 'Filtros',
         })
-        const res = await reintentarSeguimiento(42)
-        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas/42/seguimiento', {})
-        expect(res.seguimientoPendiente).toBe(false)
     })
 
-    it('getPropuesta posts particularCode and unwraps data.data', async () => {
-        const response = { currentYM: '2026-07', daysElapsed: 24, totalDays: 31, clients: [], total: 0 }
-        ;(apiClient.post as any).mockResolvedValue({ data: { ok: 1, data: response } })
-        const res = await getPropuesta('10034')
+    it('resolverRubro manda los motivos y devuelve los pendientes', async () => {
+        ;(apiClient.put as any).mockResolvedValue(ok({ rubrosPendientes: 1 }))
+        const motivos = [
+            { motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 },
+        ]
+        const res = await resolverRubro(42, 7, { motivos })
+        expect(apiClient.put).toHaveBeenCalledWith(
+            '/planificacion/visitas/42/rubros/7',
+            { motivos },
+        )
+        expect(res.rubrosPendientes).toBe(1)
+    })
+
+    it('eliminarRubro borra por id', async () => {
+        ;(apiClient.delete as any).mockResolvedValue({ data: { ok: 1 } })
+        await eliminarRubro(42, 7)
+        expect(apiClient.delete).toHaveBeenCalledWith('/planificacion/visitas/42/rubros/7')
+    })
+})
+
+describe('propuesta', () => {
+    it('getPropuesta sigue apuntando a /sale/rubro/recommendations', async () => {
+        ;(apiClient.post as any).mockResolvedValue({ data: { data: { clients: [] } } })
+        await getPropuesta('10034')
         expect(apiClient.post).toHaveBeenCalledWith('/sale/rubro/recommendations', {
             particularCode: '10034',
         })
-        expect(res).toEqual(response)
     })
 })

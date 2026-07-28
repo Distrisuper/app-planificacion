@@ -32,18 +32,6 @@ describe('apiClient response interceptor', () => {
         vi.restoreAllMocks()
     })
 
-    it('rejects with the original error and does not clear the token or reload for CRM_ 401 errors', async () => {
-        const error = {
-            response: { status: 401, data: { code: 'CRM_TOKEN_EXPIRED' } },
-        }
-        const removeSpy = vi.spyOn(Storage.prototype, 'removeItem')
-
-        await expect(rejected(error)).rejects.toBe(error)
-
-        expect(removeSpy).not.toHaveBeenCalled()
-        expect(reloadSpy).not.toHaveBeenCalled()
-    })
-
     it('clears the token and reloads for a plain 401 when not on the login page', async () => {
         window.location.pathname = '/agenda'
         const error = { response: { status: 401, data: {} } }
