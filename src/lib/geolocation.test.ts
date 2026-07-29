@@ -5,7 +5,7 @@ const PERMISSION_DENIED = 1
 const POSITION_UNAVAILABLE = 2
 const TIMEOUT = 3
 
-function mockGeolocation(impl: any) {
+function mockGeolocation(impl: (...args: any[]) => void) {
     const getCurrentPosition = vi.fn(impl)
     vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } })
     return getCurrentPosition
@@ -20,8 +20,18 @@ it('devuelve la coordenada cuando el GPS resuelve en la etapa 1', async () => {
 
     const res = await capturarUbicacion()
 
-    expect(res).toEqual({ ok: true, coord: '-34.6,-58.38', precisionM: 12 })
+    expect(res).toEqual({ ok: true, coord: '-34.60000000,-58.38000000', precisionM: 12 })
     expect(spy).toHaveBeenCalledTimes(1)
+})
+
+it('trunca coordenadas de precisión completa a 8 decimales para pasar la validación del backend', async () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -37.97837090373625, longitude: -57.57729522372346, accuracy: 15 } }),
+    )
+
+    const res = await capturarUbicacion()
+
+    expect(res).toEqual({ ok: true, coord: '-37.97837090,-57.57729522', precisionM: 15 })
 })
 
 it('permiso denegado corta sin etapa 2', async () => {
@@ -42,7 +52,7 @@ it('timeout en la etapa 1 reintenta con baja precisión', async () => {
 
     const res = await capturarUbicacion()
 
-    expect(res).toEqual({ ok: true, coord: '-34.7,-58.4', precisionM: 480 })
+    expect(res).toEqual({ ok: true, coord: '-34.70000000,-58.40000000', precisionM: 480 })
     expect(spy).toHaveBeenCalledTimes(2)
     expect(spy.mock.calls[1][2].enableHighAccuracy).toBe(false)
 })
