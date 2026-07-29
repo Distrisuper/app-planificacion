@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { getAgendaSemana, getAgendaDia } from '@/api/planificacion'
-import { withMockVisualData } from '@/lib/mockAgendaData'
-import type { Dia, SemanaAgenda } from '@/types/planificacion'
+import type { Dia } from '@/types/planificacion'
 
 export const agendaKeys = {
     semana: ['agenda', 'semana'] as const,
@@ -16,14 +15,7 @@ export const agendaKeys = {
 export function useAgendaSemana(enabled: boolean) {
     return useQuery({
         queryKey: agendaKeys.semana,
-        queryFn: async () => {
-            const semana = await getAgendaSemana()
-            const out = {} as SemanaAgenda
-            for (const dia of Object.keys(semana) as Dia[]) {
-                out[dia] = semana[dia].map(withMockVisualData)
-            }
-            return out
-        },
+        queryFn: getAgendaSemana,
         enabled,
     })
 }
@@ -31,7 +23,7 @@ export function useAgendaSemana(enabled: boolean) {
 export function useAgendaDia(dia: Dia, enabled = true) {
     return useQuery({
         queryKey: agendaKeys.dia(dia),
-        queryFn: async () => (await getAgendaDia(dia)).map(withMockVisualData),
+        queryFn: () => getAgendaDia(dia),
         enabled,
     })
 }

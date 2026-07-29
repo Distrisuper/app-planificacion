@@ -6,7 +6,6 @@ import type { IAgendaClient } from '@/types/planificacion'
 
 interface ClienteCardProps {
     cliente: IAgendaClient
-    isToday?: boolean
     /** 'preview' = hojeando otra semana: se ve, no se opera. */
     modo?: 'operable' | 'preview'
     onAbrir: (cliente: IAgendaClient) => void
@@ -23,15 +22,8 @@ const ACCENT = '#213D82'
 // para no armar un tel: inválido concatenando ambos.
 const TELEFONO_LIMPIO = /^[\d\s()+-]+$/
 
-function hasTimePassed(hora: string): boolean {
-    const now = new Date()
-    const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    return hora < current
-}
-
 export default function ClienteCard({
     cliente,
-    isToday,
     modo = 'operable',
     onAbrir,
     onEstadoVisita,
@@ -44,8 +36,6 @@ export default function ClienteCard({
     // `||` (no `??`): nombreFantasia real puede venir como '' (sin cartel) — en ese
     // caso hay que caer a la razón social, no mostrar un nombre vacío.
     const nombre = titleCaseNombre(cliente.nombreFantasia || cliente.nombreCliente)
-    const atrasado =
-        !resuelto && !enCurso && !!isToday && !!cliente.horaVisita && hasTimePassed(cliente.horaVisita)
     const telefonoLimpio =
         cliente.telefono && TELEFONO_LIMPIO.test(cliente.telefono) ? cliente.telefono : null
     const pendientes = cliente.rubrosPendientes
@@ -87,11 +77,6 @@ export default function ClienteCard({
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#EEF3FB] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-dsnavy">
                             <CalendarClock className="h-2.5 w-2.5" strokeWidth={2.6} />
                             Reagendada
-                        </span>
-                    )}
-                    {atrasado && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#FEECEC] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-dsred">
-                            Atrasado
                         </span>
                     )}
                 </div>

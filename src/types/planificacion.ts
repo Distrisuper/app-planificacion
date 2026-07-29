@@ -52,9 +52,6 @@ export interface IVisitClientCard {
     paymentCreditLimit?: number | null
     paymentAmount?: number | null
     paymentPlan?: number | null
-
-    /** Solo-front: el backend todavía no asigna horarios (ver lib/mockAgendaData.ts). */
-    horaVisita?: string
 }
 
 /** Card de la VUELTA ABIERTA. Los cinco campos del ciclo son requeridos a propósito:

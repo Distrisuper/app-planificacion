@@ -120,7 +120,6 @@ export default function AgendaBoard({
                                 <ClienteCard
                                     key={c.codigoParticularCliente}
                                     cliente={c}
-                                    isToday={isToday}
                                     modo={modo}
                                     onAbrir={onAbrir}
                                     onEstadoVisita={onEstadoVisita}

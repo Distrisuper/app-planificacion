@@ -6,9 +6,7 @@ import {
     getCicloPreview,
     reagendarCicloCliente,
 } from '@/api/planificacion'
-import { withMockVisualData } from '@/lib/mockAgendaData'
 import { agendaKeys } from './useAgenda'
-import type { Dia, IPreviewCiclo } from '@/types/planificacion'
 
 export const cicloKeys = {
     actual: ['ciclo', 'actual'] as const,
@@ -25,14 +23,7 @@ export function useCicloActual() {
 export function useCicloPreview(semana: number | undefined, enabled: boolean) {
     return useQuery({
         queryKey: cicloKeys.preview(semana),
-        queryFn: async (): Promise<IPreviewCiclo> => {
-            const data = await getCicloPreview(semana)
-            const dias = {} as IPreviewCiclo['dias']
-            for (const dia of Object.keys(data.dias) as Dia[]) {
-                dias[dia] = data.dias[dia].map(withMockVisualData)
-            }
-            return { ...data, dias }
-        },
+        queryFn: () => getCicloPreview(semana),
         enabled,
     })
 }
