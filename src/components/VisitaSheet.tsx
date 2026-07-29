@@ -6,6 +6,8 @@ import RubroCard from './propuesta/RubroCard'
 import ResolucionRubro from './propuesta/ResolucionRubro'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useRubros, useResolverRubro, useEliminarRubro } from '@/hooks/useRubros'
+import { useVisitaTimer } from '@/hooks/useVisitaTimer'
+import { formatearDuracion } from '@/lib/visitaTimer'
 import type { IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
 
 interface VisitaSheetProps {
@@ -14,8 +16,12 @@ interface VisitaSheetProps {
     nombreCliente: string
     /** true = se entró solo a completar rubros de una visita ya cerrada. */
     visitaCerrada: boolean
+    /** true = la visita está en curso (no cerrada): pinta el eyebrow naranja + cronómetro. */
+    enCurso?: boolean
     onCerrarVisita: () => void
     onClose: () => void
+    /** Si se pasa (y enCurso), aparece el botón de minimizar en el header. */
+    onMinimize?: () => void
     cerrando?: boolean
 }
 
@@ -24,10 +30,13 @@ export default function VisitaSheet({
     visitaId,
     nombreCliente,
     visitaCerrada,
+    enCurso,
     onCerrarVisita,
     onClose,
+    onMinimize,
     cerrando,
 }: VisitaSheetProps) {
+    const segundos = useVisitaTimer(visitaId)
     const { data: rubros = [] } = useRubros(open ? visitaId : null)
     const { data: motivos = [] } = useMotivos('rubro')
     const resolver = useResolverRubro(visitaId)
@@ -71,8 +80,10 @@ export default function VisitaSheet({
         <BottomSheet
             open={open}
             onClose={onClose}
+            onMinimize={enCurso ? onMinimize : undefined}
             title={nombreCliente}
-            eyebrow="Propuesta comercial"
+            eyebrow={enCurso ? `● En curso · ${formatearDuracion(segundos)}` : 'Propuesta comercial'}
+            eyebrowClassName={enCurso ? 'text-[#B45309]' : undefined}
         >
             {activo ? (
                 <div>
@@ -97,33 +108,40 @@ export default function VisitaSheet({
                     </p>
 
                     <div className="flex flex-col gap-2.5">
-                        {rubros.map(r => (
-                            <div key={r.id} className="flex items-start gap-1.5">
-                                <div
-                                    className="min-w-0 flex-1 cursor-pointer"
-                                    onClick={() => abrirRubro(r)}
-                                >
-                                    <RubroCard
-                                        nombre={r.rubroDescripcion}
-                                        motivosCargados={r.motivos.length}
-                                        onResolucion={() => abrirRubro(r)}
-                                    />
-                                </div>
-                                {/* Los de la propuesta NO se borran (RUBRO_DE_PROPUESTA):
-                                    si no se ofreció, se resuelve con "No lo ofrecí". */}
-                                {!r.esPropuesto && (
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        aria-label={`Quitar ${r.rubroDescripcion}`}
-                                        onClick={() => eliminar.mutate(r.id)}
-                                        className="mt-1 h-9 w-9 shrink-0 border-[#E1E6F0] text-dsmuted"
+                        {rubros.map(r => {
+                            // Una visita cerrada no se reedita (se genera una visita de ajuste
+                            // aparte) — salvo los rubros que quedaron sin cargar, que es
+                            // justamente lo que el aviso de "rubros sin cargar" invita a venir
+                            // a completar acá mismo.
+                            const editable = !visitaCerrada || !r.resuelto
+                            return (
+                                <div key={r.id} className="flex items-start gap-1.5">
+                                    <div
+                                        className={`min-w-0 flex-1 ${editable ? 'cursor-pointer' : ''}`}
+                                        onClick={editable ? () => abrirRubro(r) : undefined}
                                     >
-                                        <Trash2 className="h-[15px] w-[15px]" strokeWidth={2} />
-                                    </Button>
-                                )}
-                            </div>
-                        ))}
+                                        <RubroCard
+                                            nombre={r.rubroDescripcion}
+                                            motivosCargados={r.motivos.length}
+                                            onResolucion={editable ? () => abrirRubro(r) : undefined}
+                                        />
+                                    </div>
+                                    {/* Los de la propuesta NO se borran (RUBRO_DE_PROPUESTA):
+                                        si no se ofreció, se resuelve con "No lo ofrecí". */}
+                                    {!r.esPropuesto && editable && (
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            aria-label={`Quitar ${r.rubroDescripcion}`}
+                                            onClick={() => eliminar.mutate(r.id)}
+                                            className="mt-1 h-9 w-9 shrink-0 border-[#E1E6F0] text-dsmuted"
+                                        >
+                                            <Trash2 className="h-[15px] w-[15px]" strokeWidth={2} />
+                                        </Button>
+                                    )}
+                                </div>
+                            )
+                        })}
                         {rubros.length === 0 && (
                             <div className="text-sm text-dsmuted">
                                 Esta visita no tiene rubros propuestos.

@@ -72,10 +72,9 @@ describe('ciclo', () => {
     it('reagendarCicloCliente usa PATCH sobre el cicloClienteId', async () => {
         ;(apiClient.patch as any).mockResolvedValue({ data: { ok: 1 } })
         await reagendarCicloCliente(42, 3)
-        expect(apiClient.patch).toHaveBeenCalledWith(
-            '/planificacion/ciclo-cliente/42/reagendar',
-            { dia: 3 },
-        )
+        expect(apiClient.patch).toHaveBeenCalledWith('/planificacion/ciclo-cliente/42/reagendar', {
+            dia: 3,
+        })
     })
 })
 
@@ -174,10 +173,9 @@ describe('rubros', () => {
             { motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 },
         ]
         const res = await resolverRubro(42, 7, { motivos })
-        expect(apiClient.put).toHaveBeenCalledWith(
-            '/planificacion/visitas/42/rubros/7',
-            { motivos },
-        )
+        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/visitas/42/rubros/7', {
+            motivos,
+        })
         expect(res.rubrosPendientes).toBe(1)
     })
 
@@ -189,10 +187,10 @@ describe('rubros', () => {
 })
 
 describe('propuesta', () => {
-    it('getPropuesta sigue apuntando a /sale/rubro/recommendations', async () => {
-        ;(apiClient.post as any).mockResolvedValue({ data: { data: { clients: [] } } })
+    it('getPropuesta apunta a /sale/rubro/recommendations/drops', async () => {
+        ;(apiClient.post as any).mockResolvedValue({ data: { data: { rubros: [] } } })
         await getPropuesta('10034')
-        expect(apiClient.post).toHaveBeenCalledWith('/sale/rubro/recommendations', {
+        expect(apiClient.post).toHaveBeenCalledWith('/sale/rubro/recommendations/drops', {
             particularCode: '10034',
         })
     })

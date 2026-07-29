@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import { usePropuesta } from './usePropuesta'
 import * as api from '@/api/planificacion'
+import type { IRubroMonthDrop } from '@/types/planificacion'
 
 vi.mock('@/api/planificacion')
 
@@ -11,37 +12,36 @@ function wrapper({ children }: { children: React.ReactNode }) {
     return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
 }
 
-it('usePropuesta unwraps the matched client and maps rubros for the UI', async () => {
+const MES: IRubroMonthDrop = {
+    yearMonth: '2026-07',
+    actual: 600,
+    projected: 600,
+    baseline: 1000,
+    dropPct: -0.4,
+    lost: 400,
+    isRed: true,
+}
+
+it('usePropuesta mapea los rubros caídos para la UI', async () => {
     ;(api.getPropuesta as any).mockResolvedValue({
+        particularCode: '10034',
+        clientName: 'LA MITRE SRL',
+        sellerCode: '1',
         currentYM: '2026-07',
         daysElapsed: 24,
         totalDays: 31,
+        inflationAdjusted: true,
         total: 1,
-        clients: [
+        rubros: [
             {
-                clientCode: '10034',
-                particularCode: '10034',
-                clientName: 'LA MITRE SRL',
-                sellerCode: '1',
-                sellerName: 'Vendedor',
-                rubros: [
-                    {
-                        rubroCode: 'R1',
-                        rubroDescription: 'Golosinas',
-                        rubroMinUnits: 100,
-                        gapUnits: 40,
-                        projection: {
-                            currentMonthUnits: 60,
-                            projectedUnits: 60,
-                            rubroRatio: 0.6,
-                            daysElapsed: 24,
-                            totalDays: 31,
-                        },
-                        lookback: { months: [], activeMonths: 3, avgUnits: 55 },
-                        articlesToOffer: [],
-                        reason: 'Lleva 60% del mínimo (faltan ~40 ud. de Golosinas)',
-                    },
-                ],
+                rubroCode: 'R1',
+                rubroDescription: 'Golosinas',
+                isRedBoth: true,
+                isFallback: false,
+                pesosPerdidos: 400,
+                current: MES,
+                prev: MES,
+                reason: 'Cayó 40%/40% vs. prom. 6M — $400 menos por mes',
             },
         ],
     })
@@ -50,17 +50,32 @@ it('usePropuesta unwraps the matched client and maps rubros for the UI', async (
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(result.current.data).toEqual({
-        rubros: [{ nombre: 'Golosinas', gapPct: 40 }],
+        rubros: [
+            {
+                rubroCode: 'R1',
+                nombre: 'Golosinas',
+                pesosPerdidos: 400,
+                caidaPct: -0.4,
+                isFallback: false,
+                reason: 'Cayó 40%/40% vs. prom. 6M — $400 menos por mes',
+                current: MES,
+                prev: MES,
+            },
+        ],
     })
 })
 
-it('usePropuesta returns no rubros when the client has no matching entry', async () => {
+it('usePropuesta devuelve lista vacía cuando el cliente no tiene rubros caídos', async () => {
     ;(api.getPropuesta as any).mockResolvedValue({
+        particularCode: '10034',
+        clientName: 'LA MITRE SRL',
+        sellerCode: '1',
         currentYM: '2026-07',
         daysElapsed: 24,
         totalDays: 31,
+        inflationAdjusted: true,
         total: 0,
-        clients: [],
+        rubros: [],
     })
 
     const { result } = renderHook(() => usePropuesta('10034'), { wrapper })

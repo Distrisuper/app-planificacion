@@ -6,14 +6,14 @@ import AgendaBoard from '@/components/AgendaBoard'
 import CicloVacio from '@/components/CicloVacio'
 import VisitaFlow from '@/components/VisitaFlow'
 import ResolucionSheet from '@/components/ResolucionSheet'
-import ReagendarSheet from '@/components/ReagendarSheet'
+import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import CerrarSemanaSheet from '@/components/CerrarSemanaSheet'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, useCicloPreview, useAbrirCiclo, useReagendar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useNoVisita } from '@/hooks/useVisitas'
-import { useToast } from '@/hooks/useToast'
-import { Toast } from '@/components/ui/toast'
+import { useNotificacion } from '@/hooks/useNotificacion'
+import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
 import { getWeekRangeLabel } from '@/lib/weekDates'
@@ -51,7 +51,7 @@ export default function AgendaSemanaPage() {
     const reagendar = useReagendar()
     const noVisita = useNoVisita()
     const { data: motivosVisita = [] } = useMotivos('visita')
-    const { message: toastMessage, showToast } = useToast()
+    const { notificacion, mostrar, ocultar } = useNotificacion()
 
     // La semana que se está MIRANDO. null hasta que se sepa cuál: con vuelta abierta es
     // la suya; sin vuelta, la que proponga el preview.
@@ -76,7 +76,7 @@ export default function AgendaSemanaPage() {
     const [diaActivo, setDiaActivo] = useState<Dia>('LUN')
     const [visitaCliente, setVisitaCliente] = useState<IAgendaClient | null>(null)
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
-    const [reagendarCliente, setReagendarCliente] = useState<IAgendaClient | null>(null)
+    const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [cerrandoSemana, setCerrandoSemana] = useState(false)
 
     // Las cards del preview no tienen cicloClienteId ni estado, así que se adaptan a la
@@ -123,7 +123,7 @@ export default function AgendaSemanaPage() {
         try {
             const res = await abrir.mutateAsync(semanaBase ?? undefined)
             setSemanaVista(res.semana)
-            showToast(`Semana ${res.semana} abierta con ${res.clientes} clientes`)
+            mostrar('exito', `Semana ${res.semana} abierta con ${res.clientes} clientes`)
         } catch (err) {
             const code = errorCode(err)
             if (code === 'CICLO_ABIERTO_EXISTENTE') {
@@ -132,7 +132,8 @@ export default function AgendaSemanaPage() {
                 return
             }
             const deCuenta = mensajeDeCuenta(code)
-            showToast(
+            mostrar(
+                'error',
                 deCuenta ??
                     (code === 'CICLO_SIN_CLIENTES'
                         ? 'Esa semana ya no tiene clientes asignados.'
@@ -141,9 +142,9 @@ export default function AgendaSemanaPage() {
         }
     }
 
-    async function onPickReagendar(dia: Dia) {
-        const cliente = reagendarCliente
-        setReagendarCliente(null)
+    async function onElegirDia(dia: Dia) {
+        const cliente = estadoVisitaCliente
+        setEstadoVisitaCliente(null)
         if (!cliente) return
         try {
             await reagendar.mutateAsync({
@@ -151,10 +152,16 @@ export default function AgendaSemanaPage() {
                 dia: DIAS.indexOf(dia) + 1,
             })
             // Reagendar mueve el día y deja al cliente PENDIENTE: no lo resuelve.
-            showToast('Cliente reagendado')
+            mostrar('exito', 'Cliente reagendado')
         } catch {
-            showToast('No se pudo reagendar. Volvé a intentar.')
+            mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
         }
+    }
+
+    function onElegirNoVisita() {
+        const cliente = estadoVisitaCliente
+        setEstadoVisitaCliente(null)
+        setNoVisitaCliente(cliente)
     }
 
     async function onConfirmNoVisita(motivoIds: number[]) {
@@ -163,10 +170,12 @@ export default function AgendaSemanaPage() {
         if (!cliente) return
         try {
             await noVisita.mutateAsync({ cicloClienteId: cliente.cicloClienteId, motivoIds })
-            showToast('Registrado')
+            mostrar('exito', 'Registrado')
         } catch (err) {
-            showToast(
-                errorCode(err) === 'CICLO_CLIENTE_YA_RESUELTO'
+            const yaResuelto = errorCode(err) === 'CICLO_CLIENTE_YA_RESUELTO'
+            mostrar(
+                yaResuelto ? 'info' : 'error',
+                yaResuelto
                     ? 'Este cliente ya estaba resuelto. Actualizamos tu agenda.'
                     : 'No se pudo registrar. Volvé a intentar.',
             )
@@ -197,8 +206,7 @@ export default function AgendaSemanaPage() {
                 modo={operable ? 'operable' : 'preview'}
                 onActivoChange={setDiaActivo}
                 onAbrir={setVisitaCliente}
-                onReagendar={setReagendarCliente}
-                onNoVisita={setNoVisitaCliente}
+                onEstadoVisita={setEstadoVisitaCliente}
                 onCargarRubros={setVisitaCliente}
             />
 
@@ -215,8 +223,8 @@ export default function AgendaSemanaPage() {
             <VisitaFlow
                 cliente={visitaCliente}
                 onClose={() => setVisitaCliente(null)}
-                onGeoBloqueada={motivo => showToast(MENSAJE_GEO[motivo])}
-                onAviso={showToast}
+                onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
+                onAviso={mostrar}
             />
             <ResolucionSheet
                 open={!!noVisitaCliente}
@@ -227,12 +235,14 @@ export default function AgendaSemanaPage() {
                 onConfirm={onConfirmNoVisita}
                 onClose={() => setNoVisitaCliente(null)}
             />
-            <ReagendarSheet
-                open={!!reagendarCliente}
-                nombreCliente={reagendarCliente?.nombreCliente ?? ''}
-                diaActual={reagendarCliente ? DIAS[reagendarCliente.dia - 1] : null}
-                onPick={onPickReagendar}
-                onClose={() => setReagendarCliente(null)}
+            <EstadoVisitaSheet
+                open={!!estadoVisitaCliente}
+                nombreCliente={estadoVisitaCliente?.nombreCliente ?? ''}
+                diaActual={estadoVisitaCliente ? DIAS[estadoVisitaCliente.dia - 1] : null}
+                estadoActual={estadoVisitaCliente?.estado ?? null}
+                onElegirDia={onElegirDia}
+                onElegirNoVisita={onElegirNoVisita}
+                onClose={() => setEstadoVisitaCliente(null)}
             />
             <CerrarSemanaSheet
                 open={cerrandoSemana}
@@ -240,10 +250,10 @@ export default function AgendaSemanaPage() {
                 onCerrado={() => {
                     setCerrandoSemana(false)
                     setSemanaVista(null)
-                    showToast('Semana cerrada')
+                    mostrar('exito', 'Semana cerrada')
                 }}
             />
-            <Toast message={toastMessage} />
+            <Notification notificacion={notificacion} onDismiss={ocultar} />
         </div>
     )
 }

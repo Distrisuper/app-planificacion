@@ -21,16 +21,16 @@ function cliente(over: Partial<IAgendaClient> = {}): IAgendaClient {
 const noop = () => {}
 const handlers = {
     onAbrir: noop,
-    onReagendar: noop,
-    onNoVisita: noop,
+    onEstadoVisita: noop,
     onCargarRubros: noop,
 }
 
-it('un cliente pendiente muestra las tres acciones', () => {
-    render(<ClienteCard cliente={cliente()} {...handlers} />)
+it('un cliente pendiente muestra el código y las acciones', () => {
+    render(<ClienteCard cliente={cliente({ telefono: '1140506070' })} {...handlers} />)
+    expect(screen.getByText('#10034')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /propuesta/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /reagendar/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /no visité/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /llamar/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /estado de la visita/i })).toBeInTheDocument()
 })
 
 it('en_curso muestra el badge y sigue permitiendo abrir la visita', () => {
@@ -38,10 +38,41 @@ it('en_curso muestra el badge y sigue permitiendo abrir la visita', () => {
     expect(screen.getByText(/en curso/i)).toBeInTheDocument()
 })
 
-it('un cliente resuelto no ofrece acciones de resolución', () => {
+it('un cliente visitado muestra "Ver resumen" y no llamar/estado de la visita', () => {
     render(<ClienteCard cliente={cliente({ estado: 'visitada', visitaId: 7 })} {...handlers} />)
-    expect(screen.queryByRole('button', { name: /no visité/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /reagendar/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ver resumen/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^propuesta$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /estado de la visita/i })).not.toBeInTheDocument()
+})
+
+it('"Ver resumen" abre el mismo flujo que Propuesta, con el cliente completo', () => {
+    const onAbrir = vi.fn()
+    render(
+        <ClienteCard
+            cliente={cliente({ estado: 'visitada', visitaId: 7 })}
+            {...handlers}
+            onAbrir={onAbrir}
+        />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /ver resumen/i }))
+    expect(onAbrir).toHaveBeenCalledWith(expect.objectContaining({ cicloClienteId: 42 }))
+})
+
+it('no_visita y reagendada (sin visita real) no muestran fila de acciones', () => {
+    const { rerender } = render(
+        <ClienteCard cliente={cliente({ estado: 'no_visita', telefono: '1140506070' })} {...handlers} />,
+    )
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
+
+    rerender(<ClienteCard cliente={cliente({ estado: 'reagendada' })} {...handlers} />)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+})
+
+it('un cliente resuelto muestra el nombre tachado', () => {
+    render(<ClienteCard cliente={cliente({ estado: 'visitada', visitaId: 7 })} {...handlers} />)
+    expect(screen.getByText('Almacen Don Jose')).toHaveStyle({ textDecoration: 'line-through' })
 })
 
 it('no_visita y reagendada se distinguen visualmente', () => {
@@ -49,6 +80,16 @@ it('no_visita y reagendada se distinguen visualmente', () => {
     expect(screen.getByText(/no visitado/i)).toBeInTheDocument()
     rerender(<ClienteCard cliente={cliente({ estado: 'reagendada' })} {...handlers} />)
     expect(screen.getByText(/reagendada/i)).toBeInTheDocument()
+})
+
+it('no_visita pinta la card de naranja; visitada la pinta de verde', () => {
+    const { container, rerender } = render(
+        <ClienteCard cliente={cliente({ estado: 'no_visita' })} {...handlers} />,
+    )
+    expect(container.firstChild).toHaveStyle({ background: '#FEF8EC', borderColor: '#F0D8A8' })
+
+    rerender(<ClienteCard cliente={cliente({ estado: 'visitada', visitaId: 7 })} {...handlers} />)
+    expect(container.firstChild).toHaveStyle({ background: '#F3FAF5', borderColor: '#BFE6CE' })
 })
 
 it('una visita con rubros sin cargar lo avisa y ofrece completarla', () => {
@@ -64,11 +105,13 @@ it('una visita con rubros sin cargar lo avisa y ofrece completarla', () => {
     expect(onCargarRubros).toHaveBeenCalledWith(expect.objectContaining({ visitaId: 7 }))
 })
 
-it('en modo preview no hay ninguna acción', () => {
+it('en modo preview no hay botones de acción, pero la dirección sigue enlazando al mapa', () => {
     // La compuerta real la da el tipo (IPreviewClient no llega acá), pero la card
-    // igual tiene que renderizarse sin botones cuando se hojea otra semana.
+    // igual tiene que renderizarse sin botones cuando se hojea otra semana. El link
+    // al mapa no es una acción que mute nada, así que no está gateado por `operable`.
     render(<ClienteCard cliente={cliente()} {...handlers} modo="preview" />)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /san martín 100/i })).toBeInTheDocument()
 })
 
 it('los handlers reciben el cliente completo, no el código', () => {
@@ -76,4 +119,31 @@ it('los handlers reciben el cliente completo, no el código', () => {
     render(<ClienteCard cliente={cliente()} {...handlers} onAbrir={onAbrir} />)
     fireEvent.click(screen.getByRole('button', { name: /propuesta/i }))
     expect(onAbrir).toHaveBeenCalledWith(expect.objectContaining({ cicloClienteId: 42 }))
+})
+
+it('el botón de estado de la visita recibe el cliente completo', () => {
+    const onEstadoVisita = vi.fn()
+    render(<ClienteCard cliente={cliente()} {...handlers} onEstadoVisita={onEstadoVisita} />)
+    fireEvent.click(screen.getByRole('button', { name: /estado de la visita/i }))
+    expect(onEstadoVisita).toHaveBeenCalledWith(expect.objectContaining({ cicloClienteId: 42 }))
+})
+
+it('la dirección enlaza a Google Maps con coordenadas cuando están disponibles', () => {
+    render(<ClienteCard cliente={cliente({ latitud: -31.4, longitud: -64.2 })} {...handlers} />)
+    const link = screen.getByRole('link', { name: /san martín 100/i })
+    expect(link).toHaveAttribute('href', 'https://www.google.com/maps/search/?api=1&query=-31.4,-64.2')
+})
+
+it('sin coordenadas, la dirección enlaza a Google Maps por texto', () => {
+    render(<ClienteCard cliente={cliente({ direccion: 'Av. San Martín 100' })} {...handlers} />)
+    const link = screen.getByRole('link', { name: /san martín 100/i })
+    expect(link).toHaveAttribute(
+        'href',
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Av. San Martín 100')}`,
+    )
+})
+
+it('sin teléfono limpio no se muestra el botón de llamar', () => {
+    render(<ClienteCard cliente={cliente({ telefono: '1171473562 / 46641751' })} {...handlers} />)
+    expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
 })

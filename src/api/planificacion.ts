@@ -17,7 +17,7 @@ import type {
     IResolucion,
     IResolverRubroDTO,
     IResolverRubroResult,
-    IRubroRecommendationsResponse,
+    IRubroDropsResponse,
     IVisitaRubro,
     NivelMotivo,
     SemanaAgenda,
@@ -57,10 +57,7 @@ export const cerrarCiclo = async (): Promise<ICerrarCicloResult> => {
 }
 
 /** Mueve el día del cliente dentro de la vuelta. NO lo resuelve: queda pendiente. */
-export const reagendarCicloCliente = async (
-    cicloClienteId: number,
-    dia: number,
-): Promise<void> => {
+export const reagendarCicloCliente = async (cicloClienteId: number, dia: number): Promise<void> => {
     await apiClient.patch(`/planificacion/ciclo-cliente/${cicloClienteId}/reagendar`, {
         dia,
     })
@@ -75,7 +72,9 @@ export const getAgendaSemana = async (): Promise<SemanaAgenda> => {
 }
 
 export const getAgendaDia = async (dia: Dia): Promise<IAgendaClient[]> => {
-    const res = await apiClient.get('/planificacion/agenda/dia', { params: { dia } })
+    const res = await apiClient.get('/planificacion/agenda/dia', {
+        params: { dia },
+    })
     return res.data.data
 }
 
@@ -138,10 +137,7 @@ export const resolverRubro = async (
     rubroId: number,
     dto: IResolverRubroDTO,
 ): Promise<IResolverRubroResult> => {
-    const res = await apiClient.put(
-        `/planificacion/visitas/${visitaId}/rubros/${rubroId}`,
-        dto,
-    )
+    const res = await apiClient.put(`/planificacion/visitas/${visitaId}/rubros/${rubroId}`, dto)
     return res.data.data
 }
 
@@ -154,8 +150,8 @@ export const eliminarRubro = async (visitaId: number, rubroId: number): Promise<
 
 export const getPropuesta = async (
     codigoParticularCliente: string,
-): Promise<IRubroRecommendationsResponse> => {
-    const res = await apiClient.post('/sale/rubro/recommendations', {
+): Promise<IRubroDropsResponse> => {
+    const res = await apiClient.post('/sale/rubro/recommendations/drops', {
         particularCode: codigoParticularCliente,
     })
     return res.data.data ?? res.data

@@ -4,13 +4,20 @@ export type GeoResult =
 
 const PERMISSION_DENIED = 1
 
+// El backend valida el string con una regex que limita a 8 decimales (sobra para GPS, ~1mm
+// de precisión); los doubles crudos de `coords` traen hasta 15-17, así que hay que truncarlos
+// acá o el backend rechaza una coordenada real con COORD_REQUERIDA.
+function formatearCoord(valor: number): string {
+    return valor.toFixed(8)
+}
+
 function intentar(enableHighAccuracy: boolean, timeout: number): Promise<GeoResult> {
     return new Promise(resolve => {
         navigator.geolocation.getCurrentPosition(
             pos =>
                 resolve({
                     ok: true,
-                    coord: `${pos.coords.latitude},${pos.coords.longitude}`,
+                    coord: `${formatearCoord(pos.coords.latitude)},${formatearCoord(pos.coords.longitude)}`,
                     precisionM: pos.coords.accuracy,
                 }),
             err =>

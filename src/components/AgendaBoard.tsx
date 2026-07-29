@@ -13,8 +13,7 @@ interface AgendaBoardProps {
     modo?: 'operable' | 'preview'
     onActivoChange: (dia: Dia) => void
     onAbrir: (cliente: IAgendaClient) => void
-    onReagendar: (cliente: IAgendaClient) => void
-    onNoVisita: (cliente: IAgendaClient) => void
+    onEstadoVisita: (cliente: IAgendaClient) => void
     onCargarRubros: (cliente: IAgendaClient) => void
 }
 
@@ -24,8 +23,7 @@ export default function AgendaBoard({
     modo,
     onActivoChange,
     onAbrir,
-    onReagendar,
-    onNoVisita,
+    onEstadoVisita,
     onCargarRubros,
 }: AgendaBoardProps) {
     const boardRef = useRef<HTMLDivElement>(null)
@@ -73,11 +71,17 @@ export default function AgendaBoard({
             style={{ scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', minHeight: 0 }}
         >
             {DIAS.map(d => {
-                const clientes = semana?.[d] ?? []
-                const done = clientes.filter(c => estaResuelto(c.estado)).length
-                const total = clientes.length
+                const clientesDia = semana?.[d] ?? []
+                const done = clientesDia.filter(c => estaResuelto(c.estado)).length
+                const total = clientesDia.length
                 const allDone = total > 0 && done === total
                 const isToday = isSameDay(weekDates[d], today)
+                // Los resueltos van al final: así arriba solo quedan los que faltan, sin
+                // separador — ya se distinguen por su propio estilo (tachado, fondo verde).
+                const clientes = [
+                    ...clientesDia.filter(c => !estaResuelto(c.estado)),
+                    ...clientesDia.filter(c => estaResuelto(c.estado)),
+                ]
 
                 return (
                     <div
@@ -119,8 +123,7 @@ export default function AgendaBoard({
                                     isToday={isToday}
                                     modo={modo}
                                     onAbrir={onAbrir}
-                                    onReagendar={onReagendar}
-                                    onNoVisita={onNoVisita}
+                                    onEstadoVisita={onEstadoVisita}
                                     onCargarRubros={onCargarRubros}
                                 />
                             ))}

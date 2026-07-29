@@ -10,12 +10,7 @@ export type TipoResolucion = 'visita' | 'no_visita' | 'reagendada'
 export type EstadoCiclo = 'abierta' | 'cerrada'
 
 /** DERIVADO en el backend de la resolución del cliente — no existe como columna. */
-export type EstadoCicloCliente =
-    | 'pendiente'
-    | 'en_curso'
-    | 'visitada'
-    | 'no_visita'
-    | 'reagendada'
+export type EstadoCicloCliente = 'pendiente' | 'en_curso' | 'visitada' | 'no_visita' | 'reagendada'
 
 export interface IMotivo {
     motivoId: number
@@ -153,73 +148,69 @@ export interface IVisitaRubro {
 export type SemanaAgenda = Record<Dia, IAgendaClient[]>
 
 export interface IRubroPropuesta {
+    rubroCode: string
     nombre: string
-    // Mapped from IRubroRecommendation by usePropuesta — optional because the
-    // real /sale/rubro/recommendations service has no "zone average" concept
-    // (it compares against the client's own rubro minimum), so clientUnits/
-    // zoneUnits stay undefined and the comparison UI hides itself gracefully
-    // instead of inventing numbers.
-    gapPct?: number
-    clientUnits?: number
-    zoneUnits?: number
+    pesosPerdidos: number
+    /** -0.62 = cayó 62% vs. el promedio de 6 meses del propio cliente. */
+    caidaPct: number | null
+    /** true = relleno hasta el limit, no llegó al umbral de caída sostenida. */
+    isFallback: boolean
+    reason: string
+    current: IRubroMonthDrop
+    prev: IRubroMonthDrop
 }
 
-// ── Raw shape of POST /sale/rubro/recommendations (RubroRecommendationService,
-// api-vendedores) — mirrors RubroRecommendationsResponse there. Mapped to
-// IRubroPropuesta by usePropuesta for the UI. ──
-export interface IArticleToOffer {
-    articleCode: string
-    articleParticularCode: string
-    articleDescription: string
-    brandCode: string
-    brandName: string
-    kind: 'gap' | 'habitual'
-    lookbackAvgUnits: number
-    currentMonthUnits: number
+/** Lo que se manda de vuelta a `POST /planificacion/visitas`: la propuesta tal
+ *  como se le mostró al vendedor. El back resuelve rubroDescripcion por su cuenta. */
+export interface IPropuestaRubroDTO {
+    rubroCode: string
+    pesosPerdidos: number
+    caidaPct: number
 }
 
-export interface IRubroRecommendation {
+// ── Raw shape of POST /sale/rubro/recommendations/drops (RubroDropsService,
+// api-vendedores). Mapped to IRubroPropuesta by usePropuesta for the UI. ──
+export interface IRubroMonthDrop {
+    yearMonth: string
+    actual: number
+    /** Proyección a fin de mes; null en meses ya cerrados. */
+    projected: number | null
+    /** Promedio de los 6 meses previos a ESTE mes. */
+    baseline: number
+    dropPct: number | null
+    lost: number
+    isRed: boolean
+}
+
+export interface IDroppedRubro {
     rubroCode: string
     rubroDescription: string
-    rubroMinUnits: number
-    gapUnits: number
-    projection: {
-        currentMonthUnits: number
-        projectedUnits: number
-        rubroRatio: number
-        daysElapsed: number
-        totalDays: number
-    }
-    lookback: {
-        months: string[]
-        activeMonths: number
-        avgUnits: number
-    }
-    articlesToOffer: IArticleToOffer[]
+    isRedBoth: boolean
+    isFallback: boolean
+    pesosPerdidos: number
+    current: IRubroMonthDrop
+    prev: IRubroMonthDrop
     reason: string
 }
 
-export interface IClientRecommendation {
-    clientCode: string
+export interface IRubroDropsResponse {
     particularCode: string
     clientName: string
     sellerCode: string
-    sellerName: string
-    rubros: IRubroRecommendation[]
-}
-
-export interface IRubroRecommendationsResponse {
     currentYM: string
     daysElapsed: number
     totalDays: number
-    clients: IClientRecommendation[]
+    inflationAdjusted: boolean
     total: number
+    rubros: IDroppedRubro[]
 }
 
 export interface IIniciarVisitaDTO {
     cicloClienteId: number
     /** Obligatoria: el backend rechaza null con COORD_REQUERIDA. */
     coordInicio: string
+    /** La propuesta tal como se le mostró al vendedor. Si no viene, el backend la recalcula. */
+    propuesta?: IPropuestaRubroDTO[]
 }
 
 /** Sin motivoIds: al cerrar una visita el resultado comercial vive en los rubros. */

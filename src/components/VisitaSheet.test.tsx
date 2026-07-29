@@ -104,9 +104,49 @@ it('con la visita cerrada no ofrece cerrarla de nuevo', async () => {
     expect(screen.queryByRole('button', { name: /cerrar visita/i })).not.toBeInTheDocument()
 })
 
+it('con la visita cerrada, un rubro YA resuelto no se puede reabrir (es solo resumen)', async () => {
+    // No se editan visitas ya cerradas — Filtros ya tiene un motivo cargado.
+    renderSheet({ visitaCerrada: true })
+    await screen.findByText('Filtros')
+    expect(screen.queryByRole('button', { name: /motivo cargado/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('Filtros'))
+    // Sigue en la lista (no pasó a la vista de edición de Filtros).
+    expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
+    expect(screen.getByText('Filtros')).toBeInTheDocument()
+})
+
+it('con la visita cerrada, un rubro TODAVÍA sin resolver se puede completar', async () => {
+    // Amortiguadores no tiene motivos: es justo lo que el aviso de "rubros sin cargar"
+    // invita a venir a completar, aunque la visita ya haya cerrado.
+    renderSheet({ visitaCerrada: true })
+    fireEvent.click(await screen.findByText('Amortiguadores'))
+    expect(await screen.findByText('Resolución')).toBeInTheDocument()
+})
+
+it('con la visita cerrada, un rubro ya resuelto no ofrece borrarlo', async () => {
+    renderSheet({ visitaCerrada: true })
+    await screen.findByText('Filtros')
+    expect(screen.queryByRole('button', { name: /quitar/i })).not.toBeInTheDocument()
+})
+
 it('con la visita abierta ofrece cerrarla', async () => {
     const { onCerrarVisita } = renderSheet()
     await screen.findByText('Amortiguadores')
     fireEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
     expect(onCerrarVisita).toHaveBeenCalled()
+})
+
+it('en curso muestra el eyebrow naranja con cronómetro y el botón de minimizar', async () => {
+    const onMinimize = vi.fn()
+    renderSheet({ enCurso: true, onMinimize })
+    await screen.findByText('Amortiguadores')
+    expect(screen.getByText(/en curso/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText('Minimizar'))
+    expect(onMinimize).toHaveBeenCalled()
+})
+
+it('sin enCurso no ofrece minimizar', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+    expect(screen.queryByLabelText('Minimizar')).not.toBeInTheDocument()
 })

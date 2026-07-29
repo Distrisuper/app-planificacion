@@ -1,23 +1,29 @@
+@import '@fontsource/inter/400.css';
+@import '@fontsource/inter/500.css';
+@import '@fontsource/inter/600.css';
+@import '@fontsource/inter/700.css';
+@import '@fontsource/inter/800.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 html, body, #root { height: 100%; }
-body { margin: 0; background: #eef1f6; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: #eef1f6; -webkit-tap-highlight-color: transparent; font-family: 'Inter', system-ui, sans-serif; }
 
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes notif-in { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 .animate-sheet-up { animation: sheet-up .28s cubic-bezier(.22,1,.36,1); }
 .animate-fade-in { animation: fade-in .18s ease; }
-.animate-toast-in { animation: toast-in .2s ease; }
+.animate-notif-in { animation: notif-in .2s ease; }
 
 @media (prefers-reduced-motion: reduce) {
-    .animate-sheet-up, .animate-fade-in, .animate-toast-in {
+    .animate-sheet-up, .animate-fade-in, .animate-notif-in {
         animation: none !important;
     }
 }
