@@ -33,7 +33,7 @@ más reciente:
   app-vendedores (Bearer token automático, auto-logout en 401).
 - **react-router-dom**, **zod**, **React Context/Providers** para estado de negocio.
 - **Leaflet** (a confirmar) para mostrar los 2 puntos de geo sobre mapa.
-- **Vitest** para tests. Deploy en **Firebase Hosting**.
+- **Vitest** para tests. Deploy en **Vercel** (team de la empresa, no cuenta personal).
 
 No se usa Next.js (lo usa app-lupa-web, pero ese es e-commerce público; esta app es interna,
 autenticada y mobile-first — un SPA con Vite alcanza y es más simple).
