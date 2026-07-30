@@ -1,4 +1,3 @@
-import { vi } from 'vitest'
 import { getResumen, getVisitas, getVisitaDetalle, getObjeciones } from './analitica'
 import { MOCK_RESUMEN, MOCK_VISITAS, MOCK_OBJECIONES } from '@/mocks/analiticaMock'
 
