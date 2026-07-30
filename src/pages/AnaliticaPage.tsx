@@ -10,8 +10,12 @@ export default function AnaliticaPage() {
     const navigate = useNavigate()
     const { filtro, setRango, toggleVendedor, limpiarVendedores } = useFiltroAnalitica()
     const { data, isLoading, isError } = useResumen(filtro)
+    // El dropdown necesita el roster completo: getResumen ya filtra "vendedores" por
+    // filtro.vendedores, así que si lo alimentáramos de `data` el combo se reduciría
+    // al elegido y no se podría agregar un segundo. Se pide sin ese filtro, aparte.
+    const { data: roster } = useResumen({ desde: filtro.desde, hasta: filtro.hasta })
 
-    const opciones = (data?.vendedores ?? []).map(v => ({
+    const opciones = (roster?.vendedores ?? []).map(v => ({
         codigo: v.codigoParticularVendedor,
         nombre: v.nombreVendedor,
     }))
