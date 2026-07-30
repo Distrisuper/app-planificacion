@@ -257,6 +257,39 @@ dashboard.
 - **`rubrosOfrecidos = 0`**: efectividad comercial en `null`, no `0`.
 - **403**: el front muestra la pantalla `SinPermisos` ya existente.
 
+## Orden de implementación: front sobre mock primero
+
+El contrato de los cuatro endpoints queda cerrado en este spec, así que el front se construye e
+itera **antes** que el backend, contra un mock tipado.
+
+- `src/mocks/analiticaMock.ts` — fixture tipada con las mismas interfaces que consume la UI. Al
+  estar tipada, el compilador garantiza que el mock respeta el contrato: si el contrato cambia, el
+  mock deja de compilar.
+- `src/api/analitica.ts` — única capa que decide. Si `VITE_ANALITICA_MOCK=1` devuelve el fixture
+  (con un delay artificial corto, para que los estados de carga se vean); si no, pega contra
+  `apiClient`. Ningún componente ni hook sabe de la existencia del mock.
+- El día que el backend exista, se apaga el flag. No hay código de UI que desmontar.
+
+No se agregan dependencias (nada de MSW): el repo hoy no la tiene y la capa `api/` ya es un seam
+suficiente.
+
+**El fixture debe cubrir los casos borde, que son los que rompen el diseño de una tabla.** Además de
+~10 vendedores verosímiles con un buen desempeño, uno malo y el resto en el medio:
+
+- un vendedor con **ciclo en curso** (cobertura ~40% legítima) → valida el indicador `⊙ N en curso`
+- uno con **> 50% de visitas no validadas** y otro con **duración promedio < 20 min** → las dos
+  reglas absolutas del semáforo
+- clientes **sin coord** → celdas "s/d" (el caso que hoy imprime `7307510 m`)
+- un vendedor con **cero rubros ofrecidos** → `efectividadComercial: null`, la UI no muestra `0%`
+- un vendedor **sin objetivo vigente** → cumplimiento en "s/d"
+- un rango sin ciclos → estado vacío explícito
+
+Los filtros de fecha y de vendedores operan de verdad sobre el fixture: controles que no filtran
+nada dan una falsa sensación de que la pantalla funciona.
+
+Fases: (1) front sobre mock hasta que el dashboard convenza; (2) backend en `api-vendedores` contra
+el mismo contrato, más `pl_objetivo`; (3) apagar el flag y verificar end-to-end.
+
 ## Tests
 
 **Backend (Vitest/Jest según el repo):**
