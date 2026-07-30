@@ -4,6 +4,7 @@ import { queryClient } from '@/lib/queryClient'
 import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/router/ProtectedRoute'
 import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
+import AnaliticaPage from '@/pages/AnaliticaPage'
 import LoginPage from '@/pages/LoginPage'
 import SinPermisosPage from '@/pages/SinPermisosPage'
 
@@ -15,6 +16,7 @@ export default function App() {
                     <Routes>
                         <Route element={<ProtectedRoute />}>
                             <Route path="/" element={<AgendaSemanaPage />} />
+                            <Route path="/analitica" element={<AnaliticaPage />} />
                         </Route>
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/sin-permisos" element={<SinPermisosPage />} />
