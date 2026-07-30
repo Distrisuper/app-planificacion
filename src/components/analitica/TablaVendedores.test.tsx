@@ -49,6 +49,12 @@ it('pinta en rojo al vendedor con la mitad de las visitas sin validar', () => {
     expect(within(fila).getByTestId('celda-no-validadas')).toHaveClass('text-red-600')
 })
 
+it('pinta en rojo la cobertura de un vendedor por debajo del 70% del promedio del equipo', () => {
+    render(<TablaVendedores {...props} />)
+    const fila = screen.getByRole('row', { name: /DOMINGUEZ SILVINA/ })
+    expect(within(fila).getByText('40%')).toHaveClass('text-red-600')
+})
+
 it('ordena por cobertura al hacer click en el encabezado', async () => {
     render(<TablaVendedores {...props} />)
     await userEvent.click(screen.getByRole('button', { name: /cobertura/i }))
