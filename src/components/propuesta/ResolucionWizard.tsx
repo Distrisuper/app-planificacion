@@ -30,23 +30,30 @@ export default function ResolucionWizard({
 
     return (
         <div>
-            <div className="mb-1 flex items-center justify-between gap-2">
+            {/* Sticky: el nombre del rubro es la info que más importa en esta pantalla —
+             *  si scrollea con el resto (ej. al expandirse el detalle de Precio), el
+             *  vendedor pierde de vista cuál está resolviendo a mitad de la lista. El
+             *  -mx/px negativo hace que el fondo llegue a los bordes del sheet en vez de
+             *  dejar ver el contenido de abajo por el padding lateral del scroll. */}
+            <div className="sticky top-0 z-10 -mx-[18px] mb-3 flex items-center gap-2 border-b border-[#EEF0F5] bg-white px-[18px] pb-2.5">
                 <Button
                     variant="outline"
                     size="icon"
                     onClick={onVolver}
                     aria-label="Volver"
-                    className="h-[29px] w-[29px] border-[#E1E6F0] text-dsmuted"
+                    className="h-[29px] w-[29px] shrink-0 border-[#E1E6F0] text-dsmuted"
                 >
                     <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
                 </Button>
-                <span className="text-[12.5px] font-bold text-dsmuted">
+                <span className="min-w-0 flex-1 truncate text-[15px] font-extrabold text-[#182645]">
+                    {rubro.rubroDescripcion}
+                </span>
+                <span className="shrink-0 text-[12px] font-semibold text-dsmuted">
                     {index + 1} de {rubros.length}
                 </span>
             </div>
 
             <ResolucionRubro
-                rubro={rubro}
                 motivos={motivos}
                 value={borradores[rubro.id] ?? []}
                 onChange={m => onCambiarBorrador(rubro.id, m)}

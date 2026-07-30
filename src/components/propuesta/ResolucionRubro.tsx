@@ -1,8 +1,7 @@
 import { Check } from 'lucide-react'
-import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
+import type { IMotivo, IRubroMotivo } from '@/types/planificacion'
 
 interface ResolucionRubroProps {
-    rubro: IVisitaRubro
     /** Catálogo de nivel `rubro`. Nunca se hardcodea: agregar un motivo es un INSERT. */
     motivos: IMotivo[]
     value: IRubroMotivo[]
@@ -11,10 +10,10 @@ interface ResolucionRubroProps {
 
 const VACIO = { marca: null, competidor: null, pctDiferencia: null }
 
-/** Checklist + detalle de un rubro. Sin header ni botón de guardar propios: la navegación
- *  entre rubros y el guardado en lote los aporta ResolucionWizard, que envuelve a este
- *  componente y es el único con estado de posición/guardado. */
-export default function ResolucionRubro({ rubro, motivos, value, onChange }: ResolucionRubroProps) {
+/** Checklist + detalle de un rubro. Sin header, nombre de rubro ni botón de guardar
+ *  propios: eso lo aporta ResolucionWizard, que envuelve a este componente en su header
+ *  fijo y es el único con estado de posición/guardado. */
+export default function ResolucionRubro({ motivos, value, onChange }: ResolucionRubroProps) {
     const porId = new Map(value.map(m => [m.motivoId, m]))
 
     function toggle(motivoId: number) {
@@ -50,8 +49,6 @@ export default function ResolucionRubro({ rubro, motivos, value, onChange }: Res
 
     return (
         <div>
-            <div className="mb-3 text-[12.5px] font-semibold text-dsmuted">{rubro.rubroDescripcion}</div>
-
             <div className="flex flex-col gap-2">
                 {motivos.map(cat => {
                     const seleccionado = porId.get(cat.motivoId)

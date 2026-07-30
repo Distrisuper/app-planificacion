@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
 import ResolucionRubro from './ResolucionRubro'
-import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
+import type { IMotivo, IRubroMotivo } from '@/types/planificacion'
 
 const motivos: IMotivo[] = [
     { motivoId: 10, nivel: 'rubro', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
@@ -9,20 +9,9 @@ const motivos: IMotivo[] = [
     { motivoId: 16, nivel: 'rubro', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
 ]
 
-const rubro: IVisitaRubro = {
-    id: 7,
-    resolucionId: 42,
-    rubroCode: 'AMORT',
-    rubroDescripcion: 'Amortiguadores',
-    gapUnits: 12,
-    esPropuesto: true,
-    resuelto: false,
-    motivos: [],
-}
-
 function setup(value: IRubroMotivo[] = []) {
     const onChange = vi.fn()
-    render(<ResolucionRubro rubro={rubro} motivos={motivos} value={value} onChange={onChange} />)
+    render(<ResolucionRubro motivos={motivos} value={value} onChange={onChange} />)
     return { onChange }
 }
 
@@ -32,11 +21,6 @@ it('renderiza el catálogo recibido, sin nombres hardcodeados', () => {
     expect(screen.getByText('No lo ofrecí')).toBeInTheDocument()
     // "Poco trabajo" / "Estoy completo" eran del prototipo y NO están en el catálogo.
     expect(screen.queryByText('Poco trabajo')).not.toBeInTheDocument()
-})
-
-it('muestra el rubro que se está resolviendo', () => {
-    setup()
-    expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
 })
 
 it('tildar un motivo lo agrega con los detalles en null', () => {
