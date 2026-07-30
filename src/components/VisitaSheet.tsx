@@ -4,6 +4,7 @@ import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import RubroCard from './propuesta/RubroCard'
 import ResolucionWizard from './propuesta/ResolucionWizard'
+import ResolucionWizardAcciones from './propuesta/ResolucionWizardAcciones'
 import VersusTable from './propuesta/VersusTable'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useRubros, useResolverRubros, useEliminarRubro } from '@/hooks/useRubros'
@@ -124,29 +125,41 @@ export default function VisitaSheet({
 
     const pendientes = rubros.filter(r => !r.resuelto).length
 
-    // El pie (Cerrar visita) se mantiene fijo en list/versus; en el wizard no aplica —
-    // esa vista tiene su propio flujo de guardado (Guardar todo, dentro del contenido).
-    const footer =
-        !wizard ? (
-            <>
-                {pendientes > 0 && (
-                    <p className="mb-2 text-center text-[12px] font-semibold text-[#B45309]">
-                        {pendientes} {pendientes === 1 ? 'rubro' : 'rubros'} sin cargar. Podés
-                        cerrar la visita y completarlos después, pero la semana no cierra
-                        hasta que estén.
-                    </p>
-                )}
-                {!visitaCerrada && (
-                    <Button
-                        onClick={onCerrarVisita}
-                        loading={cerrando}
-                        className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
-                    >
-                        {cerrando ? 'Cerrando…' : 'Cerrar visita'}
-                    </Button>
-                )}
-            </>
-        ) : undefined
+    // El pie es fijo (fuera del scroll) tanto en list/versus (Cerrar visita) como en el
+    // wizard (Atrás/Siguiente/Guardar todo): así ninguno de los dos se oculta al expandir
+    // el detalle de un motivo (ej. Precio) empuja el contenido hacia abajo.
+    const footer = wizard ? (
+        <ResolucionWizardAcciones
+            rubros={wizard.rubros}
+            index={wizard.index}
+            motivos={motivos}
+            borradores={borradores}
+            guardados={guardados}
+            fallidos={fallidos}
+            guardando={resolverTodos.isPending}
+            onIndexChange={index => setWizard(w => (w ? { ...w, index } : w))}
+            onGuardarTodo={guardarTodo}
+        />
+    ) : (
+        <>
+            {pendientes > 0 && (
+                <p className="mb-2 text-center text-[12px] font-semibold text-[#B45309]">
+                    {pendientes} {pendientes === 1 ? 'rubro' : 'rubros'} sin cargar. Podés
+                    cerrar la visita y completarlos después, pero la semana no cierra
+                    hasta que estén.
+                </p>
+            )}
+            {!visitaCerrada && (
+                <Button
+                    onClick={onCerrarVisita}
+                    loading={cerrando}
+                    className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
+                >
+                    {cerrando ? 'Cerrando…' : 'Cerrar visita'}
+                </Button>
+            )}
+        </>
+    )
 
     return (
         <BottomSheet
@@ -164,12 +177,7 @@ export default function VisitaSheet({
                     index={wizard.index}
                     motivos={motivos}
                     borradores={borradores}
-                    guardados={guardados}
-                    fallidos={fallidos}
-                    guardando={resolverTodos.isPending}
-                    onIndexChange={index => setWizard(w => (w ? { ...w, index } : w))}
                     onCambiarBorrador={(rubroId, m) => setBorradores(prev => ({ ...prev, [rubroId]: m }))}
-                    onGuardarTodo={guardarTodo}
                     onVolver={() => setWizard(null)}
                 />
             ) : vista === 'versus' ? (
