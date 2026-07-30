@@ -134,7 +134,7 @@ export default function IniciarVisitaMapa({
                 {error && <p className="mb-3 text-[12.5px] font-semibold text-dsred">{error}</p>}
                 <Button
                     onClick={onIniciar}
-                    disabled={iniciando}
+                    loading={iniciando}
                     className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
                 >
                     {iniciando ? 'Iniciando…' : 'Iniciar visita'}

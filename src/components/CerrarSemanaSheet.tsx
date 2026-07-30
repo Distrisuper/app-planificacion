@@ -85,7 +85,7 @@ export default function CerrarSemanaSheet({ open, onClose, onCerrado }: CerrarSe
 
             <Button
                 onClick={onConfirmar}
-                disabled={cerrar.isPending}
+                loading={cerrar.isPending}
                 className="mt-1 h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
             >
                 {cerrar.isPending ? 'Cerrando…' : 'Cerrar semana'}

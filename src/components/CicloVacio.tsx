@@ -40,10 +40,11 @@ export default function CicloVacio({
             )}
             <Button
                 onClick={onAbrir}
-                disabled={abriendo || clientes === 0}
+                disabled={clientes === 0}
+                loading={abriendo}
                 className="mt-2.5 h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
             >
-                <CalendarPlus className="h-[15px] w-[15px]" strokeWidth={2.2} />
+                {!abriendo && <CalendarPlus className="h-[15px] w-[15px]" strokeWidth={2.2} />}
                 {abriendo ? 'Abriendo…' : `Abrir semana ${semana} · ${clientes} clientes`}
             </Button>
         </div>

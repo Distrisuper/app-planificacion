@@ -175,7 +175,8 @@ export default function ResolucionRubro({
 
             <Button
                 onClick={onGuardar}
-                disabled={incompleto || guardando}
+                disabled={incompleto}
+                loading={guardando}
                 className="mt-4 h-[47px] w-full text-[14.5px]"
             >
                 {guardando ? 'Guardando…' : 'Guardar'}

@@ -1,5 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes } from 'react'
 import { cva, type VariantProps } from 'class-variance-authority'
+import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
@@ -24,11 +25,23 @@ const buttonVariants = cva(
     },
 )
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {}
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+    /** Muestra un spinner y deshabilita el botón — para cualquier acción async (mutación,
+     *  captura de ubicación, etc.), no solo mientras `disabled` está seteado a mano. */
+    loading?: boolean
+}
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-    ({ className, variant, size, ...props }, ref) => (
-        <button ref={ref} className={cn(buttonVariants({ variant, size }), className)} {...props} />
+    ({ className, variant, size, loading, disabled, children, ...props }, ref) => (
+        <button
+            ref={ref}
+            disabled={disabled || loading}
+            className={cn(buttonVariants({ variant, size }), className)}
+            {...props}
+        >
+            {loading && <Loader2 className="h-[15px] w-[15px] shrink-0 animate-spin" strokeWidth={2.5} />}
+            {children}
+        </button>
     ),
 )
 Button.displayName = 'Button'

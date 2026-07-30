@@ -67,7 +67,8 @@ export default function ResolucionSheet({
                 })}
             </div>
             <Button
-                disabled={selected.length === 0 || submitting}
+                disabled={selected.length === 0}
+                loading={submitting}
                 onClick={() => onConfirm(selected)}
                 className="mt-4 h-12 w-full bg-dsgreen text-[14.5px] hover:bg-dsgreen/90"
             >
