@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
 import DiaTabs from '@/components/DiaTabs'
 import AgendaBoard from '@/components/AgendaBoard'
 import CicloVacio from '@/components/CicloVacio'
-import VisitaFlow from '@/components/VisitaFlow'
+import VisitaFlow, { type IVisitaEnCurso } from '@/components/VisitaFlow'
+import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import CerrarSemanaSheet from '@/components/CerrarSemanaSheet'
@@ -78,6 +79,42 @@ export default function AgendaSemanaPage() {
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [cerrandoSemana, setCerrandoSemana] = useState(false)
+    // La visita en curso del vendedor, independiente de qué card esté mirando ahora
+    // (`visitaCliente`). Antes vivía adentro de VisitaFlow atada al cliente abierto: tocar
+    // la propuesta de OTRO cliente y cerrarla la perdía, y la barra flotante desaparecía.
+    const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(null)
+
+    // Mantiene `visitaEnCurso` sincronizada con el servidor:
+    // - Si no hay puntero local (recién se abrió la app) pero la agenda ya trae un cliente
+    //   en curso, lo adopta para que la barra flotante aparezca tras un reload.
+    // - Si el cliente que teníamos como en curso ya no lo está en el servidor (se cerró
+    //   desde otro dispositivo/pestaña), suelta el puntero.
+    useEffect(() => {
+        if (!agenda) return
+        if (visitaEnCurso) {
+            const actual = DIAS.flatMap(d => agenda[d] ?? []).find(
+                c => c.cicloClienteId === visitaEnCurso.cliente.cicloClienteId,
+            )
+            // 'pendiente' es el hueco entre iniciar y que el refetch de la agenda catchee:
+            // no se toca acá. Cualquier otro estado que no sea 'en_curso' significa que la
+            // visita ya se resolvió por otro lado.
+            if (actual && actual.estado !== 'en_curso' && actual.estado !== 'pendiente') {
+                setVisitaEnCurso(null)
+            }
+            return
+        }
+        const enCurso = DIAS.flatMap(d => agenda[d] ?? []).find(c => c.estado === 'en_curso')
+        if (enCurso && enCurso.visitaId !== null) {
+            setVisitaEnCurso({ cliente: enCurso, visitaId: enCurso.visitaId })
+        }
+    }, [agenda, visitaEnCurso])
+
+    // Barra flotante visible siempre que haya una visita en curso Y el sheet abierto ahora
+    // no sea justo el de esa visita (incluye "sheet cerrado del todo").
+    const viendoVisitaEnCurso =
+        visitaEnCurso !== null &&
+        visitaCliente !== null &&
+        visitaCliente.cicloClienteId === visitaEnCurso.cliente.cicloClienteId
 
     // Las cards del preview no tienen cicloClienteId ni estado, así que se adaptan a la
     // forma de la agenda SOLO para render. El board queda en modo preview, sin acciones,
@@ -222,10 +259,22 @@ export default function AgendaSemanaPage() {
 
             <VisitaFlow
                 cliente={visitaCliente}
+                visitaEnCurso={visitaEnCurso}
+                onVisitaIniciada={(cliente, visitaId) => setVisitaEnCurso({ cliente, visitaId })}
+                onVisitaCerrada={() => setVisitaEnCurso(null)}
                 onClose={() => setVisitaCliente(null)}
                 onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
                 onAviso={mostrar}
             />
+            {visitaEnCurso && !viendoVisitaEnCurso && (
+                <VisitaEnCursoBar
+                    visitaId={visitaEnCurso.visitaId}
+                    nombreCliente={
+                        visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente
+                    }
+                    onExpandir={() => setVisitaCliente(visitaEnCurso.cliente)}
+                />
+            )}
             <ResolucionSheet
                 open={!!noVisitaCliente}
                 motivos={motivosVisita}

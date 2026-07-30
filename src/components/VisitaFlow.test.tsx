@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
-import VisitaFlow from './VisitaFlow'
+import VisitaFlow, { type IVisitaEnCurso } from './VisitaFlow'
+import VisitaEnCursoBar from './VisitaEnCursoBar'
 import * as api from '@/api/planificacion'
 import * as geo from '@/lib/geolocation'
 import type { IAgendaClient } from '@/types/planificacion'
@@ -33,23 +35,98 @@ const cliente: IAgendaClient = {
     rubrosPendientes: 0,
 }
 
-function renderFlow(over: Record<string, unknown> = {}) {
+interface HarnessProps {
+    clienteInicial: IAgendaClient | null
+    /** Si se pasa, se renderiza un botón de test que simula tocar la card de OTRO cliente
+     *  (como haría AgendaBoard) sin cerrar el flujo del que ya estaba abierto. */
+    otroCliente?: IAgendaClient
+    onGeoBloqueada: (motivo: any) => void
+    onAviso: (tipo: any, mensaje: string) => void
+    onClose: () => void
+    onVisitaIniciada: (cliente: IAgendaClient, visitaId: number) => void
+    onVisitaCerrada: () => void
+}
+
+/**
+ * Reproduce la porción relevante de AgendaSemanaPage: quién es el cliente cuyo sheet está
+ * abierto (`cliente`, un solo slot que cambia si se toca otra card) versus la visita en
+ * curso (`visitaEnCurso`, independiente de eso). VisitaFlow ya no gestiona internamente
+ * esa segunda pieza de estado — así que probarlo aislado sin este wrapper no reproduciría
+ * el bug real (la barra flotante se sostiene desde el padre, no desde VisitaFlow).
+ */
+function Harness({
+    clienteInicial,
+    otroCliente,
+    onGeoBloqueada,
+    onAviso,
+    onClose,
+    onVisitaIniciada,
+    onVisitaCerrada,
+}: HarnessProps) {
+    const [cliente, setCliente] = useState<IAgendaClient | null>(clienteInicial)
+    const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(
+        clienteInicial && clienteInicial.estado === 'en_curso' && clienteInicial.visitaId !== null
+            ? { cliente: clienteInicial, visitaId: clienteInicial.visitaId }
+            : null,
+    )
+    const viendoVisitaEnCurso =
+        visitaEnCurso !== null && cliente !== null && cliente.cicloClienteId === visitaEnCurso.cliente.cicloClienteId
+
+    return (
+        <>
+            {otroCliente && (
+                <button onClick={() => setCliente(otroCliente)}>Abrir {otroCliente.nombreCliente}</button>
+            )}
+            <VisitaFlow
+                cliente={cliente}
+                visitaEnCurso={visitaEnCurso}
+                onVisitaIniciada={(c, id) => {
+                    setVisitaEnCurso({ cliente: c, visitaId: id })
+                    onVisitaIniciada(c, id)
+                }}
+                onVisitaCerrada={() => {
+                    setVisitaEnCurso(null)
+                    onVisitaCerrada()
+                }}
+                onClose={() => {
+                    setCliente(null)
+                    onClose()
+                }}
+                onGeoBloqueada={onGeoBloqueada}
+                onAviso={onAviso}
+            />
+            {visitaEnCurso && !viendoVisitaEnCurso && (
+                <VisitaEnCursoBar
+                    visitaId={visitaEnCurso.visitaId}
+                    nombreCliente={visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente}
+                    onExpandir={() => setCliente(visitaEnCurso.cliente)}
+                />
+            )}
+        </>
+    )
+}
+
+function renderFlow(over: { cliente?: IAgendaClient; otroCliente?: IAgendaClient } = {}) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onGeoBloqueada = vi.fn()
     const onClose = vi.fn()
     const onAviso = vi.fn()
+    const onVisitaIniciada = vi.fn()
+    const onVisitaCerrada = vi.fn()
     render(
         <QueryClientProvider client={qc}>
-            <VisitaFlow
-                cliente={cliente}
-                onClose={onClose}
+            <Harness
+                clienteInicial={over.cliente ?? cliente}
+                otroCliente={over.otroCliente}
                 onGeoBloqueada={onGeoBloqueada}
                 onAviso={onAviso}
-                {...over}
+                onClose={onClose}
+                onVisitaIniciada={onVisitaIniciada}
+                onVisitaCerrada={onVisitaCerrada}
             />
         </QueryClientProvider>,
     )
-    return { onGeoBloqueada, onClose, onAviso }
+    return { onGeoBloqueada, onClose, onAviso, onVisitaIniciada, onVisitaCerrada }
 }
 
 beforeEach(() => {
@@ -252,6 +329,27 @@ it('si cerrar falla porque la visita ya estaba cerrada, lo trata como éxito y c
     await waitFor(() => expect(onClose).toHaveBeenCalled())
 })
 
+it('el botón se deshabilita apenas se toca, antes de que resuelva la geolocalización, y un segundo tap no dispara una segunda llamada', async () => {
+    // La captura de GPS puede tardar hasta ~23s (ver capturarUbicacion). Si el botón no se
+    // deshabilita hasta que ESA promesa resuelve, el vendedor lo vuelve a tocar creyendo que
+    // no respondió, y se disparan llamadas concurrentes a iniciarVisita.
+    let resolverGeo!: (r: { ok: true; coord: string; precisionM: number }) => void
+    ;(geo.capturarUbicacion as any).mockReturnValue(
+        new Promise(resolve => {
+            resolverGeo = resolve
+        }),
+    )
+    renderFlow()
+    const boton = await screen.findByRole('button', { name: /iniciar visita/i })
+    fireEvent.click(boton)
+
+    await waitFor(() => expect(boton).toBeDisabled())
+    fireEvent.click(boton)
+
+    resolverGeo({ ok: true, coord: '-34.6,-58.4', precisionM: 10 })
+    await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+})
+
 it('con coordenadas del cliente, iniciar visita muestra el mapa en vez de arrancar directo', async () => {
     renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
@@ -309,4 +407,50 @@ it('si cerrar falla por un error genérico, avisa y NO cierra el flujo', async (
     )
     expect(onClose).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: /cerrar visita/i })).toBeInTheDocument()
+})
+
+const otroCliente: IAgendaClient = {
+    codigoCliente: 'C2',
+    codigoParticularCliente: '20099',
+    nombreCliente: 'KIOSCO SUR',
+    cicloClienteId: 77,
+    dia: 1,
+    estado: 'pendiente',
+    visitaId: null,
+    rubrosPendientes: 0,
+}
+
+it('la visita en curso sigue viva aunque se abra y cierre la propuesta de otro cliente', async () => {
+    renderFlow({ otroCliente })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByLabelText('Minimizar')
+
+    // El vendedor toca la card de otro cliente sin cerrar la visita en curso.
+    fireEvent.click(screen.getByRole('button', { name: /kiosco sur/i }))
+    await screen.findByRole('button', { name: /iniciar visita/i })
+
+    // La cierra sin hacer nada más.
+    fireEvent.click(screen.getByLabelText('Cerrar'))
+
+    // La visita de ALMACEN DON JOSE sigue en curso: la barra flotante reaparece sola.
+    expect(await screen.findByText(/visitando a almacen don jose/i)).toBeInTheDocument()
+})
+
+it('con una visita en curso, iniciar en otro cliente queda bloqueado con aviso', async () => {
+    renderFlow({ otroCliente })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByLabelText('Minimizar')
+
+    fireEvent.click(screen.getByRole('button', { name: /kiosco sur/i }))
+    const botonIniciar = await screen.findByRole('button', { name: /iniciar visita/i })
+
+    expect(botonIniciar).toBeDisabled()
+    expect(
+        screen.getByText(/ya tenés una visita en curso con almacen don jose/i),
+    ).toBeInTheDocument()
+
+    fireEvent.click(botonIniciar)
+    // Ya se había llamado una vez para iniciar la visita de Don José: el tap sobre el
+    // botón deshabilitado de Kiosco Sur no debe sumar una segunda llamada.
+    expect(api.iniciarVisita).toHaveBeenCalledTimes(1)
 })
