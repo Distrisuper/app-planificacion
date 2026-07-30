@@ -17,7 +17,9 @@ import type {
     IResolucion,
     IResolverRubroDTO,
     IResolverRubroResult,
+    IRubroClientsPageResponse,
     IRubroDropsResponse,
+    IRubroEstado,
     IVisitaRubro,
     NivelMotivo,
     SemanaAgenda,
@@ -155,4 +157,34 @@ export const getPropuesta = async (
         particularCode: codigoParticularCliente,
     })
     return res.data.data ?? res.data
+}
+
+/** "Cómo viene comprando" (Ver versus): TODOS los rubros del cliente con Actual/M.Ant/
+ *  Prom.6M, sin el recorte a caídas/relleno de la propuesta. `pageSize` > 1 y el filtro
+ *  por `particularCode` exacto evitan quedarse con otro cliente si el `search` matchea
+ *  más de uno por nombre. */
+export const getRubroStatus = async (
+    codigoParticularCliente: string,
+): Promise<IRubroEstado[]> => {
+    const res = await apiClient.post('/sale/rubro/clients', {
+        sellerCode: null,
+        filters: { search: codigoParticularCliente },
+        page: 0,
+        pageSize: 5,
+    })
+    const data: IRubroClientsPageResponse = res.data.data ?? res.data
+    const entity = data.entities.find(
+        e => e.particularCode === codigoParticularCliente,
+    )
+    const items = entity?.breakdown?.items ?? []
+
+    return items
+        .filter(i => i.kind === 'rubro')
+        .map(i => ({
+            rubroCode: i.code,
+            nombre: i.name,
+            actual: i.totalsByPeriod.thisMonth?.amount ?? 0,
+            mesAnterior: i.totalsByPeriod.lastMonth?.amount ?? 0,
+            promedio6m: (i.totalsByPeriod.last6Months?.amount ?? 0) / 6,
+        }))
 }

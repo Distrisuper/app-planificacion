@@ -47,6 +47,9 @@ beforeEach(() => {
     ;(api.getRubros as any).mockResolvedValue(rubros)
     ;(api.getMotivos as any).mockResolvedValue(motivos)
     ;(api.resolverRubro as any).mockResolvedValue({ rubrosPendientes: 0 })
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600, mesAnterior: 800, promedio6m: 1000 },
+    ])
 })
 
 it('lista los rubros de la propuesta congelada', async () => {
@@ -149,4 +152,24 @@ it('sin enCurso no ofrece minimizar', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
     expect(screen.queryByLabelText('Minimizar')).not.toBeInTheDocument()
+})
+
+it('sin codigoParticularCliente no ofrece ver versus', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+    expect(screen.queryByRole('button', { name: /ver versus/i })).not.toBeInTheDocument()
+})
+
+it('con codigoParticularCliente, ver versus pide el estado de rubros y muestra la tabla', async () => {
+    renderSheet({ codigoParticularCliente: '10034' })
+    await screen.findByText('Amortiguadores')
+    expect(api.getRubroStatus).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /ver versus/i }))
+    expect(await screen.findByText('Cómo viene comprando')).toBeInTheDocument()
+    await waitFor(() => expect(api.getRubroStatus).toHaveBeenCalledWith('10034'))
+    expect(await screen.findByText('1.000')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByLabelText('Volver'))
+    expect(await screen.findByText('Cargá el resultado de cada rubro que ofreciste.', { exact: false })).toBeInTheDocument()
 })

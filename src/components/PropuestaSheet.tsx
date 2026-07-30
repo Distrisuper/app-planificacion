@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, Maximize2, Play } from 'lucide-react'
+import { ChevronLeft, Loader2, Maximize2, Play } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import RubroCard from './propuesta/RubroCard'
-import VersusComparativo from './propuesta/VersusComparativo'
+import VersusTable from './propuesta/VersusTable'
 import { usePropuesta } from '@/hooks/usePropuesta'
+import { useRubroStatus } from '@/hooks/useRubroStatus'
 import type { IPropuestaRubroDTO, IRubroPropuesta } from '@/types/planificacion'
 
 interface PropuestaSheetProps {
@@ -16,8 +17,12 @@ interface PropuestaSheetProps {
     onClose: () => void
     /** true = la mutación de iniciar visita está en curso. */
     iniciando?: boolean
-    /** Mensaje del último intento fallido. Queda visible hasta el próximo intento (no es un
-     *  toast de 2 segundos: si falla acá, el vendedor tiene que verlo con calma). */
+    /** true = no se puede iniciar (p.ej. hay otra visita en curso). Deshabilita el botón
+     *  sin mostrar el spinner de `iniciando`. */
+    deshabilitado?: boolean
+    /** Mensaje del último intento fallido, o el motivo por el que está deshabilitado.
+     *  Queda visible hasta el próximo intento (no es un toast de 2 segundos: si falla acá,
+     *  el vendedor tiene que verlo con calma). */
     error?: string | null
 }
 
@@ -41,12 +46,19 @@ export default function PropuestaSheet({
     onIniciarVisita,
     onClose,
     iniciando,
+    deshabilitado,
     error,
 }: PropuestaSheetProps) {
     const { data, isLoading } = usePropuesta(open ? codigoCliente : null)
     const rubros: IRubroPropuesta[] = data?.rubros ?? []
 
     const [vista, setVista] = useState<Vista>('list')
+
+    // "Ver versus" es independiente de la propuesta: trae TODOS los rubros del
+    // cliente, no solo los caídos/relleno que se muestran en la lista.
+    const { data: rubroStatus = [], isLoading: rubroStatusLoading } = useRubroStatus(
+        vista === 'versus' ? codigoCliente : null,
+    )
 
     useEffect(() => {
         if (!open) {
@@ -60,6 +72,22 @@ export default function PropuestaSheet({
             onClose={onClose}
             title={nombreCliente}
             eyebrow="Propuesta comercial"
+            footer={
+                <>
+                    {error && (
+                        <p className="mb-2.5 text-[12.5px] font-semibold text-dsred">{error}</p>
+                    )}
+                    <Button
+                        onClick={() => onIniciarVisita(rubros.map(toPropuestaDTO))}
+                        disabled={deshabilitado}
+                        loading={iniciando}
+                        className="h-12 w-full bg-dsgreen text-[15px] shadow-[0_3px_10px_rgba(0,158,79,.32)] hover:bg-dsgreen/90"
+                    >
+                        {!iniciando && <Play className="h-[15px] w-[15px] fill-current" strokeWidth={0} />}
+                        {iniciando ? 'Iniciando…' : 'Iniciar visita'}
+                    </Button>
+                </>
+            }
         >
             {vista === 'versus' ? (
                 <div>
@@ -67,20 +95,24 @@ export default function PropuestaSheet({
                         <Button
                             variant="outline"
                             size="icon"
+                            aria-label="Volver"
                             onClick={() => setVista('list')}
                             className="h-[29px] w-[29px] border-[#E1E6F0] text-dsmuted"
                         >
                             <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
                         </Button>
                         <span className="text-[13px] font-bold text-[#182645]">
-                            Este mes <span className="text-dsgreen">vs</span> tu promedio (6M)
+                            Cómo viene comprando
                         </span>
                     </div>
-                    <div className="flex flex-col gap-4">
-                        {rubros.map(r => (
-                            <VersusComparativo key={r.rubroCode} rubro={r} />
-                        ))}
-                    </div>
+                    {rubroStatusLoading ? (
+                        <div className="flex items-center justify-center gap-2 py-8 text-sm text-dsmuted">
+                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.4} />
+                            Cargando…
+                        </div>
+                    ) : (
+                        <VersusTable rubros={rubroStatus} />
+                    )}
                 </div>
             ) : (
                 <div>
@@ -119,18 +151,6 @@ export default function PropuestaSheet({
                             Ver versus
                         </Button>
                     )}
-
-                    {error && (
-                        <p className="mt-2.5 text-[12.5px] font-semibold text-dsred">{error}</p>
-                    )}
-                    <Button
-                        onClick={() => onIniciarVisita(rubros.map(toPropuestaDTO))}
-                        disabled={iniciando}
-                        className="mt-2.5 h-12 w-full bg-dsgreen text-[15px] shadow-[0_3px_10px_rgba(0,158,79,.32)] hover:bg-dsgreen/90"
-                    >
-                        <Play className="h-[15px] w-[15px] fill-current" strokeWidth={0} />
-                        {iniciando ? 'Iniciando…' : 'Iniciar visita'}
-                    </Button>
                 </div>
             )}
         </BottomSheet>

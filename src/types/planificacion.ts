@@ -202,6 +202,40 @@ export interface IRubroDropsResponse {
     rubros: IDroppedRubro[]
 }
 
+/** Fila de la tabla "Ver versus" (cómo viene comprando el cliente, TODOS los
+ *  rubros — a diferencia de la propuesta, que solo trae los caídos/relleno). */
+export interface IRubroEstado {
+    rubroCode: string
+    nombre: string
+    actual: number
+    mesAnterior: number
+    /** Promedio mensual de los últimos 6 meses cerrados. */
+    promedio6m: number
+}
+
+// ── Raw shape of POST /sale/rubro/clients (RubroClientsService, api-vendedores)
+// — solo los campos que se leen acá. Ver getRubroStatus. ──
+export interface IRubroClientsPeriodMetrics {
+    amount: number
+}
+
+export interface IRubroClientsBreakdownItem {
+    kind: string
+    code: string
+    name: string
+    totalsByPeriod: Record<string, IRubroClientsPeriodMetrics | undefined>
+}
+
+export interface IRubroClientsEntity {
+    code: string
+    particularCode?: string
+    breakdown?: { items: IRubroClientsBreakdownItem[] }
+}
+
+export interface IRubroClientsPageResponse {
+    entities: IRubroClientsEntity[]
+}
+
 export interface IIniciarVisitaDTO {
     cicloClienteId: number
     /** Obligatoria: el backend rechaza null con COORD_REQUERIDA. */
