@@ -1,5 +1,4 @@
-import { ChevronLeft, Check } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Check } from 'lucide-react'
 import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
 
 interface ResolucionRubroProps {
@@ -8,36 +7,15 @@ interface ResolucionRubroProps {
     motivos: IMotivo[]
     value: IRubroMotivo[]
     onChange: (motivos: IRubroMotivo[]) => void
-    onGuardar: () => void
-    onBack: () => void
-    guardando?: boolean
 }
 
 const VACIO = { marca: null, competidor: null, pctDiferencia: null }
 
-/** Un motivo con requiereDetalle exige los tres campos; el backend valida lo mismo
- *  (MOTIVO_DETALLE_REQUERIDO) — acá se previene para no gastar un viaje. */
-function detalleCompleto(m: IRubroMotivo): boolean {
-    return !!m.marca?.trim() && !!m.competidor?.trim() && m.pctDiferencia !== null
-}
-
-export default function ResolucionRubro({
-    rubro,
-    motivos,
-    value,
-    onChange,
-    onGuardar,
-    onBack,
-    guardando,
-}: ResolucionRubroProps) {
+/** Checklist + detalle de un rubro. Sin header ni botón de guardar propios: la navegación
+ *  entre rubros y el guardado en lote los aporta ResolucionWizard, que envuelve a este
+ *  componente y es el único con estado de posición/guardado. */
+export default function ResolucionRubro({ rubro, motivos, value, onChange }: ResolucionRubroProps) {
     const porId = new Map(value.map(m => [m.motivoId, m]))
-
-    const incompleto = motivos.some(
-        cat =>
-            cat.requiereDetalle &&
-            porId.has(cat.motivoId) &&
-            !detalleCompleto(porId.get(cat.motivoId)!),
-    )
 
     function toggle(motivoId: number) {
         onChange(
@@ -72,21 +50,7 @@ export default function ResolucionRubro({
 
     return (
         <div>
-            <div className="mb-1 flex items-center gap-2">
-                <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={onBack}
-                    aria-label="Volver"
-                    className="h-[29px] w-[29px] border-[#E1E6F0] text-dsmuted"
-                >
-                    <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                </Button>
-                <span className="text-[13.5px] font-extrabold text-[#182645]">Resolución</span>
-            </div>
-            <div className="mb-3 ml-[38px] text-[12.5px] font-semibold text-dsmuted">
-                {rubro.rubroDescripcion}
-            </div>
+            <div className="mb-3 text-[12.5px] font-semibold text-dsmuted">{rubro.rubroDescripcion}</div>
 
             <div className="flex flex-col gap-2">
                 {motivos.map(cat => {
@@ -172,15 +136,6 @@ export default function ResolucionRubro({
                     )
                 })}
             </div>
-
-            <Button
-                onClick={onGuardar}
-                disabled={incompleto}
-                loading={guardando}
-                className="mt-4 h-[47px] w-full text-[14.5px]"
-            >
-                {guardando ? 'Guardando…' : 'Guardar'}
-            </Button>
         </div>
     )
 }

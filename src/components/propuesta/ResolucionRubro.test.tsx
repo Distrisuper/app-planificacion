@@ -20,21 +20,10 @@ const rubro: IVisitaRubro = {
     motivos: [],
 }
 
-function setup(value: IRubroMotivo[] = [], over: Record<string, unknown> = {}) {
+function setup(value: IRubroMotivo[] = []) {
     const onChange = vi.fn()
-    const onGuardar = vi.fn()
-    render(
-        <ResolucionRubro
-            rubro={rubro}
-            motivos={motivos}
-            value={value}
-            onChange={onChange}
-            onGuardar={onGuardar}
-            onBack={() => {}}
-            {...over}
-        />,
-    )
-    return { onChange, onGuardar }
+    render(<ResolucionRubro rubro={rubro} motivos={motivos} value={value} onChange={onChange} />)
+    return { onChange }
 }
 
 it('renderiza el catálogo recibido, sin nombres hardcodeados', () => {
@@ -68,27 +57,6 @@ it('el detalle aparece por requiereDetalle, no por el nombre del motivo', () => 
     setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
     expect(screen.getByLabelText(/marca/i)).toBeInTheDocument()
     expect(screen.getByLabelText(/competidor/i)).toBeInTheDocument()
-})
-
-it('sin el detalle completo no se puede guardar', () => {
-    setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeDisabled()
-})
-
-it('con el detalle completo se habilita guardar', () => {
-    setup([{ motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 }])
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeEnabled()
-})
-
-it('un motivo sin requiereDetalle habilita guardar solo', () => {
-    setup([{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeEnabled()
-})
-
-it('guardar con cero motivos está permitido: limpia el rubro', () => {
-    const { onGuardar } = setup([])
-    fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
-    expect(onGuardar).toHaveBeenCalled()
 })
 
 it('el detalle se edita por motivo', () => {
