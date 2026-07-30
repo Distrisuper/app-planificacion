@@ -52,6 +52,38 @@ const [fallidos, setFallidos] = useState<Record<number, string>>({}) // rubroId 
 - Ambos se resetean junto con `activo`/`borrador` en el `useEffect` de `!open` que ya existe
   (`VisitaSheet.tsx:64-71`) — abrir la visita de otro cliente no debe arrastrar nada.
 
+## Layout
+
+Se mantiene el contenido tal cual está hoy (mismo estilo de card de motivos, mismo bloque de
+detalle para Precio) — solo se reordena el chrome de navegación:
+
+```
+┌──────────────────────────────────────────┐
+│ ‹ Volver          Pastillas        3 de 5│  ← header: contexto/salida
+├──────────────────────────────────────────┤     (el contador reemplaza el label
+│  ☑ Saqué pedido                          │      estático "Resolución")
+│  ☐ Precio  ☐ DS  ☐ Flete                 │
+│  ☐ No lo ofrecí                          │
+│                                          │
+│  [detalle Precio si aplica]              │
+├──────────────────────────────────────────┤
+│   [ ‹ Atrás ]        [ Siguiente › ]     │  ← progreso (secundario, dos
+│         [ Guardar todo (2) ]             │     botones chicos)
+└──────────────────────────────────────────┘     ← confirmación (primario,
+                                                     ancho completo, abajo)
+```
+
+Convención mobile: las acciones primarias van abajo (zona de alcance del pulgar), el header es
+para contexto/salida, no para avanzar pasos — así se evita que "Volver" (sale del wizard) y
+"Atrás" (retrocede un rubro) compitan por el mismo affordance visual si ambos fueran una flecha
+`‹` desnuda en la misma posición. Ya es el patrón que sigue el resto de la app: `Guardar`,
+`Cerrar visita`, `Registrar` están anclados abajo en todos los sheets existentes
+(`ResolucionSheet.tsx`, `VisitaSheet.tsx`); este diseño no introduce una convención nueva.
+
+Cuando hay `fallidos`, `Guardar todo` cambia a estado de alerta (mismo `text-dsred` que ya usa
+`VisitaSheet.tsx` para errores) y la lista corta de rubros fallidos aparece **arriba** del botón,
+no reemplazándolo — así no hace falta scrollear para verla.
+
 ## Navegación
 
 - Tocar un rubro en la lista llama `abrirWizard(rubros, index)`, donde `index` es la posición del
