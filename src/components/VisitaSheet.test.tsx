@@ -64,34 +64,34 @@ it('pide el catálogo de nivel rubro, no el completo', async () => {
     expect(api.getMotivos).toHaveBeenCalledWith('rubro')
 })
 
-it('entrar a un rubro abre su resolución', async () => {
+it('entrar a un rubro abre el wizard de resolución', async () => {
     renderSheet()
     fireEvent.click(await screen.findByText('Amortiguadores'))
-    expect(await screen.findByText('Resolución')).toBeInTheDocument()
+    expect(await screen.findByText('1 de 2')).toBeInTheDocument()
 })
 
-it('guardar persiste los motivos del rubro', async () => {
+it('guardar todo persiste solo los rubros con cambios', async () => {
     renderSheet()
     fireEvent.click(await screen.findByText('Amortiguadores'))
     fireEvent.click(await screen.findByText('Saqué pedido'))
-    fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
+    fireEvent.click(screen.getByRole('button', { name: /guardar todo/i }))
     await waitFor(() =>
         expect(api.resolverRubro).toHaveBeenCalledWith(42, 7, {
             motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
         }),
     )
+    // Filtros no cambió: no se manda su PUT.
+    expect(api.resolverRubro).toHaveBeenCalledTimes(1)
 })
 
-it('si el guardado falla, NO vuelve a la lista y conserva lo tildado', async () => {
-    // El vendedor tipeó marca/competidor: perder eso por un bache de señal lo entrena
-    // a no cargarlo más.
+it('si guardar todo falla, no se pierde lo tildado y ofrece reintentar', async () => {
     ;(api.resolverRubro as any).mockRejectedValue(new Error('Network Error'))
     renderSheet()
     fireEvent.click(await screen.findByText('Amortiguadores'))
     fireEvent.click(await screen.findByText('Saqué pedido'))
-    fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
-    expect(await screen.findByText(/sin conexión/i)).toBeInTheDocument()
-    expect(screen.getByText('Resolución')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /guardar todo/i }))
+    expect(await screen.findByRole('button', { name: /reintentar \(1\)/i })).toBeInTheDocument()
+    expect(screen.getByText(/no se pudo guardar.*amortiguadores/i)).toBeInTheDocument()
 })
 
 it('un rubro de la propuesta no se puede borrar', async () => {
@@ -120,10 +120,22 @@ it('con la visita cerrada, un rubro YA resuelto no se puede reabrir (es solo res
 
 it('con la visita cerrada, un rubro TODAVÍA sin resolver se puede completar', async () => {
     // Amortiguadores no tiene motivos: es justo lo que el aviso de "rubros sin cargar"
-    // invita a venir a completar, aunque la visita ya haya cerrado.
+    // invita a venir a completar, aunque la visita ya haya cerrado. Filtros ya está
+    // resuelto y queda fuera del recorrido (subset de 1).
     renderSheet({ visitaCerrada: true })
     fireEvent.click(await screen.findByText('Amortiguadores'))
-    expect(await screen.findByText('Resolución')).toBeInTheDocument()
+    expect(await screen.findByText('1 de 1')).toBeInTheDocument()
+})
+
+it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async () => {
+    renderSheet()
+    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(await screen.findByText('Saqué pedido'))
+    fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
+    expect(await screen.findByText('2 de 2')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /atrás/i }))
+    expect(await screen.findByText('1 de 2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /guardar todo \(1\)/i })).toBeInTheDocument()
 })
 
 it('con la visita cerrada, un rubro ya resuelto no ofrece borrarlo', async () => {

@@ -3,13 +3,14 @@ import { ChevronLeft, Loader2, Maximize2, Trash2 } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import RubroCard from './propuesta/RubroCard'
-import ResolucionRubro from './propuesta/ResolucionRubro'
+import ResolucionWizard from './propuesta/ResolucionWizard'
 import VersusTable from './propuesta/VersusTable'
 import { useMotivos } from '@/hooks/useMotivos'
-import { useRubros, useResolverRubro, useEliminarRubro } from '@/hooks/useRubros'
+import { useRubros, useResolverRubros, useEliminarRubro } from '@/hooks/useRubros'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
 import { formatearDuracion } from '@/lib/visitaTimer'
+import { motivosIguales } from '@/lib/resolucionRubro'
 import type { IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
 
 type Vista = 'list' | 'versus'
@@ -47,12 +48,13 @@ export default function VisitaSheet({
     const segundos = useVisitaTimer(visitaId)
     const { data: rubros = [] } = useRubros(open ? visitaId : null)
     const { data: motivos = [] } = useMotivos('rubro')
-    const resolver = useResolverRubro(visitaId)
+    const resolverTodos = useResolverRubros(visitaId)
     const eliminar = useEliminarRubro(visitaId)
 
-    const [activo, setActivo] = useState<IVisitaRubro | null>(null)
-    const [borrador, setBorrador] = useState<IRubroMotivo[]>([])
-    const [error, setError] = useState<string | null>(null)
+    const [wizard, setWizard] = useState<{ rubros: IVisitaRubro[]; index: number } | null>(null)
+    const [borradores, setBorradores] = useState<Record<number, IRubroMotivo[]>>({})
+    const [guardados, setGuardados] = useState<Record<number, IRubroMotivo[]>>({})
+    const [fallidos, setFallidos] = useState<Record<number, string>>({})
     const [vista, setVista] = useState<Vista>('list')
 
     // Solo se pide cuando el vendedor la abre: TODOS los rubros del cliente
@@ -63,39 +65,69 @@ export default function VisitaSheet({
 
     useEffect(() => {
         if (!open) {
-            setActivo(null)
-            setBorrador([])
-            setError(null)
+            setWizard(null)
+            setBorradores({})
+            setGuardados({})
+            setFallidos({})
             setVista('list')
         }
     }, [open])
 
-    function abrirRubro(rubro: IVisitaRubro) {
-        setActivo(rubro)
-        setBorrador(rubro.motivos)
-        setError(null)
+    // Una visita cerrada no se reedita (se genera una visita de ajuste aparte) — salvo
+    // los rubros que quedaron sin cargar, que es justamente lo que el aviso de "rubros
+    // sin cargar" invita a venir a completar acá mismo.
+    function esEditable(r: IVisitaRubro) {
+        return !visitaCerrada || !r.resuelto
     }
 
-    async function guardar() {
-        if (!activo) return
-        setError(null)
-        try {
-            await resolver.mutateAsync({ rubroId: activo.id, motivos: borrador })
-            setActivo(null)
-        } catch {
-            // Deliberadamente NO se cierra la vista ni se limpia el borrador: el vendedor
-            // pudo haber tipeado marca/competidor/% y perder eso por un bache de señal lo
-            // entrena a no volver a cargarlo.
-            setError('Sin conexión. Volvé a intentar; no se perdió lo que cargaste.')
-        }
+    function abrirWizard(rubro: IVisitaRubro) {
+        const subset = rubros.filter(esEditable)
+        const index = subset.findIndex(r => r.id === rubro.id)
+        setBorradores(prev => {
+            const next = { ...prev }
+            for (const r of subset) if (!(r.id in next)) next[r.id] = r.motivos
+            return next
+        })
+        setGuardados(prev => {
+            const next = { ...prev }
+            for (const r of subset) if (!(r.id in next)) next[r.id] = r.motivos
+            return next
+        })
+        setWizard({ rubros: subset, index })
+    }
+
+    async function guardarTodo() {
+        if (!wizard) return
+        const cambios = wizard.rubros
+            .filter(r => !motivosIguales(borradores[r.id] ?? [], guardados[r.id] ?? []))
+            .map(r => ({ rubroId: r.id, motivos: borradores[r.id] ?? [] }))
+        if (cambios.length === 0) return
+
+        const resultados = await resolverTodos.mutateAsync(cambios)
+
+        setFallidos(prev => {
+            const next = { ...prev }
+            for (const res of resultados) {
+                if (res.error) next[res.rubroId] = res.error
+                else delete next[res.rubroId]
+            }
+            return next
+        })
+        setGuardados(prev => {
+            const next = { ...prev }
+            for (const res of resultados) {
+                if (!res.error) next[res.rubroId] = borradores[res.rubroId] ?? []
+            }
+            return next
+        })
     }
 
     const pendientes = rubros.filter(r => !r.resuelto).length
 
-    // El pie (Cerrar visita) se mantiene fijo en list/versus; al editar un rubro
-    // (`activo`) no aplica — esa vista tiene su propio flujo de guardado.
+    // El pie (Cerrar visita) se mantiene fijo en list/versus; en el wizard no aplica —
+    // esa vista tiene su propio flujo de guardado (Guardar todo, dentro del contenido).
     const footer =
-        !activo ? (
+        !wizard ? (
             <>
                 {pendientes > 0 && (
                     <p className="mb-2 text-center text-[12px] font-semibold text-[#B45309]">
@@ -126,21 +158,20 @@ export default function VisitaSheet({
             eyebrowClassName={enCurso ? 'text-[#B45309]' : undefined}
             footer={footer}
         >
-            {activo ? (
-                <div>
-                    <ResolucionRubro
-                        rubro={activo}
-                        motivos={motivos}
-                        value={borrador}
-                        onChange={setBorrador}
-                        onGuardar={guardar}
-                        onBack={() => setActivo(null)}
-                        guardando={resolver.isPending}
-                    />
-                    {error && (
-                        <p className="mt-2 text-[12.5px] font-semibold text-dsred">{error}</p>
-                    )}
-                </div>
+            {wizard ? (
+                <ResolucionWizard
+                    rubros={wizard.rubros}
+                    index={wizard.index}
+                    motivos={motivos}
+                    borradores={borradores}
+                    guardados={guardados}
+                    fallidos={fallidos}
+                    guardando={resolverTodos.isPending}
+                    onIndexChange={index => setWizard(w => (w ? { ...w, index } : w))}
+                    onCambiarBorrador={(rubroId, m) => setBorradores(prev => ({ ...prev, [rubroId]: m }))}
+                    onGuardarTodo={guardarTodo}
+                    onVolver={() => setWizard(null)}
+                />
             ) : vista === 'versus' ? (
                 <div>
                     <div className="mb-3.5 flex items-center gap-2">
@@ -175,21 +206,17 @@ export default function VisitaSheet({
 
                     <div className="flex flex-col gap-2.5">
                         {rubros.map(r => {
-                            // Una visita cerrada no se reedita (se genera una visita de ajuste
-                            // aparte) — salvo los rubros que quedaron sin cargar, que es
-                            // justamente lo que el aviso de "rubros sin cargar" invita a venir
-                            // a completar acá mismo.
-                            const editable = !visitaCerrada || !r.resuelto
+                            const editable = esEditable(r)
                             return (
                                 <div key={r.id} className="flex items-start gap-1.5">
                                     <div
                                         className={`min-w-0 flex-1 ${editable ? 'cursor-pointer' : ''}`}
-                                        onClick={editable ? () => abrirRubro(r) : undefined}
+                                        onClick={editable ? () => abrirWizard(r) : undefined}
                                     >
                                         <RubroCard
                                             nombre={r.rubroDescripcion}
                                             motivosCargados={r.motivos.length}
-                                            onResolucion={editable ? () => abrirRubro(r) : undefined}
+                                            onResolucion={editable ? () => abrirWizard(r) : undefined}
                                         />
                                     </div>
                                     {/* Los de la propuesta NO se borran (RUBRO_DE_PROPUESTA):
