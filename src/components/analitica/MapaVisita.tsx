@@ -29,11 +29,13 @@ export default function MapaVisita({ coordInicio, coordFinal, coordCliente }: Ma
     useEffect(() => {
         if (!contenedor.current || mapa.current) return
 
-        mapa.current = L.map(contenedor.current, { attributionControl: false }).setView(
+        mapa.current = L.map(contenedor.current).setView(
             [coordCliente.lat, coordCliente.lng],
             16,
         )
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(mapa.current)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+        }).addTo(mapa.current)
 
         L.marker([coordCliente.lat, coordCliente.lng], { icon: ICONO_CLIENTE }).addTo(mapa.current)
         // El círculo hace visible por qué una visita quedó validada o no.
