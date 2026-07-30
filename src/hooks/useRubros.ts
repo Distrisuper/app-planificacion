@@ -38,12 +38,35 @@ function useMutacionDeRubros<TVars, TData>(
     })
 }
 
-/** El PUT REEMPLAZA los motivos del rubro, no acumula. */
-export function useResolverRubro(visitaId: number) {
+export interface IResolverRubrosItem {
+    rubroId: number
+    motivos: IRubroMotivo[]
+}
+
+export interface IResolverRubrosResultado {
+    rubroId: number
+    /** null si guardó bien. */
+    error: string | null
+}
+
+/** Guarda varios rubros en paralelo con Promise.allSettled: el fallo de uno no debe
+ *  descartar los que sí llegaron a guardarse. El wizard usa `error` para reintentar
+ *  solo los que fallaron, sin volver a mandar los que ya quedaron guardados. */
+export function useResolverRubros(visitaId: number) {
     return useMutacionDeRubros(
         visitaId,
-        (args: { rubroId: number; motivos: IRubroMotivo[] }) =>
-            resolverRubro(visitaId, args.rubroId, { motivos: args.motivos }),
+        async (items: IResolverRubrosItem[]): Promise<IResolverRubrosResultado[]> => {
+            const resultados = await Promise.allSettled(
+                items.map(item => resolverRubro(visitaId, item.rubroId, { motivos: item.motivos })),
+            )
+            return items.map((item, i) => ({
+                rubroId: item.rubroId,
+                error:
+                    resultados[i].status === 'rejected'
+                        ? 'Sin conexión. Volvé a intentar; no se perdió lo que cargaste.'
+                        : null,
+            }))
+        },
     )
 }
 

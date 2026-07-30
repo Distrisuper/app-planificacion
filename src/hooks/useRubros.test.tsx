@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
-import { useRubros, useResolverRubro } from './useRubros'
+import { useRubros, useResolverRubros } from './useRubros'
 import * as api from '@/api/planificacion'
 
 vi.mock('@/api/planificacion')
@@ -27,14 +27,42 @@ it('useRubros trae los rubros congelados de la visita', async () => {
     expect(result.current.data).toHaveLength(1)
 })
 
-it('useResolverRubro manda los motivos del rubro', async () => {
-    ;(api.resolverRubro as any).mockResolvedValue({ rubrosPendientes: 2 })
-    const { result } = renderHook(() => useResolverRubro(42), { wrapper })
-    const motivos = [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }]
+it('useResolverRubros manda un PUT por rubro y devuelve error null si todos guardan', async () => {
+    ;(api.resolverRubro as any).mockResolvedValue({ rubrosPendientes: 0 })
+    const { result } = renderHook(() => useResolverRubros(42), { wrapper })
+    const items = [
+        { rubroId: 7, motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }] },
+        { rubroId: 8, motivos: [{ motivoId: 16, marca: null, competidor: null, pctDiferencia: null }] },
+    ]
     let out: any
     await waitFor(async () => {
-        out = await result.current.mutateAsync({ rubroId: 7, motivos })
+        out = await result.current.mutateAsync(items)
     })
-    expect(api.resolverRubro).toHaveBeenCalledWith(42, 7, { motivos })
-    expect(out.rubrosPendientes).toBe(2)
+    expect(api.resolverRubro).toHaveBeenCalledWith(42, 7, { motivos: items[0].motivos })
+    expect(api.resolverRubro).toHaveBeenCalledWith(42, 8, { motivos: items[1].motivos })
+    expect(out).toEqual([
+        { rubroId: 7, error: null },
+        { rubroId: 8, error: null },
+    ])
+})
+
+it('un fallo no descarta los que sí guardaron', async () => {
+    ;(api.resolverRubro as any).mockImplementation((_visitaId: number, rubroId: number) =>
+        rubroId === 8
+            ? Promise.reject(new Error('Network Error'))
+            : Promise.resolve({ rubrosPendientes: 0 }),
+    )
+    const { result } = renderHook(() => useResolverRubros(42), { wrapper })
+    const items = [
+        { rubroId: 7, motivos: [] },
+        { rubroId: 8, motivos: [] },
+    ]
+    let out: any
+    await waitFor(async () => {
+        out = await result.current.mutateAsync(items)
+    })
+    expect(out).toEqual([
+        { rubroId: 7, error: null },
+        { rubroId: 8, error: 'Sin conexión. Volvé a intentar; no se perdió lo que cargaste.' },
+    ])
 })
