@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import TablaVisitas from '@/components/analitica/TablaVisitas'
+import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
 import { useResumen, useVisitas } from '@/hooks/useAnalitica'
 import { formatDuracion, formatNumero, formatPct } from '@/lib/analiticaFormat'
 
@@ -99,8 +100,12 @@ export default function AnaliticaVendedorPage() {
                     <TablaVisitas visitas={pagina.visitas} onElegirVisita={setVisitaElegida} />
                 )}
 
-                {/* El panel de detalle se agrega en la Task 10. */}
-                {visitaElegida !== null && null}
+                {visitaElegida !== null && (
+                    <DetalleVisitaPanel
+                        visitaId={visitaElegida}
+                        onCerrar={() => setVisitaElegida(null)}
+                    />
+                )}
             </main>
         </div>
     )
