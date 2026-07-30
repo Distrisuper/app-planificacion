@@ -69,6 +69,34 @@ it('posición no disponible en la etapa 1 también reintenta', async () => {
     expect(spy).toHaveBeenCalledTimes(2)
 })
 
+it('acepta un fix reciente que el navegador ya tenía en vez de expirar', async () => {
+    // Reproduce el bug real: en una PC de escritorio (sin GPS, sin Wi-Fi que escanear) el
+    // navegador resuelve la posición UNA vez por red y se la sirve al `watchPosition` del
+    // mapa, pero no puede producir un fix NUEVO a pedido. Con `maximumAge: 0` las dos
+    // etapas esperaban una lectura fresca que nunca llegaba y expiraban a los 23s.
+    const spy = mockGeolocation((ok: any, fail: any, opts: any) => {
+        if (!opts.maximumAge) return fail({ code: TIMEOUT })
+        ok({ coords: { latitude: -37.9976, longitude: -57.5482, accuracy: 40 } })
+    })
+
+    const res = await capturarUbicacion()
+
+    expect(res).toEqual({ ok: true, coord: '-37.99760000,-57.54820000', precisionM: 40 })
+    expect(spy.mock.calls[0][2].maximumAge).toBeGreaterThan(0)
+})
+
+it('no acepta un fix viejo: el maximumAge queda acotado para que siga probando presencia', async () => {
+    // La coordenada existe para verificar que el vendedor estuvo en el cliente. Un
+    // maximumAge generoso dejaría cerrar la visita con la posición del inicio.
+    const spy = mockGeolocation((_ok: any, fail: any) => fail({ code: TIMEOUT }))
+
+    await capturarUbicacion()
+
+    for (const call of spy.mock.calls) {
+        expect(call[2].maximumAge).toBeLessThanOrEqual(60_000)
+    }
+})
+
 it('si fallan las dos etapas devuelve sin_senal', async () => {
     const spy = mockGeolocation((_ok: any, fail: any) => fail({ code: TIMEOUT }))
 

@@ -11,7 +11,26 @@ function formatearCoord(valor: number): string {
     return valor.toFixed(8)
 }
 
-function intentar(enableHighAccuracy: boolean, timeout: number): Promise<GeoResult> {
+/**
+ * Cuánto se acepta de antigüedad en un fix ya resuelto por el navegador.
+ *
+ * NO puede ser 0. Con `maximumAge: 0` se exige una lectura nueva y se prohíbe la que el
+ * navegador ya tiene: en equipos sin GPS (una PC de escritorio, o un celu bajo techo) el
+ * navegador resuelve la posición por red una vez y no puede producir otra a pedido, así
+ * que las dos etapas esperaban un fix que nunca llegaba y expiraban recién a los 23s.
+ *
+ * Tampoco puede ser generoso: la coordenada existe para verificar que el vendedor estuvo
+ * en el cliente, y un margen grande dejaría cerrar la visita con la posición del inicio.
+ * Un minuto es más que suficiente para no caminar a otro cliente y evita esa ventana.
+ */
+const MAX_AGE_FINO_MS = 15_000
+const MAX_AGE_GRUESO_MS = 60_000
+
+function intentar(
+    enableHighAccuracy: boolean,
+    timeout: number,
+    maximumAge: number,
+): Promise<GeoResult> {
     return new Promise(resolve => {
         navigator.geolocation.getCurrentPosition(
             pos =>
@@ -25,7 +44,7 @@ function intentar(enableHighAccuracy: boolean, timeout: number): Promise<GeoResu
                     ok: false,
                     motivo: err.code === PERMISSION_DENIED ? 'denegado' : 'sin_senal',
                 }),
-            { enableHighAccuracy, timeout, maximumAge: 0 },
+            { enableHighAccuracy, timeout, maximumAge },
         )
     })
 }
@@ -49,8 +68,8 @@ function intentar(enableHighAccuracy: boolean, timeout: number): Promise<GeoResu
 export async function capturarUbicacion(): Promise<GeoResult> {
     if (!navigator.geolocation) return { ok: false, motivo: 'no_soportado' }
 
-    const fino = await intentar(true, 8000)
+    const fino = await intentar(true, 8000, MAX_AGE_FINO_MS)
     if (fino.ok || fino.motivo === 'denegado') return fino
 
-    return intentar(false, 15000)
+    return intentar(false, 15000, MAX_AGE_GRUESO_MS)
 }
