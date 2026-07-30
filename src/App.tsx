@@ -5,6 +5,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import ProtectedRoute from '@/router/ProtectedRoute'
 import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
+import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
 import SinPermisosPage from '@/pages/SinPermisosPage'
 
@@ -17,6 +18,10 @@ export default function App() {
                         <Route element={<ProtectedRoute />}>
                             <Route path="/" element={<AgendaSemanaPage />} />
                             <Route path="/analitica" element={<AnaliticaPage />} />
+                            <Route
+                                path="/analitica/vendedor/:codigo"
+                                element={<AnaliticaVendedorPage />}
+                            />
                         </Route>
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/sin-permisos" element={<SinPermisosPage />} />
