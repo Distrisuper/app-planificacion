@@ -16,10 +16,13 @@ interface ResolucionWizardAccionesProps {
     fallidos: Record<number, string>
     guardando?: boolean
     onIndexChange: (index: number) => void
-    onGuardarTodo: () => void
+    /** Guarda TODOS los cambios pendientes del wizard en lote y, si no queda ninguno
+     *  fallido, cierra el wizard. Es la única acción de guardado: no hay un botón de
+     *  guardar aparte — sería redundante con "recorrer y finalizar". */
+    onFinalizar: () => void
 }
 
-/** Atrás/Siguiente + Guardar todo. Se renderiza en el pie FIJO del sheet (fuera del área
+/** Atrás / Siguiente-o-Finalizar. Se renderiza en el pie FIJO del sheet (fuera del área
  *  de scroll) para que siga a la vista aunque el detalle de un motivo (ej. Precio) empuje
  *  el contenido hacia abajo — si viviera en el scroll, expandir el detalle lo tapa. */
 export default function ResolucionWizardAcciones({
@@ -31,8 +34,10 @@ export default function ResolucionWizardAcciones({
     fallidos,
     guardando,
     onIndexChange,
-    onGuardarTodo,
+    onFinalizar,
 }: ResolucionWizardAccionesProps) {
+    const esUltimo = index === rubros.length - 1
+
     // Contra `guardados`, no contra `rubros[i].motivos`: ese último queda congelado al
     // abrir el wizard, así que un guardado exitoso a mitad de recorrido no lo actualiza.
     const pendientes = rubros.filter(r => !motivosIguales(borradores[r.id] ?? [], guardados[r.id] ?? []))
@@ -51,7 +56,6 @@ export default function ResolucionWizardAcciones({
 
     const fallidosRubros = rubros.filter(r => fallidos[r.id])
     const hayFallidos = fallidosRubros.length > 0
-    const puedeGuardar = pendientes.length > 0 && !bloqueado
 
     return (
         <div>
@@ -60,20 +64,32 @@ export default function ResolucionWizardAcciones({
                     variant="outline"
                     disabled={index === 0}
                     onClick={() => onIndexChange(index - 1)}
-                    className="h-11 flex-1 text-[13.5px] font-bold"
+                    className="h-12 flex-1 text-[13.5px] font-bold"
                 >
                     <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
                     Atrás
                 </Button>
-                <Button
-                    variant="outline"
-                    disabled={index === rubros.length - 1}
-                    onClick={() => onIndexChange(index + 1)}
-                    className="h-11 flex-1 text-[13.5px] font-bold"
-                >
-                    Siguiente
-                    <ChevronRight className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                </Button>
+                {esUltimo ? (
+                    <Button
+                        onClick={onFinalizar}
+                        disabled={!!bloqueado}
+                        loading={guardando}
+                        className={`h-12 flex-1 text-[13.5px] ${
+                            hayFallidos ? 'bg-dsred hover:bg-dsred/90' : 'bg-dsgreen hover:bg-dsgreen/90'
+                        }`}
+                    >
+                        {guardando ? 'Guardando…' : hayFallidos ? `Reintentar (${pendientes.length})` : 'Finalizar'}
+                    </Button>
+                ) : (
+                    <Button
+                        variant="outline"
+                        onClick={() => onIndexChange(index + 1)}
+                        className="h-12 flex-1 text-[13.5px] font-bold"
+                    >
+                        Siguiente
+                        <ChevronRight className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                    </Button>
+                )}
             </div>
 
             {bloqueado && motivoBloqueante && (
@@ -88,23 +104,6 @@ export default function ResolucionWizardAcciones({
                     No se pudo guardar: {fallidosRubros.map(r => r.rubroDescripcion).join(', ')}.
                 </p>
             )}
-
-            <Button
-                onClick={onGuardarTodo}
-                disabled={!puedeGuardar}
-                loading={guardando}
-                className={`mt-2 h-12 w-full text-[14.5px] ${
-                    hayFallidos ? 'bg-dsred hover:bg-dsred/90' : 'bg-dsgreen hover:bg-dsgreen/90'
-                }`}
-            >
-                {guardando
-                    ? 'Guardando…'
-                    : hayFallidos
-                      ? `Reintentar (${pendientes.length})`
-                      : pendientes.length > 0
-                        ? `Guardar todo (${pendientes.length})`
-                        : 'Guardar todo'}
-            </Button>
         </div>
     )
 }

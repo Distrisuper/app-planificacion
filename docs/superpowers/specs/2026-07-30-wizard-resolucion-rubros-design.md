@@ -67,10 +67,16 @@ detalle para Precio) — solo se reordena el chrome de navegación:
 │                                          │
 │  [detalle Precio si aplica]              │
 ├──────────────────────────────────────────┤
-│   [ ‹ Atrás ]        [ Siguiente › ]     │  ← progreso (secundario, dos
-│         [ Guardar todo (2) ]             │     botones chicos)
-└──────────────────────────────────────────┘     ← confirmación (primario,
-                                                     ancho completo, abajo)
+│   [ ‹ Atrás ]        [ Siguiente › ]     │  ← rubros 1..N-1: navegación pura,
+└──────────────────────────────────────────┘     sin acción de guardado visible
+
+┌──────────────────────────────────────────┐
+│ ‹ Volver          Pastillas        5 de 5│
+├──────────────────────────────────────────┤
+│  ...                                     │
+├──────────────────────────────────────────┤
+│   [ ‹ Atrás ]        [ Finalizar ]       │  ← último rubro: "Siguiente" se
+└──────────────────────────────────────────┘     reemplaza por la acción de guardado
 ```
 
 Convención mobile: las acciones primarias van abajo (zona de alcance del pulgar), el header es
@@ -80,9 +86,19 @@ para contexto/salida, no para avanzar pasos — así se evita que "Volver" (sale
 `Cerrar visita`, `Registrar` están anclados abajo en todos los sheets existentes
 (`ResolucionSheet.tsx`, `VisitaSheet.tsx`); este diseño no introduce una convención nueva.
 
-Cuando hay `fallidos`, `Guardar todo` cambia a estado de alerta (mismo `text-dsred` que ya usa
-`VisitaSheet.tsx` para errores) y la lista corta de rubros fallidos aparece **arriba** del botón,
-no reemplazándolo — así no hace falta scrollear para verla.
+**No hay un botón "Guardar todo" separado y persistente.** La primera versión de este spec
+proponía uno, visible en todos los pasos, para cubrir el caso de un vendedor interrumpido a
+mitad de recorrido. En la práctica, un botón de guardado al lado de "Siguiente" en cada paso
+resultó redundante: el vendedor ya está recorriendo los rubros en orden, así que la acción
+natural de "terminar" es la misma que "guardar". Se resolvió fusionándolas: el botón derecho de
+la fila de navegación es "Siguiente" en todos los rubros salvo el último, donde pasa a ser
+"Finalizar" — un solo tap, sin decidir entre dos botones. El costo aceptado es que si el
+vendedor sale con "Volver" antes de llegar al último rubro, lo tildado en esa sesión **no se
+guarda** (ver "Guardado" más abajo).
+
+Cuando hay `fallidos`, "Finalizar" pasa a "Reintentar (N)" con estado de alerta (mismo
+`text-dsred` que ya usa `VisitaSheet.tsx` para errores) y la lista corta de rubros fallidos
+aparece **arriba** del botón, no reemplazándolo — así no hace falta scrollear para verla.
 
 ## Navegación
 
@@ -92,43 +108,50 @@ no reemplazándolo — así no hace falta scrollear para verla.
 - Header del wizard: `‹ Volver` (sale a la lista, no descarta `borradores`) + contador de posición
   "2 de 5" (cuenta sobre `wizard.rubros.length`, no sobre el total de rubros de la visita, porque
   en visita cerrada el total incluye resueltos que no se están recorriendo).
-- Footer con dos acciones separadas, no una sola que cambia de texto según la posición — combinar
-  "Siguiente" y "Guardar" en un solo botón hace que el vendedor tenga que leer el botón en cada
-  paso para saber qué va a pasar al tocarlo:
-  - Fila de paginación: `‹ Atrás` (disabled en `index === 0`) y `Siguiente ›` (disabled en el
-    último índice — ahí no se oculta para que el layout no salte).
-  - Debajo, **persistente en todos los pasos** (no solo al llegar al final): botón `Guardar todo`.
-    Motivo de que sea persistente: si el vendedor resuelve 2 de 5 y lo interrumpen (cliente lo
-    llama, se corta la señal), quiere poder guardar esos 2 sin recorrer los 3 restantes. Forzar a
-    llegar al final para guardar reintroduce presión de completar todo de una sentada, que es
-    exactamente la fricción que el pedido original quiere sacar.
-  - `Guardar todo` se deshabilita solo si **no hay ningún cambio pendiente** contra lo ya
-    persistido (comparación simple: ¿hay al menos un rubro en `borradores` cuyo array de motivos
-    difiere del `rubro.motivos` original?). Si no hay nada que guardar, mostrarlo habilitado y sin
-    hacer nada es peor que ocultarlo — no hace falta un round-trip para saberlo.
+- Footer de una sola fila, dos botones: `‹ Atrás` (disabled en `index === 0`) y un botón derecho
+  cuyo rol cambia con la posición — no el texto de un botón fijo, sino qué botón ES:
+  - En cualquier rubro salvo el último: `Siguiente ›`, navega sin guardar nada.
+  - En el último rubro: el mismo lugar pasa a ser `Finalizar`, que dispara el guardado en lote
+    (ver "Guardado") y, si no queda ningún rubro fallido, cierra el wizard y vuelve a la lista.
+  - Se descartó un botón `Guardar todo` separado y persistente en todos los pasos (ver rationale
+    en "Layout"): resultaba redundante con recorrer los rubros en orden hasta el final.
+  - `Finalizar` se deshabilita solo si hay un motivo con `requiereDetalle` incompleto en algún
+    rubro con cambios pendientes (ver "Validación de detalle"); si no hay nada pendiente para
+    guardar, igual queda habilitado — tocarlo simplemente cierra el wizard sin llamar a la API.
   - Swipe horizontal entre rubros queda **fuera de este spec** (no lo pidió el usuario y agrega
     superficie de gestos a testear); los botones son la única forma de navegar.
 
 ## Guardado
 
-- `Guardar todo` dispara un `PUT` por cada rubro con cambios pendientes, en paralelo vía
-  `Promise.allSettled` (no `Promise.all`): un fallo no debe cancelar ni revertir el resto, porque
-  el vendedor ya invirtió el tap de "Guardar todo" pensando en los 5, no quiere que 1 error tire
-  los otros 4 al bidón.
+- `Finalizar` (el botón derecho del footer en el último rubro, ver "Navegación") dispara un `PUT`
+  por cada rubro con cambios pendientes, en paralelo vía `Promise.allSettled` (no `Promise.all`):
+  un fallo no debe cancelar ni revertir el resto, porque el vendedor ya invirtió el tap pensando
+  en los 5, no quiere que 1 error tire los otros 4 al bidón.
+- Si no hay ningún cambio pendiente, `Finalizar` no llama a la API — solo cierra el wizard.
 - Éxito por rubro: se saca de "cambios pendientes" (se sincroniza `borradores[id]` contra lo que
   el server confirmó, vía la misma invalidación de query que ya hace `useResolverRubro` —
   `rubroKeys.deVisita` + `agendaKeys.semana`), y sale de `fallidos` si estaba ahí de un intento
-  previo.
-- Fallo por rubro: entra a `fallidos[rubroId] = mensaje`. El borrador **no se descarga** — mismo
+  previo. Si **todos** los rubros con cambios guardaron bien, el wizard se cierra solo y vuelve a
+  la lista — "Finalizar" cumple su nombre.
+- Fallo por rubro: entra a `fallidos[rubroId] = mensaje`. El borrador **no se descarta** — mismo
   principio que ya está documentado en el código actual (`VisitaSheet.tsx:86-89`: perder lo
-  tipeado por un bache de señal entrena al vendedor a no volver a cargarlo).
+  tipeado por un bache de señal entrena al vendedor a no volver a cargarlo). El wizard queda
+  abierto (no cierra con fallos pendientes) mostrando cuáles fallaron.
 - Mientras haya entradas en `fallidos`, el botón pasa a `Reintentar (N)` — reintenta **solo** los
-  rubros en `fallidos`, no vuelve a mandar los que ya guardaron. Bajo el botón, un texto corto lista
-  cuáles fallaron por nombre de rubro (no un toast genérico "algo salió mal": el vendedor necesita
-  saber *cuál* de los 5 quedó sin guardar si decide cerrar la visita igual y volver después).
+  rubros en `fallidos`, no vuelve a mandar los que ya guardaron. Arriba del botón, un texto corto
+  lista cuáles fallaron por nombre de rubro (no un toast genérico "algo salió mal": el vendedor
+  necesita saber *cuál* de los 5 quedó sin guardar si decide cerrar la visita igual y volver
+  después).
 - Mientras el guardado está en curso, el botón muestra estado `loading` (patrón ya usado en
   `Button` con la prop `loading`) y queda deshabilitado — evita doble-submit si el vendedor lo
   toca dos veces por ansiedad de conexión lenta.
+- **Salir con "Volver" antes de llegar al último rubro no guarda nada.** Es la contracara
+  deliberada de no tener un botón de guardado persistente (ver "Layout"/"Navegación"): mantiene
+  el modelo simple — una sola acción de guardado, al final del recorrido — a costa de que
+  interrumpir el wizard a mitad de camino pierde lo tildado en esa sesión (vuelve a aparecer en
+  blanco la próxima vez que se entre a esos rubros). Se evaluó autoguardar al tocar "Volver", pero
+  se descartó: agrega una llamada a la red en una acción que hoy es puramente local, y contradice
+  el pedido original de "guardar todo de una, no cada resolución".
 
 ## Validación de detalle (Precio)
 

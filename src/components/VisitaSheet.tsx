@@ -97,12 +97,19 @@ export default function VisitaSheet({
         setWizard({ rubros: subset, index })
     }
 
-    async function guardarTodo() {
+    // Única acción de guardado: recorrer todos los rubros y "Finalizar" en el último.
+    // Guarda en lote lo pendiente y cierra el wizard — salvo que algo haya fallado, en
+    // cuyo caso queda abierto mostrando qué falló para reintentar solo eso.
+    async function finalizar() {
         if (!wizard) return
         const cambios = wizard.rubros
             .filter(r => !motivosIguales(borradores[r.id] ?? [], guardados[r.id] ?? []))
             .map(r => ({ rubroId: r.id, motivos: borradores[r.id] ?? [] }))
-        if (cambios.length === 0) return
+
+        if (cambios.length === 0) {
+            setWizard(null)
+            return
+        }
 
         const resultados = await resolverTodos.mutateAsync(cambios)
 
@@ -121,13 +128,15 @@ export default function VisitaSheet({
             }
             return next
         })
+
+        if (resultados.every(res => !res.error)) setWizard(null)
     }
 
     const pendientes = rubros.filter(r => !r.resuelto).length
 
     // El pie es fijo (fuera del scroll) tanto en list/versus (Cerrar visita) como en el
-    // wizard (Atrás/Siguiente/Guardar todo): así ninguno de los dos se oculta al expandir
-    // el detalle de un motivo (ej. Precio) empuja el contenido hacia abajo.
+    // wizard (Atrás/Siguiente-o-Finalizar): así no se oculta al expandir el detalle de un
+    // motivo (ej. Precio), que empuja el contenido hacia abajo.
     const footer = wizard ? (
         <ResolucionWizardAcciones
             rubros={wizard.rubros}
@@ -138,7 +147,7 @@ export default function VisitaSheet({
             fallidos={fallidos}
             guardando={resolverTodos.isPending}
             onIndexChange={index => setWizard(w => (w ? { ...w, index } : w))}
-            onGuardarTodo={guardarTodo}
+            onFinalizar={finalizar}
         />
     ) : (
         <>
