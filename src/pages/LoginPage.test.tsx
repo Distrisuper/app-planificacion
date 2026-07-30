@@ -15,6 +15,7 @@ function renderLoginPage() {
             <Routes>
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/" element={<div>home</div>} />
+                <Route path="/analitica" element={<div>analitica</div>} />
             </Routes>
         </MemoryRouter>,
     )
@@ -46,9 +47,27 @@ describe('LoginPage', () => {
         expect(screen.getByText('Usuario o contraseña incorrectos')).toBeInTheDocument()
     })
 
-    it('redirects to / when already authenticated', () => {
-        useAuthMock.mockReturnValue({ status: 'authenticated', login: vi.fn(), loginLoading: false, loginError: null })
+    it('redirects a vendedor to / when already authenticated', () => {
+        useAuthMock.mockReturnValue({
+            status: 'authenticated',
+            rutaInicial: '/',
+            login: vi.fn(),
+            loginLoading: false,
+            loginError: null,
+        })
         renderLoginPage()
         expect(screen.getByText('home')).toBeInTheDocument()
+    })
+
+    it('redirects a versus-ger to /analitica when already authenticated', () => {
+        useAuthMock.mockReturnValue({
+            status: 'authenticated',
+            rutaInicial: '/analitica',
+            login: vi.fn(),
+            loginLoading: false,
+            loginError: null,
+        })
+        renderLoginPage()
+        expect(screen.getByText('analitica')).toBeInTheDocument()
     })
 })

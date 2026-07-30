@@ -4,13 +4,15 @@ import { Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
 export default function LoginPage() {
-    const { status, login, loginLoading, loginError } = useAuth()
+    const { status, rutaInicial, login, loginLoading, loginError } = useAuth()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [showPassword, setShowPassword] = useState(false)
 
     if (status === 'authenticated') {
-        return <Navigate to="/" replace />
+        // rutaInicial solo es null cuando no hay acceso, y ese caso ya quedó en
+        // 'unauthorized' antes de llegar acá: el fallback es solo defensivo.
+        return <Navigate to={rutaInicial ?? '/'} replace />
     }
 
     async function handleSubmit(e: FormEvent<HTMLFormElement>) {
