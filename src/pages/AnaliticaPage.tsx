@@ -2,6 +2,7 @@ import { useNavigate } from 'react-router-dom'
 import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import KpisEquipo from '@/components/analitica/KpisEquipo'
 import TablaVendedores from '@/components/analitica/TablaVendedores'
+import ObjecionesMercado from '@/components/analitica/ObjecionesMercado'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
 import { useResumen } from '@/hooks/useAnalitica'
 
@@ -65,6 +66,7 @@ export default function AnaliticaPage() {
                             promedios={data.promedios}
                             onElegirVendedor={irAVendedor}
                         />
+                        <ObjecionesMercado desde={filtro.desde} hasta={filtro.hasta} />
                     </>
                 )}
             </main>
