@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import { getResumen, getVisitas, getVisitaDetalle, getObjeciones } from './analitica'
-import { MOCK_RESUMEN, MOCK_VISITAS } from '@/mocks/analiticaMock'
+import { MOCK_RESUMEN, MOCK_VISITAS, MOCK_OBJECIONES } from '@/mocks/analiticaMock'
 
 // El fixture está activo por defecto en tests (VITE_ANALITICA_MOCK=1 en .env).
 const FILTRO = { desde: '2026-07-20', hasta: '2026-07-24' }
@@ -50,6 +50,6 @@ it('getVisitaDetalle rechaza un id inexistente', async () => {
 
 it('getObjeciones devuelve el ranking ordenado de mayor a menor', async () => {
     const res = await getObjeciones(FILTRO)
-    const cantidades = res.motivos.map(m => m.cantidad)
-    expect([...cantidades].sort((a, b) => b - a)).toEqual(cantidades)
+    const esperado = [...MOCK_OBJECIONES.motivos].sort((a, b) => b.cantidad - a.cantidad)
+    expect(res.motivos).toEqual(esperado)
 })
