@@ -247,7 +247,7 @@ export default function VisitaSheet({
                     onClick={cerrarConBorrador}
                     disabled={pendientes > 0}
                     loading={cerrando || guardandoBorrador}
-                    className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
+                    className="h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90"
                 >
                     {guardandoBorrador ? 'Guardando…' : cerrando ? 'Cerrando…' : 'Cerrar visita'}
                 </Button>
