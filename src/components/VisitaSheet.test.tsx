@@ -8,6 +8,7 @@ vi.mock('@/api/planificacion')
 
 const motivos = [
     { motivoId: 10, nivel: 'rubro', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
+    { motivoId: 13, nivel: 'rubro', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
     { motivoId: 16, nivel: 'rubro', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
 ]
 
@@ -55,6 +56,7 @@ beforeEach(() => {
         { code: 'BAT', description: 'Baterías' },
     ])
     ;(api.agregarRubro as any).mockResolvedValue({ visitaRubroId: 99 })
+    ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
 })
 
 it('lista los rubros de la propuesta congelada', async () => {
@@ -69,15 +71,15 @@ it('pide el catálogo de nivel rubro, no el completo', async () => {
     expect(api.getMotivos).toHaveBeenCalledWith('rubro')
 })
 
-it('entrar a un rubro abre el wizard de resolución', async () => {
+it('el botón Resolución abre el wizard de resolución', async () => {
     renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     expect(await screen.findByText('1 de 2')).toBeInTheDocument()
 })
 
 it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borrador', async () => {
     renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     fireEvent.click(await screen.findByText('Saqué pedido'))
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
@@ -90,7 +92,7 @@ it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borr
 
 it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async () => {
     renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     fireEvent.click(await screen.findByText('Saqué pedido'))
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
@@ -101,7 +103,7 @@ it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async
 
 it('el cambio tildado en el wizard se persiste en localStorage al instante', async () => {
     renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     fireEvent.click(await screen.findByText('Saqué pedido'))
 
     await waitFor(() => {
@@ -122,11 +124,11 @@ it('con la visita cerrada no ofrece cerrarla de nuevo', async () => {
     expect(screen.queryByRole('button', { name: /cerrar visita/i })).not.toBeInTheDocument()
 })
 
-it('con la visita cerrada, ningún rubro se puede reabrir (es solo resumen, aunque haya quedado sin resolver)', async () => {
+it('con la visita cerrada, ningún rubro se puede reabrir ni seleccionar (es solo resumen)', async () => {
     renderSheet({ visitaCerrada: true })
     await screen.findByText('Filtros')
-    expect(screen.queryByRole('button', { name: /motivo cargado/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^resolución$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /resolución de/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /seleccionar/i })).not.toBeInTheDocument()
     fireEvent.click(screen.getByText('Amortiguadores'))
     expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
     expect(screen.getByText('Filtros')).toBeInTheDocument()
@@ -147,7 +149,7 @@ it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos
 
 it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo batch y dispara el cierre', async () => {
     const { onCerrarVisita } = renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     fireEvent.click(await screen.findByText('Saqué pedido'))
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
@@ -161,7 +163,6 @@ it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo 
             motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
         }),
     )
-    // Filtros no cambió respecto de lo que ya traía el servidor: no se manda su PUT.
     expect(api.resolverRubro).toHaveBeenCalledTimes(1)
     expect(onCerrarVisita).toHaveBeenCalled()
     expect(localStorage.getItem('visita-borrador-42')).toBeNull()
@@ -170,7 +171,7 @@ it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo 
 it('si el batch de cierre falla, no limpia el borrador ni dispara el cierre', async () => {
     ;(api.resolverRubro as any).mockRejectedValue(new Error('Network Error'))
     const { onCerrarVisita } = renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     fireEvent.click(await screen.findByText('Saqué pedido'))
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
@@ -180,6 +181,53 @@ it('si el batch de cierre falla, no limpia el borrador ni dispara el cierre', as
     expect(await screen.findByText(/no se pudo guardar la resolución de algunos rubros/i)).toBeInTheDocument()
     expect(onCerrarVisita).not.toHaveBeenCalled()
     expect(localStorage.getItem('visita-borrador-42')).not.toBeNull()
+})
+
+it('tocar la card de un rubro (fuera del botón Resolución) lo selecciona, no abre el wizard', async () => {
+    renderSheet()
+    fireEvent.click(await screen.findByText('Amortiguadores'))
+    expect(screen.queryByText('1 de 2')).not.toBeInTheDocument()
+    expect(await screen.findByText('1 seleccionado')).toBeInTheDocument()
+})
+
+it('seleccionar varios rubros muestra la barra con la cantidad correcta', async () => {
+    renderSheet()
+    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(screen.getByText('Filtros'))
+    expect(await screen.findByText('2 seleccionados')).toBeInTheDocument()
+})
+
+it('Cancelar en la barra de selección limpia la selección y vuelve a mostrar Cerrar visita', async () => {
+    renderSheet()
+    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(await screen.findByRole('button', { name: /^cancelar$/i }))
+    expect(screen.queryByText('1 seleccionado')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cerrar visita/i })).toBeInTheDocument()
+})
+
+it('Resolver seleccionados fusiona el motivo en el borrador de cada rubro elegido', async () => {
+    renderSheet()
+    fireEvent.click(await screen.findByText('Amortiguadores'))
+    fireEvent.click(screen.getByText('Filtros'))
+    fireEvent.click(await screen.findByRole('button', { name: /resolver seleccionados/i }))
+
+    expect(await screen.findByText('Resolver 2 rubros')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('No lo ofrecí'))
+    fireEvent.click(screen.getByRole('button', { name: /aplicar a 2 rubros/i }))
+
+    await screen.findByText('Cargá el resultado de cada rubro que ofreciste.', { exact: false })
+    expect(api.resolverRubro).not.toHaveBeenCalled()
+
+    const borrador = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
+    // Amortiguadores no tenía nada: queda solo con "No lo ofrecí".
+    expect(borrador[7]).toEqual([{ motivoId: 16, marca: null, competidor: null, pctDiferencia: null }])
+    // Filtros ya tenía "Saqué pedido": el lote lo suma, no lo reemplaza.
+    expect(borrador[8]).toEqual(
+        expect.arrayContaining([
+            { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
+            { motivoId: 16, marca: null, competidor: null, pctDiferencia: null },
+        ]),
+    )
 })
 
 it('en curso muestra el eyebrow naranja con cronómetro y el botón de minimizar', async () => {

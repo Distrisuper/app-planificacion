@@ -1,22 +1,26 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, Loader2, Maximize2, Plus, Trash2 } from 'lucide-react'
+import { Check, ChevronLeft, Loader2, Maximize2, Plus, Trash2 } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import RubroCard from './propuesta/RubroCard'
 import AgregarRubroVista from './propuesta/AgregarRubroVista'
 import ResolucionWizard from './propuesta/ResolucionWizard'
 import ResolucionWizardAcciones from './propuesta/ResolucionWizardAcciones'
+import SeleccionBar from './propuesta/SeleccionBar'
+import ResolverLoteVista from './propuesta/ResolverLoteVista'
+import ResolverLoteAcciones from './propuesta/ResolverLoteAcciones'
 import VersusTable from './propuesta/VersusTable'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useRubros, useResolverRubros, useEliminarRubro } from '@/hooks/useRubros'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
+import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { formatearDuracion } from '@/lib/visitaTimer'
 import { motivosIguales, tieneDetalleIncompleto } from '@/lib/resolucionRubro'
 import { leerBorrador, guardarBorrador, limpiarBorrador } from '@/lib/resolucionDraft'
 import type { IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
 
-type Vista = 'list' | 'versus' | 'agregar'
+type Vista = 'list' | 'versus' | 'agregar' | 'resolverLote'
 
 interface VisitaSheetProps {
     open: boolean
@@ -63,6 +67,8 @@ export default function VisitaSheet({
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
     const [vista, setVista] = useState<Vista>('list')
+    const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set())
+    const [loteMotivos, setLoteMotivos] = useState<IRubroMotivo[]>([])
 
     // Solo se pide cuando el vendedor la abre: TODOS los rubros del cliente
     // (Actual/M.Ant/Prom.6M), independiente de la propuesta/lista de caídas.
@@ -77,6 +83,8 @@ export default function VisitaSheet({
             setBorradorListo(false)
             setErrorGuardado(null)
             setVista('list')
+            setSeleccionados(new Set())
+            setLoteMotivos([])
         }
     }, [open])
 
@@ -121,12 +129,47 @@ export default function VisitaSheet({
         setWizard(null)
     }
 
+    function toggleSeleccion(rubroId: number) {
+        setSeleccionados(prev => {
+            const next = new Set(prev)
+            if (next.has(rubroId)) next.delete(rubroId)
+            else next.add(rubroId)
+            return next
+        })
+    }
+
+    // Fusiona (por motivoId) el borrador compartido del lote en cada rubro seleccionado,
+    // sin pisar los motivos que ya tuviera cargados. Igual que el wizard individual, no
+    // llama al backend: el cambio queda en `borradores` (y por lo tanto en localStorage).
+    function aplicarLote() {
+        setBorradores(prev => {
+            const next = { ...prev }
+            for (const rubroId of seleccionados) {
+                const actual = next[rubroId] ?? []
+                const porId = new Map(actual.map(m => [m.motivoId, m]))
+                for (const m of loteMotivos) porId.set(m.motivoId, m)
+                next[rubroId] = [...porId.values()]
+            }
+            return next
+        })
+        setSeleccionados(new Set())
+        setLoteMotivos([])
+        setVista('list')
+    }
+
     function rubroCompleto(r: IVisitaRubro): boolean {
         const motivosDelRubro = borradores[r.id] ?? r.motivos
         return motivosDelRubro.length > 0 && !tieneDetalleIncompleto(motivos, motivosDelRubro)
     }
 
     const pendientes = rubros.filter(r => !rubroCompleto(r)).length
+
+    const necesitaMarcasLote = loteMotivos.some(
+        m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
+    )
+    const { data: marcasLote = [], isLoading: marcasLoteLoading } = useBrandCatalog(
+        vista === 'resolverLote' && necesitaMarcasLote,
+    )
 
     // Único punto de guardado contra el backend: junta todo lo que cambió contra lo
     // que ya tiene el servidor, lo manda en un solo batch y, si sale bien, recién ahí
@@ -169,7 +212,24 @@ export default function VisitaSheet({
             onIndexChange={index => setWizard(w => (w ? { ...w, index } : w))}
             onFinalizar={finalizar}
         />
-    ) : vista === 'agregar' ? null : (
+    ) : vista === 'agregar' ? null : vista === 'resolverLote' ? (
+        <ResolverLoteAcciones
+            motivos={motivos}
+            value={loteMotivos}
+            cantidad={seleccionados.size}
+            onCancelar={() => {
+                setVista('list')
+                setLoteMotivos([])
+            }}
+            onAplicar={aplicarLote}
+        />
+    ) : seleccionados.size > 0 ? (
+        <SeleccionBar
+            cantidad={seleccionados.size}
+            onCancelar={() => setSeleccionados(new Set())}
+            onResolver={() => setVista('resolverLote')}
+        />
+    ) : (
         <>
             {pendientes > 0 && (
                 <p className="mb-2 text-center text-[12px] font-semibold text-[#B45309]">
@@ -214,6 +274,19 @@ export default function VisitaSheet({
                     onCambiarBorrador={(rubroId, m) => setBorradores(prev => ({ ...prev, [rubroId]: m }))}
                     onVolver={() => setWizard(null)}
                 />
+            ) : vista === 'resolverLote' ? (
+                <ResolverLoteVista
+                    motivos={motivos}
+                    marcas={marcasLote}
+                    marcasLoading={marcasLoteLoading}
+                    cantidad={seleccionados.size}
+                    value={loteMotivos}
+                    onChange={setLoteMotivos}
+                    onVolver={() => {
+                        setVista('list')
+                        setLoteMotivos([])
+                    }}
+                />
             ) : vista === 'agregar' ? (
                 <AgregarRubroVista
                     visitaId={visitaId}
@@ -250,17 +323,33 @@ export default function VisitaSheet({
                 <div>
                     <p className="mb-3 text-[13px] leading-snug text-dsmuted">
                         Cargá el resultado de cada rubro que ofreciste. Los que no ofreciste se
-                        resuelven con <b className="font-bold text-[#182645]">“No lo ofrecí”</b>.
+                        resuelven con <b className="font-bold text-[#182645]">"No lo ofrecí"</b>.
                     </p>
 
                     <div className="flex flex-col gap-2.5">
                         {rubros.map(r => {
                             const editable = esEditable(r)
+                            const marcado = seleccionados.has(r.id)
                             return (
                                 <div key={r.id} className="flex items-start gap-1.5">
+                                    {editable && (
+                                        <button
+                                            type="button"
+                                            aria-label={`Seleccionar ${r.rubroDescripcion}`}
+                                            onClick={() => toggleSeleccion(r.id)}
+                                            className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg border-[1.5px]"
+                                            style={{
+                                                borderColor: marcado ? '#213D82' : '#CBD2E0',
+                                                background: marcado ? '#213D82' : '#fff',
+                                                color: marcado ? '#fff' : 'transparent',
+                                            }}
+                                        >
+                                            <Check className="h-[15px] w-[15px]" strokeWidth={3} />
+                                        </button>
+                                    )}
                                     <div
                                         className={`min-w-0 flex-1 ${editable ? 'cursor-pointer' : ''}`}
-                                        onClick={editable ? () => abrirWizard(r) : undefined}
+                                        onClick={editable ? () => toggleSeleccion(r.id) : undefined}
                                     >
                                         <RubroCard
                                             nombre={r.rubroDescripcion}

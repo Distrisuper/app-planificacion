@@ -53,7 +53,11 @@ export default function RubroCard({
                 <Button
                     variant="outline"
                     size="sm"
-                    onClick={onResolucion}
+                    aria-label={`Resolución de ${nombre}`}
+                    onClick={e => {
+                        e.stopPropagation()
+                        onResolucion()
+                    }}
                     className={`mt-2 h-10 w-full text-[12.5px] font-bold ${
                         resuelto
                             ? 'border-[#BFE6CE] bg-[#F3FAF5] text-dsgreen'
