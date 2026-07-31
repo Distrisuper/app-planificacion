@@ -19,12 +19,16 @@ Trabajo 100% de front, sin endpoints nuevos.
 
 ## Alcance
 
-Cambia sólo `PropuestaSheet` (pre-visita) y la tabla compartida. **El comportamiento de
-`VisitaSheet` no se toca**: mantiene su sub-vista de Versus, su botón "Ver versus" y su navegación
-con botón de volver. Lo que sí hereda, por compartir el componente de tabla, es el estilo nuevo:
-importes en miles, `–` para vacío, `PROM.6M` con badge `REF` y fila TOTALES. Es deseable — son las
-mismas dos tablas y no deben verse distintas. Lo único que no aparece ahí es la marca de rubro
-propuesto (`VisitaSheet` no le pasa el flag).
+Cambia `PropuestaSheet` (pre-visita) y la tabla compartida.
+
+`VisitaSheet` hereda el estilo nuevo por compartir el componente —importes en miles, `–` para
+vacío, `PROM.6M` con badge `REF`, fila TOTALES—, que es deseable: son las mismas dos tablas y no
+deben verse distintas.
+
+> **Superseded.** Este spec decía originalmente que el *comportamiento* de `VisitaSheet` no se
+> tocaba (mantenía su sub-vista de Versus y su botón "Ver versus"). Eso ya no es así:
+> `2026-07-31-tabla-visita-design.md` lleva la visita en curso a la misma tabla expandible, con
+> resolución y ＋ por fila. Lo que sigue abajo describe únicamente `PropuestaSheet`.
 
 ## Comportamiento
 
@@ -137,12 +141,13 @@ a propósito en el tipo — ya se vio una respuesta 200 sin ellos.
 | `src/components/propuesta/filas.ts` | **nuevo**. Funciones puras: merge propuesta + rubros, orden, fallback por fila, colapsado/expandido, totales. |
 | `src/lib/fmtAmount.tsx` | **nuevo**. Portado de `app-vendedores`. |
 | `src/components/PropuestaSheet.tsx` | el estado `vista: 'list' \| 'versus'` pasa a `expandido: boolean`; se borra el render de la sub-vista y su header. |
-| `src/components/propuesta/RubroCard.tsx` | pierde `caidaPct`, `pesosPerdidos` e `isFallback` — sin consumidor tras el cambio (`VisitaSheet`, su único uso restante, no las pasa). |
+| `src/components/propuesta/RubroCard.tsx` | pierde `caidaPct`, `pesosPerdidos` e `isFallback` — `PropuestaSheet` ya no lo usa y `VisitaSheet`, su único consumidor restante, no las pasa. (`2026-07-31-tabla-visita-design.md` va más lejos: le saca ese último consumidor y borra el archivo.) |
 | `src/components/VisitaSheet.tsx` | sólo lo que exija el rename del componente. |
 
-`IRubroFila = { rubroCode, nombre, actual, mesAnterior, promedio6m, esPropuesta }` con los tres
-números `number | null`. `getRubroStatus` sigue devolviendo `number` (su `?? 0` no se toca): el
-`null` lo introduce únicamente el camino de fallback de la propuesta.
+`IRubroFila = { rubroCode, nombre, actual, mesAnterior, promedio6m, destacada }` con los tres
+números `number | null` y `destacada` como la marca de barra navy + negrita. `getRubroStatus` sigue
+devolviendo `number` (su `?? 0` no se toca): el `null` lo introduce únicamente el camino de fallback
+de la propuesta. El spec de la visita extiende esta misma interfaz con los campos de acción.
 
 Toda la lógica real de esta feature vive en `filas.ts`, que no renderiza nada y se testea sin
 DOM. `RubroTable` queda como presentación pura y `PropuestaSheet` como orquestación de dos queries
@@ -168,8 +173,9 @@ y un booleano.
 
 La escala de 5 colores y el coloreado por proyección (descartados arriba, no pendientes). Sort por
 columna, drill-down por celda, columnas `P.3M`/`P.12M` y filtro de canal: existen en Versus y no
-hacen falta para decidir qué ofrecer en la puerta del cliente. La marca de propuesta en la tabla
-de `VisitaSheet`.
+hacen falta para decidir qué ofrecer en la puerta del cliente. Todo lo de la visita en curso
+—resolución por fila, ＋ para agregar, quitar rubro— vive en
+`2026-07-31-tabla-visita-design.md`.
 
 ## Nota para después
 
