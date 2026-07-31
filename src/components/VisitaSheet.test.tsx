@@ -50,6 +50,10 @@ beforeEach(() => {
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600, mesAnterior: 800, promedio6m: 1000 },
     ])
+    ;(api.getRubroCatalog as any).mockResolvedValue([
+        { code: 'BAT', description: 'Baterías' },
+    ])
+    ;(api.agregarRubro as any).mockResolvedValue({ visitaRubroId: 99 })
 })
 
 it('lista los rubros de la propuesta congelada', async () => {
@@ -196,4 +200,33 @@ it('con codigoParticularCliente, ver versus pide el estado de rubros y muestra l
 
     fireEvent.click(screen.getByLabelText('Volver'))
     expect(await screen.findByText('Cargá el resultado de cada rubro que ofreciste.', { exact: false })).toBeInTheDocument()
+})
+
+it('desde la lista se puede agregar un rubro fuera de la propuesta', async () => {
+    renderSheet()
+    fireEvent.click(await screen.findByRole('button', { name: /agregar rubro/i }))
+    fireEvent.click(await screen.findByText('Baterías'))
+    await waitFor(() =>
+        expect(api.agregarRubro).toHaveBeenCalledWith(42, {
+            rubroCode: 'BAT',
+            rubroDescripcion: 'Baterías',
+        }),
+    )
+    // Vuelve a la lista: el rubro nuevo es el feedback.
+    expect(await screen.findByText('Amortiguadores')).toBeInTheDocument()
+})
+
+it('el buscador no ofrece rubros que ya están en la visita', async () => {
+    renderSheet()
+    fireEvent.click(await screen.findByRole('button', { name: /agregar rubro/i }))
+    expect(await screen.findByText('Baterías')).toBeInTheDocument()
+    expect(screen.queryByText('Amortiguadores')).not.toBeInTheDocument()
+})
+
+// La pantalla de visita cerrada existe para VACIAR pendientes. Agregar ahí crearía
+// uno nuevo y trabaría el cierre de la semana, aunque el backend lo permita.
+it('no ofrece agregar rubros cuando la visita ya está cerrada', async () => {
+    renderSheet({ visitaCerrada: true })
+    await screen.findByText('Amortiguadores')
+    expect(screen.queryByRole('button', { name: /agregar rubro/i })).not.toBeInTheDocument()
 })

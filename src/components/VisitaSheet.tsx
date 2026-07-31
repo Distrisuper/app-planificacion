@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, Loader2, Maximize2, Trash2 } from 'lucide-react'
+import { ChevronLeft, Loader2, Maximize2, Plus, Trash2 } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import RubroCard from './propuesta/RubroCard'
+import AgregarRubroVista from './propuesta/AgregarRubroVista'
 import ResolucionWizard from './propuesta/ResolucionWizard'
 import ResolucionWizardAcciones from './propuesta/ResolucionWizardAcciones'
 import VersusTable from './propuesta/VersusTable'
@@ -14,7 +15,7 @@ import { formatearDuracion } from '@/lib/visitaTimer'
 import { motivosIguales } from '@/lib/resolucionRubro'
 import type { IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
 
-type Vista = 'list' | 'versus'
+type Vista = 'list' | 'versus' | 'agregar'
 
 interface VisitaSheetProps {
     open: boolean
@@ -149,7 +150,7 @@ export default function VisitaSheet({
             onIndexChange={index => setWizard(w => (w ? { ...w, index } : w))}
             onFinalizar={finalizar}
         />
-    ) : (
+    ) : vista === 'agregar' ? null : (
         <>
             {pendientes > 0 && (
                 <p className="mb-2 text-center text-[12px] font-semibold text-[#B45309]">
@@ -188,6 +189,13 @@ export default function VisitaSheet({
                     borradores={borradores}
                     onCambiarBorrador={(rubroId, m) => setBorradores(prev => ({ ...prev, [rubroId]: m }))}
                     onVolver={() => setWizard(null)}
+                />
+            ) : vista === 'agregar' ? (
+                <AgregarRubroVista
+                    visitaId={visitaId}
+                    codesEnVisita={rubros.map(r => r.rubroCode)}
+                    onVolver={() => setVista('list')}
+                    onAgregado={() => setVista('list')}
                 />
             ) : vista === 'versus' ? (
                 <div>
@@ -259,11 +267,22 @@ export default function VisitaSheet({
                         )}
                     </div>
 
+                    {!visitaCerrada && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setVista('agregar')}
+                            className="mt-3.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
+                        >
+                            <Plus className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                            Agregar rubro
+                        </Button>
+                    )}
+
                     {codigoParticularCliente && (
                         <Button
                             variant="outline"
                             onClick={() => setVista('versus')}
-                            className="mt-3.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
+                            className="mt-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
                         >
                             <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
                             Ver versus
