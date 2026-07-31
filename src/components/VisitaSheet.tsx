@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, ChevronLeft, Loader2, Maximize2, Plus, Trash2 } from 'lucide-react'
+import { ChevronLeft, Loader2, Maximize2, Plus } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import RubroCard from './propuesta/RubroCard'
@@ -329,48 +329,17 @@ export default function VisitaSheet({
                     <div className="flex flex-col gap-2.5">
                         {rubros.map(r => {
                             const editable = esEditable(r)
-                            const marcado = seleccionados.has(r.id)
                             return (
-                                <div key={r.id} className="flex items-start gap-1.5">
-                                    {editable && (
-                                        <button
-                                            type="button"
-                                            aria-label={`Seleccionar ${r.rubroDescripcion}`}
-                                            onClick={() => toggleSeleccion(r.id)}
-                                            className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg border-[1.5px]"
-                                            style={{
-                                                borderColor: marcado ? '#213D82' : '#CBD2E0',
-                                                background: marcado ? '#213D82' : '#fff',
-                                                color: marcado ? '#fff' : 'transparent',
-                                            }}
-                                        >
-                                            <Check className="h-[15px] w-[15px]" strokeWidth={3} />
-                                        </button>
-                                    )}
-                                    <div
-                                        className={`min-w-0 flex-1 ${editable ? 'cursor-pointer' : ''}`}
-                                        onClick={editable ? () => toggleSeleccion(r.id) : undefined}
-                                    >
-                                        <RubroCard
-                                            nombre={r.rubroDescripcion}
-                                            motivosCargados={!r.resuelto ? (borradores[r.id] ?? r.motivos).length : undefined}
-                                            onResolucion={editable ? () => abrirWizard(r) : undefined}
-                                        />
-                                    </div>
-                                    {/* Los de la propuesta NO se borran (RUBRO_DE_PROPUESTA):
-                                        si no se ofreció, se resuelve con "No lo ofrecí". */}
-                                    {!r.esPropuesto && editable && (
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            aria-label={`Quitar ${r.rubroDescripcion}`}
-                                            onClick={() => eliminar.mutate(r.id)}
-                                            className="mt-1 h-9 w-9 shrink-0 border-[#E1E6F0] text-dsmuted"
-                                        >
-                                            <Trash2 className="h-[15px] w-[15px]" strokeWidth={2} />
-                                        </Button>
-                                    )}
-                                </div>
+                                <RubroCard
+                                    key={r.id}
+                                    nombre={r.rubroDescripcion}
+                                    motivosCargados={!r.resuelto ? (borradores[r.id] ?? r.motivos).length : undefined}
+                                    onResolucion={editable ? () => abrirWizard(r) : undefined}
+                                    seleccionable={editable}
+                                    seleccionado={seleccionados.has(r.id)}
+                                    onToggleSeleccion={() => toggleSeleccion(r.id)}
+                                    onEliminar={!r.esPropuesto && editable ? () => eliminar.mutate(r.id) : undefined}
+                                />
                             )
                         })}
                         {rubros.length === 0 && (

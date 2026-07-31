@@ -10,16 +10,18 @@ interface SeleccionBarProps {
  *  normal (Cerrar visita), igual que el wizard reemplaza el suyo. */
 export default function SeleccionBar({ cantidad, onCancelar, onResolver }: SeleccionBarProps) {
     return (
-        <div className="flex items-center gap-2">
-            <span className="flex-1 text-[13px] font-bold text-[#182645]">
+        <div>
+            <p className="mb-2 text-center text-[12.5px] font-bold text-[#182645]">
                 {cantidad} {cantidad === 1 ? 'seleccionado' : 'seleccionados'}
-            </span>
-            <Button variant="outline" onClick={onCancelar} className="h-11 text-[13px] font-bold">
-                Cancelar
-            </Button>
-            <Button onClick={onResolver} className="h-11 bg-dsnavy text-[13px] hover:bg-dsnavy/90">
-                Resolver seleccionados
-            </Button>
+            </p>
+            <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={onCancelar} className="h-12 flex-1 text-[13.5px] font-bold">
+                    Cancelar
+                </Button>
+                <Button onClick={onResolver} className="h-12 flex-1 bg-dsnavy text-[13.5px] hover:bg-dsnavy/90">
+                    Resolver seleccionados
+                </Button>
+            </div>
         </div>
     )
 }
