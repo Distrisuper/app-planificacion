@@ -5,6 +5,7 @@ import type {
     IAgendaClient,
     IAgregarRubroDTO,
     IAgregarRubroResult,
+    ICatalogoItem,
     ICerrarCicloResult,
     ICerrarVisitaDTO,
     ICerrarVisitaResult,
@@ -187,4 +188,21 @@ export const getRubroStatus = async (
             mesAnterior: i.totalsByPeriod.lastMonth?.amount ?? 0,
             promedio6m: (i.totalsByPeriod.last6Months?.amount ?? 0) / 6,
         }))
+}
+
+// ── Catálogos (endpoints reusados, fuera del dominio de planificación) ─────────
+
+/** Rubros válidos para poblar selects. Es la MISMA lista contra la que el backend
+ *  valida la propuesta (RubroCatalogService) — no confundir con /clients/getRubros,
+ *  que es otra query sobre staging, sin cache y con filtros propios. */
+export const getRubroCatalog = async (): Promise<ICatalogoItem[]> => {
+    const res = await apiClient.get('/sale/rubro/catalog')
+    return res.data.data
+}
+
+/** Marcas con ventas en los últimos 12 meses. Ordenadas por descripción del lado
+ *  del server. */
+export const getBrandCatalog = async (): Promise<ICatalogoItem[]> => {
+    const res = await apiClient.get('/sale/brand/catalog')
+    return res.data.data
 }

@@ -12,6 +12,12 @@ export type EstadoCiclo = 'abierta' | 'cerrada'
 /** DERIVADO en el backend de la resolución del cliente — no existe como columna. */
 export type EstadoCicloCliente = 'pendiente' | 'en_curso' | 'visitada' | 'no_visita' | 'reagendada'
 
+/** Entrada de catálogo para poblar selects. Rubros y marcas comparten forma. */
+export interface ICatalogoItem {
+    code: string
+    description: string
+}
+
 export interface IMotivo {
     motivoId: number
     nivel: NivelMotivo
