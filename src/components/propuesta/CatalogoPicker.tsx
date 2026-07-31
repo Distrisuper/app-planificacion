@@ -104,11 +104,11 @@ export default function CatalogoPicker({
                      *  catálogo de marcas trae cientos) estira el contenedor que lo
                      *  monta. Montado inline en el detalle de un motivo, eso empuja el
                      *  resto del wizard fuera de vista en vez de scrollear en su lugar.
-                     *  `min(240px, 32dvh)` en vez de un fijo: en una pantalla chica (o
-                     *  con el teclado virtual abierto) 240px puede ser más de lo que
-                     *  queda visible del sheet; así se achica solo en vez de forzar un
-                     *  segundo scroll para ver el pie (Atrás/Finalizar). */}
-                    <div className="flex max-h-[min(240px,32dvh)] flex-col gap-1.5 overflow-y-auto pr-0.5">
+                     *  `min(200px, 26dvh)` en vez de un fijo: en una pantalla chica (o
+                     *  con el teclado virtual abierto) un alto fijo puede ser más de lo
+                     *  que queda visible del sheet; así se achica solo en vez de forzar
+                     *  un segundo scroll para ver el pie (Atrás/Finalizar). */}
+                    <div className="flex max-h-[min(200px,26dvh)] flex-col gap-1.5 overflow-y-auto pr-0.5">
                         {visibles.map(item => {
                             const enCurso = pendingCode === item.code
                             const elegido = value === item.description

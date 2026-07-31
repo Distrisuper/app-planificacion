@@ -156,42 +156,51 @@ export default function ResolucionRubro({ motivos, marcas, marcasLoading, value,
                                             </div>
                                         )}
                                     </div>
-                                    <label className="flex flex-col gap-1">
-                                        <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
-                                            Competidor
-                                        </span>
-                                        <input
-                                            value={seleccionado.competidor ?? ''}
-                                            onChange={e => setDetalle(cat.motivoId, 'competidor', e.target.value)}
-                                            placeholder="Ej. Corven"
-                                            className="w-full rounded-lg border border-[#E1E6F0] px-2.5 py-2 text-sm font-semibold text-[#182645] outline-none"
-                                        />
-                                    </label>
-                                    <div className="flex items-center gap-2">
-                                        <label
-                                            htmlFor={`pct-${cat.motivoId}`}
-                                            className="text-[12.5px] font-bold text-[#3B4560]"
-                                        >
-                                            % de diferencia
-                                        </label>
-                                        <div className="flex flex-1 items-center justify-end gap-1">
-                                            <input
-                                                id={`pct-${cat.motivoId}`}
-                                                value={seleccionado.pctDiferencia ?? ''}
-                                                onChange={e =>
-                                                    setDetalle(
-                                                        cat.motivoId,
-                                                        'pctDiferencia',
-                                                        e.target.value.replace(/[^0-9.]/g, ''),
-                                                    )
-                                                }
-                                                inputMode="decimal"
-                                                placeholder="0"
-                                                className="w-16 rounded-lg border border-[#E1E6F0] px-2 py-1.5 text-right text-sm font-extrabold text-dsnavy outline-none"
-                                            />
-                                            <span className="text-[15px] font-extrabold text-dsnavy">%</span>
-                                        </div>
-                                    </div>
+                                    {/* Mientras el picker de marca está abierto, Competidor y
+                                     *  %diferencia se ocultan: son campos chicos, pero sumados
+                                     *  a la lista competían por el mismo espacio visible del
+                                     *  sheet y terminaban tapados por el pie fijo. Reaparecen
+                                     *  solos al elegir una marca (o cerrar el picker). */}
+                                    {marcaAbierta !== cat.motivoId && (
+                                        <>
+                                            <label className="flex flex-col gap-1">
+                                                <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
+                                                    Competidor
+                                                </span>
+                                                <input
+                                                    value={seleccionado.competidor ?? ''}
+                                                    onChange={e => setDetalle(cat.motivoId, 'competidor', e.target.value)}
+                                                    placeholder="Ej. Corven"
+                                                    className="w-full rounded-lg border border-[#E1E6F0] px-2.5 py-2 text-sm font-semibold text-[#182645] outline-none"
+                                                />
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <label
+                                                    htmlFor={`pct-${cat.motivoId}`}
+                                                    className="text-[12.5px] font-bold text-[#3B4560]"
+                                                >
+                                                    % de diferencia
+                                                </label>
+                                                <div className="flex flex-1 items-center justify-end gap-1">
+                                                    <input
+                                                        id={`pct-${cat.motivoId}`}
+                                                        value={seleccionado.pctDiferencia ?? ''}
+                                                        onChange={e =>
+                                                            setDetalle(
+                                                                cat.motivoId,
+                                                                'pctDiferencia',
+                                                                e.target.value.replace(/[^0-9.]/g, ''),
+                                                            )
+                                                        }
+                                                        inputMode="decimal"
+                                                        placeholder="0"
+                                                        className="w-16 rounded-lg border border-[#E1E6F0] px-2 py-1.5 text-right text-sm font-extrabold text-dsnavy outline-none"
+                                                    />
+                                                    <span className="text-[15px] font-extrabold text-dsnavy">%</span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </div>
