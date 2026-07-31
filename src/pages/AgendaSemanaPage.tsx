@@ -76,6 +76,9 @@ export default function AgendaSemanaPage() {
 
     const [diaActivo, setDiaActivo] = useState<Dia>('LUN')
     const [visitaCliente, setVisitaCliente] = useState<IAgendaClient | null>(null)
+    // true = se abrió el flujo tocando "Iniciar visita" en la card (no "Propuesta"): se
+    // salta la propuesta y va derecho al mapa. Ver VisitaFlow.directoAMapa.
+    const [directoAMapa, setDirectoAMapa] = useState(false)
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [cerrandoSemana, setCerrandoSemana] = useState(false)
@@ -195,6 +198,16 @@ export default function AgendaSemanaPage() {
         }
     }
 
+    function abrirPropuesta(cliente: IAgendaClient) {
+        setDirectoAMapa(false)
+        setVisitaCliente(cliente)
+    }
+
+    function iniciarDirecto(cliente: IAgendaClient) {
+        setDirectoAMapa(true)
+        setVisitaCliente(cliente)
+    }
+
     function onElegirNoVisita() {
         const cliente = estadoVisitaCliente
         setEstadoVisitaCliente(null)
@@ -241,10 +254,11 @@ export default function AgendaSemanaPage() {
                 semana={semana}
                 activo={diaActivo}
                 modo={operable ? 'operable' : 'preview'}
+                hayVisitaEnCurso={visitaEnCurso !== null}
                 onActivoChange={setDiaActivo}
-                onAbrir={setVisitaCliente}
+                onAbrir={abrirPropuesta}
                 onEstadoVisita={setEstadoVisitaCliente}
-                onCargarRubros={setVisitaCliente}
+                onIniciarVisita={iniciarDirecto}
             />
 
             {ciclo === null && preview && (
@@ -260,9 +274,13 @@ export default function AgendaSemanaPage() {
             <VisitaFlow
                 cliente={visitaCliente}
                 visitaEnCurso={visitaEnCurso}
+                directoAMapa={directoAMapa}
                 onVisitaIniciada={(cliente, visitaId) => setVisitaEnCurso({ cliente, visitaId })}
                 onVisitaCerrada={() => setVisitaEnCurso(null)}
-                onClose={() => setVisitaCliente(null)}
+                onClose={() => {
+                    setVisitaCliente(null)
+                    setDirectoAMapa(false)
+                }}
                 onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
                 onAviso={mostrar}
             />
@@ -272,7 +290,7 @@ export default function AgendaSemanaPage() {
                     nombreCliente={
                         visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente
                     }
-                    onExpandir={() => setVisitaCliente(visitaEnCurso.cliente)}
+                    onExpandir={() => abrirPropuesta(visitaEnCurso.cliente)}
                 />
             )}
             <ResolucionSheet
