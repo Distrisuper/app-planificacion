@@ -18,6 +18,8 @@ import {
     resolverRubro,
     eliminarRubro,
     getPropuesta,
+    getRubroCatalog,
+    getBrandCatalog,
 } from './planificacion'
 
 vi.mock('./apiClient', () => ({
@@ -193,5 +195,21 @@ describe('propuesta', () => {
         expect(apiClient.post).toHaveBeenCalledWith('/sale/rubro/recommendations/drops', {
             particularCode: '10034',
         })
+    })
+})
+
+describe('catálogos', () => {
+    it('getRubroCatalog apunta a /sale/rubro/catalog', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok([{ code: 'AMORT', description: 'Amortiguadores' }]))
+        await expect(getRubroCatalog()).resolves.toEqual([
+            { code: 'AMORT', description: 'Amortiguadores' },
+        ])
+        expect(apiClient.get).toHaveBeenCalledWith('/sale/rubro/catalog')
+    })
+
+    it('getBrandCatalog apunta a /sale/brand/catalog', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok([{ code: 'FR', description: 'Fric-Rot' }]))
+        await expect(getBrandCatalog()).resolves.toEqual([{ code: 'FR', description: 'Fric-Rot' }])
+        expect(apiClient.get).toHaveBeenCalledWith('/sale/brand/catalog')
     })
 })

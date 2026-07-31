@@ -15,7 +15,7 @@ export default function VisitaEnCursoBar({ visitaId, nombreCliente, onExpandir }
     return (
         <button
             onClick={onExpandir}
-            className="fixed inset-x-3 bottom-3 z-40 flex items-center justify-between gap-3 rounded-2xl bg-[#B45309] px-4 py-3 text-white shadow-[0_6px_20px_rgba(180,83,9,.35)]"
+            className="fixed inset-x-3 bottom-3 z-40 flex items-center justify-between gap-3 rounded-2xl bg-dsorange px-4 py-3 text-white shadow-[0_6px_20px_rgba(180,83,9,.35)]"
         >
             <span className="flex min-w-0 items-center gap-2 text-left">
                 <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-white" />

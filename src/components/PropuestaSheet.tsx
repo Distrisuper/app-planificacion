@@ -31,7 +31,7 @@ type Vista = 'list' | 'versus'
 // El backend exige -1 <= caidaPct <= 0 (0 = sin caída, -1 = -100%). Los rubros de relleno
 // (isFallback) no llegaron al umbral de caída sostenida y su dropPct puede venir positivo
 // (creció, no cayó) — eso no es una caída, así que se manda 0 en vez del valor crudo.
-function toPropuestaDTO(r: IRubroPropuesta): IPropuestaRubroDTO {
+export function toPropuestaDTO(r: IRubroPropuesta): IPropuestaRubroDTO {
     return {
         rubroCode: r.rubroCode,
         pesosPerdidos: r.pesosPerdidos,

@@ -17,13 +17,15 @@ body { margin: 0; background: #eef1f6; -webkit-tap-highlight-color: transparent;
 @keyframes sheet-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes notif-in { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes panel-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
 
 .animate-sheet-up { animation: sheet-up .28s cubic-bezier(.22,1,.36,1); }
 .animate-fade-in { animation: fade-in .18s ease; }
 .animate-notif-in { animation: notif-in .2s ease; }
+.animate-panel-in { animation: panel-in .16s ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
-    .animate-sheet-up, .animate-fade-in, .animate-notif-in {
+    .animate-sheet-up, .animate-fade-in, .animate-notif-in, .animate-panel-in {
         animation: none !important;
     }
 }
