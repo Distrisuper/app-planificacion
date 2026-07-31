@@ -28,8 +28,6 @@ function setup(over: Record<string, unknown> = {}) {
             index={0}
             motivos={motivos}
             borradores={{ 7: [], 8: [] }}
-            guardados={{ 7: [], 8: [] }}
-            fallidos={{}}
             onIndexChange={onIndexChange}
             onFinalizar={onFinalizar}
             {...over}
@@ -61,7 +59,7 @@ it('Atrás retrocede el índice', () => {
     expect(onIndexChange).toHaveBeenCalledWith(0)
 })
 
-it('en el último rubro, muestra Finalizar en vez de Siguiente, habilitado sin cambios pendientes', () => {
+it('en el último rubro, muestra Finalizar en vez de Siguiente, habilitado sin nada bloqueante', () => {
     setup({ index: 1 })
     expect(screen.queryByRole('button', { name: /siguiente/i })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^finalizar$/i })).toBeEnabled()
@@ -73,26 +71,11 @@ it('Finalizar dispara onFinalizar', () => {
     expect(onFinalizar).toHaveBeenCalled()
 })
 
-it('con el detalle de Precio incompleto, avisa cuál falta y bloquea Finalizar', () => {
+it('con el detalle de Precio incompleto en cualquier rubro, avisa cuál falta y bloquea Finalizar', () => {
     setup({
         index: 1,
         borradores: { 7: [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }], 8: [] },
     })
     expect(screen.getByText(/completá el detalle de precio en amortiguadores/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^finalizar$/i })).toBeDisabled()
-})
-
-it('con fallidos, Finalizar pasa a Reintentar y lista los rubros que fallaron', () => {
-    setup({
-        index: 1,
-        borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] },
-        fallidos: { 7: 'Sin conexión.' },
-    })
-    expect(screen.getByRole('button', { name: /reintentar \(1\)/i })).toBeInTheDocument()
-    expect(screen.getByText(/no se pudo guardar.*amortiguadores/i)).toBeInTheDocument()
-})
-
-it('mientras guarda, el botón muestra el estado de carga', () => {
-    setup({ index: 1, guardando: true })
-    expect(screen.getByText(/guardando/i)).toBeInTheDocument()
 })
