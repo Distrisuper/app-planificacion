@@ -65,6 +65,37 @@ it('usePropuesta mapea los rubros caídos para la UI', async () => {
     })
 })
 
+it('un rubro sin `current`/`prev` no rompe la query: cae a caidaPct null', async () => {
+    // Regresión: el tipo declara `current` requerido, pero la respuesta real puede no
+    // traerlo. `r.current.dropPct` tiraba TypeError DENTRO del `select` de React Query,
+    // así que la query quedaba en isError con un 200 en la red — y el flujo de "Iniciar
+    // visita" moría en un spinner infinito. Un dato de display que falta no puede
+    // tumbar la visita.
+    ;(api.getPropuesta as any).mockResolvedValue({
+        particularCode: '10034',
+        rubros: [
+            {
+                rubroCode: 'R1',
+                rubroDescription: 'Lubricantes',
+                isRedBoth: false,
+                isFallback: true,
+                pesosPerdidos: 0,
+                reason: 'relleno',
+            },
+        ],
+    })
+
+    const { result } = renderHook(() => usePropuesta('10034'), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(result.current.isError).toBe(false)
+    expect(result.current.data?.rubros[0]).toMatchObject({
+        rubroCode: 'R1',
+        nombre: 'Lubricantes',
+        caidaPct: null,
+    })
+})
+
 it('usePropuesta devuelve lista vacía cuando el cliente no tiene rubros caídos', async () => {
     ;(api.getPropuesta as any).mockResolvedValue({
         particularCode: '10034',

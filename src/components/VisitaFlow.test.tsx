@@ -40,6 +40,7 @@ interface HarnessProps {
     /** Si se pasa, se renderiza un botón de test que simula tocar la card de OTRO cliente
      *  (como haría AgendaBoard) sin cerrar el flujo del que ya estaba abierto. */
     otroCliente?: IAgendaClient
+    directoAMapa?: boolean
     onGeoBloqueada: (motivo: any) => void
     onAviso: (tipo: any, mensaje: string) => void
     onClose: () => void
@@ -57,6 +58,7 @@ interface HarnessProps {
 function Harness({
     clienteInicial,
     otroCliente,
+    directoAMapa,
     onGeoBloqueada,
     onAviso,
     onClose,
@@ -80,6 +82,7 @@ function Harness({
             <VisitaFlow
                 cliente={cliente}
                 visitaEnCurso={visitaEnCurso}
+                directoAMapa={directoAMapa}
                 onVisitaIniciada={(c, id) => {
                     setVisitaEnCurso({ cliente: c, visitaId: id })
                     onVisitaIniciada(c, id)
@@ -106,7 +109,9 @@ function Harness({
     )
 }
 
-function renderFlow(over: { cliente?: IAgendaClient; otroCliente?: IAgendaClient } = {}) {
+function renderFlow(
+    over: { cliente?: IAgendaClient; otroCliente?: IAgendaClient; directoAMapa?: boolean } = {},
+) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onGeoBloqueada = vi.fn()
     const onClose = vi.fn()
@@ -118,6 +123,7 @@ function renderFlow(over: { cliente?: IAgendaClient; otroCliente?: IAgendaClient
             <Harness
                 clienteInicial={over.cliente ?? cliente}
                 otroCliente={over.otroCliente}
+                directoAMapa={over.directoAMapa}
                 onGeoBloqueada={onGeoBloqueada}
                 onAviso={onAviso}
                 onClose={onClose}
@@ -369,6 +375,73 @@ it('confirmar en el mapa recién ahí arranca la visita', async () => {
             propuesta: [],
         }),
     )
+})
+
+it('directoAMapa: si la propuesta falla, no deja al vendedor trabado en el spinner', async () => {
+    // El spinner de carga tapa toda la pantalla y no tiene botón de cerrar: si la
+    // propuesta falla y solo se mira `data` (que queda undefined para siempre), la app
+    // queda inusable hasta reiniciarla. En la calle, con señal mala, eso pasa seguido.
+    ;(api.getPropuesta as any).mockRejectedValue(new Error('sin señal'))
+    renderFlow({
+        cliente: { ...cliente, latitud: -34.6, longitud: -58.4 },
+        directoAMapa: true,
+    })
+
+    await waitFor(() =>
+        expect(screen.queryByTestId('cargando-propuesta')).not.toBeInTheDocument(),
+    )
+    // Y tiene que quedar en un estado del que pueda salir o reintentar.
+    expect(await screen.findByText(/no pudimos traer la propuesta/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /volver a intentar/i })).toBeInTheDocument()
+})
+
+it('directoAMapa con coordenadas salta la propuesta y va derecho al mapa', async () => {
+    renderFlow({
+        cliente: { ...cliente, latitud: -34.6, longitud: -58.4 },
+        directoAMapa: true,
+    })
+    expect(await screen.findByTestId('mapa-iniciar-visita')).toBeInTheDocument()
+    expect(screen.queryByText(/cayeron los/i)).not.toBeInTheDocument()
+    // Igual pide la propuesta: el backend la exige para congelarla al confirmar en el mapa.
+    await waitFor(() => expect(api.getPropuesta).toHaveBeenCalledWith('10034'))
+    expect(api.iniciarVisita).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^iniciar visita$/i }))
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith({
+            cicloClienteId: 42,
+            coordInicio: '-34.6,-58.4',
+            propuesta: [],
+        }),
+    )
+})
+
+it('directoAMapa sin coordenadas cae al flujo normal de la propuesta', async () => {
+    renderFlow({ directoAMapa: true })
+    expect(await screen.findByText(/cayeron los/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+})
+
+it('directoAMapa: cancelar en el mapa lo cierra de verdad y no lo reabre solo', async () => {
+    // `cargandoDirecto` incluye `propuestaPendiente === null`, y el efecto que setea
+    // propuestaPendiente depende de `cargandoDirecto`. Al cancelar, propuestaPendiente
+    // vuelve a null → cargandoDirecto vuelve a true → el efecto lo vuelve a setear con la
+    // propuesta que sigue en cache → el mapa se reabre solo. El vendedor no podía salir.
+    renderFlow({
+        cliente: { ...cliente, latitud: -34.6, longitud: -58.4 },
+        directoAMapa: true,
+    })
+    await screen.findByTestId('mapa-iniciar-visita')
+
+    fireEvent.click(screen.getByLabelText('Cancelar'))
+
+    await waitFor(() =>
+        expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument(),
+    )
+    // Y sigue cerrado: nada lo vuelve a abrir en los ticks siguientes.
+    await new Promise(r => setTimeout(r, 150))
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+    expect(api.iniciarVisita).not.toHaveBeenCalled()
 })
 
 it('cancelar en el mapa vuelve a la propuesta sin iniciar nada', async () => {

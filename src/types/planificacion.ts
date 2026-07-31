@@ -159,8 +159,9 @@ export interface IRubroPropuesta {
     /** true = relleno hasta el limit, no llegó al umbral de caída sostenida. */
     isFallback: boolean
     reason: string
-    current: IRubroMonthDrop
-    prev: IRubroMonthDrop
+    /** Se arrastran crudos desde la respuesta; hoy no los consume ninguna vista. */
+    current?: IRubroMonthDrop
+    prev?: IRubroMonthDrop
 }
 
 /** Lo que se manda de vuelta a `POST /planificacion/visitas`: la propuesta tal
@@ -191,8 +192,11 @@ export interface IDroppedRubro {
     isRedBoth: boolean
     isFallback: boolean
     pesosPerdidos: number
-    current: IRubroMonthDrop
-    prev: IRubroMonthDrop
+    /** Opcionales a propósito: se vio la respuesta real (200) traer rubros sin estos dos
+     *  campos. Declararlos requeridos hacía que `r.current.dropPct` pareciera seguro y
+     *  rompía el mapeo en runtime — ver el test de regresión en usePropuesta.test.tsx. */
+    current?: IRubroMonthDrop
+    prev?: IRubroMonthDrop
     reason: string
 }
 

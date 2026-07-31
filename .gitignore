@@ -19,6 +19,9 @@ coverage
 
 .superpowers/
 
+# Snapshots y logs que deja el navegador de Playwright MCP al depurar
+.playwright-mcp/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
