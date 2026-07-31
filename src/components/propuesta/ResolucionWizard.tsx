@@ -1,6 +1,7 @@
 import { ChevronLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import ResolucionRubro from './ResolucionRubro'
+import { useBrandCatalog } from '@/hooks/useCatalogos'
 import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
 
 interface ResolucionWizardProps {
@@ -27,6 +28,15 @@ export default function ResolucionWizard({
     onVolver,
 }: ResolucionWizardProps) {
     const rubro = rubros[index]
+
+    // El catálogo de marcas se pide desde acá y no desde ResolucionRubro: el wizard es
+    // el ancestro más cercano que ve a la vez el catálogo de motivos y el borrador, así
+    // que puede pedirlo SOLO cuando hace falta — y deja a ResolucionRubro presentacional
+    // puro, sin React Query en su test.
+    const necesitaMarcas = (borradores[rubro.id] ?? []).some(
+        m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
+    )
+    const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
 
     return (
         <div>
@@ -55,6 +65,8 @@ export default function ResolucionWizard({
 
             <ResolucionRubro
                 motivos={motivos}
+                marcas={marcas}
+                marcasLoading={marcasLoading}
                 value={borradores[rubro.id] ?? []}
                 onChange={m => onCambiarBorrador(rubro.id, m)}
             />

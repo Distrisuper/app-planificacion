@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
 import ResolucionRubro from './ResolucionRubro'
-import type { IMotivo, IRubroMotivo } from '@/types/planificacion'
+import type { ICatalogoItem, IMotivo, IRubroMotivo } from '@/types/planificacion'
 
 const motivos: IMotivo[] = [
     { motivoId: 10, nivel: 'rubro', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
@@ -9,9 +9,21 @@ const motivos: IMotivo[] = [
     { motivoId: 16, nivel: 'rubro', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
 ]
 
+const marcas: ICatalogoItem[] = [
+    { code: 'FR', description: 'Fric-Rot' },
+    { code: 'FX', description: 'Fremax' },
+]
+
 function setup(value: IRubroMotivo[] = []) {
     const onChange = vi.fn()
-    render(<ResolucionRubro motivos={motivos} value={value} onChange={onChange} />)
+    render(
+        <ResolucionRubro
+            motivos={motivos}
+            marcas={marcas}
+            value={value}
+            onChange={onChange}
+        />,
+    )
     return { onChange }
 }
 
@@ -43,10 +55,30 @@ it('el detalle aparece por requiereDetalle, no por el nombre del motivo', () => 
     expect(screen.getByLabelText(/competidor/i)).toBeInTheDocument()
 })
 
-it('el detalle se edita por motivo', () => {
-    const { onChange } = setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
-    fireEvent.change(screen.getByLabelText(/marca/i), { target: { value: 'Fric-Rot' } })
+it('la marca se elige del catálogo, no se escribe', () => {
+    setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
+    fireEvent.click(screen.getByLabelText(/marca/i))
+    expect(screen.getByText('Fric-Rot')).toBeInTheDocument()
+})
+
+it('elegir una marca la guarda por su descripción', () => {
+    const { onChange } = setup([
+        { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
+    ])
+    fireEvent.click(screen.getByLabelText(/marca/i))
+    fireEvent.click(screen.getByText('Fric-Rot'))
     expect(onChange).toHaveBeenCalledWith([
         { motivoId: 13, marca: 'Fric-Rot', competidor: null, pctDiferencia: null },
+    ])
+})
+
+// Es una marca de afuera: no está en fct_sales, así que no hay catálogo que ofrecer.
+it('competidor sigue siendo texto libre', () => {
+    const { onChange } = setup([
+        { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
+    ])
+    fireEvent.change(screen.getByLabelText(/competidor/i), { target: { value: 'Corven' } })
+    expect(onChange).toHaveBeenCalledWith([
+        { motivoId: 13, marca: null, competidor: 'Corven', pctDiferencia: null },
     ])
 })
