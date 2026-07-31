@@ -61,7 +61,7 @@ export default function RubroCard({
                     }`}
                 >
                     {resuelto
-                        ? `${motivosCargados} ${motivosCargados === 1 ? 'motivo' : 'motivos'} cargados`
+                        ? `${motivosCargados} ${motivosCargados === 1 ? 'motivo' : 'motivos'} cargado${motivosCargados === 1 ? '' : 's'}`
                         : 'Resolución'}
                 </Button>
             )}
