@@ -100,46 +100,52 @@ export default function CatalogoPicker({
                 </div>
             ) : (
                 <div className="flex flex-col gap-1.5">
-                    {visibles.map(item => {
-                        const enCurso = pendingCode === item.code
-                        const elegido = value === item.description
-                        return (
-                            <button
-                                key={item.code}
-                                type="button"
-                                disabled={bloqueada}
-                                aria-busy={enCurso}
-                                onClick={() => onSelect(item)}
-                                className={`flex w-full items-center gap-2.5 rounded-[11px] border-[1.5px] px-3 py-2.5 text-left font-sans disabled:opacity-50 ${
-                                    elegido
-                                        ? 'border-[#B9CCEC] bg-[#EEF3FB]'
-                                        : 'border-[#E4E8F0] bg-white'
-                                }`}
-                            >
-                                <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#3B4560]">
-                                    {item.description}
-                                </span>
-                                {enCurso && (
-                                    <Loader2
-                                        className="h-4 w-4 shrink-0 animate-spin text-dsmuted"
-                                        strokeWidth={2.4}
-                                    />
-                                )}
-                                {!enCurso && elegido && (
-                                    <Check
-                                        className="h-4 w-4 shrink-0 text-[#213D82]"
-                                        strokeWidth={3}
-                                    />
-                                )}
-                            </button>
-                        )
-                    })}
+                    {/* Alto acotado con scroll propio: sin esto, una lista larga (el
+                     *  catálogo de marcas trae cientos) estira el contenedor que lo
+                     *  monta. Montado inline en el detalle de un motivo, eso empuja el
+                     *  resto del wizard fuera de vista en vez de scrollear en su lugar. */}
+                    <div className="flex max-h-[240px] flex-col gap-1.5 overflow-y-auto pr-0.5">
+                        {visibles.map(item => {
+                            const enCurso = pendingCode === item.code
+                            const elegido = value === item.description
+                            return (
+                                <button
+                                    key={item.code}
+                                    type="button"
+                                    disabled={bloqueada}
+                                    aria-busy={enCurso}
+                                    onClick={() => onSelect(item)}
+                                    className={`flex w-full items-center gap-2.5 rounded-[11px] border-[1.5px] px-3 py-2.5 text-left font-sans disabled:opacity-50 ${
+                                        elegido
+                                            ? 'border-[#B9CCEC] bg-[#EEF3FB]'
+                                            : 'border-[#E4E8F0] bg-white'
+                                    }`}
+                                >
+                                    <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#3B4560]">
+                                        {item.description}
+                                    </span>
+                                    {enCurso && (
+                                        <Loader2
+                                            className="h-4 w-4 shrink-0 animate-spin text-dsmuted"
+                                            strokeWidth={2.4}
+                                        />
+                                    )}
+                                    {!enCurso && elegido && (
+                                        <Check
+                                            className="h-4 w-4 shrink-0 text-[#213D82]"
+                                            strokeWidth={3}
+                                        />
+                                    )}
+                                </button>
+                            )
+                        })}
 
-                    {visibles.length === 0 && (
-                        <div className="py-6 text-center text-sm text-dsmuted">
-                            Sin resultados
-                        </div>
-                    )}
+                        {visibles.length === 0 && (
+                            <div className="py-6 text-center text-sm text-dsmuted">
+                                Sin resultados
+                            </div>
+                        )}
+                    </div>
 
                     {ocultos > 0 && (
                         <div className="py-2 text-center text-[12px] font-semibold text-dsmuted">
