@@ -130,12 +130,14 @@ export default function ResolucionRubro({ motivos, marcas, marcasLoading, value,
                                                 />
                                             )}
                                             <ChevronDown
-                                                className="h-4 w-4 shrink-0 text-dsmuted"
+                                                className={`h-4 w-4 shrink-0 text-dsmuted transition-transform duration-150 ${
+                                                    marcaAbierta === cat.motivoId ? 'rotate-180' : ''
+                                                }`}
                                                 strokeWidth={2.4}
                                             />
                                         </button>
                                         {marcaAbierta === cat.motivoId && (
-                                            <div ref={panelRef} className="mt-1.5">
+                                            <div ref={panelRef} className="animate-panel-in mt-1.5">
                                                 <CatalogoPicker
                                                     items={marcas}
                                                     loading={marcasLoading}
