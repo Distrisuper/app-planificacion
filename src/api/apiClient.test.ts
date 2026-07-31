@@ -10,6 +10,34 @@ describe('apiClient', () => {
     })
 })
 
+describe('apiClient response interceptor - mojibake', () => {
+    const fulfilled = (apiClient.interceptors.response as any).handlers[0].fulfilled
+
+    it('arregla strings con mojibake en cualquier profundidad del payload', () => {
+        const response = {
+            data: {
+                data: [
+                    { descripcion: 'SaquÃ© pedido', nested: { detalle: 'maÃ±ana' } },
+                ],
+                ok: 1,
+            },
+        }
+
+        const result = fulfilled(response)
+
+        expect(result.data.data[0].descripcion).toBe('Saqué pedido')
+        expect(result.data.data[0].nested.detalle).toBe('mañana')
+    })
+
+    it('deja intactos valores no-string (números, booleanos, null)', () => {
+        const response = { data: { ok: 1, count: 5, activo: true, resultado: null } }
+
+        const result = fulfilled(response)
+
+        expect(result.data).toEqual({ ok: 1, count: 5, activo: true, resultado: null })
+    })
+})
+
 describe('apiClient response interceptor', () => {
     const rejected = (apiClient.interceptors.response as any).handlers[0].rejected
 

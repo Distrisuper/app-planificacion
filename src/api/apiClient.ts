@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { fixMojibake } from '@/lib/textFormat'
 
 const apiUrl: string = import.meta.env.VITE_API_URL || ''
 
@@ -15,8 +16,26 @@ apiClient.interceptors.request.use(config => {
     return config
 })
 
+/** Recorre cualquier payload de respuesta arreglando strings con mojibake.
+ *  Va acá y no en cada componente porque la corrupción es un problema de datos
+ *  (filas viejas de MySQL), no de una pantalla puntual: cualquier endpoint que
+ *  devuelva texto con acentos puede traerla. */
+function deepFixMojibake(value: unknown): unknown {
+    if (typeof value === 'string') return fixMojibake(value)
+    if (Array.isArray(value)) return value.map(deepFixMojibake)
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, val]) => [key, deepFixMojibake(val)]),
+        )
+    }
+    return value
+}
+
 apiClient.interceptors.response.use(
-    response => response,
+    response => {
+        response.data = deepFixMojibake(response.data)
+        return response
+    },
     error => {
         if (error.response?.status === 401) {
             localStorage.removeItem('access_token')
