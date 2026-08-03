@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { isoLocal, rangoHoy } from '@/lib/fechas'
 import type { IAnaliticaFiltro } from '@/types/analitica'
 
 export interface VendedorOpcion {
@@ -16,30 +17,35 @@ interface FiltrosAnaliticaProps {
     onLimpiar: () => void
 }
 
-const iso = (d: Date) => d.toISOString().slice(0, 10)
+function hoy() {
+    const { desde, hasta } = rangoHoy()
+    return [desde, hasta] as const
+}
 
 function estaSemana() {
-    const hoy = new Date()
-    const diaSemana = hoy.getDay() === 0 ? 7 : hoy.getDay()
-    const lunes = new Date(hoy)
-    lunes.setDate(hoy.getDate() - (diaSemana - 1))
+    const ahora = new Date()
+    const diaSemana = ahora.getDay() === 0 ? 7 : ahora.getDay()
+    const lunes = new Date(ahora)
+    lunes.setDate(ahora.getDate() - (diaSemana - 1))
     const viernes = new Date(lunes)
     viernes.setDate(lunes.getDate() + 4)
-    return [iso(lunes), iso(viernes)] as const
+    return [isoLocal(lunes), isoLocal(viernes)] as const
 }
 
 function esteMes() {
-    const hoy = new Date()
-    const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1)
-    const ultimo = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0)
-    return [iso(primero), iso(ultimo)] as const
+    const ahora = new Date()
+    return [
+        isoLocal(new Date(ahora.getFullYear(), ahora.getMonth(), 1)),
+        isoLocal(new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0)),
+    ] as const
 }
 
 function mesPasado() {
-    const hoy = new Date()
-    const primero = new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)
-    const ultimo = new Date(hoy.getFullYear(), hoy.getMonth(), 0)
-    return [iso(primero), iso(ultimo)] as const
+    const ahora = new Date()
+    return [
+        isoLocal(new Date(ahora.getFullYear(), ahora.getMonth() - 1, 1)),
+        isoLocal(new Date(ahora.getFullYear(), ahora.getMonth(), 0)),
+    ] as const
 }
 
 export default function FiltrosAnalitica({
@@ -77,6 +83,9 @@ export default function FiltrosAnalitica({
             </label>
 
             <div className="flex gap-1">
+                <Button variant="outline" size="sm" onClick={() => onRango(...hoy())}>
+                    Hoy
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => onRango(...estaSemana())}>
                     Esta semana
                 </Button>

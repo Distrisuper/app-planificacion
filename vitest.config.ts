@@ -9,5 +9,9 @@ export default defineConfig({
         environment: 'jsdom',
         globals: true,
         setupFiles: ['./src/test/setup.ts'],
+        // El bug que este helper arregla solo se manifiesta en timezones al oeste de
+        // Greenwich. Fijarla acá hace que el test falle en CI si alguien vuelve a
+        // introducir toISOString() para fechas locales.
+        env: { TZ: 'America/Argentina/Buenos_Aires' },
     },
 })

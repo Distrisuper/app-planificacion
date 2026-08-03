@@ -69,3 +69,20 @@ it('sin vendedores elegidos el botón dice "Todos"', () => {
     )
     expect(screen.getByRole('button', { name: /todos/i })).toBeInTheDocument()
 })
+
+it('el atajo Hoy pone el mismo día en desde y hasta', async () => {
+    const onRango = vi.fn()
+    render(
+        <FiltrosAnalitica
+            filtro={{ desde: '2026-07-20', hasta: '2026-07-24', vendedores: [] }}
+            vendedoresDisponibles={[]}
+            onRango={onRango}
+            onToggleVendedor={vi.fn()}
+            onLimpiar={vi.fn()}
+        />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Hoy' }))
+    const [desde, hasta] = onRango.mock.calls[0]
+    expect(desde).toBe(hasta)
+    expect(desde).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+})

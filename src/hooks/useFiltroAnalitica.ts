@@ -1,8 +1,7 @@
 import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { isoLocal } from '@/lib/fechas'
 import type { IAnaliticaFiltro } from '@/types/analitica'
-
-const iso = (d: Date) => d.toISOString().slice(0, 10)
 
 /** Lunes a viernes de la semana en curso: el default con el que gerencia abre la app. */
 function semanaEnCurso(): { desde: string; hasta: string } {
@@ -12,7 +11,7 @@ function semanaEnCurso(): { desde: string; hasta: string } {
     lunes.setDate(hoy.getDate() - (diaSemana - 1))
     const viernes = new Date(lunes)
     viernes.setDate(lunes.getDate() + 4)
-    return { desde: iso(lunes), hasta: iso(viernes) }
+    return { desde: isoLocal(lunes), hasta: isoLocal(viernes) }
 }
 
 export function useFiltroAnalitica() {
