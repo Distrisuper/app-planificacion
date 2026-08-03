@@ -40,11 +40,21 @@ export function useResumen(filtro: IAnaliticaFiltro) {
     })
 }
 
+interface OpcionesVisitas {
+    /** Milisegundos entre refrescos. 0 o ausente = sin auto-refresh. */
+    refrescarCada?: number
+}
+
 /** Sin `vendedor` devuelve al equipo completo: es la vista de actividad. */
-export function useVisitas(args: IVisitasArgs) {
+export function useVisitas(args: IVisitasArgs, opciones: OpcionesVisitas = {}) {
+    const refrescarCada = opciones.refrescarCada ?? 0
     return useQuery({
         queryKey: analiticaKeys.visitas(args),
         queryFn: () => getVisitas(args),
+        refetchInterval: refrescarCada > 0 ? refrescarCada : false,
+        // El staleTime global es de 5 min: sin bajarlo acá, el intervalo refrescaría
+        // contra caché y la pantalla se quedaría quieta igual.
+        staleTime: refrescarCada > 0 ? 0 : undefined,
     })
 }
 

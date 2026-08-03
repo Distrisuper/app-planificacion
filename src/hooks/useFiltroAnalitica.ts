@@ -14,9 +14,12 @@ function semanaEnCurso(): { desde: string; hasta: string } {
     return { desde: isoLocal(lunes), hasta: isoLocal(viernes) }
 }
 
-export function useFiltroAnalitica() {
+export function useFiltroAnalitica(porDefectoRecibido?: { desde: string; hasta: string }) {
     const [params, setParams] = useSearchParams()
-    const porDefecto = useMemo(semanaEnCurso, [])
+    // La analítica arranca en la semana; actividad arranca en hoy. El default es del
+    // llamador, no del hook, porque es una decisión de pantalla.
+    const calculado = useMemo(semanaEnCurso, [])
+    const porDefecto = porDefectoRecibido ?? calculado
 
     const filtro: IAnaliticaFiltro = useMemo(() => {
         const vendedores = (params.get('vendedores') ?? '')

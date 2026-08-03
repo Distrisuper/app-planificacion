@@ -43,6 +43,31 @@ it('useVisitaDetalle pide el detalle del id indicado', async () => {
     expect(api.getVisitaDetalle).toHaveBeenCalledWith(1000)
 })
 
+it('useVisitas refresca solo si se le pide un intervalo', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+
+    const { result } = renderHook(() => useVisitas(FILTRO, { refrescarCada: 1000 }), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.getVisitas).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(1100)
+    await waitFor(() => expect(api.getVisitas).toHaveBeenCalledTimes(2))
+    vi.useRealTimers()
+})
+
+it('useVisitas sin intervalo no vuelve a pedir solo', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+
+    const { result } = renderHook(() => useVisitas(FILTRO), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(api.getVisitas).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
+})
+
 it('useObjeciones pide el ranking con zona y rubro', async () => {
     ;(api.getObjeciones as any).mockResolvedValue({ total: 0, motivos: [] })
     const args = { ...FILTRO, zona: 'NORTE', rubro: 'R01' }

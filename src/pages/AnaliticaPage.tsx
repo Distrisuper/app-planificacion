@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import KpisEquipo from '@/components/analitica/KpisEquipo'
 import TablaVendedores from '@/components/analitica/TablaVendedores'
@@ -24,8 +24,14 @@ export default function AnaliticaPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="border-b border-slate-200 bg-white px-6 py-4">
+            <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4">
                 <h1 className="text-lg font-semibold text-slate-900">Analítica de visitas</h1>
+                <Link
+                    to={`/analitica/actividad?desde=${filtro.desde}&hasta=${filtro.hasta}`}
+                    className="text-sm text-blue-700 hover:underline"
+                >
+                    Ver actividad
+                </Link>
             </header>
 
             <FiltrosAnalitica

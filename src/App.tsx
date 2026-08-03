@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from '@/context/AuthContext'
 import ProtectedRoute from '@/router/ProtectedRoute'
 import { esRolAnalitica, esRolVendedor } from '@/lib/roles'
 import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
+import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
 import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
@@ -28,6 +29,10 @@ export default function App() {
                         </Route>
                         <Route element={<ProtectedRoute permitirRol={esRolAnalitica} />}>
                             <Route path="/analitica" element={<AnaliticaPage />} />
+                            <Route
+                                path="/analitica/actividad"
+                                element={<AnaliticaActividadPage />}
+                            />
                             <Route
                                 path="/analitica/vendedor/:codigo"
                                 element={<AnaliticaVendedorPage />}
