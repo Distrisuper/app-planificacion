@@ -2,10 +2,16 @@ function key(visitaId: number): string {
     return `visita-inicio-${visitaId}`
 }
 
-/** Se llama apenas la mutación de iniciar tiene éxito, para que el cronómetro sobreviva a
- *  cerrar/reabrir el sheet dentro de la misma sesión. */
+/** Se llama exactamente una vez, apenas la mutación de iniciar tiene éxito — nunca al
+ *  reabrir una visita que ya estaba en curso (eso no vuelve a llamar a esta función,
+ *  sigue leyendo el timestamp que ya había). Por eso SIEMPRE pisa el valor anterior:
+ *  antes tenía un guard "si ya existe, no lo toques" pensado para sobrevivir a
+ *  cerrar/reabrir el sheet, pero ningún call site vuelve a marcar la misma visita en
+ *  curso — el único efecto real del guard era que, si quedaba una clave vieja de una
+ *  visita anterior sin cerrar (p.ej. porque el backend de dev reusó un id tras un
+ *  reset), el cronómetro de la visita NUEVA arrancaba contando desde ese timestamp
+ *  viejo para siempre, mostrando horas o días que nunca pasaron. */
 export function marcarInicioVisita(visitaId: number): void {
-    if (localStorage.getItem(key(visitaId)) != null) return
     localStorage.setItem(key(visitaId), String(Date.now()))
 }
 
