@@ -27,6 +27,8 @@ export function usePropuesta(codigoCliente: string | null) {
         enabled: !!codigoCliente,
         select: data => ({
             rubros: (data.rubros ?? []).map(toRubroPropuesta),
+            daysElapsed: data.daysElapsed,
+            totalDays: data.totalDays,
         }),
     })
 }
