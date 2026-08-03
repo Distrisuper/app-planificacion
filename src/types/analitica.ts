@@ -88,6 +88,8 @@ export interface IVisitaFila {
     distanciaMetros: number | null
     codigoParticularCliente: string
     nombreCliente: string
+    codigoParticularVendedor: string
+    nombreVendedor: string
     tipo: TipoResolucion
     /** Descripciones de los motivos, ya resueltas contra el catálogo. */
     motivos: string[]
@@ -100,6 +102,16 @@ export interface IVisitasPage {
     pagina: number
     cant: number
     visitas: IVisitaFila[]
+}
+
+export interface IVisitasArgs extends IAnaliticaFiltro {
+    /** Ausente = todo el equipo del scope. Es lo que habilita la vista de actividad. */
+    vendedor?: string
+    cliente?: string
+    /** Ausente = las tres resoluciones. */
+    tipo?: TipoResolucion[]
+    pagina?: number
+    cant?: number
 }
 
 export interface IVisitaRubroMotivoDetalle {

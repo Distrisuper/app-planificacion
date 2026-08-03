@@ -1,3 +1,4 @@
+import { isoLocal } from '@/lib/fechas'
 import type {
     IAnaliticaResumen,
     ICoord,
@@ -345,7 +346,7 @@ let seqVisita = 1000
 /** Genera visitas deterministas para un vendedor. Los índices elegidos fuerzan los
  *  casos borde: la 3ra visita de cada vendedor va sin coord del cliente, y la 5ta
  *  cae fuera de la tolerancia de 300 m. */
-function visitasDe(codigo: string, cantidad: number): IVisitaFila[] {
+function visitasDe(codigo: string, nombreVendedor: string, cantidad: number): IVisitaFila[] {
     const filas: IVisitaFila[] = []
     for (let i = 0; i < cantidad; i++) {
         const dia = 20 + (i % 5)
@@ -364,6 +365,8 @@ function visitasDe(codigo: string, cantidad: number): IVisitaFila[] {
             distanciaMetros: distancia,
             codigoParticularCliente: `C${1000 + i}`,
             nombreCliente: CLIENTES[i % CLIENTES.length],
+            codigoParticularVendedor: codigo,
+            nombreVendedor,
             tipo: 'visita',
             motivos: [motivo.descripcion],
             resultado: codigo === 'V7' ? null : motivo.resultado,
@@ -373,8 +376,68 @@ function visitasDe(codigo: string, cantidad: number): IVisitaFila[] {
 }
 
 export const MOCK_VISITAS: Record<string, IVisitaFila[]> = Object.fromEntries(
-    VENDEDORES.map(v => [v.codigoParticularVendedor, visitasDe(v.codigoParticularVendedor, 12)]),
+    VENDEDORES.map(v => [
+        v.codigoParticularVendedor,
+        visitasDe(v.codigoParticularVendedor, v.nombreVendedor, 12),
+    ]),
 )
+
+const MOTIVOS_NO_VISITA = ['Cerrado', 'De vacaciones', 'No estaba el encargado']
+
+/** Una fila que no es una visita. `duracionMin`/`horaFin` van en null igual que una
+ *  visita en curso: la UI las distingue por `tipo`, nunca por los nulls. */
+function resolucionNoVisita(
+    v: IVendedorMetricas,
+    i: number,
+    fecha: string,
+    tipo: 'no_visita' | 'reagendada',
+): IVisitaFila {
+    return {
+        visitaId: seqVisita++,
+        fecha,
+        horaInicio: `${String(9 + (i % 8)).padStart(2, '0')}:${String((i * 17) % 60).padStart(2, '0')}`,
+        horaFin: null,
+        duracionMin: null,
+        distanciaMetros: null,
+        codigoParticularCliente: `C${2000 + i}`,
+        nombreCliente: CLIENTES[i % CLIENTES.length],
+        codigoParticularVendedor: v.codigoParticularVendedor,
+        nombreVendedor: v.nombreVendedor,
+        tipo,
+        motivos: tipo === 'no_visita' ? [MOTIVOS_NO_VISITA[i % MOTIVOS_NO_VISITA.length]] : [],
+        resultado: null,
+    }
+}
+
+/** Las no-visitas y reagendadas de la semana del fixture, para que la tabla de
+ *  actividad tenga las tres resoluciones también en un rango histórico. */
+export const MOCK_OTRAS_RESOLUCIONES: IVisitaFila[] = VENDEDORES.flatMap((v, i) => [
+    resolucionNoVisita(v, i, '2026-07-21', 'no_visita'),
+    ...(i % 3 === 0 ? [resolucionNoVisita(v, i + 50, '2026-07-23', 'reagendada')] : []),
+])
+
+/** Actividad anclada al día de HOY: sin esto la vista de actividad abre vacía en su
+ *  propio default, que es el peor primer contacto posible con la pantalla. */
+export const MOCK_VISITAS_HOY: IVisitaFila[] = (() => {
+    const hoy = isoLocal(new Date())
+    const filas = VENDEDORES.slice(0, 6).flatMap((v, i) => {
+        const cerradas = visitasDe(v.codigoParticularVendedor, v.nombreVendedor, 2).map(f => ({
+            ...f,
+            fecha: hoy,
+        }))
+        // Una visita abierta: el caso que hace útil mirar la pantalla a media mañana.
+        const enCurso: IVisitaFila = {
+            ...cerradas[0],
+            visitaId: seqVisita++,
+            horaFin: null,
+            duracionMin: null,
+            motivos: [],
+            resultado: null,
+        }
+        return i < 2 ? [...cerradas, enCurso] : cerradas
+    })
+    return [...filas, resolucionNoVisita(VENDEDORES[2], 7, hoy, 'no_visita')]
+})()
 
 /** Coord base (Rosario) para que el mapa del nivel 3 tenga algo verosímil. */
 const BASE: ICoord = { lat: -32.9442, lng: -60.6505 }
@@ -433,9 +496,9 @@ function detalleDe(fila: IVisitaFila, indice: number): IVisitaDetalle {
 }
 
 export const MOCK_DETALLES: Record<number, IVisitaDetalle> = Object.fromEntries(
-    Object.values(MOCK_VISITAS)
-        .flat()
-        .map((fila, i) => [fila.visitaId, detalleDe(fila, i % 20)]),
+    [...Object.values(MOCK_VISITAS).flat(), ...MOCK_OTRAS_RESOLUCIONES, ...MOCK_VISITAS_HOY].map(
+        (fila, i) => [fila.visitaId, detalleDe(fila, i % 20)],
+    ),
 )
 
 export const MOCK_OBJECIONES: IObjecionesResumen = {

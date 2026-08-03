@@ -1,5 +1,6 @@
 import { getResumen, getVisitas, getVisitaDetalle, getObjeciones, getVendedores } from './analitica'
 import { MOCK_RESUMEN, MOCK_VISITAS, MOCK_OBJECIONES } from '@/mocks/analiticaMock'
+import { isoLocal } from '@/lib/fechas'
 
 // El fixture está activo por defecto en tests (VITE_ANALITICA_MOCK=1 en .env).
 const FILTRO = { desde: '2026-07-20', hasta: '2026-07-24' }
@@ -25,7 +26,7 @@ it('getResumen devuelve la lista vacía si el rango no tiene datos', async () =>
 })
 
 it('getVisitas devuelve las visitas del vendedor pedido', async () => {
-    const res = await getVisitas({ ...FILTRO, vendedor: 'V1' })
+    const res = await getVisitas({ ...FILTRO, vendedor: 'V1', tipo: ['visita'] })
     expect(res.visitas).toHaveLength(MOCK_VISITAS['V1'].length)
     expect(res.total).toBe(MOCK_VISITAS['V1'].length)
 })
@@ -57,4 +58,47 @@ it('getVendedores devuelve el roster completo, no solo a los que tuvieron activi
     const roster = await getVendedores()
     expect(roster.length).toBeGreaterThan(MOCK_RESUMEN.vendedores.length)
     expect(roster.some(v => v.codigoParticularVendedor === 'V11')).toBe(true)
+})
+
+it('getVisitas sin vendedor devuelve las filas de todo el equipo', async () => {
+    const res = await getVisitas(FILTRO)
+    const codigos = new Set(res.visitas.map(v => v.codigoParticularVendedor))
+    expect(codigos.size).toBeGreaterThan(1)
+})
+
+it('getVisitas ordena de la más reciente a la más vieja', async () => {
+    const res = await getVisitas(FILTRO)
+    const claves = res.visitas.map(v => `${v.fecha} ${v.horaInicio}`)
+    expect(claves).toEqual([...claves].sort().reverse())
+})
+
+it('getVisitas trae las tres resoluciones y las filtra por tipo', async () => {
+    const todas = await getVisitas(FILTRO)
+    const tipos = new Set(todas.visitas.map(v => v.tipo))
+    expect(tipos).toEqual(new Set(['visita', 'no_visita', 'reagendada']))
+
+    const soloNoVisita = await getVisitas({ ...FILTRO, tipo: ['no_visita'] })
+    expect(soloNoVisita.visitas.every(v => v.tipo === 'no_visita')).toBe(true)
+    expect(soloNoVisita.visitas.length).toBeGreaterThan(0)
+})
+
+it('una no-visita trae motivos pero no resultado ni duración', async () => {
+    const res = await getVisitas({ ...FILTRO, tipo: ['no_visita'] })
+    const fila = res.visitas[0]
+    expect(fila.motivos.length).toBeGreaterThan(0)
+    expect(fila.resultado).toBeNull()
+    expect(fila.horaFin).toBeNull()
+    expect(fila.duracionMin).toBeNull()
+})
+
+it('una reagendada no trae motivos', async () => {
+    const res = await getVisitas({ ...FILTRO, tipo: ['reagendada'] })
+    expect(res.visitas[0].motivos).toEqual([])
+})
+
+it('el rango de hoy trae actividad, incluida una visita en curso', async () => {
+    const hoy = isoLocal(new Date())
+    const res = await getVisitas({ desde: hoy, hasta: hoy })
+    expect(res.visitas.length).toBeGreaterThan(0)
+    expect(res.visitas.some(v => v.tipo === 'visita' && v.horaFin === null)).toBe(true)
 })

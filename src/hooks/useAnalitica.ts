@@ -14,7 +14,19 @@ export const analiticaKeys = {
     resumen: (f: IAnaliticaFiltro) =>
         ['analitica', 'resumen', f.desde, f.hasta, (f.vendedores ?? []).join(',')] as const,
     visitas: (a: IVisitasArgs) =>
-        ['analitica', 'visitas', a.vendedor, a.desde, a.hasta, a.cliente ?? ''] as const,
+        [
+            'analitica',
+            'visitas',
+            a.vendedor ?? '',
+            // El multi-select de la vista de actividad viaja por acá: sin incluirlo,
+            // dos filtros distintos compartirían entrada de caché y la tabla mostraría
+            // las filas del filtro anterior.
+            (a.vendedores ?? []).join(','),
+            a.desde,
+            a.hasta,
+            a.cliente ?? '',
+            (a.tipo ?? []).join(','),
+        ] as const,
     detalle: (id: number) => ['analitica', 'visita', id] as const,
     objeciones: (a: IObjecionesArgs) =>
         ['analitica', 'objeciones', a.desde, a.hasta, a.zona ?? '', a.rubro ?? ''] as const,
@@ -28,12 +40,11 @@ export function useResumen(filtro: IAnaliticaFiltro) {
     })
 }
 
-/** Sin vendedor no hay nada que pedir: el nivel 2 se monta recién al elegir uno. */
+/** Sin `vendedor` devuelve al equipo completo: es la vista de actividad. */
 export function useVisitas(args: IVisitasArgs) {
     return useQuery({
         queryKey: analiticaKeys.visitas(args),
         queryFn: () => getVisitas(args),
-        enabled: Boolean(args.vendedor),
     })
 }
 

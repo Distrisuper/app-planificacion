@@ -22,11 +22,11 @@ it('useResumen pide el resumen con el filtro recibido', async () => {
     expect(api.getResumen).toHaveBeenCalledWith(FILTRO)
 })
 
-it('useVisitas no consulta si no hay vendedor elegido', async () => {
-    ;(api.getVisitas as any).mockResolvedValue({ visitas: [] })
-    const { result } = renderHook(() => useVisitas({ ...FILTRO, vendedor: '' }), { wrapper })
-    await waitFor(() => expect(result.current.fetchStatus).toBe('idle'))
-    expect(api.getVisitas).not.toHaveBeenCalled()
+it('useVisitas sin vendedor consulta igual: es la vista de actividad', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    const { result } = renderHook(() => useVisitas(FILTRO), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.getVisitas).toHaveBeenCalledWith(FILTRO)
 })
 
 it('useVisitaDetalle no consulta con id null', async () => {

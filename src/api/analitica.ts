@@ -2,10 +2,13 @@ import { apiClient } from './apiClient'
 import {
     MOCK_DETALLES,
     MOCK_OBJECIONES,
+    MOCK_OTRAS_RESOLUCIONES,
     MOCK_RESUMEN,
     MOCK_VENDEDORES,
     MOCK_VISITAS,
+    MOCK_VISITAS_HOY,
 } from '@/mocks/analiticaMock'
+import { incluyeHoy } from '@/lib/fechas'
 import type {
     IAnaliticaFiltro,
     IAnaliticaResumen,
@@ -13,8 +16,11 @@ import type {
     IVendedorMetricas,
     IVendedorOpcion,
     IVisitaDetalle,
+    IVisitasArgs,
     IVisitasPage,
 } from '@/types/analitica'
+
+export type { IVisitasArgs }
 
 const USA_MOCK = import.meta.env.VITE_ANALITICA_MOCK === '1'
 
@@ -24,10 +30,13 @@ const DELAY_MS = import.meta.env.DEV ? 250 : 0
 
 const esperar = () => new Promise(r => setTimeout(r, DELAY_MS))
 
-/** El fixture cubre una sola semana. Fuera de ese rango se devuelve vacío, así el
- *  estado "no hay ciclos entre X e Y" se puede probar moviendo el datepicker. */
+/** El fixture cubre una semana concreta MÁS el día de hoy. Fuera de eso devuelve
+ *  vacío, así el estado "no hay ciclos entre X e Y" se puede probar moviendo el
+ *  datepicker sin tocar código. */
 function dentroDelRango(filtro: IAnaliticaFiltro): boolean {
-    return filtro.desde <= MOCK_RESUMEN.hasta && filtro.hasta >= MOCK_RESUMEN.desde
+    const solapaFixture =
+        filtro.desde <= MOCK_RESUMEN.hasta && filtro.hasta >= MOCK_RESUMEN.desde
+    return solapaFixture || incluyeHoy(filtro.desde, filtro.hasta)
 }
 
 function promediarCampo(
@@ -77,21 +86,23 @@ export const getResumen = async (filtro: IAnaliticaFiltro): Promise<IAnaliticaRe
     return res.data.data
 }
 
-export interface IVisitasArgs extends IAnaliticaFiltro {
-    vendedor: string
-    cliente?: string
-    pagina?: number
-    cant?: number
-}
-
 export const getVisitas = async (args: IVisitasArgs): Promise<IVisitasPage> => {
     if (USA_MOCK) {
         await esperar()
-        const todas = dentroDelRango(args) ? (MOCK_VISITAS[args.vendedor] ?? []) : []
+        const universo = [
+            ...Object.values(MOCK_VISITAS).flat(),
+            ...MOCK_OTRAS_RESOLUCIONES,
+            ...MOCK_VISITAS_HOY,
+        ]
         const busqueda = args.cliente?.trim().toLowerCase()
-        const visitas = busqueda
-            ? todas.filter(v => v.nombreCliente.toLowerCase().includes(busqueda))
-            : todas
+        const visitas = universo
+            .filter(v => v.fecha >= args.desde && v.fecha <= args.hasta)
+            .filter(v => !args.vendedor || v.codigoParticularVendedor === args.vendedor)
+            .filter(v => !args.vendedores?.length || args.vendedores.includes(v.codigoParticularVendedor))
+            .filter(v => !args.tipo?.length || args.tipo.includes(v.tipo))
+            .filter(v => !busqueda || v.nombreCliente.toLowerCase().includes(busqueda))
+            // Feed de actividad: lo último arriba.
+            .sort((a, b) => `${b.fecha} ${b.horaInicio}`.localeCompare(`${a.fecha} ${a.horaInicio}`))
         return { total: visitas.length, pagina: args.pagina ?? 1, cant: visitas.length, visitas }
     }
     const res = await apiClient.get('/planificacion/analitica/visitas', { params: args })
