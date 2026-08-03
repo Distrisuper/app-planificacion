@@ -71,3 +71,18 @@ it('avisa al padre el vendedor elegido', async () => {
     await userEvent.click(screen.getByText('ACOSTA MARIANO'))
     expect(props.onElegirVendedor).toHaveBeenCalledWith('V1')
 })
+
+it('muestra la columna En curso con el valor del vendedor', () => {
+    const vendedores = [
+        { ...MOCK_RESUMEN.vendedores[0], codigoParticularVendedor: 'V4', enCurso: 2 },
+    ]
+    render(
+        <TablaVendedores
+            vendedores={vendedores}
+            promedios={MOCK_RESUMEN.promedios}
+            onElegirVendedor={vi.fn()}
+        />,
+    )
+    expect(screen.getByRole('button', { name: /en curso/i })).toBeInTheDocument()
+    expect(screen.getByTestId('celda-enCurso-V4')).toHaveTextContent('2')
+})

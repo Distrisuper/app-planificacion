@@ -28,6 +28,7 @@ const COLUMNAS: Columna[] = [
     { clave: 'planificados', titulo: 'Plan', render: v => formatNumero(v.planificados), comparar: false },
     { clave: 'visitados', titulo: 'Visitados', render: v => formatNumero(v.visitados), comparar: true },
     { clave: 'pendientes', titulo: 'Pend.', render: v => formatNumero(v.pendientes), comparar: false },
+    { clave: 'enCurso', titulo: 'En curso', render: v => formatNumero(v.enCurso), comparar: false },
     { clave: 'visitasPorDia', titulo: 'Visitas/día', render: v => formatNumero(v.visitasPorDia), comparar: true },
     { clave: 'clientesDistintos', titulo: 'Clientes', render: v => formatNumero(v.clientesDistintos), comparar: true },
     {
@@ -108,7 +109,11 @@ export default function TablaVendedores({
                     </span>
                 </td>
                 {COLUMNAS.map(col => (
-                    <td key={col.clave} className={`px-3 py-2 text-right ${filaClase(v, col)}`}>
+                    <td
+                        key={col.clave}
+                        data-testid={esPromedio ? undefined : `celda-${col.clave}-${v.codigoParticularVendedor}`}
+                        className={`px-3 py-2 text-right ${filaClase(v, col)}`}
+                    >
                         {col.render(v)}
                     </td>
                 ))}

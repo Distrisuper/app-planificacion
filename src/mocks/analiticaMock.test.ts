@@ -69,3 +69,14 @@ it('los porcentajes de objeciones suman aproximadamente 1', () => {
     expect(suma).toBeGreaterThan(0.98)
     expect(suma).toBeLessThan(1.02)
 })
+
+it('los seis buckets de cada vendedor suman planificados', () => {
+    for (const v of MOCK_RESUMEN.vendedores) {
+        const suma = v.visitados + v.enCurso + v.noVisita + v.reagendados + v.pendientes
+        expect(suma).toBe(v.planificados)
+    }
+})
+
+it('hay al menos un vendedor con una visita en curso', () => {
+    expect(MOCK_RESUMEN.vendedores.some(v => v.enCurso > 0)).toBe(true)
+})

@@ -26,6 +26,9 @@ export interface IVendedorMetricas {
     noVisita: number
     reagendados: number
     pendientes: number
+    /** Visitas abiertas ahora mismo. Es un bucket propio: sin él los estados no suman
+     *  planificados, y un cliente que el vendedor tiene adelante figuraría como pendiente. */
+    enCurso: number
     /** 0..1. null si planificados === 0 (no se muestra 0%). */
     cobertura: number | null
     /** Cuántos de esos ciclos siguen abiertos. > 0 = la cobertura es parcial. */
