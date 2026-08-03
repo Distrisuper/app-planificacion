@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import AnaliticaPage from './AnaliticaPage'
-import { MOCK_RESUMEN } from '@/mocks/analiticaMock'
+import { MOCK_RESUMEN, MOCK_VENDEDORES } from '@/mocks/analiticaMock'
 import * as api from '@/api/analitica'
 
 vi.mock('@/api/analitica')
@@ -23,6 +23,7 @@ function montar(ruta = '/analitica?desde=2026-07-20&hasta=2026-07-24') {
 beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getObjeciones as any).mockResolvedValue({ total: 0, motivos: [] })
+    ;(api.getVendedores as any).mockResolvedValue(MOCK_VENDEDORES)
 })
 
 it('muestra la tabla con los vendedores del resumen', async () => {
@@ -53,18 +54,16 @@ it('muestra el error si el resumen falla', async () => {
     await waitFor(() => expect(screen.getByText(/no se pudo cargar/i)).toBeInTheDocument())
 })
 
-it('el dropdown de vendedores sigue mostrando a todos aunque el filtro deje solo uno', async () => {
-    ;(api.getResumen as any).mockImplementation((filtro: { vendedores?: string[] }) => {
-        const vendedores = !filtro.vendedores?.length
-            ? MOCK_RESUMEN.vendedores
-            : MOCK_RESUMEN.vendedores.filter(v => filtro.vendedores!.includes(v.codigoParticularVendedor))
-        return Promise.resolve({ ...MOCK_RESUMEN, vendedores })
+it('el dropdown muestra el roster completo, incluido un vendedor sin actividad', async () => {
+    ;(api.getResumen as any).mockResolvedValue({
+        ...MOCK_RESUMEN,
+        vendedores: MOCK_RESUMEN.vendedores.filter(v => v.codigoParticularVendedor === 'V1'),
     })
     montar('/analitica?desde=2026-07-20&hasta=2026-07-24&vendedores=V1')
     await waitFor(() => expect(screen.getByText('ACOSTA MARIANO')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: /vendedores/i }))
-    for (const v of MOCK_RESUMEN.vendedores) {
+    for (const v of MOCK_VENDEDORES) {
         expect(screen.getByLabelText(v.nombreVendedor)).toBeInTheDocument()
     }
 })

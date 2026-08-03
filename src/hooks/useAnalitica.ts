@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
     getObjeciones,
     getResumen,
+    getVendedores,
     getVisitaDetalle,
     getVisitas,
     type IObjecionesArgs,
@@ -17,6 +18,7 @@ export const analiticaKeys = {
     detalle: (id: number) => ['analitica', 'visita', id] as const,
     objeciones: (a: IObjecionesArgs) =>
         ['analitica', 'objeciones', a.desde, a.hasta, a.zona ?? '', a.rubro ?? ''] as const,
+    vendedores: () => ['analitica', 'vendedores'] as const,
 }
 
 export function useResumen(filtro: IAnaliticaFiltro) {
@@ -47,5 +49,15 @@ export function useObjeciones(args: IObjecionesArgs) {
     return useQuery({
         queryKey: analiticaKeys.objeciones(args),
         queryFn: () => getObjeciones(args),
+    })
+}
+
+/** El roster cambia de mes a mes, no de minuto a minuto: no hace falta refrescarlo
+ *  con cada cambio de rango, por eso no depende del filtro. */
+export function useVendedores() {
+    return useQuery({
+        queryKey: analiticaKeys.vendedores(),
+        queryFn: getVendedores,
+        staleTime: 30 * 60 * 1000,
     })
 }

@@ -147,3 +147,10 @@ export interface IObjecionesResumen {
     total: number
     motivos: IObjecionFila[]
 }
+
+/** Una opción del filtro de vendedores. Es el roster completo del scope del usuario,
+ *  no la lista de los que registraron actividad en el rango. */
+export interface IVendedorOpcion {
+    codigoParticularVendedor: string
+    nombreVendedor: string
+}

@@ -3,6 +3,7 @@ import type {
     ICoord,
     IObjecionesResumen,
     IVendedorMetricas,
+    IVendedorOpcion,
     IVisitaDetalle,
     IVisitaFila,
 } from '@/types/analitica'
@@ -306,6 +307,17 @@ export const MOCK_RESUMEN: IAnaliticaResumen = {
     promedios: PROMEDIOS,
     vendedores: VENDEDORES,
 }
+
+/** El roster incluye a un vendedor SIN actividad (V11): tiene que aparecer en el
+ *  dropdown aunque no tenga una fila en la tabla, porque es exactamente el caso que
+ *  gerencia quiere poder mirar. */
+export const MOCK_VENDEDORES: IVendedorOpcion[] = [
+    ...VENDEDORES.map(v => ({
+        codigoParticularVendedor: v.codigoParticularVendedor,
+        nombreVendedor: v.nombreVendedor,
+    })),
+    { codigoParticularVendedor: 'V11', nombreVendedor: 'KRAUSE VERONICA' },
+]
 
 const CLIENTES = [
     'CALDERON ALEJANDRO PABLO',

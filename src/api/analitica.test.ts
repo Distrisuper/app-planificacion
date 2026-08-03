@@ -1,4 +1,4 @@
-import { getResumen, getVisitas, getVisitaDetalle, getObjeciones } from './analitica'
+import { getResumen, getVisitas, getVisitaDetalle, getObjeciones, getVendedores } from './analitica'
 import { MOCK_RESUMEN, MOCK_VISITAS, MOCK_OBJECIONES } from '@/mocks/analiticaMock'
 
 // El fixture está activo por defecto en tests (VITE_ANALITICA_MOCK=1 en .env).
@@ -51,4 +51,10 @@ it('getObjeciones devuelve el ranking ordenado de mayor a menor', async () => {
     const res = await getObjeciones(FILTRO)
     const esperado = [...MOCK_OBJECIONES.motivos].sort((a, b) => b.cantidad - a.cantidad)
     expect(res.motivos).toEqual(esperado)
+})
+
+it('getVendedores devuelve el roster completo, no solo a los que tuvieron actividad', async () => {
+    const roster = await getVendedores()
+    expect(roster.length).toBeGreaterThan(MOCK_RESUMEN.vendedores.length)
+    expect(roster.some(v => v.codigoParticularVendedor === 'V11')).toBe(true)
 })

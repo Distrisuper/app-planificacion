@@ -3,6 +3,7 @@ import {
     MOCK_DETALLES,
     MOCK_OBJECIONES,
     MOCK_RESUMEN,
+    MOCK_VENDEDORES,
     MOCK_VISITAS,
 } from '@/mocks/analiticaMock'
 import type {
@@ -10,6 +11,7 @@ import type {
     IAnaliticaResumen,
     IObjecionesResumen,
     IVendedorMetricas,
+    IVendedorOpcion,
     IVisitaDetalle,
     IVisitasPage,
 } from '@/types/analitica'
@@ -122,5 +124,14 @@ export const getObjeciones = async (args: IObjecionesArgs): Promise<IObjecionesR
         }
     }
     const res = await apiClient.get('/planificacion/analitica/objeciones', { params: args })
+    return res.data.data
+}
+
+export const getVendedores = async (): Promise<IVendedorOpcion[]> => {
+    if (USA_MOCK) {
+        await esperar()
+        return MOCK_VENDEDORES
+    }
+    const res = await apiClient.get('/planificacion/analitica/vendedores')
     return res.data.data
 }
