@@ -8,12 +8,14 @@ interface RubroTableProps {
     onResolucion?: (visitaRubroId: number) => void
     onAgregar?: (rubroCode: string) => void
     onEliminar?: (visitaRubroId: number) => void
-    /** rubroCode cuya mutación de "agregar" está en vuelo: esa fila queda
-     *  atenuada y deshabilitada. */
-    agregandoCode?: string | null
-    /** visitaRubroId cuya mutación de "eliminar" está en vuelo: ese botón
-     *  muestra spinner y queda deshabilitado. */
-    eliminandoId?: number | null
+    /** rubroCodes cuyas mutaciones de "agregar" están en vuelo: esas filas
+     *  quedan atenuadas y deshabilitadas. Es un set (no un solo valor) porque
+     *  el vendedor puede tocar varias filas agregables antes de que la
+     *  primera request vuelva. */
+    agregandoCodes?: Set<string>
+    /** visitaRubroIds cuyas mutaciones de "eliminar" están en vuelo: esos
+     *  botones muestran spinner y quedan deshabilitados. */
+    eliminandoIds?: Set<number>
 }
 
 /** Sin acentos ni mayúsculas: nadie tipea la tilde de "BATERÍAS" parado en un mostrador
@@ -86,18 +88,18 @@ function ContenidoFila({ fila }: { fila: IRubroFila }) {
 function FilaDatos({
     fila,
     onAgregar,
-    agregandoCode,
+    agregandoCodes,
     conBorde,
 }: {
     fila: IRubroFila
     onAgregar?: (rubroCode: string) => void
-    agregandoCode?: string | null
+    agregandoCodes?: Set<string>
     conBorde: boolean
 }) {
     const clasesFila = `flex w-full items-center gap-1 px-2.5 py-2.5 text-left ${conBorde ? 'border-b border-dsline' : ''}`
 
     if (fila.agregable) {
-        const agregando = agregandoCode === fila.rubroCode
+        const agregando = agregandoCodes?.has(fila.rubroCode) ?? false
         return (
             <button
                 type="button"
@@ -126,19 +128,19 @@ function FilaRubro({
     onResolucion,
     onAgregar,
     onEliminar,
-    agregandoCode,
-    eliminandoId,
+    agregandoCodes,
+    eliminandoIds,
 }: {
     fila: IRubroFila
     conBorde: boolean
     onResolucion?: (visitaRubroId: number) => void
     onAgregar?: (rubroCode: string) => void
     onEliminar?: (visitaRubroId: number) => void
-    agregandoCode?: string | null
-    eliminandoId?: number | null
+    agregandoCodes?: Set<string>
+    eliminandoIds?: Set<number>
 }) {
     if (!fila.resolucion) {
-        return <FilaDatos fila={fila} onAgregar={onAgregar} agregandoCode={agregandoCode} conBorde={conBorde} />
+        return <FilaDatos fila={fila} onAgregar={onAgregar} agregandoCodes={agregandoCodes} conBorde={conBorde} />
     }
 
     return (
@@ -169,10 +171,10 @@ function FilaRubro({
                             type="button"
                             aria-label={`Quitar ${fila.nombre}`}
                             onClick={() => onEliminar?.(fila.resolucion!.visitaRubroId)}
-                            disabled={eliminandoId === fila.resolucion.visitaRubroId}
+                            disabled={eliminandoIds?.has(fila.resolucion.visitaRubroId) ?? false}
                             className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[#EAD3D3] text-dsred disabled:opacity-50"
                         >
-                            {eliminandoId === fila.resolucion.visitaRubroId ? (
+                            {eliminandoIds?.has(fila.resolucion.visitaRubroId) ? (
                                 <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.4} />
                             ) : (
                                 <Trash2 className="h-4 w-4" strokeWidth={2} />
@@ -212,15 +214,18 @@ export default function RubroTable({
     onResolucion,
     onAgregar,
     onEliminar,
-    agregandoCode,
-    eliminandoId,
+    agregandoCodes,
+    eliminandoIds,
 }: RubroTableProps) {
     const [busqueda, setBusqueda] = useState('')
 
-    const primerIndexNoDestacado = filas.findIndex(f => !f.destacada)
-    const hayBloqueExtra = primerIndexNoDestacado > 0
-    const bloqueArriba = hayBloqueExtra ? filas.slice(0, primerIndexNoDestacado) : filas
-    const bloqueAbajo = hayBloqueExtra ? filas.slice(primerIndexNoDestacado) : []
+    // Se filtra por `destacada` en vez de asumir que `filas` viene ordenada
+    // destacadas-primero: `construirFilas*` hoy respeta ese orden, pero
+    // derivarlo así evita que un bloque de arriba vacío (o desordenado) se
+    // confunda con "no hay bloque extra".
+    const bloqueArriba = filas.filter(f => f.destacada)
+    const bloqueAbajo = filas.filter(f => !f.destacada)
+    const hayBloqueExtra = bloqueAbajo.length > 0
     const bloqueExtraEsAgregable = bloqueAbajo.some(f => f.agregable)
 
     const q = normalizar(busqueda.trim())
@@ -257,8 +262,8 @@ export default function RubroTable({
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}
                         onEliminar={onEliminar}
-                        agregandoCode={agregandoCode}
-                        eliminandoId={eliminandoId}
+                        agregandoCodes={agregandoCodes}
+                        eliminandoIds={eliminandoIds}
                     />
                 ))}
 
@@ -277,6 +282,7 @@ export default function RubroTable({
                                 value={busqueda}
                                 onChange={e => setBusqueda(e.target.value)}
                                 placeholder="Buscar rubro…"
+                                aria-label="Buscar rubro"
                                 className="h-8 w-full rounded-md border border-[#E4E8F0] bg-white pl-8 pr-2.5 text-[12.5px] font-semibold text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
                             />
                         </div>
@@ -291,8 +297,8 @@ export default function RubroTable({
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}
                         onEliminar={onEliminar}
-                        agregandoCode={agregandoCode}
-                        eliminandoId={eliminandoId}
+                        agregandoCodes={agregandoCodes}
+                        eliminandoIds={eliminandoIds}
                     />
                 ))}
 

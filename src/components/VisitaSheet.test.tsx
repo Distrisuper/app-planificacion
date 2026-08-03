@@ -245,6 +245,38 @@ it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de 
     )
 })
 
+it('agregar dos rubros distintos en simultáneo deshabilita cada fila por separado, sin que la segunda apague el spinner de la primera', async () => {
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'FOCO', nombre: 'Focos', actual: 200_000, mesAnterior: 150_000, promedio6m: 180_000 },
+    ])
+    const resolvers: Record<string, (v: { visitaRubroId: number }) => void> = {}
+    ;(api.agregarRubro as any).mockImplementation((_visitaId: number, dto: { rubroCode: string }) =>
+        new Promise(resolve => {
+            resolvers[dto.rubroCode] = resolve
+        }),
+    )
+    renderSheet({ codigoParticularCliente: '10034' })
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /agregar focos/i }))
+    await waitFor(() => expect(api.agregarRubro).toHaveBeenCalledTimes(2))
+
+    expect(screen.getByRole('button', { name: /agregar baterías/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /agregar focos/i })).toBeDisabled()
+
+    resolvers.FOCO({ visitaRubroId: 100 })
+    await waitFor(() => expect(screen.getByRole('button', { name: /agregar focos/i })).not.toBeDisabled())
+    // BAT sigue en vuelo: no se apagó por el settle de FOCO.
+    expect(screen.getByRole('button', { name: /agregar baterías/i })).toBeDisabled()
+
+    resolvers.BAT({ visitaRubroId: 101 })
+    await waitFor(() => expect(screen.getByRole('button', { name: /agregar baterías/i })).not.toBeDisabled())
+})
+
 it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaban', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },

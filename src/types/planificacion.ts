@@ -212,7 +212,7 @@ export interface IRubroDropsResponse {
     rubros: IDroppedRubro[]
 }
 
-/** Fila de la tabla "Ver versus" (cómo viene comprando el cliente, TODOS los
+/** Fila de la tabla "Ver más" (cómo viene comprando el cliente, TODOS los
  *  rubros — a diferencia de la propuesta, que solo trae los caídos/relleno). */
 export interface IRubroEstado {
     rubroCode: string

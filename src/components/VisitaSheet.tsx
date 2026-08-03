@@ -67,6 +67,14 @@ export default function VisitaSheet({
     // por estado": si además reordenara al resolver, la fila saltaría de posición justo
     // cuando el vendedor la está completando (ver nota en `construirFilasVisita`).
     const [agregadosIds, setAgregadosIds] = useState<number[]>([])
+    // Ambas mutaciones (agregar/eliminar) son una sola instancia compartida por todas
+    // las filas de la tabla: `agregar.isPending`/`agregar.variables` solo reflejan la
+    // ÚLTIMA llamada a `.mutate()`, no todas las que puedan estar en vuelo a la vez. Si
+    // el vendedor toca dos filas agregables antes de que la primera request vuelva, el
+    // spinner/disabled de la primera se apagaría solo aunque siga en curso. Por eso el
+    // estado de "en vuelo" se lleva acá, por rubroCode/id, independiente de la mutación.
+    const [agregandoCodes, setAgregandoCodes] = useState<Set<string>>(new Set())
+    const [eliminandoIds, setEliminandoIds] = useState<Set<number>>(new Set())
 
     // Se pide al abrir el sheet, no al entrar a una sub-vista: la tabla es la fuente de
     // los números en las dos pantallas y en los dos estados (colapsada/expandida).
@@ -80,6 +88,8 @@ export default function VisitaSheet({
             setErrorGuardado(null)
             setExpandido(false)
             setAgregadosIds([])
+            setAgregandoCodes(new Set())
+            setEliminandoIds(new Set())
         }
     }, [open])
 
@@ -123,17 +133,44 @@ export default function VisitaSheet({
         if (rubro) abrirWizard(rubro)
     }
 
-    function agregarDesdeTabla(rubroCode: string) {
+    // mutateAsync (no mutate) a propósito: los callbacks que se pasan como segundo
+    // argumento de `.mutate()` viven en un solo campo del observer, compartido por
+    // toda la vida del hook — una segunda llamada concurrente pisa los callbacks de
+    // la primera antes de que termine, y su "en vuelo" queda deshabilitado para
+    // siempre. mutateAsync devuelve una promesa propia de CADA llamada, así que el
+    // try/finally de acá sí queda atado a la request correcta.
+    async function agregarDesdeTabla(rubroCode: string) {
         const item = rubroStatus.find(s => s.rubroCode === rubroCode)
         if (!item) return
-        agregar.mutate(
-            { rubroCode: item.rubroCode, rubroDescripcion: item.nombre },
-            { onSuccess: result => setAgregadosIds(prev => [result.visitaRubroId, ...prev]) },
-        )
+        setAgregandoCodes(prev => new Set(prev).add(rubroCode))
+        try {
+            const result = await agregar.mutateAsync({ rubroCode: item.rubroCode, rubroDescripcion: item.nombre })
+            setAgregadosIds(prev => [result.visitaRubroId, ...prev])
+        } catch {
+            // Silencioso a propósito: la fila vuelve a su estado agregable y el
+            // vendedor puede volver a tocarla (mismo comportamiento que antes).
+        } finally {
+            setAgregandoCodes(prev => {
+                const next = new Set(prev)
+                next.delete(rubroCode)
+                return next
+            })
+        }
     }
 
-    function eliminarDesdeTabla(visitaRubroId: number) {
-        eliminar.mutate(visitaRubroId)
+    async function eliminarDesdeTabla(visitaRubroId: number) {
+        setEliminandoIds(prev => new Set(prev).add(visitaRubroId))
+        try {
+            await eliminar.mutateAsync(visitaRubroId)
+        } catch {
+            // Silencioso a propósito: mismo criterio que agregarDesdeTabla.
+        } finally {
+            setEliminandoIds(prev => {
+                const next = new Set(prev)
+                next.delete(visitaRubroId)
+                return next
+            })
+        }
     }
 
     // Los recién agregados van arriba de todo (en el orden en que se agregaron, el
@@ -300,8 +337,8 @@ export default function VisitaSheet({
                             onResolucion={abrirResolucion}
                             onAgregar={agregarDesdeTabla}
                             onEliminar={eliminarDesdeTabla}
-                            agregandoCode={agregar.isPending ? (agregar.variables?.rubroCode ?? null) : null}
-                            eliminandoId={eliminar.isPending ? (eliminar.variables ?? null) : null}
+                            agregandoCodes={agregandoCodes}
+                            eliminandoIds={eliminandoIds}
                         />
                     )}
                 </div>

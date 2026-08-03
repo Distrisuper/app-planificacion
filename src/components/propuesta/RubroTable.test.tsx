@@ -215,13 +215,13 @@ it('el botón Quitar rubro dispara onEliminar con el visitaRubroId', () => {
     expect(onEliminar).toHaveBeenCalledWith(7)
 })
 
-it('Quitar rubro en vuelo (eliminandoId) queda deshabilitado', () => {
+it('Quitar rubro en vuelo (eliminandoIds) queda deshabilitado', () => {
     render(
         <RubroTable
             filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
             onResolucion={vi.fn()}
             onEliminar={vi.fn()}
-            eliminandoId={7}
+            eliminandoIds={new Set([7])}
         />,
     )
     expect(screen.getByRole('button', { name: /quitar amortiguadores/i })).toBeDisabled()
@@ -241,15 +241,30 @@ it('toda la fila agregable es el botón: tocarla dispara onAgregar con el rubroC
     expect(onAgregar).toHaveBeenCalledWith('BAT')
 })
 
-it('una fila agregable en vuelo (agregandoCode) queda deshabilitada', () => {
+it('una fila agregable en vuelo (agregandoCodes) queda deshabilitada', () => {
     render(
         <RubroTable
             filas={[fila({ rubroCode: 'BAT', nombre: 'Baterías', destacada: false, agregable: true })]}
             onAgregar={vi.fn()}
-            agregandoCode="BAT"
+            agregandoCodes={new Set(['BAT'])}
         />,
     )
     expect(screen.getByRole('button', { name: /agregar baterías/i })).toBeDisabled()
+})
+
+it('con varias filas agregables en vuelo a la vez, solo las que están en agregandoCodes quedan deshabilitadas', () => {
+    render(
+        <RubroTable
+            filas={[
+                fila({ rubroCode: 'BAT', nombre: 'Baterías', destacada: false, agregable: true }),
+                fila({ rubroCode: 'FILT', nombre: 'Filtros', destacada: false, agregable: true }),
+            ]}
+            onAgregar={vi.fn()}
+            agregandoCodes={new Set(['BAT', 'FILT'])}
+        />,
+    )
+    expect(screen.getByRole('button', { name: /agregar baterías/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /agregar filtros/i })).toBeDisabled()
 })
 
 it('en solo lectura (sin resolucion ni agregable) no se renderiza ninguna acción', () => {
