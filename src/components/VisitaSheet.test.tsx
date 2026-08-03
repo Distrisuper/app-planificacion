@@ -52,9 +52,6 @@ beforeEach(() => {
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
     ])
-    ;(api.getRubroCatalog as any).mockResolvedValue([
-        { code: 'BAT', description: 'Baterías' },
-    ])
     ;(api.agregarRubro as any).mockResolvedValue({ visitaRubroId: 99 })
     ;(api.eliminarRubro as any).mockResolvedValue(undefined)
     ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
@@ -234,6 +231,74 @@ it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de 
     )
 })
 
+it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaban', async () => {
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+    ])
+    ;(api.getRubros as any).mockResolvedValueOnce(rubros).mockResolvedValue([
+        ...rubros,
+        {
+            id: 99, resolucionId: 42, rubroCode: 'BAT', rubroDescripcion: 'Baterías',
+            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [],
+        },
+    ])
+    renderSheet({ codigoParticularCliente: '10034' })
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
+    await screen.findByRole('button', { name: 'Resolución de Baterías' })
+
+    const botones = screen.getAllByRole('button', { name: /^resolución de /i })
+    expect(botones.map(b => b.getAttribute('aria-label'))).toEqual([
+        'Resolución de Baterías',
+        'Resolución de Amortiguadores',
+        'Resolución de Filtros',
+    ])
+})
+
+it('un rubro agregado se mantiene arriba aunque se resuelva (no se reordena por estado)', async () => {
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+    ])
+    ;(api.getRubros as any).mockResolvedValueOnce(rubros).mockResolvedValue([
+        ...rubros,
+        {
+            id: 99, resolucionId: 42, rubroCode: 'BAT', rubroDescripcion: 'Baterías',
+            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [],
+        },
+    ])
+    renderSheet({ codigoParticularCliente: '10034' })
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
+    await screen.findByRole('button', { name: 'Resolución de Baterías' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Baterías' }))
+    fireEvent.click(await screen.findByText('Saqué pedido'))
+    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+
+    const botones = await screen.findAllByRole('button', { name: /^resolución de /i })
+    expect(botones[0]).toHaveAttribute('aria-label', 'Resolución de Baterías')
+    expect(botones[0]).toHaveTextContent('✓ 1 motivo cargado')
+})
+
+it('el botón Quitar rubro en la tabla llama al backend para un rubro que no es de la propuesta', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+    fireEvent.click(screen.getByRole('button', { name: /quitar filtros/i }))
+    await waitFor(() => expect(api.eliminarRubro).toHaveBeenCalledWith(42, 8))
+})
+
+it('un rubro de la propuesta no ofrece Quitar rubro en la tabla', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+    expect(screen.queryByRole('button', { name: /quitar amortiguadores/i })).not.toBeInTheDocument()
+})
+
 it('si getRubroStatus falla, la tabla igual lista los rubros de la visita y el botón de Resolución funciona', async () => {
     ;(api.getRubroStatus as any).mockRejectedValue(new Error('offline'))
     renderSheet({ codigoParticularCliente: '10034' })
@@ -244,28 +309,14 @@ it('si getRubroStatus falla, la tabla igual lista los rubros de la visita y el b
     expect(await screen.findByText('1 de 2')).toBeInTheDocument()
 })
 
-it('desde la lista se puede agregar un rubro fuera de la propuesta', async () => {
-    renderSheet()
-    fireEvent.click(await screen.findByRole('button', { name: /agregar rubro/i }))
-    fireEvent.click(await screen.findByText('Baterías'))
-    await waitFor(() =>
-        expect(api.agregarRubro).toHaveBeenCalledWith(42, {
-            rubroCode: 'BAT',
-            rubroDescripcion: 'Baterías',
-        }),
-    )
-    expect(await screen.findByText('Amortiguadores')).toBeInTheDocument()
-})
-
-it('el buscador no ofrece rubros que ya están en la visita', async () => {
-    renderSheet()
-    fireEvent.click(await screen.findByRole('button', { name: /agregar rubro/i }))
-    expect(await screen.findByText('Baterías')).toBeInTheDocument()
-    expect(screen.queryByText('Amortiguadores')).not.toBeInTheDocument()
-})
-
-it('no ofrece agregar rubros cuando la visita ya está cerrada', async () => {
-    renderSheet({ visitaCerrada: true })
+it('con la visita cerrada, "otros rubros del cliente" no son tocables para agregar', async () => {
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+    ])
+    renderSheet({ visitaCerrada: true, codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
-    expect(screen.queryByRole('button', { name: /agregar rubro/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
+    expect(await screen.findByText('Baterías')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /agregar baterías/i })).not.toBeInTheDocument()
 })

@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Maximize2, Minimize2, Plus } from 'lucide-react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
-import AgregarRubroVista from './propuesta/AgregarRubroVista'
 import ResolucionWizard from './propuesta/ResolucionWizard'
 import ResolucionWizardAcciones from './propuesta/ResolucionWizardAcciones'
 import SeleccionBar from './propuesta/SeleccionBar'
@@ -11,7 +10,7 @@ import ResolverLoteAcciones from './propuesta/ResolverLoteAcciones'
 import RubroTable from './propuesta/RubroTable'
 import { construirFilasVisita } from './propuesta/filas'
 import { useMotivos } from '@/hooks/useMotivos'
-import { useRubros, useResolverRubros, useAgregarRubro } from '@/hooks/useRubros'
+import { useRubros, useResolverRubros, useAgregarRubro, useEliminarRubro } from '@/hooks/useRubros'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
@@ -20,7 +19,7 @@ import { motivosIguales, tieneDetalleIncompleto } from '@/lib/resolucionRubro'
 import { leerBorrador, guardarBorrador, limpiarBorrador } from '@/lib/resolucionDraft'
 import type { IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
 
-type Vista = 'list' | 'agregar' | 'resolverLote'
+type Vista = 'list' | 'resolverLote'
 
 interface VisitaSheetProps {
     open: boolean
@@ -57,6 +56,7 @@ export default function VisitaSheet({
     const { data: motivos = [] } = useMotivos('rubro')
     const resolverTodos = useResolverRubros(visitaId)
     const agregar = useAgregarRubro(visitaId)
+    const eliminar = useEliminarRubro(visitaId)
 
     const [wizard, setWizard] = useState<{ rubros: IVisitaRubro[]; index: number } | null>(null)
     // Fuente de verdad de la resolución mientras la visita está abierta: se inicializa
@@ -68,6 +68,12 @@ export default function VisitaSheet({
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
     const [vista, setVista] = useState<Vista>('list')
     const [expandido, setExpandido] = useState(false)
+    // Los ids que se agregaron dinámicamente esta sesión, más reciente primero — se
+    // usan para insertarlos arriba de todo en la lista al agregarlos (ver
+    // `conNuevosArriba`). Es una decisión deliberada que NO se generaliza a "reordenar
+    // por estado": si además reordenara al resolver, la fila saltaría de posición justo
+    // cuando el vendedor la está completando (ver nota en `construirFilasVisita`).
+    const [agregadosIds, setAgregadosIds] = useState<number[]>([])
     // La selección múltiple se desconectó de la UI (ver ResolucionWizard, que ahora es
     // la única forma de abrir la resolución de un rubro): estos dos quedan sin ninguna
     // forma de poblarse, pero se mantienen para no romper SeleccionBar/ResolverLoteVista/
@@ -89,6 +95,7 @@ export default function VisitaSheet({
             setExpandido(false)
             setSeleccionados(new Set())
             setLoteMotivos([])
+            setAgregadosIds([])
         }
     }, [open])
 
@@ -135,7 +142,28 @@ export default function VisitaSheet({
     function agregarDesdeTabla(rubroCode: string) {
         const item = rubroStatus.find(s => s.rubroCode === rubroCode)
         if (!item) return
-        agregar.mutate({ rubroCode: item.rubroCode, rubroDescripcion: item.nombre })
+        agregar.mutate(
+            { rubroCode: item.rubroCode, rubroDescripcion: item.nombre },
+            { onSuccess: result => setAgregadosIds(prev => [result.visitaRubroId, ...prev]) },
+        )
+    }
+
+    function eliminarDesdeTabla(visitaRubroId: number) {
+        eliminar.mutate(visitaRubroId)
+    }
+
+    // Los recién agregados van arriba de todo (en el orden en que se agregaron, el
+    // último primero) para que el vendedor los encuentre sin buscarlos entre los que
+    // ya estaban. Una vez ahí NO se vuelven a mover — ni siquiera al resolverlos —
+    // porque el orden solo se recalcula acá, a partir de `agregadosIds`, no a partir
+    // del estado de resolución de cada rubro.
+    function conNuevosArriba(rubrosVisita: IVisitaRubro[]): IVisitaRubro[] {
+        if (agregadosIds.length === 0) return rubrosVisita
+        const porId = new Map(rubrosVisita.map(r => [r.id, r]))
+        const nuevos = agregadosIds.map(id => porId.get(id)).filter((r): r is IVisitaRubro => r != null)
+        const nuevosIds = new Set(agregadosIds)
+        const resto = rubrosVisita.filter(r => !nuevosIds.has(r.id))
+        return [...nuevos, ...resto]
     }
 
     // El wizard ya escribió todo en `borradores` en cada tilde (ver onCambiarBorrador
@@ -179,7 +207,13 @@ export default function VisitaSheet({
     }
     const codesVisita = new Set(rubros.map(r => r.rubroCode))
     const hayOtrosRubros = rubroStatus.some(s => !codesVisita.has(s.rubroCode))
-    const filas = construirFilasVisita(rubros, rubroStatus, estadosResolucion, expandido, !visitaCerrada)
+    const filas = construirFilasVisita(
+        conNuevosArriba(rubros),
+        rubroStatus,
+        estadosResolucion,
+        expandido,
+        !visitaCerrada,
+    )
 
     const necesitaMarcasLote = loteMotivos.some(
         m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
@@ -229,7 +263,7 @@ export default function VisitaSheet({
             onIndexChange={index => setWizard(w => (w ? { ...w, index } : w))}
             onFinalizar={finalizar}
         />
-    ) : vista === 'agregar' ? null : vista === 'resolverLote' ? (
+    ) : vista === 'resolverLote' ? (
         <ResolverLoteAcciones
             motivos={motivos}
             value={loteMotivos}
@@ -258,6 +292,24 @@ export default function VisitaSheet({
                 <p className="mb-2 text-center text-[12.5px] font-semibold text-dsred">
                     {errorGuardado}
                 </p>
+            )}
+            {/* Fijo junto al botón principal, no adentro del scroll: al expandir la
+             *  tabla con "Ver más" la lista puede crecer bastante, y si este botón
+             *  quedara al final del contenido scrolleable, minimizarla exigiría
+             *  scrollear hasta abajo de todo para volver a encontrarlo. */}
+            {hayOtrosRubros && (
+                <Button
+                    variant="outline"
+                    onClick={() => setExpandido(e => !e)}
+                    className="mb-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
+                >
+                    {expandido ? (
+                        <Minimize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                    ) : (
+                        <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                    )}
+                    {expandido ? 'Ver menos' : 'Ver más'}
+                </Button>
             )}
             {!visitaCerrada && (
                 <Button
@@ -305,13 +357,6 @@ export default function VisitaSheet({
                         setLoteMotivos([])
                     }}
                 />
-            ) : vista === 'agregar' ? (
-                <AgregarRubroVista
-                    visitaId={visitaId}
-                    codesEnVisita={rubros.map(r => r.rubroCode)}
-                    onVolver={() => setVista('list')}
-                    onAgregado={() => setVista('list')}
-                />
             ) : (
                 <div>
                     <p className="mb-3 text-[13px] leading-snug text-dsmuted">
@@ -326,34 +371,10 @@ export default function VisitaSheet({
                             filas={filas}
                             onResolucion={abrirResolucion}
                             onAgregar={agregarDesdeTabla}
+                            onEliminar={eliminarDesdeTabla}
                             agregandoCode={agregar.isPending ? (agregar.variables?.rubroCode ?? null) : null}
+                            eliminandoId={eliminar.isPending ? (eliminar.variables ?? null) : null}
                         />
-                    )}
-
-                    {hayOtrosRubros && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setExpandido(e => !e)}
-                            className="mt-3.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
-                        >
-                            {expandido ? (
-                                <Minimize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                            ) : (
-                                <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                            )}
-                            {expandido ? 'Ver menos' : 'Ver más'}
-                        </Button>
-                    )}
-
-                    {!visitaCerrada && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setVista('agregar')}
-                            className="mt-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
-                        >
-                            <Plus className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                            Agregar rubro
-                        </Button>
                     )}
                 </div>
             )}
