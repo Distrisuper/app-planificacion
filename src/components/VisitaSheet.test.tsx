@@ -50,12 +50,13 @@ beforeEach(() => {
     ;(api.getMotivos as any).mockResolvedValue(motivos)
     ;(api.resolverRubro as any).mockResolvedValue({ rubrosPendientes: 0 })
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600, mesAnterior: 800, promedio6m: 1000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
     ])
     ;(api.getRubroCatalog as any).mockResolvedValue([
         { code: 'BAT', description: 'Baterías' },
     ])
     ;(api.agregarRubro as any).mockResolvedValue({ visitaRubroId: 99 })
+    ;(api.eliminarRubro as any).mockResolvedValue(undefined)
     ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
 })
 
@@ -87,7 +88,7 @@ it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borr
 
     expect(await screen.findByText('Cargá el resultado de cada rubro que ofreciste.', { exact: false })).toBeInTheDocument()
     expect(api.resolverRubro).not.toHaveBeenCalled()
-    expect(screen.getByText('1 motivo cargado')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resolución de Amortiguadores' })).toHaveTextContent('✓ 1 motivo cargado')
 })
 
 it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async () => {
@@ -112,10 +113,17 @@ it('el cambio tildado en el wizard se persiste en localStorage al instante', asy
     })
 })
 
-it('un rubro de la propuesta no se puede borrar', async () => {
+it('un rubro de la propuesta no se puede borrar (el wizard no ofrece Quitar rubro)', async () => {
     renderSheet()
-    await screen.findByText('Amortiguadores')
-    expect(screen.getAllByRole('button', { name: /quitar/i })).toHaveLength(1)
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+    expect(screen.queryByRole('button', { name: /quitar amortiguadores/i })).not.toBeInTheDocument()
+})
+
+it('un rubro que no es de la propuesta ofrece Quitar rubro dentro del wizard', async () => {
+    renderSheet()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Filtros' }))
+    fireEvent.click(await screen.findByRole('button', { name: /quitar filtros/i }))
+    await waitFor(() => expect(api.eliminarRubro).toHaveBeenCalledWith(42, 8))
 })
 
 it('con la visita cerrada no ofrece cerrarla de nuevo', async () => {
@@ -124,17 +132,13 @@ it('con la visita cerrada no ofrece cerrarla de nuevo', async () => {
     expect(screen.queryByRole('button', { name: /cerrar visita/i })).not.toBeInTheDocument()
 })
 
-it('con la visita cerrada, ningún rubro se puede reabrir ni seleccionar (es solo resumen)', async () => {
+it('con la visita cerrada, ningún rubro se puede reabrir', async () => {
     renderSheet({ visitaCerrada: true })
     await screen.findByText('Filtros')
     expect(screen.queryByRole('button', { name: /resolución de/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /seleccionar/i })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByText('Amortiguadores'))
-    expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
-    expect(screen.getByText('Filtros')).toBeInTheDocument()
 })
 
-it('con la visita cerrada, un rubro ya resuelto no ofrece borrarlo', async () => {
+it('con la visita cerrada, un rubro ya resuelto no ofrece borrarlo (no hay wizard al que entrar)', async () => {
     renderSheet({ visitaCerrada: true })
     await screen.findByText('Filtros')
     expect(screen.queryByRole('button', { name: /quitar/i })).not.toBeInTheDocument()
@@ -183,53 +187,6 @@ it('si el batch de cierre falla, no limpia el borrador ni dispara el cierre', as
     expect(localStorage.getItem('visita-borrador-42')).not.toBeNull()
 })
 
-it('tocar la card de un rubro (fuera del botón Resolución) lo selecciona, no abre el wizard', async () => {
-    renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
-    expect(screen.queryByText('1 de 2')).not.toBeInTheDocument()
-    expect(await screen.findByText('1 seleccionado')).toBeInTheDocument()
-})
-
-it('seleccionar varios rubros muestra la barra con la cantidad correcta', async () => {
-    renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
-    fireEvent.click(screen.getByText('Filtros'))
-    expect(await screen.findByText('2 seleccionados')).toBeInTheDocument()
-})
-
-it('Cancelar en la barra de selección limpia la selección y vuelve a mostrar Cerrar visita', async () => {
-    renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
-    fireEvent.click(await screen.findByRole('button', { name: /^cancelar$/i }))
-    expect(screen.queryByText('1 seleccionado')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /cerrar visita/i })).toBeInTheDocument()
-})
-
-it('Resolver seleccionados fusiona el motivo en el borrador de cada rubro elegido', async () => {
-    renderSheet()
-    fireEvent.click(await screen.findByText('Amortiguadores'))
-    fireEvent.click(screen.getByText('Filtros'))
-    fireEvent.click(await screen.findByRole('button', { name: /resolver seleccionados/i }))
-
-    expect(await screen.findByText('Resolver 2 rubros')).toBeInTheDocument()
-    fireEvent.click(screen.getByText('No lo ofrecí'))
-    fireEvent.click(screen.getByRole('button', { name: /aplicar a 2 rubros/i }))
-
-    await screen.findByText('Cargá el resultado de cada rubro que ofreciste.', { exact: false })
-    expect(api.resolverRubro).not.toHaveBeenCalled()
-
-    const borrador = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
-    // Amortiguadores no tenía nada: queda solo con "No lo ofrecí".
-    expect(borrador[7]).toEqual([{ motivoId: 16, marca: null, competidor: null, pctDiferencia: null }])
-    // Filtros ya tenía "Saqué pedido": el lote lo suma, no lo reemplaza.
-    expect(borrador[8]).toEqual(
-        expect.arrayContaining([
-            { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
-            { motivoId: 16, marca: null, competidor: null, pctDiferencia: null },
-        ]),
-    )
-})
-
 it('en curso muestra el eyebrow naranja con cronómetro y el botón de minimizar', async () => {
     const onMinimize = vi.fn()
     renderSheet({ enCurso: true, onMinimize })
@@ -245,24 +202,46 @@ it('sin enCurso no ofrece minimizar', async () => {
     expect(screen.queryByLabelText('Minimizar')).not.toBeInTheDocument()
 })
 
-it('sin codigoParticularCliente no ofrece ver versus', async () => {
+it('sin codigoParticularCliente no ofrece Ver más', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
-    expect(screen.queryByRole('button', { name: /ver versus/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ver más/i })).not.toBeInTheDocument()
 })
 
-it('con codigoParticularCliente, ver versus pide el estado de rubros y muestra la tabla', async () => {
+it('con codigoParticularCliente, los números de rubroStatus aparecen en la tabla sin navegar', async () => {
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
-    expect(api.getRubroStatus).not.toHaveBeenCalled()
-
-    fireEvent.click(screen.getByRole('button', { name: /ver versus/i }))
-    expect(await screen.findByText('Cómo viene comprando')).toBeInTheDocument()
     await waitFor(() => expect(api.getRubroStatus).toHaveBeenCalledWith('10034'))
-    expect(await screen.findByText('1.000')).toBeInTheDocument()
+    const allBy1940 = screen.getAllByText('1.940')
+    expect(allBy1940.length).toBeGreaterThan(0)
+    expect(screen.getAllByText('2.600').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('3.100').length).toBeGreaterThan(0)
+})
 
-    fireEvent.click(screen.getByLabelText('Volver'))
-    expect(await screen.findByText('Cargá el resultado de cada rubro que ofreciste.', { exact: false })).toBeInTheDocument()
+it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de arriba con su botón de Resolución', async () => {
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+    ])
+    renderSheet({ codigoParticularCliente: '10034' })
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
+
+    await waitFor(() =>
+        expect(api.agregarRubro).toHaveBeenCalledWith(42, { rubroCode: 'BAT', rubroDescripcion: 'Baterías' }),
+    )
+})
+
+it('si getRubroStatus falla, la tabla igual lista los rubros de la visita y el botón de Resolución funciona', async () => {
+    ;(api.getRubroStatus as any).mockRejectedValue(new Error('offline'))
+    renderSheet({ codigoParticularCliente: '10034' })
+    expect(await screen.findByText('Amortiguadores')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ver más/i })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    expect(await screen.findByText('1 de 2')).toBeInTheDocument()
 })
 
 it('desde la lista se puede agregar un rubro fuera de la propuesta', async () => {
