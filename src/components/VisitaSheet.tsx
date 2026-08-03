@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Maximize2, Minimize2, Plus } from 'lucide-react'
+import { Maximize2, Minimize2, Plus } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import AgregarRubroVista from './propuesta/AgregarRubroVista'
