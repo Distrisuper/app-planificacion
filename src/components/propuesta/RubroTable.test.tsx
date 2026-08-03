@@ -83,6 +83,55 @@ it('si el bloque de otros rubros es de solo lectura, la etiqueta no invita a toc
     expect(screen.queryByText(/tocá uno para agregarlo/i)).not.toBeInTheDocument()
 })
 
+it('sin otros rubros, no se muestra el buscador', () => {
+    render(<RubroTable filas={[fila({ destacada: true })]} />)
+    expect(screen.queryByPlaceholderText(/buscar rubro/i)).not.toBeInTheDocument()
+})
+
+it('con otros rubros, el buscador filtra esa sección sin tocar el bloque de arriba', () => {
+    render(
+        <RubroTable
+            filas={[
+                fila({ rubroCode: 'R1', nombre: 'Amortiguadores', destacada: true }),
+                fila({ rubroCode: 'R2', nombre: 'Baterías', destacada: false }),
+                fila({ rubroCode: 'R3', nombre: 'Filtros de aceite', destacada: false }),
+            ]}
+        />,
+    )
+    fireEvent.change(screen.getByPlaceholderText(/buscar rubro/i), { target: { value: 'filt' } })
+
+    expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
+    expect(screen.getByText('Filtros de aceite')).toBeInTheDocument()
+    expect(screen.queryByText('Baterías')).not.toBeInTheDocument()
+})
+
+it('el buscador ignora acentos y mayúsculas', () => {
+    render(
+        <RubroTable
+            filas={[
+                fila({ rubroCode: 'R1', destacada: true }),
+                fila({ rubroCode: 'R2', nombre: 'BATERÍAS', destacada: false }),
+            ]}
+        />,
+    )
+    fireEvent.change(screen.getByPlaceholderText(/buscar rubro/i), { target: { value: 'baterias' } })
+    expect(screen.getByText('BATERÍAS')).toBeInTheDocument()
+})
+
+it('sin resultados en la búsqueda, muestra el mensaje en vez de la lista', () => {
+    render(
+        <RubroTable
+            filas={[
+                fila({ rubroCode: 'R1', destacada: true }),
+                fila({ rubroCode: 'R2', nombre: 'Baterías', destacada: false }),
+            ]}
+        />,
+    )
+    fireEvent.change(screen.getByPlaceholderText(/buscar rubro/i), { target: { value: 'zzz' } })
+    expect(screen.queryByText('Baterías')).not.toBeInTheDocument()
+    expect(screen.getByText(/sin resultados para "zzz"/i)).toBeInTheDocument()
+})
+
 it('no hay ninguna fila de totales', () => {
     render(<RubroTable filas={[fila({ rubroCode: 'R1' }), fila({ rubroCode: 'R2', nombre: 'Filtros' })]} />)
     expect(screen.queryByText(/totales/i)).not.toBeInTheDocument()
