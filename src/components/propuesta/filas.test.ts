@@ -1,5 +1,5 @@
-import { construirFilasPropuesta, totalesDe } from './filas'
-import type { IRubroEstado, IRubroPropuesta } from '@/types/planificacion'
+import { construirFilasPropuesta, construirFilasVisita, totalesDe } from './filas'
+import type { IRubroEstado, IRubroPropuesta, IVisitaRubro } from '@/types/planificacion'
 
 function propuesta(over: Partial<IRubroPropuesta> = {}): IRubroPropuesta {
     return {
@@ -94,5 +94,85 @@ describe('construirFilasPropuesta', () => {
 
         const expandida = construirFilasPropuesta(propuestaRubros, status, true)
         expect(totalesDe(expandida)).toEqual({ actual: 700_000, mesAnterior: 1_000_000, promedio6m: 1_300_000 })
+    })
+})
+
+function visitaRubro(over: Partial<IVisitaRubro> = {}): IVisitaRubro {
+    return {
+        id: 7,
+        resolucionId: 42,
+        rubroCode: 'AMORT',
+        rubroDescripcion: 'Amortiguadores',
+        gapUnits: 12,
+        esPropuesto: true,
+        resuelto: false,
+        motivos: [],
+        ...over,
+    }
+}
+
+describe('construirFilasVisita', () => {
+    it('respeta el orden del backend, no reordena por estado', () => {
+        const filas = construirFilasVisita(
+            [visitaRubro({ id: 7, rubroCode: 'AMORT' }), visitaRubro({ id: 8, rubroCode: 'FILT', rubroDescripcion: 'Filtros' })],
+            [],
+            { 7: { motivosCargados: 0, completo: false }, 8: { motivosCargados: 1, completo: true } },
+            false,
+            true,
+        )
+        expect(filas.map(f => f.rubroCode)).toEqual(['AMORT', 'FILT'])
+    })
+
+    it('un rubro de la visita ausente de rubroStatus queda en – en las tres columnas', () => {
+        const filas = construirFilasVisita(
+            [visitaRubro({ id: 7, rubroCode: 'AMORT' })],
+            [],
+            { 7: { motivosCargados: 0, completo: false } },
+            false,
+            true,
+        )
+        expect(filas[0]).toMatchObject({ actual: null, mesAnterior: null, promedio6m: null })
+    })
+
+    it('expandida agrega los rubros faltantes del cliente, marcados agregable', () => {
+        const filas = construirFilasVisita(
+            [visitaRubro({ id: 7, rubroCode: 'AMORT' })],
+            [
+                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
+                { rubroCode: 'BAT', nombre: 'Baterías', actual: 0, mesAnterior: 200_000, promedio6m: 100_000 },
+            ],
+            { 7: { motivosCargados: 0, completo: false } },
+            true,
+            true,
+        )
+        expect(filas.map(f => f.rubroCode)).toEqual(['AMORT', 'BAT'])
+        expect(filas[1]).toMatchObject({ destacada: false, agregable: true })
+        expect(filas[0].agregable).toBeUndefined()
+    })
+
+    it('con la visita cerrada, ninguna fila trae resolucion ni agregable', () => {
+        const filas = construirFilasVisita(
+            [visitaRubro({ id: 7, rubroCode: 'AMORT' })],
+            [
+                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
+                { rubroCode: 'BAT', nombre: 'Baterías', actual: 0, mesAnterior: 200_000, promedio6m: 100_000 },
+            ],
+            { 7: { motivosCargados: 1, completo: true } },
+            true,
+            false,
+        )
+        expect(filas.every(f => f.resolucion === undefined)).toBe(true)
+        expect(filas.every(f => f.agregable === undefined)).toBe(true)
+    })
+
+    it('editable trae resolucion con motivosCargados y completo del estado dado', () => {
+        const filas = construirFilasVisita(
+            [visitaRubro({ id: 7, rubroCode: 'AMORT' })],
+            [],
+            { 7: { motivosCargados: 2, completo: true } },
+            false,
+            true,
+        )
+        expect(filas[0].resolucion).toEqual({ visitaRubroId: 7, motivosCargados: 2, completo: true })
     })
 })

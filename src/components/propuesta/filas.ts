@@ -87,3 +87,56 @@ export function construirFilasPropuesta(
 
     return [...bloqueArriba, ...bloqueAbajo]
 }
+
+export interface IEstadoResolucionRubro {
+    motivosCargados: number
+    completo: boolean
+}
+
+/** Colapsada: los rubros de la visita, en el orden que los devuelve el backend —
+ *  no se reordena al resolver (ver spec: reordenar dejando pendientes arriba haría
+ *  saltar la fila que el vendedor acaba de tocar). Expandida: agrega el resto de los
+ *  rubros del cliente, marcados `agregable` cuando la visita es editable. */
+export function construirFilasVisita(
+    rubrosVisita: IVisitaRubro[],
+    rubroStatus: IRubroEstado[],
+    estados: Record<number, IEstadoResolucionRubro>,
+    expandido: boolean,
+    editable: boolean,
+): IRubroFila[] {
+    const status = porCode(rubroStatus)
+    const codesVisita = new Set(rubrosVisita.map(r => r.rubroCode))
+
+    const bloqueArriba: IRubroFila[] = rubrosVisita.map(r => {
+        const s = status.get(r.rubroCode)
+        const estado = estados[r.id]
+        return {
+            rubroCode: r.rubroCode,
+            nombre: r.rubroDescripcion,
+            actual: s?.actual ?? null,
+            mesAnterior: s?.mesAnterior ?? null,
+            promedio6m: s?.promedio6m ?? null,
+            destacada: true,
+            resolucion:
+                editable && estado
+                    ? { visitaRubroId: r.id, motivosCargados: estado.motivosCargados, completo: estado.completo }
+                    : undefined,
+        }
+    })
+
+    if (!expandido) return bloqueArriba
+
+    const bloqueAbajo: IRubroFila[] = rubroStatus
+        .filter(s => !codesVisita.has(s.rubroCode))
+        .map(s => ({
+            rubroCode: s.rubroCode,
+            nombre: s.nombre,
+            actual: s.actual,
+            mesAnterior: s.mesAnterior,
+            promedio6m: s.promedio6m,
+            destacada: false,
+            agregable: editable || undefined,
+        }))
+
+    return [...bloqueArriba, ...bloqueAbajo]
+}
