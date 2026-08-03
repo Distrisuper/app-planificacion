@@ -215,6 +215,20 @@ it('con codigoParticularCliente, los números de rubroStatus aparecen en la tabl
     expect(screen.getAllByText('3.100').length).toBeGreaterThan(0)
 })
 
+it('visita sin rubros pero con otros rubros del cliente: "Ver más" trae la tabla', async () => {
+    ;(api.getRubros as any).mockResolvedValue([])
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+    ])
+    renderSheet({ codigoParticularCliente: '10034' })
+
+    expect(await screen.findByText('Esta visita no tiene rubros propuestos.')).toBeInTheDocument()
+
+    fireEvent.click(await screen.findByRole('button', { name: /ver más/i }))
+    expect(await screen.findByText('Baterías')).toBeInTheDocument()
+    expect(screen.queryByText('Esta visita no tiene rubros propuestos.')).not.toBeInTheDocument()
+})
+
 it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de arriba con su botón de Resolución', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },

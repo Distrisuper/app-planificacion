@@ -207,3 +207,36 @@ it('propuesta vacía sin otros rubros: solo el mensaje, sin botón Ver más', as
     expect(await screen.findByText('Sin oportunidades destacadas.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /ver más/i })).not.toBeInTheDocument()
 })
+
+it('propuesta vacía con otros rubros del cliente: "Ver más" trae la tabla', async () => {
+    ;(api.getPropuesta as any).mockResolvedValue({
+        particularCode: '10034',
+        clientName: 'Don José',
+        sellerCode: '1',
+        currentYM: '2026-07',
+        daysElapsed: 24,
+        totalDays: 31,
+        inflationAdjusted: true,
+        total: 0,
+        rubros: [],
+    })
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        { rubroCode: 'R9', nombre: 'Baterías', actual: 100_000, mesAnterior: 100_000, promedio6m: 100_000 },
+    ])
+    render(
+        wrap(
+            <PropuestaSheet
+                open
+                codigoCliente="10034"
+                nombreCliente="Don José"
+                onIniciarVisita={vi.fn()}
+                onClose={vi.fn()}
+            />,
+        ),
+    )
+    expect(await screen.findByText('Sin oportunidades destacadas.')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
+    expect(await screen.findByText('Baterías')).toBeInTheDocument()
+    expect(screen.queryByText('Sin oportunidades destacadas.')).not.toBeInTheDocument()
+})

@@ -4,22 +4,16 @@ import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
 import ResolucionWizardAcciones from './propuesta/ResolucionWizardAcciones'
-import SeleccionBar from './propuesta/SeleccionBar'
-import ResolverLoteVista from './propuesta/ResolverLoteVista'
-import ResolverLoteAcciones from './propuesta/ResolverLoteAcciones'
 import RubroTable from './propuesta/RubroTable'
 import { construirFilasVisita } from './propuesta/filas'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useRubros, useResolverRubros, useAgregarRubro, useEliminarRubro } from '@/hooks/useRubros'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
-import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { formatearDuracion } from '@/lib/visitaTimer'
 import { motivosIguales, tieneDetalleIncompleto } from '@/lib/resolucionRubro'
 import { leerBorrador, guardarBorrador, limpiarBorrador } from '@/lib/resolucionDraft'
 import type { IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
-
-type Vista = 'list' | 'resolverLote'
 
 interface VisitaSheetProps {
     open: boolean
@@ -66,7 +60,6 @@ export default function VisitaSheet({
     const [borradorListo, setBorradorListo] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
-    const [vista, setVista] = useState<Vista>('list')
     const [expandido, setExpandido] = useState(false)
     // Los ids que se agregaron dinámicamente esta sesión, más reciente primero — se
     // usan para insertarlos arriba de todo en la lista al agregarlos (ver
@@ -74,12 +67,6 @@ export default function VisitaSheet({
     // por estado": si además reordenara al resolver, la fila saltaría de posición justo
     // cuando el vendedor la está completando (ver nota en `construirFilasVisita`).
     const [agregadosIds, setAgregadosIds] = useState<number[]>([])
-    // La selección múltiple se desconectó de la UI (ver ResolucionWizard, que ahora es
-    // la única forma de abrir la resolución de un rubro): estos dos quedan sin ninguna
-    // forma de poblarse, pero se mantienen para no romper SeleccionBar/ResolverLoteVista/
-    // ResolverLoteAcciones, que siguen con sus propios tests en verde.
-    const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set())
-    const [loteMotivos, setLoteMotivos] = useState<IRubroMotivo[]>([])
 
     // Se pide al abrir el sheet, no al entrar a una sub-vista: la tabla es la fuente de
     // los números en las dos pantallas y en los dos estados (colapsada/expandida).
@@ -91,10 +78,7 @@ export default function VisitaSheet({
             setBorradores({})
             setBorradorListo(false)
             setErrorGuardado(null)
-            setVista('list')
             setExpandido(false)
-            setSeleccionados(new Set())
-            setLoteMotivos([])
             setAgregadosIds([])
         }
     }, [open])
@@ -172,25 +156,6 @@ export default function VisitaSheet({
         setWizard(null)
     }
 
-    // Fusiona (por motivoId) el borrador compartido del lote en cada rubro seleccionado,
-    // sin pisar los motivos que ya tuviera cargados. Igual que el wizard individual, no
-    // llama al backend: el cambio queda en `borradores` (y por lo tanto en localStorage).
-    function aplicarLote() {
-        setBorradores(prev => {
-            const next = { ...prev }
-            for (const rubroId of seleccionados) {
-                const actual = next[rubroId] ?? []
-                const porId = new Map(actual.map(m => [m.motivoId, m]))
-                for (const m of loteMotivos) porId.set(m.motivoId, m)
-                next[rubroId] = [...porId.values()]
-            }
-            return next
-        })
-        setSeleccionados(new Set())
-        setLoteMotivos([])
-        setVista('list')
-    }
-
     function rubroCompleto(r: IVisitaRubro): boolean {
         const motivosDelRubro = borradores[r.id] ?? r.motivos
         return motivosDelRubro.length > 0 && !tieneDetalleIncompleto(motivos, motivosDelRubro)
@@ -213,13 +178,6 @@ export default function VisitaSheet({
         estadosResolucion,
         expandido,
         !visitaCerrada,
-    )
-
-    const necesitaMarcasLote = loteMotivos.some(
-        m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
-    )
-    const { data: marcasLote = [], isLoading: marcasLoteLoading } = useBrandCatalog(
-        vista === 'resolverLote' && necesitaMarcasLote,
     )
 
     // Único punto de guardado contra el backend: junta todo lo que cambió contra lo
@@ -262,23 +220,6 @@ export default function VisitaSheet({
             borradores={borradores}
             onIndexChange={index => setWizard(w => (w ? { ...w, index } : w))}
             onFinalizar={finalizar}
-        />
-    ) : vista === 'resolverLote' ? (
-        <ResolverLoteAcciones
-            motivos={motivos}
-            value={loteMotivos}
-            cantidad={seleccionados.size}
-            onCancelar={() => {
-                setVista('list')
-                setLoteMotivos([])
-            }}
-            onAplicar={aplicarLote}
-        />
-    ) : seleccionados.size > 0 ? (
-        <SeleccionBar
-            cantidad={seleccionados.size}
-            onCancelar={() => setSeleccionados(new Set())}
-            onResolver={() => setVista('resolverLote')}
         />
     ) : (
         <>
@@ -344,19 +285,6 @@ export default function VisitaSheet({
                     onCambiarBorrador={(rubroId, m) => setBorradores(prev => ({ ...prev, [rubroId]: m }))}
                     onVolver={() => setWizard(null)}
                 />
-            ) : vista === 'resolverLote' ? (
-                <ResolverLoteVista
-                    motivos={motivos}
-                    marcas={marcasLote}
-                    marcasLoading={marcasLoteLoading}
-                    cantidad={seleccionados.size}
-                    value={loteMotivos}
-                    onChange={setLoteMotivos}
-                    onVolver={() => {
-                        setVista('list')
-                        setLoteMotivos([])
-                    }}
-                />
             ) : (
                 <div>
                     <p className="mb-3 text-[13px] leading-snug text-dsmuted">
@@ -364,7 +292,7 @@ export default function VisitaSheet({
                         resuelven con <b className="font-bold text-[#182645]">"No lo ofrecí"</b>.
                     </p>
 
-                    {rubros.length === 0 ? (
+                    {filas.length === 0 ? (
                         <div className="text-sm text-dsmuted">Esta visita no tiene rubros propuestos.</div>
                     ) : (
                         <RubroTable

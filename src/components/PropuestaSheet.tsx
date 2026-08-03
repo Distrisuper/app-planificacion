@@ -127,7 +127,7 @@ export default function PropuestaSheet({
                         <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.4} />
                         Cargando…
                     </div>
-                ) : rubros.length === 0 ? (
+                ) : filas.length === 0 ? (
                     <div className="text-sm text-dsmuted">Sin oportunidades destacadas.</div>
                 ) : (
                     <RubroTable filas={filas} />
