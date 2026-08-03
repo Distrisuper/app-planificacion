@@ -5,6 +5,10 @@ export interface IRubroFilaResolucion {
     visitaRubroId: number
     motivosCargados: number
     completo: boolean
+    /** false ⇒ se agregó dinámicamente (no viene de la propuesta congelada):
+     *  la tarjeta ofrece "Quitar rubro" al lado de la Resolución. Los de la
+     *  propuesta no se pueden borrar (el backend responde RUBRO_DE_PROPUESTA). */
+    esPropuesto: boolean
 }
 
 export interface IRubroFila {
@@ -119,7 +123,12 @@ export function construirFilasVisita(
             destacada: true,
             resolucion:
                 editable && estado
-                    ? { visitaRubroId: r.id, motivosCargados: estado.motivosCargados, completo: estado.completo }
+                    ? {
+                          visitaRubroId: r.id,
+                          motivosCargados: estado.motivosCargados,
+                          completo: estado.completo,
+                          esPropuesto: r.esPropuesto,
+                      }
                     : undefined,
         }
     })

@@ -80,6 +80,24 @@ export default function PropuestaSheet({
                     {error && (
                         <p className="mb-2.5 text-[12.5px] font-semibold text-dsred">{error}</p>
                     )}
+                    {/* Fijo junto al botón principal, no adentro del scroll: al expandir la
+                     *  tabla con "Ver más" la lista puede crecer bastante, y si este botón
+                     *  quedara al final del contenido scrolleable, minimizarla exigiría
+                     *  scrollear hasta abajo de todo para volver a encontrarlo. */}
+                    {!cargando && hayOtrosRubros && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setExpandido(e => !e)}
+                            className="mb-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
+                        >
+                            {expandido ? (
+                                <Minimize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                            ) : (
+                                <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                            )}
+                            {expandido ? 'Ver menos' : 'Ver más'}
+                        </Button>
+                    )}
                     <Button
                         onClick={() => onIniciarVisita(rubros.map(toPropuestaDTO))}
                         disabled={deshabilitado}
@@ -113,21 +131,6 @@ export default function PropuestaSheet({
                     <div className="text-sm text-dsmuted">Sin oportunidades destacadas.</div>
                 ) : (
                     <RubroTable filas={filas} />
-                )}
-
-                {!cargando && hayOtrosRubros && (
-                    <Button
-                        variant="outline"
-                        onClick={() => setExpandido(e => !e)}
-                        className="mt-3.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
-                    >
-                        {expandido ? (
-                            <Minimize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                        ) : (
-                            <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                        )}
-                        {expandido ? 'Ver menos' : 'Ver más'}
-                    </Button>
                 )}
             </div>
         </BottomSheet>

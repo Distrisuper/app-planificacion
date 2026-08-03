@@ -15,21 +15,19 @@ function fila(over: Partial<IRubroFila> = {}): IRubroFila {
     }
 }
 
-it('columnas en el orden RUBRO · ACTUAL · M.ANT · PROM.6M', () => {
+it('columnas en el orden RUBRO · ACTUAL · M.ANT · P.6M', () => {
     render(<RubroTable filas={[fila()]} />)
     const headers = screen.getAllByRole('columnheader').map(th => th.textContent)
     expect(headers[0]).toMatch(/rubro/i)
     expect(headers[1]).toMatch(/actual/i)
     expect(headers[2]).toMatch(/m\.ant/i)
-    expect(headers[3]).toMatch(/prom\.6m/i)
+    expect(headers[3]).toMatch(/p\.6m/i)
 })
 
-it('pinta de rojo ACTUAL y M.ANT cuando caen bajo PROM.6M', () => {
+it('pinta de rojo ACTUAL y M.ANT cuando caen bajo P.6M', () => {
     render(<RubroTable filas={[fila({ actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 })]} />)
-    const allSixHundreds = screen.getAllByText('600')
-    expect(allSixHundreds[1].closest('span')).toHaveClass('text-dsred') // skip TOTALES row, get data row
-    const allEightHundreds = screen.getAllByText('800')
-    expect(allEightHundreds[1].closest('span')).toHaveClass('text-dsred')
+    expect(screen.getByText('600').closest('span')).toHaveClass('text-dsred')
+    expect(screen.getByText('800').closest('span')).toHaveClass('text-dsred')
 })
 
 it('no pinta de rojo cuando el valor es –', () => {
@@ -38,38 +36,74 @@ it('no pinta de rojo cuando el valor es –', () => {
     expect(celdas.some(c => c.closest('span')?.classList.contains('text-dsred'))).toBe(false)
 })
 
-it('PROM.6M nunca se pinta de rojo (es la referencia)', () => {
+it('P.6M nunca se pinta de rojo (es la referencia)', () => {
     render(<RubroTable filas={[fila({ actual: 50_000, mesAnterior: 50_000, promedio6m: 1_000_000 })]} />)
-    const allOneThousands = screen.getAllByText('1.000')
-    const promCell = allOneThousands[1] // skip TOTALES row, get data row
+    const promCell = screen.getByText('1.000')
     expect(promCell.closest('span')).not.toHaveClass('text-dsred')
 })
 
-it('marca la fila destacada con la barra navy y el nombre en negrita', () => {
+it('sin filas fuera de la propuesta/visita, no muestra separador de sección', () => {
     render(<RubroTable filas={[fila({ destacada: true })]} />)
-    const celdaNombre = screen.getByText('Amortiguadores')
-    expect(celdaNombre.className).toContain('font-bold')
-    expect(celdaNombre.className).toContain('shadow-[inset_3px_0_0_0_#213D82]')
+    expect(screen.queryByText(/otros rubros del cliente/i)).not.toBeInTheDocument()
 })
 
-it('la fila TOTALES suma las columnas de las filas recibidas', () => {
+it('con filas destacadas y no destacadas mezcladas, separa con una etiqueta', () => {
     render(
         <RubroTable
             filas={[
-                fila({ rubroCode: 'R1', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 }),
-                fila({ rubroCode: 'R2', nombre: 'Filtros', actual: 400_000, mesAnterior: 200_000, promedio6m: 300_000 }),
+                fila({ rubroCode: 'R1', destacada: true }),
+                fila({ rubroCode: 'R2', nombre: 'Filtros', destacada: false }),
             ]}
         />,
     )
-    expect(screen.getByText(/totales/i)).toBeInTheDocument()
-    const allOneThousands = screen.getAllByText('1.000')
-    expect(allOneThousands.length).toBeGreaterThan(0) // 600k + 400k = 1.000k
+    expect(screen.getByText(/otros rubros del cliente/i)).toBeInTheDocument()
+})
+
+it('si el bloque de otros rubros es agregable, la etiqueta invita a tocar', () => {
+    render(
+        <RubroTable
+            filas={[
+                fila({ rubroCode: 'R1', destacada: true }),
+                fila({ rubroCode: 'R2', nombre: 'Filtros', destacada: false, agregable: true }),
+            ]}
+        />,
+    )
+    expect(screen.getByText(/tocá uno para agregarlo/i)).toBeInTheDocument()
+})
+
+it('si el bloque de otros rubros es de solo lectura, la etiqueta no invita a tocar', () => {
+    render(
+        <RubroTable
+            filas={[
+                fila({ rubroCode: 'R1', destacada: true }),
+                fila({ rubroCode: 'R2', nombre: 'Filtros', destacada: false }),
+            ]}
+        />,
+    )
+    expect(screen.queryByText(/tocá uno para agregarlo/i)).not.toBeInTheDocument()
+})
+
+it('no hay ninguna fila de totales', () => {
+    render(<RubroTable filas={[fila({ rubroCode: 'R1' }), fila({ rubroCode: 'R2', nombre: 'Filtros' })]} />)
+    expect(screen.queryByText(/totales/i)).not.toBeInTheDocument()
+})
+
+it('una fila con resolución se agrupa con su botón en una tarjeta propia', () => {
+    render(
+        <RubroTable
+            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
+            onResolucion={vi.fn()}
+        />,
+    )
+    const boton = screen.getByRole('button', { name: /resolución de amortiguadores/i })
+    const tarjeta = boton.closest('.rounded-xl')
+    expect(tarjeta).toContainElement(screen.getByText('Amortiguadores'))
 })
 
 it('segunda línea: "Resolución" cuando no está completo', () => {
     render(
         <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false } })]}
+            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
             onResolucion={vi.fn()}
         />,
     )
@@ -79,7 +113,7 @@ it('segunda línea: "Resolución" cuando no está completo', () => {
 it('segunda línea: "✓ N motivos cargados" cuando está completo', () => {
     render(
         <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 2, completo: true } })]}
+            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 2, completo: true, esPropuesto: true } })]}
             onResolucion={vi.fn()}
         />,
     )
@@ -90,7 +124,7 @@ it('el botón de resolución dispara onResolucion con el visitaRubroId', () => {
     const onResolucion = vi.fn()
     render(
         <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false } })]}
+            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
             onResolucion={onResolucion}
         />,
     )
@@ -98,7 +132,53 @@ it('el botón de resolución dispara onResolucion con el visitaRubroId', () => {
     expect(onResolucion).toHaveBeenCalledWith(7)
 })
 
-it('el ＋ de una fila agregable dispara onAgregar con el rubroCode', () => {
+it('un rubro de la propuesta no ofrece Quitar rubro', () => {
+    render(
+        <RubroTable
+            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
+            onResolucion={vi.fn()}
+        />,
+    )
+    expect(screen.queryByRole('button', { name: /quitar amortiguadores/i })).not.toBeInTheDocument()
+})
+
+it('un rubro agregado dinámicamente (no propuesto) ofrece Quitar rubro junto a Resolución', () => {
+    render(
+        <RubroTable
+            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
+            onResolucion={vi.fn()}
+            onEliminar={vi.fn()}
+        />,
+    )
+    expect(screen.getByRole('button', { name: /quitar amortiguadores/i })).toBeInTheDocument()
+})
+
+it('el botón Quitar rubro dispara onEliminar con el visitaRubroId', () => {
+    const onEliminar = vi.fn()
+    render(
+        <RubroTable
+            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
+            onResolucion={vi.fn()}
+            onEliminar={onEliminar}
+        />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /quitar amortiguadores/i }))
+    expect(onEliminar).toHaveBeenCalledWith(7)
+})
+
+it('Quitar rubro en vuelo (eliminandoId) queda deshabilitado', () => {
+    render(
+        <RubroTable
+            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
+            onResolucion={vi.fn()}
+            onEliminar={vi.fn()}
+            eliminandoId={7}
+        />,
+    )
+    expect(screen.getByRole('button', { name: /quitar amortiguadores/i })).toBeDisabled()
+})
+
+it('toda la fila agregable es el botón: tocarla dispara onAgregar con el rubroCode', () => {
     const onAgregar = vi.fn()
     render(
         <RubroTable
@@ -106,8 +186,21 @@ it('el ＋ de una fila agregable dispara onAgregar con el rubroCode', () => {
             onAgregar={onAgregar}
         />,
     )
-    fireEvent.click(screen.getByRole('button', { name: /agregar baterías/i }))
+    const boton = screen.getByRole('button', { name: /agregar baterías/i })
+    expect(boton).toContainElement(screen.getByText('Baterías'))
+    fireEvent.click(boton)
     expect(onAgregar).toHaveBeenCalledWith('BAT')
+})
+
+it('una fila agregable en vuelo (agregandoCode) queda deshabilitada', () => {
+    render(
+        <RubroTable
+            filas={[fila({ rubroCode: 'BAT', nombre: 'Baterías', destacada: false, agregable: true })]}
+            onAgregar={vi.fn()}
+            agregandoCode="BAT"
+        />,
+    )
+    expect(screen.getByRole('button', { name: /agregar baterías/i })).toBeDisabled()
 })
 
 it('en solo lectura (sin resolucion ni agregable) no se renderiza ninguna acción', () => {

@@ -167,12 +167,28 @@ describe('construirFilasVisita', () => {
 
     it('editable trae resolucion con motivosCargados y completo del estado dado', () => {
         const filas = construirFilasVisita(
-            [visitaRubro({ id: 7, rubroCode: 'AMORT' })],
+            [visitaRubro({ id: 7, rubroCode: 'AMORT', esPropuesto: true })],
             [],
             { 7: { motivosCargados: 2, completo: true } },
             false,
             true,
         )
-        expect(filas[0].resolucion).toEqual({ visitaRubroId: 7, motivosCargados: 2, completo: true })
+        expect(filas[0].resolucion).toEqual({
+            visitaRubroId: 7,
+            motivosCargados: 2,
+            completo: true,
+            esPropuesto: true,
+        })
+    })
+
+    it('un rubro que no es de la propuesta trae resolucion.esPropuesto en false', () => {
+        const filas = construirFilasVisita(
+            [visitaRubro({ id: 8, rubroCode: 'FILT', esPropuesto: false })],
+            [],
+            { 8: { motivosCargados: 0, completo: false } },
+            false,
+            true,
+        )
+        expect(filas[0].resolucion?.esPropuesto).toBe(false)
     })
 })
