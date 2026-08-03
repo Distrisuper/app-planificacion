@@ -1,10 +1,13 @@
-import { ChevronLeft } from 'lucide-react'
+import { useState } from 'react'
+import { ChevronLeft, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import ResolucionRubro from './ResolucionRubro'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
+import { useEliminarRubro } from '@/hooks/useRubros'
 import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
 
 interface ResolucionWizardProps {
+    visitaId: number
     /** Subconjunto fijo de rubros que se está recorriendo (ya filtrado por el llamador). */
     rubros: IVisitaRubro[]
     /** Posición actual dentro de `rubros`. */
@@ -20,6 +23,7 @@ interface ResolucionWizardProps {
  *  sheet — la navegación y el guardado en lote viven en ResolucionWizardAcciones, que se
  *  renderiza aparte, en el pie fijo, para que no se oculten al expandirse el detalle. */
 export default function ResolucionWizard({
+    visitaId,
     rubros,
     index,
     motivos,
@@ -37,6 +41,23 @@ export default function ResolucionWizard({
         m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
     )
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
+
+    const eliminar = useEliminarRubro(visitaId)
+    const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
+
+    // Los rubros de la propuesta NO se borran (el backend responde RUBRO_DE_PROPUESTA):
+    // si no se ofreció, se resuelve con "No lo ofrecí". Poner el borrado detrás del
+    // wizard (y no al lado del target grande de la fila en la tabla) evita el borrado
+    // accidental.
+    async function quitarRubro() {
+        setErrorEliminar(null)
+        try {
+            await eliminar.mutateAsync(rubro.id)
+            onVolver()
+        } catch {
+            setErrorEliminar('Sin conexión. Volvé a intentar; no se perdió lo que cargaste.')
+        }
+    }
 
     return (
         <div>
@@ -61,7 +82,28 @@ export default function ResolucionWizard({
                 <span className="shrink-0 text-[12px] font-semibold text-dsmuted">
                     {index + 1} de {rubros.length}
                 </span>
+                {!rubro.esPropuesto && (
+                    <button
+                        type="button"
+                        aria-label={`Quitar ${rubro.rubroDescripcion}`}
+                        onClick={quitarRubro}
+                        disabled={eliminar.isPending}
+                        className="shrink-0 text-dsmuted disabled:opacity-50"
+                    >
+                        {eliminar.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.4} />
+                        ) : (
+                            <Trash2 className="h-4 w-4" strokeWidth={2} />
+                        )}
+                    </button>
+                )}
             </div>
+
+            {errorEliminar && (
+                <p className="mb-2.5 rounded-[10px] bg-[#FEECEC] px-3 py-2 text-[12.5px] font-semibold text-dsred">
+                    {errorEliminar}
+                </p>
+            )}
 
             <ResolucionRubro
                 motivos={motivos}

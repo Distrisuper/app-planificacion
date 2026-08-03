@@ -50,6 +50,8 @@ it('usePropuesta mapea los rubros caídos para la UI', async () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(result.current.data).toEqual({
+        daysElapsed: 24,
+        totalDays: 31,
         rubros: [
             {
                 rubroCode: 'R1',
@@ -112,5 +114,5 @@ it('usePropuesta devuelve lista vacía cuando el cliente no tiene rubros caídos
     const { result } = renderHook(() => usePropuesta('10034'), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
-    expect(result.current.data).toEqual({ rubros: [] })
+    expect(result.current.data).toEqual({ daysElapsed: 24, totalDays: 31, rubros: [] })
 })

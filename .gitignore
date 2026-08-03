@@ -18,6 +18,7 @@ dist-ssr
 coverage
 
 .superpowers/
+.worktrees/
 
 # Snapshots y logs que deja el navegador de Playwright MCP al depurar
 .playwright-mcp/

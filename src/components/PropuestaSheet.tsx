@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, Loader2, Maximize2, Play } from 'lucide-react'
+import { Loader2, Maximize2, Minimize2, Play } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
-import RubroCard from './propuesta/RubroCard'
-import VersusTable from './propuesta/VersusTable'
+import RubroTable from './propuesta/RubroTable'
+import { construirFilasPropuesta } from './propuesta/filas'
 import { usePropuesta } from '@/hooks/usePropuesta'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import type { IPropuestaRubroDTO, IRubroPropuesta } from '@/types/planificacion'
@@ -25,8 +25,6 @@ interface PropuestaSheetProps {
      *  el vendedor tiene que verlo con calma). */
     error?: string | null
 }
-
-type Vista = 'list' | 'versus'
 
 // El backend exige -1 <= caidaPct <= 0 (0 = sin caída, -1 = -100%). Los rubros de relleno
 // (isFallback) no llegaron al umbral de caída sostenida y su dropPct puede venir positivo
@@ -52,19 +50,24 @@ export default function PropuestaSheet({
     const { data, isLoading } = usePropuesta(open ? codigoCliente : null)
     const rubros: IRubroPropuesta[] = data?.rubros ?? []
 
-    const [vista, setVista] = useState<Vista>('list')
+    const [expandido, setExpandido] = useState(false)
 
-    // "Ver versus" es independiente de la propuesta: trae TODOS los rubros del
-    // cliente, no solo los caídos/relleno que se muestran en la lista.
+    // Antes solo se pedía al entrar a "Ver versus"; ahora la tabla ES el contenido de
+    // esta pantalla, así que se pide junto con la propuesta, al abrir el sheet.
     const { data: rubroStatus = [], isLoading: rubroStatusLoading } = useRubroStatus(
-        vista === 'versus' ? codigoCliente : null,
+        open ? codigoCliente : null,
     )
 
     useEffect(() => {
         if (!open) {
-            setVista('list')
+            setExpandido(false)
         }
     }, [open])
+
+    const cargando = isLoading || rubroStatusLoading
+    const codesPropuesta = new Set(rubros.map(r => r.rubroCode))
+    const hayOtrosRubros = rubroStatus.some(s => !codesPropuesta.has(s.rubroCode))
+    const filas = construirFilasPropuesta(rubros, rubroStatus, expandido)
 
     return (
         <BottomSheet
@@ -76,6 +79,24 @@ export default function PropuestaSheet({
                 <>
                     {error && (
                         <p className="mb-2.5 text-[12.5px] font-semibold text-dsred">{error}</p>
+                    )}
+                    {/* Fijo junto al botón principal, no adentro del scroll: al expandir la
+                     *  tabla con "Ver más" la lista puede crecer bastante, y si este botón
+                     *  quedara al final del contenido scrolleable, minimizarla exigiría
+                     *  scrollear hasta abajo de todo para volver a encontrarlo. */}
+                    {!cargando && hayOtrosRubros && (
+                        <Button
+                            variant="outline"
+                            onClick={() => setExpandido(e => !e)}
+                            className="mb-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
+                        >
+                            {expandido ? (
+                                <Minimize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                            ) : (
+                                <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                            )}
+                            {expandido ? 'Ver menos' : 'Ver más'}
+                        </Button>
                     )}
                     <Button
                         onClick={() => onIniciarVisita(rubros.map(toPropuestaDTO))}
@@ -89,70 +110,29 @@ export default function PropuestaSheet({
                 </>
             }
         >
-            {vista === 'versus' ? (
-                <div>
-                    <div className="mb-3.5 flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            aria-label="Volver"
-                            onClick={() => setVista('list')}
-                            className="h-[29px] w-[29px] border-[#E1E6F0] text-dsmuted"
-                        >
-                            <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                        </Button>
-                        <span className="text-[13px] font-bold text-[#182645]">
-                            Cómo viene comprando
-                        </span>
-                    </div>
-                    {rubroStatusLoading ? (
-                        <div className="flex items-center justify-center gap-2 py-8 text-sm text-dsmuted">
-                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.4} />
-                            Cargando…
-                        </div>
-                    ) : (
-                        <VersusTable rubros={rubroStatus} />
-                    )}
-                </div>
-            ) : (
-                <div>
-                    <p className="mb-3 text-[13px] leading-snug text-dsmuted">
-                        Cayeron los <b className="font-bold text-dsred">últimos 2 meses</b> vs. el
-                        promedio de 6 meses del cliente:
-                    </p>
-                    {isLoading ? (
-                        <div className="text-sm text-dsmuted">Cargando propuesta…</div>
-                    ) : (
-                        <div className="flex flex-col gap-2.5">
-                            {rubros.map(r => (
-                                <RubroCard
-                                    key={r.rubroCode}
-                                    nombre={r.nombre}
-                                    caidaPct={r.caidaPct}
-                                    pesosPerdidos={r.pesosPerdidos}
-                                    isFallback={r.isFallback}
-                                />
-                            ))}
-                            {rubros.length === 0 && (
-                                <div className="text-sm text-dsmuted">
-                                    Sin oportunidades destacadas.
-                                </div>
-                            )}
-                        </div>
-                    )}
+            <div>
+                <p className="mb-3 text-[13px] leading-snug text-dsmuted">
+                    Cayeron los <b className="font-bold text-dsred">últimos 2 meses</b> vs. el
+                    promedio de 6 meses del cliente:
+                </p>
 
-                    {rubros.length > 0 && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setVista('versus')}
-                            className="mt-3.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
-                        >
-                            <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                            Ver versus
-                        </Button>
-                    )}
-                </div>
-            )}
+                {data && (
+                    <p className="mb-2.5 text-[11px] font-semibold text-dsmuted">
+                        Actual: {data.daysElapsed} de {data.totalDays} días del mes
+                    </p>
+                )}
+
+                {cargando ? (
+                    <div className="flex items-center justify-center gap-2 py-8 text-sm text-dsmuted">
+                        <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.4} />
+                        Cargando…
+                    </div>
+                ) : filas.length === 0 ? (
+                    <div className="text-sm text-dsmuted">Sin oportunidades destacadas.</div>
+                ) : (
+                    <RubroTable filas={filas} />
+                )}
+            </div>
         </BottomSheet>
     )
 }

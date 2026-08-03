@@ -1,26 +1,19 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, Loader2, Maximize2, Plus } from 'lucide-react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
-import RubroCard from './propuesta/RubroCard'
-import AgregarRubroVista from './propuesta/AgregarRubroVista'
 import ResolucionWizard from './propuesta/ResolucionWizard'
 import ResolucionWizardAcciones from './propuesta/ResolucionWizardAcciones'
-import SeleccionBar from './propuesta/SeleccionBar'
-import ResolverLoteVista from './propuesta/ResolverLoteVista'
-import ResolverLoteAcciones from './propuesta/ResolverLoteAcciones'
-import VersusTable from './propuesta/VersusTable'
+import RubroTable from './propuesta/RubroTable'
+import { construirFilasVisita } from './propuesta/filas'
 import { useMotivos } from '@/hooks/useMotivos'
-import { useRubros, useResolverRubros, useEliminarRubro } from '@/hooks/useRubros'
+import { useRubros, useResolverRubros, useAgregarRubro, useEliminarRubro } from '@/hooks/useRubros'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
-import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { formatearDuracion } from '@/lib/visitaTimer'
 import { motivosIguales, tieneDetalleIncompleto } from '@/lib/resolucionRubro'
 import { leerBorrador, guardarBorrador, limpiarBorrador } from '@/lib/resolucionDraft'
 import type { IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
-
-type Vista = 'list' | 'versus' | 'agregar' | 'resolverLote'
 
 interface VisitaSheetProps {
     open: boolean
@@ -30,8 +23,8 @@ interface VisitaSheetProps {
     visitaCerrada: boolean
     /** true = la visita está en curso (no cerrada): pinta el eyebrow naranja + cronómetro. */
     enCurso?: boolean
-    /** Si se pasa, habilita "Ver versus" (cómo viene comprando el cliente) durante la
-     *  visita, igual que en la Propuesta previa. */
+    /** Si se pasa, habilita la tabla "cómo viene comprando" durante la visita, igual
+     *  que en la Propuesta previa. */
     codigoParticularCliente?: string
     onCerrarVisita: () => void
     onClose: () => void
@@ -56,6 +49,7 @@ export default function VisitaSheet({
     const { data: rubros = [], isSuccess: rubrosCargados } = useRubros(open ? visitaId : null)
     const { data: motivos = [] } = useMotivos('rubro')
     const resolverTodos = useResolverRubros(visitaId)
+    const agregar = useAgregarRubro(visitaId)
     const eliminar = useEliminarRubro(visitaId)
 
     const [wizard, setWizard] = useState<{ rubros: IVisitaRubro[]; index: number } | null>(null)
@@ -66,15 +60,25 @@ export default function VisitaSheet({
     const [borradorListo, setBorradorListo] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
-    const [vista, setVista] = useState<Vista>('list')
-    const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set())
-    const [loteMotivos, setLoteMotivos] = useState<IRubroMotivo[]>([])
+    const [expandido, setExpandido] = useState(false)
+    // Los ids que se agregaron dinámicamente esta sesión, más reciente primero — se
+    // usan para insertarlos arriba de todo en la lista al agregarlos (ver
+    // `conNuevosArriba`). Es una decisión deliberada que NO se generaliza a "reordenar
+    // por estado": si además reordenara al resolver, la fila saltaría de posición justo
+    // cuando el vendedor la está completando (ver nota en `construirFilasVisita`).
+    const [agregadosIds, setAgregadosIds] = useState<number[]>([])
+    // Ambas mutaciones (agregar/eliminar) son una sola instancia compartida por todas
+    // las filas de la tabla: `agregar.isPending`/`agregar.variables` solo reflejan la
+    // ÚLTIMA llamada a `.mutate()`, no todas las que puedan estar en vuelo a la vez. Si
+    // el vendedor toca dos filas agregables antes de que la primera request vuelva, el
+    // spinner/disabled de la primera se apagaría solo aunque siga en curso. Por eso el
+    // estado de "en vuelo" se lleva acá, por rubroCode/id, independiente de la mutación.
+    const [agregandoCodes, setAgregandoCodes] = useState<Set<string>>(new Set())
+    const [eliminandoIds, setEliminandoIds] = useState<Set<number>>(new Set())
 
-    // Solo se pide cuando el vendedor la abre: TODOS los rubros del cliente
-    // (Actual/M.Ant/Prom.6M), independiente de la propuesta/lista de caídas.
-    const { data: rubroStatus = [], isLoading: rubroStatusLoading } = useRubroStatus(
-        vista === 'versus' ? (codigoParticularCliente ?? null) : null,
-    )
+    // Se pide al abrir el sheet, no al entrar a una sub-vista: la tabla es la fuente de
+    // los números en las dos pantallas y en los dos estados (colapsada/expandida).
+    const { data: rubroStatus = [] } = useRubroStatus(open ? (codigoParticularCliente ?? null) : null)
 
     useEffect(() => {
         if (!open) {
@@ -82,9 +86,10 @@ export default function VisitaSheet({
             setBorradores({})
             setBorradorListo(false)
             setErrorGuardado(null)
-            setVista('list')
-            setSeleccionados(new Set())
-            setLoteMotivos([])
+            setExpandido(false)
+            setAgregadosIds([])
+            setAgregandoCodes(new Set())
+            setEliminandoIds(new Set())
         }
     }, [open])
 
@@ -123,38 +128,69 @@ export default function VisitaSheet({
         setWizard({ rubros: subset, index })
     }
 
+    function abrirResolucion(visitaRubroId: number) {
+        const rubro = rubros.find(r => r.id === visitaRubroId)
+        if (rubro) abrirWizard(rubro)
+    }
+
+    // mutateAsync (no mutate) a propósito: los callbacks que se pasan como segundo
+    // argumento de `.mutate()` viven en un solo campo del observer, compartido por
+    // toda la vida del hook — una segunda llamada concurrente pisa los callbacks de
+    // la primera antes de que termine, y su "en vuelo" queda deshabilitado para
+    // siempre. mutateAsync devuelve una promesa propia de CADA llamada, así que el
+    // try/finally de acá sí queda atado a la request correcta.
+    async function agregarDesdeTabla(rubroCode: string) {
+        const item = rubroStatus.find(s => s.rubroCode === rubroCode)
+        if (!item) return
+        setAgregandoCodes(prev => new Set(prev).add(rubroCode))
+        try {
+            const result = await agregar.mutateAsync({ rubroCode: item.rubroCode, rubroDescripcion: item.nombre })
+            setAgregadosIds(prev => [result.visitaRubroId, ...prev])
+        } catch {
+            // Silencioso a propósito: la fila vuelve a su estado agregable y el
+            // vendedor puede volver a tocarla (mismo comportamiento que antes).
+        } finally {
+            setAgregandoCodes(prev => {
+                const next = new Set(prev)
+                next.delete(rubroCode)
+                return next
+            })
+        }
+    }
+
+    async function eliminarDesdeTabla(visitaRubroId: number) {
+        setEliminandoIds(prev => new Set(prev).add(visitaRubroId))
+        try {
+            await eliminar.mutateAsync(visitaRubroId)
+        } catch {
+            // Silencioso a propósito: mismo criterio que agregarDesdeTabla.
+        } finally {
+            setEliminandoIds(prev => {
+                const next = new Set(prev)
+                next.delete(visitaRubroId)
+                return next
+            })
+        }
+    }
+
+    // Los recién agregados van arriba de todo (en el orden en que se agregaron, el
+    // último primero) para que el vendedor los encuentre sin buscarlos entre los que
+    // ya estaban. Una vez ahí NO se vuelven a mover — ni siquiera al resolverlos —
+    // porque el orden solo se recalcula acá, a partir de `agregadosIds`, no a partir
+    // del estado de resolución de cada rubro.
+    function conNuevosArriba(rubrosVisita: IVisitaRubro[]): IVisitaRubro[] {
+        if (agregadosIds.length === 0) return rubrosVisita
+        const porId = new Map(rubrosVisita.map(r => [r.id, r]))
+        const nuevos = agregadosIds.map(id => porId.get(id)).filter((r): r is IVisitaRubro => r != null)
+        const nuevosIds = new Set(agregadosIds)
+        const resto = rubrosVisita.filter(r => !nuevosIds.has(r.id))
+        return [...nuevos, ...resto]
+    }
+
     // El wizard ya escribió todo en `borradores` en cada tilde (ver onCambiarBorrador
     // más abajo) — acá solo queda cerrar y volver a la lista.
     function finalizar() {
         setWizard(null)
-    }
-
-    function toggleSeleccion(rubroId: number) {
-        setSeleccionados(prev => {
-            const next = new Set(prev)
-            if (next.has(rubroId)) next.delete(rubroId)
-            else next.add(rubroId)
-            return next
-        })
-    }
-
-    // Fusiona (por motivoId) el borrador compartido del lote en cada rubro seleccionado,
-    // sin pisar los motivos que ya tuviera cargados. Igual que el wizard individual, no
-    // llama al backend: el cambio queda en `borradores` (y por lo tanto en localStorage).
-    function aplicarLote() {
-        setBorradores(prev => {
-            const next = { ...prev }
-            for (const rubroId of seleccionados) {
-                const actual = next[rubroId] ?? []
-                const porId = new Map(actual.map(m => [m.motivoId, m]))
-                for (const m of loteMotivos) porId.set(m.motivoId, m)
-                next[rubroId] = [...porId.values()]
-            }
-            return next
-        })
-        setSeleccionados(new Set())
-        setLoteMotivos([])
-        setVista('list')
     }
 
     function rubroCompleto(r: IVisitaRubro): boolean {
@@ -164,11 +200,21 @@ export default function VisitaSheet({
 
     const pendientes = rubros.filter(r => !rubroCompleto(r)).length
 
-    const necesitaMarcasLote = loteMotivos.some(
-        m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
-    )
-    const { data: marcasLote = [], isLoading: marcasLoteLoading } = useBrandCatalog(
-        vista === 'resolverLote' && necesitaMarcasLote,
+    const estadosResolucion: Record<number, { motivosCargados: number; completo: boolean }> = {}
+    for (const r of rubros) {
+        estadosResolucion[r.id] = {
+            motivosCargados: (borradores[r.id] ?? r.motivos).length,
+            completo: rubroCompleto(r),
+        }
+    }
+    const codesVisita = new Set(rubros.map(r => r.rubroCode))
+    const hayOtrosRubros = rubroStatus.some(s => !codesVisita.has(s.rubroCode))
+    const filas = construirFilasVisita(
+        conNuevosArriba(rubros),
+        rubroStatus,
+        estadosResolucion,
+        expandido,
+        !visitaCerrada,
     )
 
     // Único punto de guardado contra el backend: junta todo lo que cambió contra lo
@@ -212,23 +258,6 @@ export default function VisitaSheet({
             onIndexChange={index => setWizard(w => (w ? { ...w, index } : w))}
             onFinalizar={finalizar}
         />
-    ) : vista === 'agregar' ? null : vista === 'resolverLote' ? (
-        <ResolverLoteAcciones
-            motivos={motivos}
-            value={loteMotivos}
-            cantidad={seleccionados.size}
-            onCancelar={() => {
-                setVista('list')
-                setLoteMotivos([])
-            }}
-            onAplicar={aplicarLote}
-        />
-    ) : seleccionados.size > 0 ? (
-        <SeleccionBar
-            cantidad={seleccionados.size}
-            onCancelar={() => setSeleccionados(new Set())}
-            onResolver={() => setVista('resolverLote')}
-        />
     ) : (
         <>
             {pendientes > 0 && (
@@ -241,6 +270,24 @@ export default function VisitaSheet({
                 <p className="mb-2 text-center text-[12.5px] font-semibold text-dsred">
                     {errorGuardado}
                 </p>
+            )}
+            {/* Fijo junto al botón principal, no adentro del scroll: al expandir la
+             *  tabla con "Ver más" la lista puede crecer bastante, y si este botón
+             *  quedara al final del contenido scrolleable, minimizarla exigiría
+             *  scrollear hasta abajo de todo para volver a encontrarlo. */}
+            {hayOtrosRubros && (
+                <Button
+                    variant="outline"
+                    onClick={() => setExpandido(e => !e)}
+                    className="mb-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
+                >
+                    {expandido ? (
+                        <Minimize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                    ) : (
+                        <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                    )}
+                    {expandido ? 'Ver menos' : 'Ver más'}
+                </Button>
             )}
             {!visitaCerrada && (
                 <Button
@@ -267,6 +314,7 @@ export default function VisitaSheet({
         >
             {wizard ? (
                 <ResolucionWizard
+                    visitaId={visitaId}
                     rubros={wizard.rubros}
                     index={wizard.index}
                     motivos={motivos}
@@ -274,51 +322,6 @@ export default function VisitaSheet({
                     onCambiarBorrador={(rubroId, m) => setBorradores(prev => ({ ...prev, [rubroId]: m }))}
                     onVolver={() => setWizard(null)}
                 />
-            ) : vista === 'resolverLote' ? (
-                <ResolverLoteVista
-                    motivos={motivos}
-                    marcas={marcasLote}
-                    marcasLoading={marcasLoteLoading}
-                    cantidad={seleccionados.size}
-                    value={loteMotivos}
-                    onChange={setLoteMotivos}
-                    onVolver={() => {
-                        setVista('list')
-                        setLoteMotivos([])
-                    }}
-                />
-            ) : vista === 'agregar' ? (
-                <AgregarRubroVista
-                    visitaId={visitaId}
-                    codesEnVisita={rubros.map(r => r.rubroCode)}
-                    onVolver={() => setVista('list')}
-                    onAgregado={() => setVista('list')}
-                />
-            ) : vista === 'versus' ? (
-                <div>
-                    <div className="mb-3.5 flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            aria-label="Volver"
-                            onClick={() => setVista('list')}
-                            className="h-[29px] w-[29px] border-[#E1E6F0] text-dsmuted"
-                        >
-                            <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                        </Button>
-                        <span className="text-[13px] font-bold text-[#182645]">
-                            Cómo viene comprando
-                        </span>
-                    </div>
-                    {rubroStatusLoading ? (
-                        <div className="flex items-center justify-center gap-2 py-8 text-sm text-dsmuted">
-                            <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.4} />
-                            Cargando…
-                        </div>
-                    ) : (
-                        <VersusTable rubros={rubroStatus} />
-                    )}
-                </div>
             ) : (
                 <div>
                     <p className="mb-3 text-[13px] leading-snug text-dsmuted">
@@ -326,49 +329,17 @@ export default function VisitaSheet({
                         resuelven con <b className="font-bold text-[#182645]">"No lo ofrecí"</b>.
                     </p>
 
-                    <div className="flex flex-col gap-2.5">
-                        {rubros.map(r => {
-                            const editable = esEditable(r)
-                            return (
-                                <RubroCard
-                                    key={r.id}
-                                    nombre={r.rubroDescripcion}
-                                    motivosCargados={!r.resuelto ? (borradores[r.id] ?? r.motivos).length : undefined}
-                                    onResolucion={editable ? () => abrirWizard(r) : undefined}
-                                    seleccionable={editable}
-                                    seleccionado={seleccionados.has(r.id)}
-                                    onToggleSeleccion={() => toggleSeleccion(r.id)}
-                                    onEliminar={!r.esPropuesto && editable ? () => eliminar.mutate(r.id) : undefined}
-                                />
-                            )
-                        })}
-                        {rubros.length === 0 && (
-                            <div className="text-sm text-dsmuted">
-                                Esta visita no tiene rubros propuestos.
-                            </div>
-                        )}
-                    </div>
-
-                    {!visitaCerrada && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setVista('agregar')}
-                            className="mt-3.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
-                        >
-                            <Plus className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                            Agregar rubro
-                        </Button>
-                    )}
-
-                    {codigoParticularCliente && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setVista('versus')}
-                            className="mt-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
-                        >
-                            <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                            Ver versus
-                        </Button>
+                    {filas.length === 0 ? (
+                        <div className="text-sm text-dsmuted">Esta visita no tiene rubros propuestos.</div>
+                    ) : (
+                        <RubroTable
+                            filas={filas}
+                            onResolucion={abrirResolucion}
+                            onAgregar={agregarDesdeTabla}
+                            onEliminar={eliminarDesdeTabla}
+                            agregandoCodes={agregandoCodes}
+                            eliminandoIds={eliminandoIds}
+                        />
                     )}
                 </div>
             )}

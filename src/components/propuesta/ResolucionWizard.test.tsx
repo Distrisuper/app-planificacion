@@ -30,6 +30,7 @@ function setup(over: Record<string, unknown> = {}) {
     render(
         <QueryClientProvider client={qc}>
             <ResolucionWizard
+                visitaId={42}
                 rubros={rubros}
                 index={0}
                 motivos={motivos}
@@ -46,6 +47,7 @@ function setup(over: Record<string, unknown> = {}) {
 beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
+    ;(api.eliminarRubro as any).mockResolvedValue(undefined)
 })
 
 it('muestra la posición y el rubro actual', () => {
@@ -83,4 +85,29 @@ it('pide el catálogo de marcas cuando hay tildado un motivo con detalle', async
         },
     })
     await waitFor(() => expect(api.getBrandCatalog).toHaveBeenCalled())
+})
+
+it('ofrece "Quitar rubro" para un rubro que no es de la propuesta', () => {
+    setup({ index: 1 }) // rubros[1] = Filtros, esPropuesto: false
+    expect(screen.getByRole('button', { name: /quitar filtros/i })).toBeInTheDocument()
+})
+
+it('no ofrece "Quitar rubro" para un rubro de la propuesta', () => {
+    setup({ index: 0 }) // rubros[0] = Amortiguadores, esPropuesto: true
+    expect(screen.queryByRole('button', { name: /quitar amortiguadores/i })).not.toBeInTheDocument()
+})
+
+it('"Quitar rubro" llama al backend y vuelve a la lista', async () => {
+    const { onVolver } = setup({ index: 1 })
+    fireEvent.click(screen.getByRole('button', { name: /quitar filtros/i }))
+    await waitFor(() => expect(api.eliminarRubro).toHaveBeenCalledWith(42, 8))
+    expect(onVolver).toHaveBeenCalled()
+})
+
+it('si falla el borrado, muestra el error y no vuelve a la lista', async () => {
+    ;(api.eliminarRubro as any).mockRejectedValue(new Error('offline'))
+    const { onVolver } = setup({ index: 1 })
+    fireEvent.click(screen.getByRole('button', { name: /quitar filtros/i }))
+    expect(await screen.findByText(/sin conexión/i)).toBeInTheDocument()
+    expect(onVolver).not.toHaveBeenCalled()
 })
