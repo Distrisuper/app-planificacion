@@ -5,6 +5,7 @@ import type {
     IAgendaClient,
     IAgregarRubroDTO,
     IAgregarRubroResult,
+    ICatalogoItem,
     ICerrarCicloResult,
     ICerrarVisitaDTO,
     ICerrarVisitaResult,
@@ -187,4 +188,13 @@ export const getRubroStatus = async (
             mesAnterior: i.totalsByPeriod.lastMonth?.amount ?? 0,
             promedio6m: (i.totalsByPeriod.last6Months?.amount ?? 0) / 6,
         }))
+}
+
+// ── Catálogos (endpoints reusados, fuera del dominio de planificación) ─────────
+
+/** Marcas con ventas en los últimos 12 meses. Ordenadas por descripción del lado
+ *  del server. */
+export const getBrandCatalog = async (): Promise<ICatalogoItem[]> => {
+    const res = await apiClient.get('/sale/brand/catalog')
+    return res.data.data
 }

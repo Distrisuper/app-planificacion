@@ -1,7 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
 import ResolucionRubro from './ResolucionRubro'
-import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
+import type { ICatalogoItem, IMotivo, IRubroMotivo } from '@/types/planificacion'
 
 const motivos: IMotivo[] = [
     { motivoId: 10, nivel: 'rubro', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
@@ -9,32 +9,22 @@ const motivos: IMotivo[] = [
     { motivoId: 16, nivel: 'rubro', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
 ]
 
-const rubro: IVisitaRubro = {
-    id: 7,
-    resolucionId: 42,
-    rubroCode: 'AMORT',
-    rubroDescripcion: 'Amortiguadores',
-    gapUnits: 12,
-    esPropuesto: true,
-    resuelto: false,
-    motivos: [],
-}
+const marcas: ICatalogoItem[] = [
+    { code: 'FR', description: 'Fric-Rot' },
+    { code: 'FX', description: 'Fremax' },
+]
 
-function setup(value: IRubroMotivo[] = [], over: Record<string, unknown> = {}) {
+function setup(value: IRubroMotivo[] = []) {
     const onChange = vi.fn()
-    const onGuardar = vi.fn()
     render(
         <ResolucionRubro
-            rubro={rubro}
             motivos={motivos}
+            marcas={marcas}
             value={value}
             onChange={onChange}
-            onGuardar={onGuardar}
-            onBack={() => {}}
-            {...over}
         />,
     )
-    return { onChange, onGuardar }
+    return { onChange }
 }
 
 it('renderiza el catálogo recibido, sin nombres hardcodeados', () => {
@@ -43,11 +33,6 @@ it('renderiza el catálogo recibido, sin nombres hardcodeados', () => {
     expect(screen.getByText('No lo ofrecí')).toBeInTheDocument()
     // "Poco trabajo" / "Estoy completo" eran del prototipo y NO están en el catálogo.
     expect(screen.queryByText('Poco trabajo')).not.toBeInTheDocument()
-})
-
-it('muestra el rubro que se está resolviendo', () => {
-    setup()
-    expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
 })
 
 it('tildar un motivo lo agrega con los detalles en null', () => {
@@ -70,31 +55,30 @@ it('el detalle aparece por requiereDetalle, no por el nombre del motivo', () => 
     expect(screen.getByLabelText(/competidor/i)).toBeInTheDocument()
 })
 
-it('sin el detalle completo no se puede guardar', () => {
+it('la marca se elige del catálogo, no se escribe', () => {
     setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeDisabled()
+    fireEvent.click(screen.getByLabelText(/marca/i))
+    expect(screen.getByText('Fric-Rot')).toBeInTheDocument()
 })
 
-it('con el detalle completo se habilita guardar', () => {
-    setup([{ motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 }])
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeEnabled()
-})
-
-it('un motivo sin requiereDetalle habilita guardar solo', () => {
-    setup([{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeEnabled()
-})
-
-it('guardar con cero motivos está permitido: limpia el rubro', () => {
-    const { onGuardar } = setup([])
-    fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
-    expect(onGuardar).toHaveBeenCalled()
-})
-
-it('el detalle se edita por motivo', () => {
-    const { onChange } = setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
-    fireEvent.change(screen.getByLabelText(/marca/i), { target: { value: 'Fric-Rot' } })
+it('elegir una marca la guarda por su descripción', () => {
+    const { onChange } = setup([
+        { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
+    ])
+    fireEvent.click(screen.getByLabelText(/marca/i))
+    fireEvent.click(screen.getByText('Fric-Rot'))
     expect(onChange).toHaveBeenCalledWith([
         { motivoId: 13, marca: 'Fric-Rot', competidor: null, pctDiferencia: null },
+    ])
+})
+
+// Es una marca de afuera: no está en fct_sales, así que no hay catálogo que ofrecer.
+it('competidor sigue siendo texto libre', () => {
+    const { onChange } = setup([
+        { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
+    ])
+    fireEvent.change(screen.getByLabelText(/competidor/i), { target: { value: 'Corven' } })
+    expect(onChange).toHaveBeenCalledWith([
+        { motivoId: 13, marca: null, competidor: 'Corven', pctDiferencia: null },
     ])
 })

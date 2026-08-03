@@ -20,7 +20,12 @@ it('marca el inicio y calcula segundos transcurridos', () => {
     expect(segundosTranscurridos(1)).toBe(5)
 })
 
-it('marcar dos veces la misma visita no pisa el inicio original', () => {
+it('marcar de nuevo la misma visita pisa el inicio anterior con el nuevo', () => {
+    // Regresión: un guard "si ya existe, no lo toques" parecía inofensivo (marcar la
+    // MISMA visita en curso dos veces no pasa en ningún flujo real), pero si el id se
+    // reutilizaba (p.ej. tras un reset del backend de dev) y quedaba una clave vieja
+    // de una visita anterior sin cerrar, el cronómetro de la visita NUEVA arrancaba
+    // contando desde ese timestamp de hace horas o días, sin forma de corregirse.
     const antes = Date.now()
     vi.spyOn(Date, 'now').mockReturnValue(antes)
     marcarInicioVisita(1)
@@ -29,7 +34,7 @@ it('marcar dos veces la misma visita no pisa el inicio original', () => {
     marcarInicioVisita(1)
 
     vi.spyOn(Date, 'now').mockReturnValue(antes + 10000)
-    expect(segundosTranscurridos(1)).toBe(10)
+    expect(segundosTranscurridos(1)).toBe(7)
 })
 
 it('limpiarInicioVisita borra el registro', () => {

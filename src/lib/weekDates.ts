@@ -23,6 +23,14 @@ export function getWeekDates(reference: Date = new Date()): Record<Dia, Date> {
     return out
 }
 
+/** El `Dia` de hoy, o null si es sábado o domingo (la agenda es lunes a viernes).
+ *  Sirve para que la agenda arranque en el día que el vendedor está recorriendo en vez
+ *  de en LUN, que un jueves lo obliga a swipear cuatro columnas. */
+export function getDiaDeHoy(reference: Date = new Date()): Dia | null {
+    const dates = getWeekDates(reference)
+    return DIAS.find(d => isSameDay(dates[d], reference)) ?? null
+}
+
 export function formatDayDate(date: Date): string {
     return `${date.getDate()} ${MESES[date.getMonth()]}`
 }

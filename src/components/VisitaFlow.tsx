@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import PropuestaSheet from './PropuestaSheet'
+import { Loader2, WifiOff } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import PropuestaSheet, { toPropuestaDTO } from './PropuestaSheet'
 import VisitaSheet from './VisitaSheet'
 import IniciarVisitaMapa from './IniciarVisitaMapa'
 import { useCerrarVisita, useIniciarVisita } from '@/hooks/useVisitas'
+import { usePropuesta } from '@/hooks/usePropuesta'
 import { capturarUbicacion, type GeoResult } from '@/lib/geolocation'
 import { errorCode } from '@/lib/apiError'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
@@ -25,6 +28,10 @@ interface VisitaFlowProps {
      *  desaparecía. Ahora vive en el padre (AgendaSemanaPage) y sobrevive a qué cliente
      *  esté mirando el vendedor en cada momento. */
     visitaEnCurso: IVisitaEnCurso | null
+    /** true = el vendedor tocó "Iniciar visita" directo desde la card: se salta la
+     *  propuesta y va derecho al mapa (o arranca sin más si el cliente no tiene
+     *  coordenadas), igual que si hubiera confirmado la propuesta a mano. */
+    directoAMapa?: boolean
     onVisitaIniciada: (cliente: IAgendaClient, visitaId: number) => void
     onVisitaCerrada: () => void
     onClose: () => void
@@ -41,6 +48,7 @@ interface VisitaFlowProps {
 export default function VisitaFlow({
     cliente,
     visitaEnCurso,
+    directoAMapa,
     onVisitaIniciada,
     onVisitaCerrada,
     onClose,
@@ -74,14 +82,12 @@ export default function VisitaFlow({
         setErrorIniciar(null)
     }, [cliente?.cicloClienteId])
 
-    if (!cliente) return null
-
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
     // vendedor mire mientras tanto queda en modo consulta: el backend igual rechazaría un
     // segundo POST /visitas con VISITA_ACTIVA_EXISTENTE (no se puede estar en dos lugares
     // a la vez), así que el bloqueo se muestra acá antes de gastar un viaje al servidor.
     const esClienteEnCurso =
-        visitaEnCurso !== null && visitaEnCurso.cliente.cicloClienteId === cliente.cicloClienteId
+        visitaEnCurso !== null && cliente !== null && visitaEnCurso.cliente.cicloClienteId === cliente.cicloClienteId
     const bloqueadoPorOtraVisita = visitaEnCurso !== null && !esClienteEnCurso
 
     // Un cliente con visita ya abierta (o cerrada con rubros pendientes) entra derecho
@@ -89,11 +95,32 @@ export default function VisitaFlow({
     // `visitaEnCurso` es la fuente de verdad para ESTE cliente mientras la agenda no
     // refrescó todavía (recién se inició en esta sesión); si no aplica, se usa el
     // snapshot que ya trae `cliente` del servidor.
-    const visitaId = esClienteEnCurso ? visitaEnCurso!.visitaId : cliente.visitaId
-    const enRubros = visitaId !== null && cliente.estado !== 'pendiente'
+    const visitaId = esClienteEnCurso ? visitaEnCurso!.visitaId : (cliente?.visitaId ?? null)
+    const enRubros = visitaId !== null && cliente?.estado !== 'pendiente'
     const mostrarRubros = esClienteEnCurso || enRubros
-    const enCurso = cliente.estado === 'en_curso' || esClienteEnCurso
-    const tieneCoords = cliente.latitud != null && cliente.longitud != null
+    const enCurso = cliente?.estado === 'en_curso' || esClienteEnCurso
+    const tieneCoords = cliente?.latitud != null && cliente?.longitud != null
+
+    // "Iniciar visita" tocado directo desde la card: se salta la propuesta y va derecho
+    // al mapa. Solo aplica con coordenadas (si no las hay, no hay mapa que mostrar, así
+    // que cae al flujo normal de la propuesta). La propuesta igual hace falta pedirla acá
+    // (el backend la exige para congelarla), solo que ya no se muestra en pantalla.
+    const cargandoDirecto =
+        !!directoAMapa && tieneCoords && !mostrarRubros && propuestaPendiente === null && !bloqueadoPorOtraVisita
+    // `isError` es imprescindible, no un extra: el loader de abajo tapa toda la pantalla y
+    // no tiene cómo cerrarse, así que mirando solo `data` (que ante un fallo queda
+    // undefined para siempre) la app quedaba trabada en el spinner hasta reiniciarla.
+    const {
+        data: propuestaDirecta,
+        isError: fallóPropuestaDirecta,
+        refetch: reintentarPropuestaDirecta,
+    } = usePropuesta(cargandoDirecto ? (cliente?.codigoParticularCliente ?? null) : null)
+    useEffect(() => {
+        if (!cargandoDirecto || !propuestaDirecta) return
+        setPropuestaPendiente(propuestaDirecta.rubros.map(toPropuestaDTO))
+    }, [cargandoDirecto, propuestaDirecta])
+
+    if (!cliente) return null
 
     async function conUbicacion(accion: (coord: string) => Promise<void>) {
         const geo = await capturarUbicacion()
@@ -206,7 +233,7 @@ export default function VisitaFlow({
     return (
         <>
             <PropuestaSheet
-                open={!mostrarRubros && propuestaPendiente === null}
+                open={!mostrarRubros && propuestaPendiente === null && !cargandoDirecto}
                 codigoCliente={cliente.codigoParticularCliente}
                 nombreCliente={nombre}
                 iniciando={iniciandoFlujo}
@@ -240,11 +267,57 @@ export default function VisitaFlow({
                     error={errorIniciar}
                     onIniciar={onConfirmarEnMapa}
                     onCancel={() => {
-                        setPropuestaPendiente(null)
                         setErrorIniciar(null)
+                        // En modo directo se salteó la propuesta a propósito, así que atrás
+                        // del mapa no hay nada: cancelar es volver a la agenda. Además es lo
+                        // único que corta el ciclo — limpiar solo `propuestaPendiente` vuelve
+                        // a habilitar `cargandoDirecto`, y el efecto de más arriba reabre el
+                        // mapa al instante con la propuesta que quedó en cache (así el mapa
+                        // se volvía imposible de cerrar).
+                        if (directoAMapa) {
+                            cerrarFlujo()
+                            return
+                        }
+                        setPropuestaPendiente(null)
                     }}
                 />
             )}
+            {cargandoDirecto &&
+                !propuestaDirecta &&
+                (fallóPropuestaDirecta ? (
+                    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white px-8 text-center">
+                        <WifiOff className="h-8 w-8 text-dsmuted" strokeWidth={2} />
+                        <p className="text-[14px] font-semibold leading-snug text-[#182645]">
+                            No pudimos traer la propuesta de {nombre}.
+                        </p>
+                        <p className="-mt-2 text-[12.5px] leading-snug text-dsmuted">
+                            Fijate que tengas señal y volvé a intentar.
+                        </p>
+                        <Button
+                            onClick={() => reintentarPropuestaDirecta()}
+                            className="h-11 w-full max-w-[240px] bg-dsgreen text-[13.5px] hover:bg-dsgreen/90"
+                        >
+                            Volver a intentar
+                        </Button>
+                        <button
+                            type="button"
+                            onClick={cerrarFlujo}
+                            className="text-[13px] font-semibold text-dsmuted underline"
+                        >
+                            Volver a la agenda
+                        </button>
+                    </div>
+                ) : (
+                    <div
+                        data-testid="cargando-propuesta"
+                        className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white"
+                    >
+                        <Loader2 className="h-7 w-7 animate-spin text-dsnavy" strokeWidth={2.4} />
+                        <p className="text-[12.5px] font-semibold text-dsmuted">
+                            Buscando la propuesta…
+                        </p>
+                    </div>
+                ))}
         </>
     )
 }

@@ -1,4 +1,4 @@
-import { AlertCircle, Ban, Calendar, CalendarClock, Check, ChevronRight, MapPin, Phone, Zap } from 'lucide-react'
+import { Ban, Calendar, CalendarClock, Check, ChevronRight, Lock, MapPin, Phone, Play, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { estaResuelto } from '@/lib/estadoCiclo'
@@ -8,12 +8,28 @@ interface ClienteCardProps {
     cliente: IAgendaClient
     /** 'preview' = hojeando otra semana: se ve, no se opera. */
     modo?: 'operable' | 'preview'
+    /** El vendedor ya tiene una visita en curso EN OTRO cliente: no puede tener dos
+     *  visitas abiertas a la vez, así que acá "Iniciar visita" se muestra bloqueado
+     *  en vez de dejar que el vendedor lo intente y recién se entere en el sheet. */
+    otraVisitaEnCurso?: boolean
     onAbrir: (cliente: IAgendaClient) => void
     onEstadoVisita: (cliente: IAgendaClient) => void
-    onCargarRubros: (cliente: IAgendaClient) => void
+    /** Arranca la visita derecho, sin pasar por la propuesta: va directo al mapa
+     *  de confirmación (o inicia sin más si el cliente no tiene coordenadas). */
+    onIniciarVisita: (cliente: IAgendaClient) => void
 }
 
-const ICON_BUTTON = 'h-11 w-11 shrink-0 rounded-lg border-[#D8DEEA] p-0'
+// Utilidades (llamar/reagendar). Viven en el header, no en el área de acciones: son
+// auxiliares al ciclo de la visita, y como fila propia de botones sumaban una cuarta
+// caja que hacía la card innecesariamente alta en una columna de 7-8 clientes. Acá
+// aprovechan el hueco que la card pendiente ya tenía a la derecha del código.
+const HEADER_ACTION =
+    'inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-[#F4F6FA] text-[11.5px] font-semibold text-[#54607A] hover:bg-[#EAEEF6]'
+// El teléfono va sin texto porque el ícono ya se entiende solo; "reagendar" NO tiene
+// ícono universal (un calendario a secas no dice qué le va a pasar al cliente), así que
+// ese lleva label sí o sí — se probó como ícono pelado y no se entendía.
+const HEADER_ICON_ONLY = `${HEADER_ACTION} w-8`
+const HEADER_WITH_LABEL = `${HEADER_ACTION} px-2.5`
 
 const ACCENT = '#213D82'
 
@@ -25,20 +41,25 @@ const TELEFONO_LIMPIO = /^[\d\s()+-]+$/
 export default function ClienteCard({
     cliente,
     modo = 'operable',
+    otraVisitaEnCurso = false,
     onAbrir,
     onEstadoVisita,
-    onCargarRubros,
+    onIniciarVisita,
 }: ClienteCardProps) {
     const resuelto = estaResuelto(cliente.estado)
     const enCurso = cliente.estado === 'en_curso'
     const noVisitado = cliente.estado === 'no_visita'
     const operable = modo === 'operable'
+    // Solo se puede arrancar de cero un cliente que todavía no tiene visita: una vez
+    // iniciada (en_curso) o resuelta, "Iniciar visita" ya no aplica. Tampoco aplica con
+    // otra visita ya abierta — el backend la rechazaría igual (VISITA_ACTIVA_EXISTENTE),
+    // pero mostrarlo bloqueado acá evita el viaje al servidor para enterarse.
+    const puedeIniciar = cliente.estado === 'pendiente' && !otraVisitaEnCurso
     // `||` (no `??`): nombreFantasia real puede venir como '' (sin cartel) — en ese
     // caso hay que caer a la razón social, no mostrar un nombre vacío.
     const nombre = titleCaseNombre(cliente.nombreFantasia || cliente.nombreCliente)
     const telefonoLimpio =
         cliente.telefono && TELEFONO_LIMPIO.test(cliente.telefono) ? cliente.telefono : null
-    const pendientes = cliente.rubrosPendientes
     const direccionTexto = cliente.direccion || cliente.barrio
     const mapsHref =
         cliente.latitud != null && cliente.longitud != null
@@ -88,6 +109,29 @@ export default function ClienteCard({
                         <Check className="h-3 w-3" strokeWidth={3.5} />
                     </span>
                 )}
+                {operable && !resuelto && (
+                    <div className="-mr-0.5 -mt-0.5 flex shrink-0 gap-1">
+                        {telefonoLimpio && (
+                            <a
+                                href={`tel:+54${telefonoLimpio.replace(/\D/g, '')}`}
+                                onClick={e => e.stopPropagation()}
+                                aria-label="Llamar"
+                                title="Llamar"
+                                className={HEADER_ICON_ONLY}
+                            >
+                                <Phone className="h-[15px] w-[15px]" strokeWidth={2} />
+                            </a>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => onEstadoVisita(cliente)}
+                            className={HEADER_WITH_LABEL}
+                        >
+                            <Calendar className="h-[13px] w-[13px]" strokeWidth={2} />
+                            Reagendar
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div
@@ -121,20 +165,6 @@ export default function ClienteCard({
                     </div>
                 ))}
 
-            {/* Rubros sin cargar: traban el cierre de la semana, así que el aviso va
-                donde el vendedor ya está mirando y no recién al final. */}
-            {operable && pendientes > 0 && cliente.visitaId !== null && (
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onCargarRubros(cliente)}
-                    className="mt-2.5 h-10 w-full border-[#F0D8A8] bg-[#FEF8EC] text-[12.5px] font-bold text-[#B45309]"
-                >
-                    <AlertCircle className="h-[14px] w-[14px]" strokeWidth={2.2} />
-                    {pendientes} {pendientes === 1 ? 'rubro' : 'rubros'} sin cargar
-                </Button>
-            )}
-
             {/* Resuelto sin visita real (no_visita/reagendada): no hay nada que resumir ni
                 ninguna acción que tenga sentido — llamar o reagendar a alguien ya resuelto
                 no aplica. Queda solo el pill de estado de más arriba. */}
@@ -150,35 +180,40 @@ export default function ClienteCard({
                     </Button>
                 </div>
             ) : operable ? (
-                <div className="mt-2.5 flex gap-1.5 border-t border-[#EDEFF4] pt-2.5">
-                    <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => onAbrir(cliente)}
-                        className="h-11 flex-1 text-[13px]"
-                    >
-                        <Zap className="h-[14px] w-[14px]" strokeWidth={2} />
-                        Propuesta
-                    </Button>
-                    {telefonoLimpio && (
-                        <a
-                            href={`tel:+54${telefonoLimpio.replace(/\D/g, '')}`}
-                            onClick={e => e.stopPropagation()}
-                            aria-label="Llamar"
-                            className={`${ICON_BUTTON} inline-flex items-center justify-center border bg-white text-dsnavy hover:bg-dsnavy/5`}
+                <div className="mt-2.5 flex flex-col gap-1.5 border-t border-[#EDEFF4] pt-2.5">
+                    {/* Tier 1 — las dos acciones de la visita, con el MISMO peso: el vendedor
+                        tanto entra derecho como prepara la propuesta antes, según el cliente.
+                        Se distinguen por relleno (outline vs. verde), no por tamaño. */}
+                    <div className="flex gap-1.5">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onAbrir(cliente)}
+                            className="h-11 flex-1 border-[#D8DEEA] text-[13px] text-dsnavy"
                         >
-                            <Phone className="h-[14px] w-[14px]" strokeWidth={2} />
-                        </a>
+                            <Zap className="h-[14px] w-[14px]" strokeWidth={2} />
+                            Propuesta
+                        </Button>
+                        {puedeIniciar && (
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => onIniciarVisita(cliente)}
+                                className="h-11 flex-1 bg-dsgreen text-[13px] hover:bg-dsgreen/90"
+                            >
+                                <Play className="h-[14px] w-[14px] fill-current" strokeWidth={0} />
+                                Iniciar visita
+                            </Button>
+                        )}
+                    </div>
+                    {/* Bloqueado por otra visita: nota informativa, no un control. Va chica y
+                        sin caja de botón para que no compita con el tier 1 ni invite al tap. */}
+                    {cliente.estado === 'pendiente' && otraVisitaEnCurso && (
+                        <div className="flex items-center justify-center gap-1.5 pt-0.5 text-[11.5px] font-semibold leading-tight text-[#8A93A6]">
+                            <Lock className="h-3 w-3 shrink-0" strokeWidth={2.2} />
+                            Cerrá la visita en curso para iniciar otra
+                        </div>
                     )}
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label="Estado de la visita"
-                        onClick={() => onEstadoVisita(cliente)}
-                        className={ICON_BUTTON}
-                    >
-                        <Calendar className="h-[14px] w-[14px]" strokeWidth={2} />
-                    </Button>
                 </div>
             ) : null}
         </div>

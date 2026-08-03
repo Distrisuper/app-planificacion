@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
 import DiaTabs from '@/components/DiaTabs'
@@ -17,7 +18,7 @@ import { useNotificacion } from '@/hooks/useNotificacion'
 import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
-import { getWeekRangeLabel } from '@/lib/weekDates'
+import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
 import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
@@ -54,9 +55,43 @@ export default function AgendaSemanaPage() {
     const { data: motivosVisita = [] } = useMotivos('visita')
     const { notificacion, mostrar, ocultar } = useNotificacion()
 
+    // La posición que el vendedor está mirando (semana + día) vive en la URL, no en
+    // useState: al recargar la página — o cuando la PWA se resume desde cero — un useState
+    // volvía a LUN de la vuelta abierta y le hacía perder dónde estaba.
+    //
+    // Deliberadamente NO se escribe la URL al montar: `/` queda limpio, así abrir la app
+    // de cero siempre significa "hoy" y un bookmark no congela un día viejo. Y la semana
+    // sigue siendo `null` por defecto, cayendo a `ciclo.semana` — el backend sigue siendo
+    // la autoridad sobre cuál es la vuelta abierta (ver "Decisiones no obvias" en
+    // CLAUDE.md: no hay ancla local que pueda desincronizarse en silencio).
+    const [searchParams, setSearchParams] = useSearchParams()
+
+    // `replace` y no `push`: AgendaBoard emite onActivoChange en CADA evento de scroll al
+    // swipear entre columnas, así que apilar historial llenaría el back stack con decenas
+    // de entradas tras unos pocos swipes.
+    function actualizarPosicion(cambios: { dia?: Dia; semana?: number | null }) {
+        setSearchParams(
+            prev => {
+                const next = new URLSearchParams(prev)
+                if (cambios.dia !== undefined) next.set('dia', cambios.dia)
+                if (cambios.semana !== undefined) {
+                    if (cambios.semana === null) next.delete('semana')
+                    else next.set('semana', String(cambios.semana))
+                }
+                return next
+            },
+            { replace: true },
+        )
+    }
+
     // La semana que se está MIRANDO. null hasta que se sepa cuál: con vuelta abierta es
     // la suya; sin vuelta, la que proponga el preview.
-    const [semanaVista, setSemanaVista] = useState<number | null>(null)
+    const semanaParam = Number(searchParams.get('semana'))
+    const semanaVista =
+        Number.isInteger(semanaParam) && semanaParam >= 1 && semanaParam <= SEMANAS
+            ? semanaParam
+            : null
+    const setSemanaVista = (semana: number | null) => actualizarPosicion({ semana })
     const semanaEfectiva = semanaVista ?? ciclo?.semana ?? null
     const operable = ciclo != null && semanaEfectiva === ciclo.semana
 
@@ -74,8 +109,18 @@ export default function AgendaSemanaPage() {
     // tumbaría el preview ya cargado durante el refetch, ocultando momentáneamente el CTA.
     const semanaBase = semanaEfectiva ?? preview?.semana ?? null
 
-    const [diaActivo, setDiaActivo] = useState<Dia>('LUN')
+    // Sin `?dia=`, arranca en HOY y no en LUN: un jueves, LUN obligaba a swipear cuatro
+    // columnas para llegar a lo que el vendedor está recorriendo. El fin de semana no hay
+    // "hoy" en la agenda (es lunes a viernes), así que ahí sí cae a LUN.
+    const diaParam = searchParams.get('dia')
+    const diaActivo: Dia = DIAS.includes(diaParam as Dia)
+        ? (diaParam as Dia)
+        : (getDiaDeHoy() ?? 'LUN')
+    const setDiaActivo = (dia: Dia) => actualizarPosicion({ dia })
     const [visitaCliente, setVisitaCliente] = useState<IAgendaClient | null>(null)
+    // true = se abrió el flujo tocando "Iniciar visita" en la card (no "Propuesta"): se
+    // salta la propuesta y va derecho al mapa. Ver VisitaFlow.directoAMapa.
+    const [directoAMapa, setDirectoAMapa] = useState(false)
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [cerrandoSemana, setCerrandoSemana] = useState(false)
@@ -195,6 +240,16 @@ export default function AgendaSemanaPage() {
         }
     }
 
+    function abrirPropuesta(cliente: IAgendaClient) {
+        setDirectoAMapa(false)
+        setVisitaCliente(cliente)
+    }
+
+    function iniciarDirecto(cliente: IAgendaClient) {
+        setDirectoAMapa(true)
+        setVisitaCliente(cliente)
+    }
+
     function onElegirNoVisita() {
         const cliente = estadoVisitaCliente
         setEstadoVisitaCliente(null)
@@ -241,10 +296,11 @@ export default function AgendaSemanaPage() {
                 semana={semana}
                 activo={diaActivo}
                 modo={operable ? 'operable' : 'preview'}
+                hayVisitaEnCurso={visitaEnCurso !== null}
                 onActivoChange={setDiaActivo}
-                onAbrir={setVisitaCliente}
+                onAbrir={abrirPropuesta}
                 onEstadoVisita={setEstadoVisitaCliente}
-                onCargarRubros={setVisitaCliente}
+                onIniciarVisita={iniciarDirecto}
             />
 
             {ciclo === null && preview && (
@@ -260,9 +316,13 @@ export default function AgendaSemanaPage() {
             <VisitaFlow
                 cliente={visitaCliente}
                 visitaEnCurso={visitaEnCurso}
+                directoAMapa={directoAMapa}
                 onVisitaIniciada={(cliente, visitaId) => setVisitaEnCurso({ cliente, visitaId })}
                 onVisitaCerrada={() => setVisitaEnCurso(null)}
-                onClose={() => setVisitaCliente(null)}
+                onClose={() => {
+                    setVisitaCliente(null)
+                    setDirectoAMapa(false)
+                }}
                 onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
                 onAviso={mostrar}
             />
@@ -272,7 +332,7 @@ export default function AgendaSemanaPage() {
                     nombreCliente={
                         visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente
                     }
-                    onExpandir={() => setVisitaCliente(visitaEnCurso.cliente)}
+                    onExpandir={() => abrirPropuesta(visitaEnCurso.cliente)}
                 />
             )}
             <ResolucionSheet
