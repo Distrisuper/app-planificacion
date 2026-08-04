@@ -1,9 +1,8 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import TablaActividad from '@/components/analitica/TablaActividad'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
+import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
 import { useResumen, useVendedores, useVisitas } from '@/hooks/useAnalitica'
 import { incluyeHoy, rangoHoy } from '@/lib/fechas'
@@ -44,22 +43,8 @@ export default function AnaliticaActividadPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="border-b border-slate-200 bg-white px-6 py-4">
-                <Link
-                    to={`/analitica?desde=${filtro.desde}&hasta=${filtro.hasta}`}
-                    className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900"
-                >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    Volver a la analítica
-                </Link>
-                <h1 className="mt-1 flex items-center gap-2 text-lg font-semibold text-slate-900">
-                    Actividad
-                    {enVivo && (
-                        <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                            En vivo
-                        </span>
-                    )}
-                </h1>
+            <header className="bg-white px-6 pt-4">
+                <AnaliticaTabs enVivo={enVivo} />
             </header>
 
             <FiltrosAnalitica
@@ -70,7 +55,7 @@ export default function AnaliticaActividadPage() {
                 onLimpiar={limpiarVendedores}
             />
 
-            <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
+            <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                     {kpis.map(k => (
                         <div

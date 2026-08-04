@@ -37,7 +37,7 @@ export default function AnaliticaVendedorPage() {
                 </p>
             </header>
 
-            <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
+            <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 {vendedor && promedios && (
                     <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                         {[
