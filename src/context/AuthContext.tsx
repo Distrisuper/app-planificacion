@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react'
 import { login as loginApi, getMe } from '@/api/authApi'
+import { rutaInicialPara } from '@/lib/roles'
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthorized' | 'unauthenticated'
 
@@ -11,6 +12,8 @@ interface AuthUser {
 interface AuthContextValue {
     status: AuthStatus
     user: AuthUser | null
+    /** Pantalla donde arranca el rol logueado. null si no tiene acceso. */
+    rutaInicial: string | null
     loginError: string | null
     loginLoading: boolean
     login: (email: string, password: string) => Promise<void>
@@ -35,13 +38,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         try {
             const me = await getMe(token)
             const authUser = { name: me.name, rol: me.rol }
-            if (me.rol?.toLowerCase() !== 'vendedor') {
-                setUser(authUser)
-                setStatus('unauthorized')
-                return
-            }
             setUser(authUser)
-            setStatus('authenticated')
+            // El rol define a qué pantalla entra: el vendedor a su agenda, los roles
+            // analíticos a /analitica. Cualquier otro no tiene nada que hacer acá.
+            setStatus(rutaInicialPara(me.rol) === null ? 'unauthorized' : 'authenticated')
         } catch {
             localStorage.removeItem('access_token')
             setUser(null)
@@ -80,7 +80,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     return (
-        <AuthContext.Provider value={{ status, user, loginError, loginLoading, login, logout }}>
+        <AuthContext.Provider
+            value={{
+                status,
+                user,
+                rutaInicial: rutaInicialPara(user?.rol),
+                loginError,
+                loginLoading,
+                login,
+                logout,
+            }}
+        >
             {children}
         </AuthContext.Provider>
     )

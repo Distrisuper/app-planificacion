@@ -11,11 +11,12 @@ vi.mock('@/api/authApi', () => ({
 import { login as loginApi, getMe } from '@/api/authApi'
 
 function Probe() {
-    const { status, user, loginError, login, logout } = useAuth()
+    const { status, user, rutaInicial, loginError, login, logout } = useAuth()
     return (
         <div>
             <div data-testid="status">{status}</div>
             <div data-testid="user">{user ? `${user.name}:${user.rol}` : ''}</div>
+            <div data-testid="ruta">{rutaInicial ?? 'ninguna'}</div>
             <div data-testid="error">{loginError ?? ''}</div>
             <button onClick={() => login('user@x.com', 'pass')}>login</button>
             <button onClick={logout}>logout</button>
@@ -48,14 +49,26 @@ describe('AuthContext', () => {
         renderProbe()
         await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
         expect(screen.getByTestId('user')).toHaveTextContent('Martín:vendedor')
+        expect(screen.getByTestId('ruta')).toHaveTextContent('/')
     })
 
-    it('sets status to unauthorized when rol is not vendedor, without clearing the token', async () => {
+    it('authenticates a rol with unrestricted scope (analitica) and points it at /analitica', async () => {
         localStorage.setItem('access_token', 'tok')
         ;(getMe as any).mockResolvedValue({ name: 'Ana', rol: 'admin' })
         renderProbe()
-        await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthorized'))
+        await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
         expect(screen.getByTestId('user')).toHaveTextContent('Ana:admin')
+        expect(screen.getByTestId('ruta')).toHaveTextContent('/analitica')
+        expect(localStorage.getItem('access_token')).toBe('tok')
+    })
+
+    it('sets status to unauthorized when rol has no known access, without clearing the token', async () => {
+        localStorage.setItem('access_token', 'tok')
+        ;(getMe as any).mockResolvedValue({ name: 'Marketing', rol: 'marketing' })
+        renderProbe()
+        await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthorized'))
+        expect(screen.getByTestId('user')).toHaveTextContent('Marketing:marketing')
+        expect(screen.getByTestId('ruta')).toHaveTextContent('ninguna')
         expect(localStorage.getItem('access_token')).toBe('tok')
     })
 
