@@ -12,6 +12,13 @@ export default defineConfig({
         // El bug que este helper arregla solo se manifiesta en timezones al oeste de
         // Greenwich. Fijarla acá hace que el test falle en CI si alguien vuelve a
         // introducir toISOString() para fechas locales.
-        env: { TZ: 'America/Argentina/Buenos_Aires' },
+        env: {
+            TZ: 'America/Argentina/Buenos_Aires',
+            // Los tests de src/api/analitica.test.ts ejercitan la capa de fixture a
+            // propósito. Sin fijarlo acá quedaban a merced del .env de cada máquina:
+            // apagar el mock para probar contra el backend local los hacía salir a la
+            // red y fallar con "Network Error", que no dice nada de lo que se rompió.
+            VITE_ANALITICA_MOCK: '1',
+        },
     },
 })

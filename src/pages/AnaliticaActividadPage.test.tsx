@@ -13,8 +13,8 @@ vi.mock('@/api/analitica')
 const FILA: IVisitaFila = {
     visitaId: 1,
     fecha: '2026-08-03',
-    horaInicio: '09:15',
-    horaFin: null,
+    fechaInicio: '2026-08-03T12:15:00Z',
+    fechaFin: null,
     duracionMin: null,
     distanciaMetros: 80,
     codigoParticularCliente: 'C1000',

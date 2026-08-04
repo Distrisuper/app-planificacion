@@ -1,4 +1,4 @@
-import { isoLocal } from '@/lib/fechas'
+import { horaNegocio, isoLocal } from '@/lib/fechas'
 import type {
     IAnaliticaResumen,
     ICoord,
@@ -343,6 +343,15 @@ const MOTIVOS_RUBRO = [
 
 let seqVisita = 1000
 
+/** El instante de un horario de pared ARGENTINO, en el mismo formato que manda el
+ *  backend (ISO 8601 con offset). Escribir la hora "pelada" haría que el fixture se
+ *  interpretara en la TZ de quien corre los tests, y el mock dejaría de reproducir
+ *  lo que se ve en producción. */
+const instante = (fecha: string, hora: number, minuto: number): string =>
+    new Date(
+        `${fecha}T${String(hora).padStart(2, '0')}:${String(minuto).padStart(2, '0')}:00-03:00`,
+    ).toISOString()
+
 /** Genera visitas deterministas para un vendedor. Los índices elegidos fuerzan los
  *  casos borde: la 3ra visita de cada vendedor va sin coord del cliente, y la 5ta
  *  cae fuera de la tolerancia de 300 m. */
@@ -356,11 +365,12 @@ function visitasDe(codigo: string, nombreVendedor: string, cantidad: number): IV
         if (i % 7 === 2) distancia = null
         else if (i % 5 === 4) distancia = 4200 + i * 130
         const motivo = MOTIVOS_RUBRO[i % MOTIVOS_RUBRO.length]
+        const fecha = `2026-07-${String(dia).padStart(2, '0')}`
         filas.push({
             visitaId: seqVisita++,
-            fecha: `2026-07-${String(dia).padStart(2, '0')}`,
-            horaInicio: `${String(hora).padStart(2, '0')}:${String((i * 13) % 60).padStart(2, '0')}`,
-            horaFin: `${String(hora + 1).padStart(2, '0')}:00`,
+            fecha,
+            fechaInicio: instante(fecha, hora, (i * 13) % 60),
+            fechaFin: instante(fecha, hora + 1, 0),
             duracionMin: duracion,
             distanciaMetros: distancia,
             codigoParticularCliente: `C${1000 + i}`,
@@ -384,7 +394,7 @@ export const MOCK_VISITAS: Record<string, IVisitaFila[]> = Object.fromEntries(
 
 const MOTIVOS_NO_VISITA = ['Cerrado', 'De vacaciones', 'No estaba el encargado']
 
-/** Una fila que no es una visita. `duracionMin`/`horaFin` van en null igual que una
+/** Una fila que no es una visita. `duracionMin`/`fechaFin` van en null igual que una
  *  visita en curso: la UI las distingue por `tipo`, nunca por los nulls. */
 function resolucionNoVisita(
     v: IVendedorMetricas,
@@ -395,8 +405,8 @@ function resolucionNoVisita(
     return {
         visitaId: seqVisita++,
         fecha,
-        horaInicio: `${String(9 + (i % 8)).padStart(2, '0')}:${String((i * 17) % 60).padStart(2, '0')}`,
-        horaFin: null,
+        fechaInicio: instante(fecha, 9 + (i % 8), (i * 17) % 60),
+        fechaFin: null,
         duracionMin: null,
         distanciaMetros: null,
         codigoParticularCliente: `C${2000 + i}`,
@@ -420,16 +430,24 @@ export const MOCK_OTRAS_RESOLUCIONES: IVisitaFila[] = VENDEDORES.flatMap((v, i) 
  *  propio default, que es el peor primer contacto posible con la pantalla. */
 export const MOCK_VISITAS_HOY: IVisitaFila[] = (() => {
     const hoy = isoLocal(new Date())
+    /** Mueve una fila del fixture histórico al día de hoy conservando su horario de
+     *  pared argentino — no alcanza con pisar `fecha`, que es solo la etiqueta. */
+    const aHoy = (iso: string): string => {
+        const [h, m] = horaNegocio(iso).split(':').map(Number)
+        return instante(hoy, h, m)
+    }
     const filas = VENDEDORES.slice(0, 6).flatMap((v, i) => {
         const cerradas = visitasDe(v.codigoParticularVendedor, v.nombreVendedor, 2).map(f => ({
             ...f,
             fecha: hoy,
+            fechaInicio: aHoy(f.fechaInicio),
+            fechaFin: f.fechaFin ? aHoy(f.fechaFin) : null,
         }))
         // Una visita abierta: el caso que hace útil mirar la pantalla a media mañana.
         const enCurso: IVisitaFila = {
             ...cerradas[0],
             visitaId: seqVisita++,
-            horaFin: null,
+            fechaFin: null,
             duracionMin: null,
             motivos: [],
             resultado: null,
@@ -450,8 +468,8 @@ function detalleDe(fila: IVisitaFila, indice: number): IVisitaDetalle {
         codigoParticularCliente: fila.codigoParticularCliente,
         nombreCliente: fila.nombreCliente,
         direccion: sinCoordCliente ? null : `Av. Pellegrini ${1200 + indice * 37}`,
-        fechaInicio: `${fila.fecha}T${fila.horaInicio}:00`,
-        fechaFin: fila.horaFin ? `${fila.fecha}T${fila.horaFin}:00` : null,
+        fechaInicio: fila.fechaInicio,
+        fechaFin: fila.fechaFin,
         duracionMin: fila.duracionMin,
         coordInicio: {
             lat: BASE.lat + indice * 0.002 + desvio,

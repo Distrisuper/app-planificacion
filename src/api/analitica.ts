@@ -101,8 +101,10 @@ export const getVisitas = async (args: IVisitasArgs): Promise<IVisitasPage> => {
             .filter(v => !args.vendedores?.length || args.vendedores.includes(v.codigoParticularVendedor))
             .filter(v => !args.tipo?.length || args.tipo.includes(v.tipo))
             .filter(v => !busqueda || v.nombreCliente.toLowerCase().includes(busqueda))
-            // Feed de actividad: lo último arriba.
-            .sort((a, b) => `${b.fecha} ${b.horaInicio}`.localeCompare(`${a.fecha} ${a.horaInicio}`))
+            // Feed de actividad: lo último arriba. Ordena por el instante, no por el
+            // string: el ISO ya es comparable, pero el intento es el mismo que el del
+            // backend (`ORDER BY r.fecha_inicio DESC`).
+            .sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))
         return { total: visitas.length, pagina: args.pagina ?? 1, cant: visitas.length, visitas }
     }
     const res = await apiClient.get('/planificacion/analitica/visitas', { params: args })

@@ -141,6 +141,13 @@ app-planificacion  ──Bearer token──►  api-vendedores (dominio nuevo "p
 - **El catálogo de motivos es la tabla `Motivos` ya existente, pero solo de lectura** (picklist).
   El prototipo visual sugiere 9 opciones de referencia — hay que confirmar contra
   `SELECT * FROM Motivos` si ya están cargadas o faltan agregar filas.
+- **Las horas se formatean en TZ de negocio, no en la del dispositivo.** La API manda instantes
+  ISO en UTC (`fechaInicio`/`fechaFin`); la hora visible sale de `horaNegocio` en `src/lib/fechas.ts`,
+  anclada a `America/Argentina/Buenos_Aires` vía `Intl`. Nunca `slice(11, 16)` sobre el ISO (eso
+  muestra Greenwich: es lo que hizo que el dashboard marcara 15:07 para una visita de las 12:07) ni
+  `toLocaleTimeString()` pelado (la notebook de gerencia con otra TZ correría los horarios del
+  equipo). El campo `fecha` en cambio NO se recalcula acá: es el día de negocio que ya resolvió el
+  backend, y es la clave de agrupación de la cobertura.
 - **Geolocalización: solo 2 puntos (inicio y fin de la visita)**, con `navigator.geolocation`
   estándar y la app al frente. Alimenta la efectividad (compara `coord_inicio` vs `coord_cliente`).
   NO hay recorrido continuo ni tracking en segundo plano — eso no existe en web y se descartó

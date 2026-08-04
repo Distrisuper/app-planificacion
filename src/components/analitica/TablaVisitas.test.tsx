@@ -8,8 +8,8 @@ const VISITAS: IVisitaFila[] = [
     {
         visitaId: 1,
         fecha: '2026-07-20',
-        horaInicio: '09:13',
-        horaFin: '09:58',
+        fechaInicio: '2026-07-20T12:13:00Z',
+        fechaFin: '2026-07-20T12:58:00Z',
         duracionMin: 45,
         distanciaMetros: 29,
         codigoParticularCliente: 'C1',
@@ -23,8 +23,8 @@ const VISITAS: IVisitaFila[] = [
     {
         visitaId: 2,
         fecha: '2026-07-20',
-        horaInicio: '11:44',
-        horaFin: '12:27',
+        fechaInicio: '2026-07-20T14:44:00Z',
+        fechaFin: '2026-07-20T15:27:00Z',
         duracionMin: 43,
         distanciaMetros: null,
         codigoParticularCliente: 'C2',
@@ -38,8 +38,8 @@ const VISITAS: IVisitaFila[] = [
     {
         visitaId: 3,
         fecha: '2026-07-21',
-        horaInicio: '10:02',
-        horaFin: '10:20',
+        fechaInicio: '2026-07-21T13:02:00Z',
+        fechaFin: '2026-07-21T13:20:00Z',
         duracionMin: 18,
         distanciaMetros: 4300,
         codigoParticularCliente: 'C3',

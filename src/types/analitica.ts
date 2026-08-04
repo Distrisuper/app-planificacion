@@ -78,11 +78,13 @@ export interface IAnaliticaResumen {
 /** Una fila de la tabla de visitas (nivel 2). */
 export interface IVisitaFila {
     visitaId: number
-    /** YYYY-MM-DD */
+    /** YYYY-MM-DD. El día de negocio (TZ Argentina) que resolvió el backend: es la
+     *  clave de agrupación de la cobertura, no se recalcula acá. */
     fecha: string
-    /** HH:mm */
-    horaInicio: string
-    horaFin: string | null
+    /** Instante ISO 8601 en UTC. La hora visible se formatea con `horaNegocio`. */
+    fechaInicio: string
+    /** null = visita en curso. */
+    fechaFin: string | null
     duracionMin: number | null
     /** null = cliente sin coords → se muestra 's/d', nunca un número absurdo. */
     distanciaMetros: number | null

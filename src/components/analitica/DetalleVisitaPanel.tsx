@@ -2,6 +2,7 @@ import { X } from 'lucide-react'
 import MapaVisita from './MapaVisita'
 import { useVisitaDetalle } from '@/hooks/useAnalitica'
 import { claseDistancia, formatDistancia, formatDuracion } from '@/lib/analiticaFormat'
+import { horaNegocio } from '@/lib/fechas'
 import type { ResultadoMotivo } from '@/types/planificacion'
 
 interface DetalleVisitaPanelProps {
@@ -22,7 +23,9 @@ const CLASE_DISTANCIA: Record<string, string> = {
     neutro: 'text-slate-400',
 }
 
-const hora = (iso: string | null) => (iso ? iso.slice(11, 16) : '—')
+/** Nunca `slice(11, 16)`: el instante viene en ISO UTC, así que cortar el string
+ *  mostraba la hora de Greenwich (+3 sobre la real). Ver `horaNegocio`. */
+const hora = horaNegocio
 
 const etiqueta = (r: ResultadoMotivo | null) => (r ? ETIQUETA_RESULTADO[r] : '—')
 

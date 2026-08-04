@@ -68,7 +68,7 @@ it('getVisitas sin vendedor devuelve las filas de todo el equipo', async () => {
 
 it('getVisitas ordena de la más reciente a la más vieja', async () => {
     const res = await getVisitas(FILTRO)
-    const claves = res.visitas.map(v => `${v.fecha} ${v.horaInicio}`)
+    const claves = res.visitas.map(v => v.fechaInicio)
     expect(claves).toEqual([...claves].sort().reverse())
 })
 
@@ -87,7 +87,7 @@ it('una no-visita trae motivos pero no resultado ni duración', async () => {
     const fila = res.visitas[0]
     expect(fila.motivos.length).toBeGreaterThan(0)
     expect(fila.resultado).toBeNull()
-    expect(fila.horaFin).toBeNull()
+    expect(fila.fechaFin).toBeNull()
     expect(fila.duracionMin).toBeNull()
 })
 
@@ -100,5 +100,5 @@ it('el rango de hoy trae actividad, incluida una visita en curso', async () => {
     const hoy = isoLocal(new Date())
     const res = await getVisitas({ desde: hoy, hasta: hoy })
     expect(res.visitas.length).toBeGreaterThan(0)
-    expect(res.visitas.some(v => v.tipo === 'visita' && v.horaFin === null)).toBe(true)
+    expect(res.visitas.some(v => v.tipo === 'visita' && v.fechaFin === null)).toBe(true)
 })

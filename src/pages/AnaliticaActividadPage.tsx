@@ -31,8 +31,8 @@ export default function AnaliticaActividadPage() {
     }))
 
     const filas = pagina?.visitas ?? []
-    const cerradas = filas.filter(f => f.tipo === 'visita' && f.horaFin !== null).length
-    const enCurso = filas.filter(f => f.tipo === 'visita' && f.horaFin === null).length
+    const cerradas = filas.filter(f => f.tipo === 'visita' && f.fechaFin !== null).length
+    const enCurso = filas.filter(f => f.tipo === 'visita' && f.fechaFin === null).length
     const noVisitas = filas.filter(f => f.tipo === 'no_visita').length
 
     const kpis = [

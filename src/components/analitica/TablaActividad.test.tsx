@@ -7,8 +7,8 @@ import type { IVisitaFila } from '@/types/analitica'
 const base: IVisitaFila = {
     visitaId: 1,
     fecha: '2026-08-03',
-    horaInicio: '09:15',
-    horaFin: '09:55',
+    fechaInicio: '2026-08-03T12:15:00Z',
+    fechaFin: '2026-08-03T12:55:00Z',
     duracionMin: 40,
     distanciaMetros: 80,
     codigoParticularCliente: 'C1000',
@@ -25,11 +25,17 @@ it('muestra el vendedor de cada fila', () => {
     expect(screen.getByText('ACOSTA MARIANO')).toBeInTheDocument()
 })
 
+it('la HORA es la argentina, no la del ISO en UTC', () => {
+    render(<TablaActividad filas={[base]} onElegirVisita={vi.fn()} />)
+    expect(screen.getByText('09:15')).toBeInTheDocument()
+    expect(screen.queryByText('12:15')).not.toBeInTheDocument()
+})
+
 it('una visita abierta se muestra En curso, no s/d', () => {
     const enCurso: IVisitaFila = {
         ...base,
         visitaId: 2,
-        horaFin: null,
+        fechaFin: null,
         duracionMin: null,
         motivos: [],
         resultado: null,
@@ -38,12 +44,12 @@ it('una visita abierta se muestra En curso, no s/d', () => {
     expect(screen.getByTestId('estado-2')).toHaveTextContent('En curso')
 })
 
-it('una reagendada NO se muestra como en curso aunque no tenga horaFin', () => {
+it('una reagendada NO se muestra como en curso aunque no tenga fechaFin', () => {
     const reagendada: IVisitaFila = {
         ...base,
         visitaId: 3,
         tipo: 'reagendada',
-        horaFin: null,
+        fechaFin: null,
         duracionMin: null,
         motivos: [],
         resultado: null,
@@ -57,7 +63,7 @@ it('una no-visita muestra sus motivos', () => {
         ...base,
         visitaId: 4,
         tipo: 'no_visita',
-        horaFin: null,
+        fechaFin: null,
         duracionMin: null,
         distanciaMetros: null,
         motivos: ['Cerrado'],

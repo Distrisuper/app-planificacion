@@ -1,4 +1,5 @@
 import { claseDistancia, formatDistancia, formatDuracion } from '@/lib/analiticaFormat'
+import { horaNegocio } from '@/lib/fechas'
 import type { IVisitaFila } from '@/types/analitica'
 import type { ResultadoMotivo } from '@/types/planificacion'
 
@@ -33,12 +34,12 @@ interface Estado {
     clase: string
 }
 
-/** El estado sale del `tipo` y recién después del `horaFin`. Una fila sin horaFin
+/** El estado sale del `tipo` y recién después del `fechaFin`. Una fila sin fechaFin
  *  puede ser una visita abierta o una reagendada: mirar solo los nulls las confunde. */
 function estadoDe(fila: IVisitaFila): Estado {
     if (fila.tipo === 'no_visita') return { texto: 'No visitó', clase: 'bg-slate-100 text-slate-600' }
     if (fila.tipo === 'reagendada') return { texto: 'Reagendada', clase: 'bg-sky-100 text-sky-700' }
-    if (fila.horaFin === null) return { texto: 'En curso', clase: 'bg-amber-100 text-amber-800' }
+    if (fila.fechaFin === null) return { texto: 'En curso', clase: 'bg-amber-100 text-amber-800' }
     return { texto: 'Cerrada', clase: 'bg-emerald-100 text-emerald-700' }
 }
 
@@ -70,7 +71,7 @@ export default function TablaActividad({ filas, onElegirVisita }: TablaActividad
                                 className="cursor-pointer border-b border-slate-100 hover:bg-blue-50"
                             >
                                 <td className="whitespace-nowrap px-3 py-2 text-slate-600">
-                                    {f.horaInicio}
+                                    {horaNegocio(f.fechaInicio)}
                                     <span className="ml-2 text-xs text-slate-400">{f.fecha}</span>
                                 </td>
                                 <td className="px-3 py-2">

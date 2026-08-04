@@ -1,4 +1,5 @@
 import { claseDistancia, formatDistancia, formatDuracion } from '@/lib/analiticaFormat'
+import { horaNegocio } from '@/lib/fechas'
 import type { IVisitaFila } from '@/types/analitica'
 import type { ResultadoMotivo } from '@/types/planificacion'
 
@@ -53,7 +54,9 @@ export default function TablaVisitas({ visitas, onElegirVisita }: TablaVisitasPr
                             className="cursor-pointer border-b border-slate-100 hover:bg-blue-50"
                         >
                             <td className="px-3 py-2 text-slate-600">{v.fecha}</td>
-                            <td className="px-3 py-2 text-slate-600">{v.horaInicio}</td>
+                            <td className="px-3 py-2 text-slate-600">
+                                {horaNegocio(v.fechaInicio)}
+                            </td>
                             <td className="px-3 py-2 text-right text-slate-700">
                                 {formatDuracion(v.duracionMin)}
                             </td>
