@@ -3,6 +3,8 @@ import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import TablaActividad from '@/components/analitica/TablaActividad'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
+import AccountMenu from '@/components/AccountMenu'
+import { useAuth } from '@/context/AuthContext'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
 import { useResumen, useVendedores, useVisitas } from '@/hooks/useAnalitica'
 import { incluyeHoy, rangoHoy } from '@/lib/fechas'
@@ -13,6 +15,7 @@ import { formatNumero, formatPct } from '@/lib/analiticaFormat'
 const REFRESCO_MS = 60_000
 
 export default function AnaliticaActividadPage() {
+    const { user, logout } = useAuth()
     const { filtro, setRango, toggleVendedor, limpiarVendedores } = useFiltroAnalitica(rangoHoy())
     const [visitaElegida, setVisitaElegida] = useState<number | null>(null)
 
@@ -43,8 +46,11 @@ export default function AnaliticaActividadPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="bg-white px-6 pt-4">
-                <AnaliticaTabs enVivo={enVivo} />
+            <header className="flex items-center justify-between gap-4 bg-white px-6 pt-4">
+                <div className="flex-1">
+                    <AnaliticaTabs enVivo={enVivo} />
+                </div>
+                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} />
             </header>
 
             <FiltrosAnalitica

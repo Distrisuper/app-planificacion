@@ -4,11 +4,14 @@ import KpisEquipo from '@/components/analitica/KpisEquipo'
 import TablaVendedores from '@/components/analitica/TablaVendedores'
 import ObjecionesMercado from '@/components/analitica/ObjecionesMercado'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
+import AccountMenu from '@/components/AccountMenu'
+import { useAuth } from '@/context/AuthContext'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
 import { useResumen, useVendedores } from '@/hooks/useAnalitica'
 
 export default function AnaliticaPage() {
     const navigate = useNavigate()
+    const { user, logout } = useAuth()
     const { filtro, setRango, toggleVendedor, limpiarVendedores } = useFiltroAnalitica()
     const { data, isLoading, isError } = useResumen(filtro)
     const { data: roster } = useVendedores()
@@ -25,8 +28,11 @@ export default function AnaliticaPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="bg-white px-6 pt-4">
-                <AnaliticaTabs />
+            <header className="flex items-center justify-between gap-4 bg-white px-6 pt-4">
+                <div className="flex-1">
+                    <AnaliticaTabs />
+                </div>
+                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} />
             </header>
 
             <FiltrosAnalitica
