@@ -45,7 +45,7 @@ export default function AccountMenu({ nombre, onLogout, onCerrarSemana }: Accoun
                 aria-haspopup="menu"
                 aria-expanded={open}
                 aria-label="Cuenta"
-                className="block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-dsnavy"
+                className="block rounded-full outline-none focus-visible:ring-2 focus-visible:ring-dsgreen/60 focus-visible:ring-offset-2"
             >
                 <Avatar initials={initialsOf(nombre)} />
             </button>

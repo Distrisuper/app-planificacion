@@ -8,6 +8,9 @@ import { MOCK_RESUMEN, MOCK_VENDEDORES } from '@/mocks/analiticaMock'
 import * as api from '@/api/analitica'
 
 vi.mock('@/api/analitica')
+vi.mock('@/context/AuthContext', () => ({
+    useAuth: () => ({ user: { name: 'Martín Rossi' }, logout: vi.fn() }),
+}))
 
 function montar(ruta = '/analitica?desde=2026-07-20&hasta=2026-07-24') {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })

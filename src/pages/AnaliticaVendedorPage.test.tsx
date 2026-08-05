@@ -7,6 +7,9 @@ import { MOCK_RESUMEN, MOCK_VISITAS } from '@/mocks/analiticaMock'
 import * as api from '@/api/analitica'
 
 vi.mock('@/api/analitica')
+vi.mock('@/context/AuthContext', () => ({
+    useAuth: () => ({ user: { name: 'Martín Rossi' }, logout: vi.fn() }),
+}))
 
 function montar(codigo = 'V1') {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })

@@ -9,6 +9,9 @@ import * as api from '@/api/analitica'
 import type { IVisitaFila } from '@/types/analitica'
 
 vi.mock('@/api/analitica')
+vi.mock('@/context/AuthContext', () => ({
+    useAuth: () => ({ user: { name: 'Martín Rossi' }, logout: vi.fn() }),
+}))
 
 const FILA: IVisitaFila = {
     visitaId: 1,

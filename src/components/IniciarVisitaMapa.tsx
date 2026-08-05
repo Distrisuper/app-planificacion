@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { X } from 'lucide-react'
+import { Navigation, RotateCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface IniciarVisitaMapaProps {
@@ -48,14 +48,17 @@ export default function IniciarVisitaMapa({
     onCancel,
 }: IniciarVisitaMapaProps) {
     const mapRef = useRef<HTMLDivElement>(null)
+    const mapInstance = useRef<L.Map | null>(null)
     const vendedorMarker = useRef<L.Marker | null>(null)
     const [sinUbicacion, setSinUbicacion] = useState(false)
+    const [recalculando, setRecalculando] = useState(false)
 
     useEffect(() => {
         if (!open || !mapRef.current) return
 
         setSinUbicacion(false)
         const map = L.map(mapRef.current, { zoomControl: false }).setView([latitud, longitud], 15)
+        mapInstance.current = map
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap',
         }).addTo(map)
@@ -96,9 +99,50 @@ export default function IniciarVisitaMapa({
         return () => {
             if (watchId != null) navigator.geolocation.clearWatch(watchId)
             map.remove()
+            mapInstance.current = null
             vendedorMarker.current = null
         }
     }, [open, latitud, longitud])
+
+    function handleRecalcular() {
+        if (!navigator.geolocation) {
+            setSinUbicacion(true)
+            return
+        }
+        setRecalculando(true)
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                setRecalculando(false)
+                const { latitude, longitude } = pos.coords
+                const map = mapInstance.current
+                if (!map) return
+                if (!vendedorMarker.current) {
+                    vendedorMarker.current = L.marker([latitude, longitude], { icon: ICONO_VENDEDOR }).addTo(map)
+                } else {
+                    vendedorMarker.current.setLatLng([latitude, longitude])
+                }
+                map.fitBounds(
+                    [
+                        [latitud, longitud],
+                        [latitude, longitude],
+                    ],
+                    { padding: [48, 48] },
+                )
+            },
+            () => {
+                setRecalculando(false)
+                setSinUbicacion(true)
+            },
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+        )
+    }
+
+    function handleComoLlegar() {
+        window.open(
+            `https://www.google.com/maps/dir/?api=1&destination=${latitud},${longitud}&travelmode=driving`,
+            '_blank',
+        )
+    }
 
     if (!open) return null
 
@@ -132,6 +176,25 @@ export default function IniciarVisitaMapa({
                     </p>
                 )}
                 {error && <p className="mb-3 text-[12.5px] font-semibold text-dsred">{error}</p>}
+                <div className="mb-3 flex gap-2">
+                    <Button
+                        variant="outline"
+                        onClick={handleRecalcular}
+                        loading={recalculando}
+                        className="h-11 min-w-0 flex-1 text-[13px]"
+                    >
+                        <RotateCw className="h-4 w-4 shrink-0" strokeWidth={2.4} />
+                        <span className="truncate">Recalcular posición</span>
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={handleComoLlegar}
+                        className="h-11 min-w-0 flex-1 text-[13px]"
+                    >
+                        <Navigation className="h-4 w-4 shrink-0" strokeWidth={2.4} />
+                        <span className="truncate">¿Cómo llegar?</span>
+                    </Button>
+                </div>
                 <Button
                     onClick={onIniciar}
                     loading={iniciando}
