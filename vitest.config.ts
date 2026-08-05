@@ -9,6 +9,11 @@ export default defineConfig({
         environment: 'jsdom',
         globals: true,
         setupFiles: ['./src/test/setup.ts'],
+        // .worktrees/ son copias sueltas de tareas en paralelo (ver skill de git
+        // worktrees) con su propio node_modules: si vitest las recorre, carga una
+        // segunda copia de React y los hooks explotan con "Cannot read properties
+        // of null" en cualquier componente de la copia principal.
+        exclude: ['**/node_modules/**', '**/.worktrees/**'],
         // El bug que este helper arregla solo se manifiesta en timezones al oeste de
         // Greenwich. Fijarla acá hace que el test falle en CI si alguien vuelve a
         // introducir toISOString() para fechas locales.
