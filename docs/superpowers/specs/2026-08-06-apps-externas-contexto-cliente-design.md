@@ -371,3 +371,83 @@ sincronizar ese repo con lo que está en producción.
 
 El handoff por URL contra el deploy actual **no funciona**, y el arreglo no está del lado de esta
 app: hay que tocar pagos-lupa y/o el backend. Las tareas 2 a 8 quedan detenidas.
+
+## Segunda vuelta del spike: sí comparten el login (2026-08-06)
+
+La primera vuelta concluyó "bloqueante" mirando solo la ruta `lupaToken` → `decode-token`. Al leer el
+repo de pagos-lupa apareció que **hay dos rutas de auth**, y la segunda sí sirve.
+
+### Hallazgo: `VITE_API_DISTRI_API` es nuestro propio emisor
+
+Extraído del bundle desplegado (`/assets/index-ca5c7acd.js`), pagos-lupa habla con **dos** backends:
+
+| Ruta de auth | Endpoint | Verifica con |
+| --- | --- | --- |
+| `lupaToken` (la del `?token=` en la URL) | `POST distrimdp.dvrdns.org/api/authorization/decode-token` | secreto de api-distri-node → **rechaza nuestro token** |
+| `access_token` | `GET apidistri.distrisuper.com/api/auth/me` | **el mismo emisor que nuestra app** |
+
+`AuthContext.tsx:50-98` elige la ruta según qué clave haya en `localStorage`: si hay `lupaToken` usa
+`decode-token`; si no, y hay `access_token`, usa `/auth/me`. Y `loginUser` (`api_auth.ts:33`) postea a
+`apidistri.distrisuper.com/api/auth/login` — las mismas credenciales que nuestro login.
+
+**Conclusión: el token de esta app es válido para pagos-lupa. El bug es que el handoff por URL lo
+guarda en la clave equivocada.**
+
+### Verificado empíricamente
+
+Con el `localStorage` del origen de pagos-lupa borrado, poniendo **solo** nuestro `access_token` sin
+modificar y navegando a `https://pagos-lupa.web.app/?client=05519` (sin `/auth/login`, sin `?token=`):
+
+- Sesión válida, sin formulario de login.
+- Input "Ingrese código cliente" precargado con `05519`.
+- Las facturas pendientes de ese cliente cargadas (FA-9242, FA-9264, FA-9542, …).
+
+El lector del param existe y funciona: `ListPendings.tsx:519-526` — con `user.rol === 'VENDEDOR'` y
+`?client=` presente, setea `clientCodeInput` y `cpCliente`. **El contrato de contexto es `/?client=`,
+no `/auth/login?...&client=`.**
+
+### Riesgo: `frame-ancestors` — **NO ES UN PROBLEMA**
+
+pagos-lupa **se deja embeber**. Iframe inyectado desde `http://localhost:5173` cargando
+`https://pagos-lupa.web.app/?client=05519`: `onload` dispara, la UI renderiza completa, cero errores
+de CSP o `X-Frame-Options` en consola. El "pedido a pagos-lupa" de `frame-ancestors` que anotaba este
+spec **no hace falta**.
+
+### Riesgo 3 (storage particionado) — **CONFIRMADO**
+
+Dentro del iframe aparece el login de pagos-lupa, **aunque el origen top-level tenga sesión válida**.
+Chrome particiona el storage por par (sitio top-level, origen embebido): la partición
+`(localhost, pagos-lupa)` es otra, y arranca vacía. Esto es lo que decide entre los dos caminos de
+abajo.
+
+## Los dos caminos viables
+
+### Camino A — cero cambios en pagos-lupa: login manual una vez dentro del iframe
+
+El vendedor se loguea **una sola vez** dentro del iframe (login propio de pagos-lupa, mismas
+credenciales, mismo backend). Eso escribe `access_token` en la partición
+`(nuestra-app, pagos-lupa)`, y de ahí en más el handoff es solo `/?client=<codigo>`. Todo lo que
+hace falta está verificado: el framing anda, `/auth/me` acepta el token, `?client=` se lee.
+
+Costo: la primera vez el vendedor tipea usuario y contraseña dentro del iframe. Y **cuánto dura esa
+sesión no está verificado**: el storage particionado persiste en Chrome, pero la ITP de Safari/iOS
+capa el storage escrito por script (histórico: 7 días), así que en iOS "una vez" puede volverse
+"cada tanto". Requiere probarlo con credenciales reales en un iPhone antes de prometerlo.
+
+### Camino B — dos ediciones chicas en pagos-lupa, y el handoff queda invisible
+
+En `src/pages/Authentication/LoginBoxed.tsx`:
+
+1. Línea 86: guardar el token de la URL en **`access_token`** en vez de `lupaToken` — o intentar
+   `decode-token` y, si devuelve `ok: 0`, caer a la ruta `/auth/me`. Con eso el token de esta app
+   valida por el camino que ya existe.
+2. Línea 148: preservar `client` en ese `navigate('/')`, que hoy lo descarta (hoy solo preserva
+   `type_operation`).
+
+Ventajas sobre A: no hay login manual, y el storage particionado **deja de importar** porque el token
+llega en la URL en cada apertura. El estado final de este camino es exactamente el que se verificó
+arriba, así que no hay incógnita técnica: solo hace falta que alguien toque ese repo.
+
+Recomendación: **B**, con A como puente si B tarda en coordinarse. Los dos comparten el mismo diseño
+del lado de esta app — cambia una línea del registro (`/?client=` vs `/auth/login?token=&client=`),
+que es justamente lo que `appsExternas.ts` aísla.
