@@ -52,6 +52,39 @@ describe('appsExternas', () => {
         }
     })
 
+    // Una base sin esquema ("pagos-lupa.web.app" en vez de "https://pagos-lupa.web.app")
+    // pasa el filtro de "no vacía" pero sigue produciendo una URL relativa: mismo
+    // auto-embebido que la base ausente, solo que con un typo de deploy distinto.
+    it('no ofrece una app cuya URL base no tiene esquema http/https', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        vi.stubEnv('VITE_PAGOS_LUPA_URL', 'pagos-lupa.web.app')
+        vi.resetModules()
+        try {
+            const { APPS_EXTERNAS: baseInvalida } = await import('./appsExternas')
+            expect(baseInvalida.find(a => a.id === 'pagos')).toBeUndefined()
+            expect(error).toHaveBeenCalledWith(expect.stringContaining('"pagos"'))
+        } finally {
+            vi.unstubAllEnvs()
+            vi.resetModules()
+            error.mockRestore()
+        }
+    })
+
+    it('ofrece la app cuando la URL base es absoluta con esquema https', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        vi.stubEnv('VITE_PAGOS_LUPA_URL', 'https://pagos-lupa.web.app')
+        vi.resetModules()
+        try {
+            const { APPS_EXTERNAS: baseValida } = await import('./appsExternas')
+            expect(baseValida.find(a => a.id === 'pagos')).toBeDefined()
+            expect(error).not.toHaveBeenCalled()
+        } finally {
+            vi.unstubAllEnvs()
+            vi.resetModules()
+            error.mockRestore()
+        }
+    })
+
     it('arma la URL de handoff con el client en la raíz', () => {
         const resuelto = resolverHandoff(appDePagos(), CLIENTE)
         expect(resuelto.tipo).toBe('url')

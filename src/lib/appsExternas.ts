@@ -72,29 +72,57 @@ const DECLARADAS: AppExternaDeclarada[] = [
     },
 ]
 
+/** true si `base` es una URL absoluta con esquema http/https. Una base sin esquema
+ *  (p. ej. "pagos-lupa.web.app") también reintroduce la URL relativa: `new URL` la rechaza
+ *  (no tiene de dónde resolver un origen), así que cae en el catch. El chequeo de protocolo
+ *  aparte hace falta porque `new URL('mailto:x')` sí parsea, pero ese esquema no sirve como
+ *  base de un iframe. */
+function esBaseAbsolutaHttp(base: string): boolean {
+    try {
+        const url = new URL(base)
+        return url.protocol === 'http:' || url.protocol === 'https:'
+    } catch {
+        return false
+    }
+}
+
 /**
- * Solo las apps que este deploy tiene configuradas. Una app sin URL base NO se ofrece.
+ * Solo las apps que este deploy tiene configuradas correctamente. Una app sin URL base, o
+ * con una base que no es una URL absoluta http/https, NO se ofrece.
  *
  * Por qué: con la variable de entorno ausente la base queda en '' y la URL de handoff sale
- * RELATIVA ('/?client=10034'). El iframe la resuelve contra NUESTRO origen y embebe
- * app-planificacion dentro de app-planificacion a pantalla completa; el `onLoad` dispara
- * normal, así que el overlay se va y no hay ningún error visible: el vendedor ve la agenda
- * donde esperaba los pagos. Un éxito engañoso es peor que una falla.
+ * RELATIVA ('/?client=10034'). Lo mismo pasa con una base sin esquema ("pagos-lupa.web.app"
+ * en vez de "https://pagos-lupa.web.app"): sigue sin ser absoluta, así que el resultado
+ * ('pagos-lupa.web.app/?client=10034') también es relativo. En ambos casos el iframe la
+ * resuelve contra NUESTRO origen y embebe app-planificacion dentro de app-planificacion a
+ * pantalla completa; el `onLoad` dispara normal, así que el overlay se va y no hay ningún
+ * error visible: el vendedor ve la agenda donde esperaba los pagos. Un éxito engañoso es
+ * peor que una falla.
  *
- * Se filtra acá en vez de tirar en resolverHandoff porque la falta de configuración es del
- * deploy, no del tap: el vendedor en campo no puede resolverla, y un botón que existe y
- * explota al tocarlo (o que abre nuestra propia agenda) le hace perder tiempo en cada
- * cliente — que el botón no esté es la degradación entendible. Para quien deploya la falla
- * igual es ruidosa y temprana: el console.error sale al evaluar el módulo, antes del primer
- * render, sin depender de que alguien toque nada.
+ * Se filtra acá en vez de tirar en resolverHandoff porque la falta/invalidez de la
+ * configuración es del deploy, no del tap: el vendedor en campo no puede resolverla, y un
+ * botón que existe y explota al tocarlo (o que abre nuestra propia agenda) le hace perder
+ * tiempo en cada cliente — que el botón no esté es la degradación entendible. Para quien
+ * deploya la falla igual es ruidosa y temprana: el console.error sale al evaluar el módulo,
+ * antes del primer render, sin depender de que alguien toque nada.
  */
 export const APPS_EXTERNAS: AppExterna[] = DECLARADAS.filter(({ baseUrl, app }) => {
-    if (baseUrl) return true
-    console.error(
-        `[appsExternas] la app "${app.id}" no se ofrece: falta su URL base en el entorno. ` +
-            'Revisá las variables VITE_*_URL del deploy.',
-    )
-    return false
+    if (!baseUrl) {
+        console.error(
+            `[appsExternas] la app "${app.id}" no se ofrece: falta su URL base en el entorno. ` +
+                'Revisá las variables VITE_*_URL del deploy.',
+        )
+        return false
+    }
+    if (!esBaseAbsolutaHttp(baseUrl)) {
+        console.error(
+            `[appsExternas] la app "${app.id}" no se ofrece: su URL base ("${baseUrl}") no es ` +
+                'una URL absoluta http/https. Revisá las variables VITE_*_URL del deploy ' +
+                '(falta el esquema, p. ej. "https://").',
+        )
+        return false
+    }
+    return true
 }).map(({ app }) => app)
 
 /** Misma fuente de verdad que el interceptor de apiClient. AuthContext no expone el token. */
