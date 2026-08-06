@@ -19,6 +19,12 @@ function appDePagos(): AppExterna {
     return app
 }
 
+function appDeVersus(): AppExterna {
+    const app = APPS_EXTERNAS.find(a => a.id === 'versus')
+    if (!app) throw new Error('la app "versus" tiene que estar registrada')
+    return app
+}
+
 describe('appsExternas', () => {
     beforeEach(() => {
         localStorage.clear()
@@ -127,5 +133,35 @@ describe('appsExternas', () => {
         const raro: IVisitClientCard = { ...CLIENTE, codigoParticularCliente: 'a&b=c' }
         const { url } = resolverHandoff(appDePagos(), raro)
         expect(new URL(url).searchParams.get('client')).toBe('a&b=c')
+    })
+
+    it('registra versus sin credencial en el handoff', () => {
+        const app = appDeVersus()
+        expect(app.label).toBe('Versus')
+        // Versus podría recibir el token por ?token=, pero se decidió no mandarlo por Clarity.
+        expect(app.token).toBe('ninguno')
+        expect(app.handoff.tipo).toBe('url')
+    })
+
+    it('arma la URL de handoff de versus con q en /v2/rubro/clientes', () => {
+        const { url } = resolverHandoff(appDeVersus(), CLIENTE)
+        const parsed = new URL(url)
+        expect(parsed.pathname).toBe('/v2/rubro/clientes')
+        expect(parsed.searchParams.get('q')).toBe('05519')
+    })
+
+    // Mismo riesgo que pagos-lupa: versus-v2 carga Microsoft Clarity, así que un token en la
+    // query quedaría grabado. token: 'ninguno' asegura que resolverToken no lo aporte.
+    it('no filtra el token en la URL de versus', () => {
+        localStorage.setItem('access_token', 'tok-123')
+        const { url } = resolverHandoff(appDeVersus(), CLIENTE)
+        expect(url).not.toContain('tok-123')
+        expect(new URL(url).searchParams.has('token')).toBe(false)
+    })
+
+    it('escapa el código de cliente en el handoff de versus', () => {
+        const raro: IVisitClientCard = { ...CLIENTE, codigoParticularCliente: 'a&b=c' }
+        const { url } = resolverHandoff(appDeVersus(), raro)
+        expect(new URL(url).searchParams.get('q')).toBe('a&b=c')
     })
 })

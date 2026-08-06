@@ -1,10 +1,11 @@
-import { Wallet } from 'lucide-react'
+import { BarChart3, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { IVisitClientCard } from '@/types/planificacion'
 
 // Ausente = '' a propósito: el registro de más abajo trata la base vacía como "esta app no
 // está configurada en este deploy" y no la ofrece.
 const PAGOS_LUPA_URL: string = import.meta.env.VITE_PAGOS_LUPA_URL || ''
+const VERSUS_URL: string = import.meta.env.VITE_VERSUS_URL || ''
 
 /** De dónde sale la credencial que se le pasa a la app externa. 'sesion' = el
  *  access_token de esta app. Es el caso normal (las apps propias comparten el login),
@@ -66,6 +67,34 @@ const DECLARADAS: AppExternaDeclarada[] = [
                         client: cliente.codigoParticularCliente,
                     })
                     return `${PAGOS_LUPA_URL}/?${params}`
+                },
+            },
+        },
+    },
+    {
+        baseUrl: VERSUS_URL,
+        app: {
+            id: 'versus',
+            label: 'Versus',
+            icon: BarChart3,
+            // Versus SÍ puede recibir el token por `?token=` (lo lee y lo valida contra
+            // apidistri.distrisuper.com/api/auth/me, nuestro mismo emisor) — pero versus-v2
+            // carga Microsoft Clarity (grabador de sesión) y el tag de Clarity corre antes de
+            // que la app limpie el token de la URL. El token de vendedor tiene exp a ~3 meses:
+            // mandarlo grabaría una credencial de acceso completo en la sesión de Clarity. Por
+            // eso 'ninguno': la sesión la crea el vendedor logueándose una vez dentro del
+            // iframe, igual que con pagos-lupa. No "optimizar" esto metiendo el token de nuevo.
+            token: 'ninguno',
+            handoff: {
+                tipo: 'url',
+                // Contrato verificado contra el repo de Versus: RubroV2Page.tsx:192 inicializa
+                // el filtro con searchParams.get('q') (no `client`, no `cliente`) y :344 lo
+                // re-sincroniza en navegación same-route.
+                url: ({ cliente }) => {
+                    const params = new URLSearchParams({
+                        q: cliente.codigoParticularCliente,
+                    })
+                    return `${VERSUS_URL}/v2/rubro/clientes?${params}`
                 },
             },
         },
