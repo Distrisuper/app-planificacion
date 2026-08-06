@@ -92,8 +92,12 @@ Cuatro piezas, cada una con una responsabilidad y testeable por separado.
 Única fuente de verdad. Agregar la próxima app es una entrada en un array; no se toca ningún
 componente.
 
+Dos ejes independientes, y hay que separarlos: **de dónde sale la credencial** (`token`) y **cómo se
+le entrega a la app externa** (`handoff`). Mezclarlos en un solo `buildUrl` es lo que ataría el diseño
+a apps que aceptan el token por query string.
+
 ```ts
-/** De dónde sale el token que se le pasa a la app externa.
+/** De dónde sale la credencial que se le pasa a la app externa.
  *  'sesion' = el access_token de app-planificacion. Es el caso normal: las apps
  *  propias comparten el login. No es universal, por eso es un campo y no un supuesto. */
 export type EstrategiaToken = 'sesion' | 'ninguno'
@@ -104,13 +108,21 @@ export interface AppExternaContext {
     token: string | null
 }
 
+/** CÓMO se le entrega el contexto. Union discriminada a propósito: el contenedor
+ *  hace un switch exhaustivo sobre `tipo`, así que sumar una variante es un cambio
+ *  aditivo que el compilador señala, y ningún consumidor se toca. */
+export type Handoff = {
+    tipo: 'url'
+    /** Se invoca UNA vez por apertura. Nunca en render. */
+    url: (ctx: AppExternaContext) => string
+}
+
 export interface AppExterna {
     id: string
     label: string
     icon: LucideIcon
     token: EstrategiaToken
-    /** Se invoca UNA vez por apertura. Nunca en render. */
-    buildUrl: (ctx: AppExternaContext) => string
+    handoff: Handoff
 }
 ```
 
@@ -122,23 +134,42 @@ Entrada de pagos-lupa:
     label: 'Pagos',
     icon: Wallet,
     token: 'sesion',
-    buildUrl: ({ cliente, token }) => {
-        const params = new URLSearchParams({
-            token: token ?? '',
-            client: cliente.codigoParticularCliente,
-        })
-        return `${PAGOS_LUPA_URL}/auth/login?${params}`
+    handoff: {
+        tipo: 'url',
+        url: ({ cliente, token }) => {
+            const params = new URLSearchParams({
+                token: token ?? '',
+                client: cliente.codigoParticularCliente,
+            })
+            return `${PAGOS_LUPA_URL}/auth/login?${params}`
+        },
     },
 }
 ```
 
 `EstrategiaToken` existe porque las apps propias **normalmente** comparten el token (mismo login),
 pero no siempre. Modelarlo como campo desde el día uno evita que la primera app que no lo comparta
-obligue a rediseñar el registro. Arranca con dos valores; cuando aparezca un caso real de token
-propio se suma una variante (`{ tipo: 'propio', obtener: () => Promise<string> }`) sin romper a las
-demás.
+obligue a rediseñar el registro.
 
-Una app sin token declarado no se puede registrar: el tipo lo exige.
+Una app sin `token` ni `handoff` declarados no se puede registrar: el tipo lo exige.
+
+### Qué formas de handoff son posibles (y cuál no)
+
+Se investigó contra la documentación de la plataforma web antes de fijar la forma del tipo. El
+`Handoff` arranca con una sola variante (YAGNI: hoy hay una sola app), pero estas son las variantes
+conocidas, con su forma ya definida, para que agregarlas sea mecánico:
+
+| Cómo recibe la credencial la app externa | ¿Posible en un iframe? | Variante |
+| --- | --- | --- |
+| Query string (GET) | Sí. Es el caso de pagos-lupa. | `{ tipo: 'url', url }` — implementada |
+| **Body de un POST** | **Sí.** Un `<form method="POST" target="<name del iframe>">` submiteado por JS navega el iframe con POST. Es el mismo mecanismo que el HTTP-POST binding de SAML. | `{ tipo: 'form', action, campos }` |
+| Post-carga, por mensaje | Sí, pero exige que la app externa tenga un listener. **Es el más seguro**: la credencial no pasa por URL, ni por historial, ni por grabadores de sesión. | `{ tipo: 'postMessage', url, mensaje, origen }` |
+| **Header HTTP custom** | **No, y no hay workaround.** No existe API para setear headers en una navegación de documento: ni `src=`, ni el submit de un form, exponen ese hook — el navegador retiene el control de los headers de navegación. | — |
+
+**Límite arquitectónico explícito:** si una app externa **exige** la credencial en un header custom,
+no se puede integrar por iframe. Punto. Las salidas son pedirle que acepte otro binding (`postMessage`
+es el pedido correcto) o resignar el embebido para esa app. Queda escrito acá para que nadie invierta
+tiempo buscando la forma de hacerlo: no existe.
 
 ### 2. `src/components/AppExternaSheet.tsx` — el contenedor
 
@@ -146,6 +177,11 @@ Pantalla completa propia. **No reusa `BottomSheet`**: ese primitivo topea en `85
 lateral y scroll interno, y los tres arruinan un iframe (viewport recortado, franjas blancas, doble
 scroll). Sí reusa su patrón visual de header (título + botón de cierre) para que se sienta parte de
 la app.
+
+El montaje del iframe se resuelve con un `switch` exhaustivo sobre `handoff.tipo`. Hoy la única rama
+es `'url'` (setea `src`); la rama `'form'` necesitaría además un `name` en el iframe y un form oculto
+que se submitea contra ese `name`. Por eso el iframe **lleva `name` desde v1** aunque no se use: es el
+gancho que hace aditiva esa variante.
 
 Mecánica:
 
@@ -165,8 +201,9 @@ Mecánica:
 
 Acá vive la eficiencia, y es lo que hace que se sienta "una sola app":
 
-- El `src` se calcula **una vez por apertura** y se guarda en un `useRef`. Cualquier recálculo en
-  render recarga los 888 KB.
+- El `handoff` se ejecuta **una vez por apertura** y su resultado se guarda en un `useRef`. Cualquier
+  recálculo en render recarga los 888 KB. Esto vale para las tres variantes, no solo para `'url'`:
+  re-submitear un form o re-emitir un `postMessage` en cada render sería igual de caro.
 - El iframe se monta en un portal a nivel app, **keyed por `codigoParticularCliente`**, y se mantiene
   vivo mientras ese cliente sea el activo. Cerrar el sheet lo **oculta**, no lo desmonta → la segunda
   apertura es instantánea.
@@ -238,8 +275,10 @@ Ordenados por qué se verifica primero.
 ## Testing
 
 - **`appsExternas.ts`**: funciones puras. Test unitario del armado de URL y del escapado de params.
-- **`useAppExterna`**: test de que el `src` se calcula **una sola vez** a lo largo de varios
-  re-renders (el bug que más caro sale) y de que el desmontaje ocurre al cambiar de cliente.
+- **`useAppExterna`**: test de que el `handoff` se ejecuta **una sola vez** a lo largo de varios
+  re-renders (el bug que más caro sale) y de que el desmontaje ocurre al cambiar de cliente. El test
+  usa un `handoff` espía, no la entrada real de pagos-lupa: así sigue siendo válido cuando se sumen
+  variantes.
 - **`AppExternaSheet`**: el overlay de carga desaparece con `onLoad`; el header muestra el cliente
   correcto.
 - **`AccionesExternas`**: renderiza una acción por app registrada, en los dos contextos de uso.
