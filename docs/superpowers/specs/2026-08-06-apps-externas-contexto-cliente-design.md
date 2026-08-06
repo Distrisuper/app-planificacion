@@ -215,10 +215,13 @@ Acá vive la eficiencia, y es lo que hace que se sienta "una sola app":
 
 Un componente, dos contextos de uso:
 
-- **En `ClienteCard`**: detrás de un cuarto botón `⋯`, que abre un sheet chico con la lista de apps.
-  La fila de acciones de la card ya está llena (Propuesta + Llamar + Estado) y en mobile no entra un
-  cuarto botón con label.
-- **En el sheet del cliente** (`VisitaSheet` / propuesta): como fila propia, donde hay espacio.
+- **En `ClienteCard`**: como **chip entre las utilidades del header**, al lado del código del cliente,
+  junto a Llamar y Reagendar. Ese es el patrón que la card ya tiene para acciones auxiliares al ciclo
+  de la visita, elegido explícitamente para no sumar una cuarta caja de botones que haría la card
+  innecesariamente alta en una columna de 7-8 clientes (`ClienteCard.tsx:22-25`). "Pagos" es
+  exactamente una utilidad de ese tipo. **Sin menú `⋯` y sin sheet intermedio: un tap.**
+- **En el sheet del cliente** (`VisitaSheet` / `PropuestaSheet`): como fila propia arriba de la
+  propuesta, donde hay espacio y el vendedor mira el estado del cliente antes de ofrecer.
 
 Que sea el mismo componente es lo que garantiza que la app número tres no requiera decisiones nuevas.
 
@@ -285,8 +288,13 @@ Ordenados por qué se verifica primero.
 - El comportamiento del iframe en sí no se testea en jsdom. Es verificación manual en dispositivo
   real, Android y iOS.
 
-## Duda abierta
+## Duda cerrada: la ubicación en la card
 
-La ubicación en `ClienteCard` detrás de `⋯` asume que el vistazo a pagos es ocasional. Si en la
-práctica el vendedor lo hace en casi toda visita, ese `⋯` es un tap de más en el camino caliente y
-conviene rediseñar la fila de acciones de la card en serio. Se decide con uso real, no ahora.
+La versión original de este spec proponía esconder las apps externas detrás de un `⋯`, asumiendo que
+el vistazo a pagos era ocasional, y dejaba abierta la duda de si eso era un tap de más en el camino
+caliente.
+
+**Resuelto: van en el header, sin menú.** El rediseño de la card (`572f1f0`, `33a8ac8`) movió
+Llamar/Reagendar al header como chips de 32px y dejó el área de acciones con dos botones de tier 1.
+Ese patrón existente resuelve el problema que el `⋯` intentaba resolver — no sumar altura a la card —
+sin costar un tap extra. No hay nada que decidir con uso real.

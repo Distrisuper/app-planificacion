@@ -742,7 +742,7 @@ git commit -m "feat(apps-externas): contenedor full-screen del iframe embebido"
 
 **Interfaces:**
 - Consumes: `APPS_EXTERNAS`, `AppExterna` de `@/lib/appsExternas`; `IVisitClientCard`.
-- Produces: `default function AccionesExternas(props: { cliente: IVisitClientCard; variante: 'fila' | 'lista'; onAbrir: (app: AppExterna, cliente: IVisitClientCard) => void })`
+- Produces: `default function AccionesExternas(props: { cliente: IVisitClientCard; variante: 'fila' | 'header'; onAbrir: (app: AppExterna, cliente: IVisitClientCard) => void })`
 
 - [ ] **Step 1: Escribir el test que falla**
 
@@ -781,9 +781,16 @@ describe('AccionesExternas', () => {
         )
     })
 
-    it('la variante lista renderiza los ítems a lo ancho', () => {
-        render(<AccionesExternas cliente={CLIENTE} variante="lista" onAbrir={vi.fn()} />)
-        expect(screen.getByRole('button', { name: 'Pagos' }).className).toContain('w-full')
+    // La variante header comparte el lenguaje visual de las utilidades que ya viven
+    // arriba de la card (Llamar / Reagendar): chip bajo de 32px, no botón de 44px.
+    it('la variante header usa el alto de chip de las utilidades de la card', () => {
+        render(<AccionesExternas cliente={CLIENTE} variante="header" onAbrir={vi.fn()} />)
+        expect(screen.getByRole('button', { name: 'Pagos' }).className).toContain('h-8')
+    })
+
+    it('la variante fila usa el alto de acción táctil', () => {
+        render(<AccionesExternas cliente={CLIENTE} variante="fila" onAbrir={vi.fn()} />)
+        expect(screen.getByRole('button', { name: 'Pagos' }).className).toContain('h-11')
     })
 })
 ```
@@ -798,40 +805,48 @@ Expected: FAIL — no existe el módulo `./AccionesExternas`.
 Crear `src/components/AccionesExternas.tsx`:
 
 ```tsx
-import { Button } from '@/components/ui/button'
 import { APPS_EXTERNAS, type AppExterna } from '@/lib/appsExternas'
 import type { IVisitClientCard } from '@/types/planificacion'
 
+// La variante 'header' replica el chip de las utilidades de ClienteCard (Llamar /
+// Reagendar). Se duplica el string en vez de importarlo de ClienteCard para no invertir
+// la dependencia entre componentes hermanos; si alguna vez son tres los que lo usan,
+// el constante se muda a src/lib.
+const CHIP_HEADER =
+    'inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-[#F4F6FA] px-2.5 text-[11.5px] font-semibold text-[#54607A] hover:bg-[#EAEEF6]'
+const BOTON_FILA =
+    'inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#D8DEEA] bg-white text-[13px] font-semibold text-dsnavy hover:bg-dsnavy/5'
+
 interface AccionesExternasProps {
     cliente: IVisitClientCard
-    /** 'fila' = botones al lado del otro, dentro de un sheet con espacio.
-     *  'lista' = ítems full-width, dentro del menú ⋯ de la card. */
-    variante: 'fila' | 'lista'
+    /** 'header' = chip bajo entre las utilidades de la card (no suma altura a la card).
+     *  'fila' = botón táctil dentro de un sheet, donde hay espacio. */
+    variante: 'fila' | 'header'
     onAbrir: (app: AppExterna, cliente: IVisitClientCard) => void
 }
 
 /** Único lugar donde se listan las apps externas para el usuario. Se renderiza en dos
- *  contextos (menú de la card y sheet del cliente) para que agregar una app no obligue a
- *  decidir de nuevo dónde va. */
+ *  contextos (header de la card y sheet del cliente) para que agregar una app no obligue
+ *  a decidir de nuevo dónde va. */
 export default function AccionesExternas({ cliente, variante, onAbrir }: AccionesExternasProps) {
-    const lista = variante === 'lista'
+    const header = variante === 'header'
     return (
-        <div className={lista ? 'flex flex-col gap-2' : 'flex gap-1.5'}>
+        <div className={header ? 'flex gap-1' : 'flex gap-1.5'}>
             {APPS_EXTERNAS.map(app => {
                 const Icono = app.icon
                 return (
-                    <Button
+                    <button
                         key={app.id}
-                        variant="outline"
-                        size="sm"
+                        type="button"
                         onClick={() => onAbrir(app, cliente)}
-                        className={`h-11 border-[#D8DEEA] text-[13px] text-dsnavy ${
-                            lista ? 'w-full justify-start' : 'flex-1'
-                        }`}
+                        className={header ? CHIP_HEADER : BOTON_FILA}
                     >
-                        <Icono className="h-[14px] w-[14px]" strokeWidth={2} />
+                        <Icono
+                            className={header ? 'h-[13px] w-[13px]' : 'h-[14px] w-[14px]'}
+                            strokeWidth={2}
+                        />
                         {app.label}
-                    </Button>
+                    </button>
                 )
             })}
         </div>
@@ -842,7 +857,7 @@ export default function AccionesExternas({ cliente, variante, onAbrir }: Accione
 - [ ] **Step 4: Correr el test y verificar que pasa**
 
 Run: `npx vitest run src/components/AccionesExternas.test.tsx`
-Expected: PASS (3 tests)
+Expected: PASS (4 tests)
 
 - [ ] **Step 5: Commit**
 
@@ -853,77 +868,109 @@ git commit -m "feat(apps-externas): componente de acciones reutilizable"
 
 ---
 
-### Task 6: Acceso desde la agenda (botón `⋯` en la card)
+### Task 6: Acceso desde la agenda (utilidades del header de la card)
 
-La card ya tiene tres acciones (Propuesta + Llamar + Estado) y en mobile no entra un cuarto botón con
-label. El `⋯` **no abre un sheet propio por card** — hay hasta ~40 cards en pantalla: la card avisa
-hacia arriba y la página abre una única instancia del menú.
+**Sin menú `⋯`, y sin sheet intermedio.** La card fue rediseñada en `572f1f0`/`33a8ac8`: Llamar y
+Reagendar se movieron al **header**, al lado del código del cliente, con este razonamiento ya escrito
+en el código (`ClienteCard.tsx:22-25`):
+
+> Utilidades (llamar/reagendar). Viven en el header, no en el área de acciones: son auxiliares al
+> ciclo de la visita, y como fila propia de botones sumaban una cuarta caja que hacía la card
+> innecesariamente alta en una columna de 7-8 clientes.
+
+"Pagos" es exactamente eso: auxiliar al ciclo de la visita. Va al mismo lugar, con el mismo chip de
+32px, y así **no suma altura a la card** — que era el problema real que el `⋯` intentaba resolver. El
+área de acciones queda intacta con sus dos botones de tier 1 (Propuesta + Iniciar visita).
+
+Con esto la card no necesita ninguna prop nueva de "abrir menú": recibe directamente el callback de
+abrir una app.
 
 **Files:**
-- Modify: `src/components/ClienteCard.tsx` (nueva prop + botón `⋯`)
+- Modify: `src/components/ClienteCard.tsx` (nueva prop + `AccionesExternas` variante header)
 - Modify: `src/components/ClienteCard.test.tsx` (nueva prop en los renders existentes + tests nuevos)
 - Modify: `src/components/AgendaBoard.tsx` (pasar la prop hacia abajo)
 - Modify: `src/components/AgendaBoard.test.tsx` (nueva prop en los renders existentes)
-- Modify: `src/pages/AgendaSemanaPage.tsx` (estado del menú + `useAppExterna` + `AppExternaSheet`)
+- Modify: `src/pages/AgendaSemanaPage.tsx` (`useAppExterna` + `AppExternaSheet`)
 - Modify: `src/pages/AgendaSemanaPage.test.tsx` (test de flujo end-to-end de la agenda)
 
 **Interfaces:**
 - Consumes: `useAppExterna` (Task 3), `AppExternaSheet` (Task 4), `AccionesExternas` (Task 5).
-- Produces: `ClienteCardProps.onAppsExternas: (cliente: IAgendaClient) => void` (requerida) y
-  `AgendaBoardProps.onAppsExternas: (cliente: IAgendaClient) => void` (requerida).
+- Produces: `onAbrirAppExterna: (app: AppExterna, cliente: IVisitClientCard) => void`, prop
+  **requerida** en `ClienteCardProps` y en `AgendaBoardProps`. Mismo nombre y misma firma que la prop
+  opcional de los sheets en la Task 7: un solo callback en todo el árbol.
 
 - [ ] **Step 1: Escribir el test que falla en `ClienteCard.test.tsx`**
 
-Agregar al `describe` existente. **Antes**, sumar `onAppsExternas={vi.fn()}` al helper de render que
+Agregar al `describe` existente. **Antes**, sumar `onAbrirAppExterna={vi.fn()}` al helper de render que
 ya usa ese archivo (la prop es requerida: sin eso no compila ningún test del archivo).
 
 ```tsx
-    it('avisa hacia arriba cuando se piden las apps externas del cliente', async () => {
-        const onAppsExternas = vi.fn()
-        renderCard({ onAppsExternas })
-        await userEvent.click(screen.getByLabelText('Más opciones'))
-        expect(onAppsExternas).toHaveBeenCalledWith(expect.objectContaining({ codigoParticularCliente: '12345' }))
+    it('ofrece las apps externas entre las utilidades del header', async () => {
+        const onAbrirAppExterna = vi.fn()
+        renderCard({ onAbrirAppExterna })
+        await userEvent.click(screen.getByRole('button', { name: 'Pagos' }))
+        expect(onAbrirAppExterna).toHaveBeenCalledWith(
+            expect.objectContaining({ id: 'pagos' }),
+            expect.objectContaining({ codigoParticularCliente: CLIENTE.codigoParticularCliente }),
+        )
     })
 
     // En preview (hojeando otra semana) no se opera: nada de apps externas.
-    it('no muestra el botón de más opciones en modo preview', () => {
+    it('no ofrece apps externas en modo preview', () => {
         renderCard({ modo: 'preview' })
-        expect(screen.queryByLabelText('Más opciones')).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
+    })
+
+    // Un cliente ya visitado también tiene pagos que mirar: la utilidad no depende de que
+    // el ciclo esté pendiente, a diferencia de Llamar/Reagendar.
+    it('sigue ofreciendo apps externas en un cliente ya resuelto', () => {
+        renderCard({ cliente: { ...CLIENTE, estado: 'visitada' } })
+        expect(screen.getByRole('button', { name: 'Pagos' })).toBeInTheDocument()
     })
 ```
 
-Ajustar `codigoParticularCliente: '12345'` al valor que use el fixture del archivo.
+Usar el nombre del fixture de cliente que ya exista en ese archivo en lugar de `CLIENTE` si difiere.
 
 - [ ] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/components/ClienteCard.test.tsx`
-Expected: FAIL — no existe el botón con `aria-label="Más opciones"`.
+Expected: FAIL — no existe ningún botón "Pagos".
 
 - [ ] **Step 3: Implementar en `ClienteCard.tsx`**
 
-Agregar `MoreHorizontal` al import de `lucide-react`. Agregar a `ClienteCardProps`:
-
-```ts
-    onAppsExternas: (cliente: IAgendaClient) => void
-```
-
-Agregarla al destructuring del componente. En la fila de acciones del caso operable-no-resuelto,
-después del botón de "Estado de la visita", agregar:
+Imports nuevos:
 
 ```tsx
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        aria-label="Más opciones"
-                        onClick={() => onAppsExternas(cliente)}
-                        className={ICON_BUTTON}
-                    >
-                        <MoreHorizontal className="h-[14px] w-[14px]" strokeWidth={2} />
-                    </Button>
+import AccionesExternas from './AccionesExternas'
+import type { AppExterna } from '@/lib/appsExternas'
+import type { IVisitClientCard } from '@/types/planificacion'
 ```
 
-Agregar el mismo botón en la rama `operable && resuelto` (la del "Ver resumen"), envolviendo ambos en
-`<div className="flex gap-1.5">`: ver los pagos de un cliente ya visitado sigue teniendo sentido.
+Agregar a `ClienteCardProps`:
+
+```ts
+    onAbrirAppExterna: (app: AppExterna, cliente: IVisitClientCard) => void
+```
+
+Agregarla al destructuring. En el bloque de utilidades del header, hoy envuelto en
+`{operable && !resuelto && (<div className="-mr-0.5 -mt-0.5 flex shrink-0 gap-1"> … </div>)}`:
+
+1. Cambiar la condición de ese `div` a `{operable && (` — las apps externas aplican también a un
+   cliente resuelto, aunque Llamar/Reagendar no.
+2. Mantener `telefonoLimpio &&` y el botón de Reagendar condicionados además a `!resuelto`, para que
+   no aparezcan en un cliente ya resuelto como hasta ahora.
+3. Agregar al final del `div`, después del botón de Reagendar:
+
+```tsx
+                        <AccionesExternas
+                            cliente={cliente}
+                            variante="header"
+                            onAbrir={onAbrirAppExterna}
+                        />
+```
+
+El resultado es que en un cliente pendiente el header muestra `Llamar · Reagendar · Pagos`, y en uno
+resuelto solo `Pagos`.
 
 - [ ] **Step 4: Correr y verificar que pasa**
 
@@ -932,9 +979,10 @@ Expected: PASS
 
 - [ ] **Step 5: Pasar la prop por `AgendaBoard`**
 
-En `AgendaBoard.tsx`: agregar `onAppsExternas: (cliente: IAgendaClient) => void` a las props, al
+En `AgendaBoard.tsx`: agregar
+`onAbrirAppExterna: (app: AppExterna, cliente: IVisitClientCard) => void` a las props, al
 destructuring, y pasarla a cada `<ClienteCard>`. En `AgendaBoard.test.tsx` sumar
-`onAppsExternas={vi.fn()}` a los renders existentes.
+`onAbrirAppExterna={vi.fn()}` a los renders existentes.
 
 Run: `npx vitest run src/components/AgendaBoard.test.tsx`
 Expected: PASS
@@ -947,8 +995,7 @@ Agregar al describe existente, siguiendo el helper de render de ese archivo:
     it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async () => {
         localStorage.setItem('access_token', 'tok-123')
         await renderPagina() // helper existente del archivo
-        await userEvent.click(screen.getAllByLabelText('Más opciones')[0])
-        await userEvent.click(screen.getByRole('button', { name: 'Pagos' }))
+        await userEvent.click(screen.getAllByRole('button', { name: 'Pagos' })[0])
 
         const iframe = screen.getByTitle('Pagos')
         const url = new URL(iframe.getAttribute('src') as string)
@@ -965,52 +1012,28 @@ Agregar al describe existente, siguiendo el helper de render de ese archivo:
 - [ ] **Step 7: Correr y verificar que falla**
 
 Run: `npx vitest run src/pages/AgendaSemanaPage.test.tsx`
-Expected: FAIL — no hay botón "Más opciones" conectado ni iframe.
+Expected: FAIL — no hay botón "Pagos" conectado ni iframe.
 
 - [ ] **Step 8: Conectar en `AgendaSemanaPage.tsx`**
 
 Imports:
 
 ```tsx
-import BottomSheet from '@/components/ui/BottomSheet'
-import AccionesExternas from '@/components/AccionesExternas'
 import AppExternaSheet from '@/components/AppExternaSheet'
 import { useAppExterna } from '@/hooks/useAppExterna'
 ```
 
-Estado, junto a los otros `useState` de la página:
+Junto a los otros hooks de la página:
 
 ```tsx
-    // Cliente cuyo menú de apps externas está abierto. Vive acá y no en la card: hay hasta
-    // ~40 cards en pantalla y una sola instancia del menú.
-    const [appsMenuCliente, setAppsMenuCliente] = useState<IAgendaClient | null>(null)
     const appExterna = useAppExterna()
 ```
 
-En `<AgendaBoard>`, sumar `onAppsExternas={setAppsMenuCliente}`.
+En `<AgendaBoard>`, sumar `onAbrirAppExterna={appExterna.abrir}`.
 
 Al final del JSX, después de `<CerrarSemanaSheet ... />`:
 
 ```tsx
-            <BottomSheet
-                open={appsMenuCliente !== null}
-                onClose={() => setAppsMenuCliente(null)}
-                title={appsMenuCliente ? titleCaseNombre(appsMenuCliente.nombreFantasia || appsMenuCliente.nombreCliente) : ''}
-                eyebrow="Más información"
-                eyebrowClassName="text-dsnavy"
-            >
-                {appsMenuCliente && (
-                    <AccionesExternas
-                        cliente={appsMenuCliente}
-                        variante="lista"
-                        onAbrir={(app, cliente) => {
-                            appExterna.abrir(app, cliente)
-                            setAppsMenuCliente(null)
-                        }}
-                    />
-                )}
-            </BottomSheet>
-
             {appExterna.montada && (
                 <AppExternaSheet
                     montada={appExterna.montada}
@@ -1019,8 +1042,6 @@ Al final del JSX, después de `<CerrarSemanaSheet ... />`:
                 />
             )}
 ```
-
-Importar `titleCaseNombre` de `@/lib/textFormat` si la página todavía no lo importa.
 
 - [ ] **Step 9: Correr toda la suite y el lint**
 
@@ -1100,8 +1121,12 @@ Agregar a las props:
 ```
 
 Importar `AccionesExternas`, y los tipos `AppExterna` de `@/lib/appsExternas` e `IVisitClientCard` de
-`@/types/planificacion`. En la vista `'list'`, arriba de la lista de rubros (el vendedor mira el estado
-del cliente **antes** de ofrecer):
+`@/types/planificacion`.
+
+El contenido del sheet es un único `<div>` que abre con un `<p className="mb-3 …">` explicativo (en
+`PropuestaSheet.tsx`, dentro del `<BottomSheet>`; ya **no** hay estado `vista`/`'list'` — la vista
+"versus" se unificó en `RubroTable` en el commit `572f1f0`). Insertar la fila **antes** de ese `<p>`:
+el vendedor mira cómo viene el cliente *antes* de leer la propuesta.
 
 ```tsx
             {cliente && onAbrirAppExterna && (
@@ -1118,8 +1143,12 @@ Expected: PASS
 
 - [ ] **Step 5: Repetir en `VisitaSheet.tsx` con su propio test**
 
-Mismo par de props (`cliente?`, `onAbrirAppExterna?`), mismo bloque en la vista `'list'`, y en
-`VisitaSheet.test.tsx` los dos tests del Step 1 adaptados al helper de render de ese archivo.
+Mismo par de props (`cliente?`, `onAbrirAppExterna?`) y en `VisitaSheet.test.tsx` los dos tests del
+Step 1 adaptados al helper de render de ese archivo.
+
+El ancla acá es la rama `: (` del ternario `{wizard ? (…) : (<div> …`: insertar la fila **antes** del
+`<p className="mb-3 …">` de ese `<div>`. Dentro del wizard **no** va — el vendedor está cargando
+resultados rubro por rubro y ahí un botón que se lleva la pantalla completa es una trampa.
 
 Run: `npx vitest run src/components/VisitaSheet.test.tsx`
 Expected: PASS
@@ -1220,6 +1249,11 @@ En `AgendaSemanaPage.tsx`, agregar:
     }, [diaActivo, appExterna.desmontar])
 ```
 
+`diaActivo` ya no es un `useState`: se deriva del search param de la URL
+(`AgendaSemanaPage.tsx:116`). Como dependencia del efecto funciona igual — sigue siendo un valor que
+cambia cuando el vendedor cambia de día. El test tiene que cambiar de día por el mismo camino que usen
+los demás tests del archivo (router + tab), no seteando estado a mano.
+
 - [ ] **Step 4: Correr y verificar que pasa**
 
 Run: `npx vitest run src/pages/AgendaSemanaPage.test.tsx`
@@ -1271,12 +1305,26 @@ git commit -m "feat(apps-externas): soltar la instancia embebida al cambiar de c
 | `useAppExterna`: handoff una vez, oculta ≠ desmontada | 3 |
 | `AppExternaSheet`: `dvh`, sin sandbox, `name`, overlay de carga | 4 |
 | `AccionesExternas` en dos variantes | 5 |
-| Ubicación en `ClienteCard` (menú `⋯`) | 6 |
+| Ubicación en `ClienteCard` | 6 — **el spec decía menú `⋯`; se implementa como utilidad del header.** Ver abajo. |
 | Ubicación en el sheet del cliente | 7 |
 | Desmontaje al cambiar de cliente/contexto | 8 |
 | Riesgos 1, 2 y 3 (token cross-host, client en reapertura, storage particionado) | 1 |
 | Verificación manual en Android e iOS | 8 |
 | Cero dependencias nuevas | Global Constraints |
+
+## Desvío del spec: dónde va el botón en la card
+
+El spec propuso un menú `⋯` porque la card tenía tres acciones (Propuesta + Llamar + Estado) y no
+entraba una cuarta. **Eso dejó de ser cierto:** los commits `572f1f0` y `33a8ac8` rediseñaron la card
+y movieron Llamar/Reagendar al header, dejando el área de acciones con dos botones de tier 1
+(Propuesta + Iniciar visita) y un patrón explícito para utilidades — chips de 32px en el header, junto
+al código del cliente, elegido justamente para no sumar altura en una columna de 7-8 clientes
+(`ClienteCard.tsx:22-25`).
+
+"Pagos" es una utilidad auxiliar al ciclo de la visita, igual que Llamar. Va al header, sin menú y sin
+sheet intermedio: **un tap en vez de dos**, sin altura extra, siguiendo un patrón que ya existe en vez
+de introduciendo uno nuevo. Esto además cierra la "duda abierta" del spec (si el `⋯` era un tap de más
+en el camino caliente): con el header no hay tap de más que discutir.
 
 **Fuera de este plan, por decisión del spec:** los tres pedidos a pagos-lupa
 (`frame-ancestors`, `?embed=1`, listener de `postMessage`), el token de handoff de un solo uso
