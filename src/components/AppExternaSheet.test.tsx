@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { Wallet } from 'lucide-react'
 import { vi } from 'vitest'
@@ -64,6 +64,54 @@ describe('AppExternaSheet', () => {
         const { onClose } = renderSheet()
         await userEvent.click(screen.getByLabelText('Cerrar'))
         expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    // onError no cubre todo (un frame bloqueado por CSP "carga" a una página vacía sin
+    // disparar error), pero sí cubre la falla de red/DNS real: no puede quedar en spinner.
+    it('muestra el estado de error si el iframe dispara onError', () => {
+        renderSheet()
+        fireEvent.error(screen.getByTitle('Pagos'))
+        expect(screen.queryByTestId('app-externa-cargando')).not.toBeInTheDocument()
+        expect(screen.getByTestId('app-externa-error')).toBeInTheDocument()
+    })
+
+    // El caso que onError no ve: un frame bloqueado por X-Frame-Options/CSP nunca dispara
+    // onLoad ni onError. Sin este timeout el spinner gira para siempre.
+    it('si no llega onLoad ni onError, cae en error por timeout', () => {
+        vi.useFakeTimers()
+        try {
+            renderSheet()
+            act(() => {
+                vi.advanceTimersByTime(15000)
+            })
+            expect(screen.getByTestId('app-externa-error')).toBeInTheDocument()
+        } finally {
+            vi.useRealTimers()
+        }
+    })
+
+    it('el botón Recargar vuelve a mostrar el overlay de carga y cambia el src', async () => {
+        renderSheet()
+        fireEvent.load(screen.getByTitle('Pagos'))
+        expect(screen.queryByTestId('app-externa-cargando')).not.toBeInTheDocument()
+
+        await userEvent.click(screen.getByLabelText('Recargar'))
+
+        expect(screen.getByTestId('app-externa-cargando')).toBeInTheDocument()
+        expect(screen.getByTitle('Pagos')).toHaveAttribute(
+            'src',
+            'https://ext.test/?client=12345&_reintento=1',
+        )
+    })
+
+    it('Reintentar desde el estado de error vuelve a cargar', async () => {
+        renderSheet()
+        fireEvent.error(screen.getByTitle('Pagos'))
+
+        await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }))
+
+        expect(screen.getByTestId('app-externa-cargando')).toBeInTheDocument()
+        expect(screen.queryByTestId('app-externa-error')).not.toBeInTheDocument()
     })
 
     // Oculto pero montado: es lo que hace instantánea la reapertura. El iframe tiene que
