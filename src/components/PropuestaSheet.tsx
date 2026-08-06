@@ -3,10 +3,12 @@ import { Loader2, Maximize2, Minimize2, Play } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import RubroTable from './propuesta/RubroTable'
+import AccionesExternas from './AccionesExternas'
 import { construirFilasPropuesta } from './propuesta/filas'
 import { usePropuesta } from '@/hooks/usePropuesta'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
-import type { IPropuestaRubroDTO, IRubroPropuesta } from '@/types/planificacion'
+import type { AppExterna } from '@/lib/appsExternas'
+import type { IPropuestaRubroDTO, IRubroPropuesta, IVisitClientCard } from '@/types/planificacion'
 
 interface PropuestaSheetProps {
     open: boolean
@@ -24,6 +26,11 @@ interface PropuestaSheetProps {
      *  Queda visible hasta el próximo intento (no es un toast de 2 segundos: si falla acá,
      *  el vendedor tiene que verlo con calma). */
     error?: string | null
+    /** Cliente completo, solo para las apps externas: este sheet trabaja con
+     *  codigoCliente/nombreCliente y AccionesExternas necesita la card entera.
+     *  Va junto con onAbrirAppExterna — sin las dos no se muestra la fila. */
+    cliente?: IVisitClientCard
+    onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
 }
 
 // El backend exige -1 <= caidaPct <= 0 (0 = sin caída, -1 = -100%). Los rubros de relleno
@@ -46,6 +53,8 @@ export default function PropuestaSheet({
     iniciando,
     deshabilitado,
     error,
+    cliente,
+    onAbrirAppExterna,
 }: PropuestaSheetProps) {
     const { data, isLoading } = usePropuesta(open ? codigoCliente : null)
     const rubros: IRubroPropuesta[] = data?.rubros ?? []
@@ -111,6 +120,17 @@ export default function PropuestaSheet({
             }
         >
             <div>
+                {/* Arriba de la propuesta a propósito: el vendedor mira cómo viene el
+                 *  cliente (deuda, pagos) antes de leer qué ofrecerle. */}
+                {cliente && onAbrirAppExterna && (
+                    <div className="mb-3">
+                        <AccionesExternas
+                            cliente={cliente}
+                            variante="fila"
+                            onAbrir={onAbrirAppExterna}
+                        />
+                    </div>
+                )}
                 <p className="mb-3 text-[13px] leading-snug text-dsmuted">
                     Cayeron los <b className="font-bold text-dsred">últimos 2 meses</b> vs. el
                     promedio de 6 meses del cliente:

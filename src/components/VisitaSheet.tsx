@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
 import ResolucionWizardAcciones from './propuesta/ResolucionWizardAcciones'
 import RubroTable from './propuesta/RubroTable'
+import AccionesExternas from './AccionesExternas'
 import { construirFilasVisita } from './propuesta/filas'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useRubros, useResolverRubros, useAgregarRubro, useEliminarRubro } from '@/hooks/useRubros'
@@ -13,7 +14,8 @@ import { useVisitaTimer } from '@/hooks/useVisitaTimer'
 import { formatearDuracion } from '@/lib/visitaTimer'
 import { motivosIguales, tieneDetalleIncompleto } from '@/lib/resolucionRubro'
 import { leerBorrador, guardarBorrador, limpiarBorrador } from '@/lib/resolucionDraft'
-import type { IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
+import type { AppExterna } from '@/lib/appsExternas'
+import type { IRubroMotivo, IVisitaRubro, IVisitClientCard } from '@/types/planificacion'
 
 interface VisitaSheetProps {
     open: boolean
@@ -31,6 +33,10 @@ interface VisitaSheetProps {
     /** Si se pasa (y enCurso), aparece el botón de minimizar en el header. */
     onMinimize?: () => void
     cerrando?: boolean
+    /** Cliente completo, solo para las apps externas. Va junto con onAbrirAppExterna —
+     *  sin las dos no se muestra la fila. */
+    cliente?: IVisitClientCard
+    onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
 }
 
 export default function VisitaSheet({
@@ -44,6 +50,8 @@ export default function VisitaSheet({
     onClose,
     onMinimize,
     cerrando,
+    cliente,
+    onAbrirAppExterna,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
     const { data: rubros = [], isSuccess: rubrosCargados } = useRubros(open ? visitaId : null)
@@ -324,6 +332,18 @@ export default function VisitaSheet({
                 />
             ) : (
                 <div>
+                    {/* Solo en la lista, nunca dentro del wizard: ahí el vendedor está
+                     *  cargando el resultado rubro por rubro y un botón que se lleva la
+                     *  pantalla completa a otra app le haría perder el hilo. */}
+                    {cliente && onAbrirAppExterna && (
+                        <div className="mb-3">
+                            <AccionesExternas
+                                cliente={cliente}
+                                variante="fila"
+                                onAbrir={onAbrirAppExterna}
+                            />
+                        </div>
+                    )}
                     <p className="mb-3 text-[13px] leading-snug text-dsmuted">
                         Cargá el resultado de cada rubro que ofreciste. Los que no ofreciste se
                         resuelven con <b className="font-bold text-[#182645]">"No lo ofrecí"</b>.

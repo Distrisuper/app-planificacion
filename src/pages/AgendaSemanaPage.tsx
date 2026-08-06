@@ -329,6 +329,7 @@ export default function AgendaSemanaPage() {
                 }}
                 onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
                 onAviso={mostrar}
+                onAbrirAppExterna={appExterna.abrir}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar

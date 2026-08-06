@@ -10,7 +10,8 @@ import { capturarUbicacion, type GeoResult } from '@/lib/geolocation'
 import { errorCode } from '@/lib/apiError'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
 import type { NotificacionTipo } from '@/components/ui/Notification'
-import type { IAgendaClient, IPropuestaRubroDTO } from '@/types/planificacion'
+import type { AppExterna } from '@/lib/appsExternas'
+import type { IAgendaClient, IPropuestaRubroDTO, IVisitClientCard } from '@/types/planificacion'
 
 /** La visita que está en curso ahora mismo, sea cual sea el cliente cuyo sheet esté
  *  abierto (o ninguno) — ver comentario en VisitaFlowProps.visitaEnCurso. */
@@ -37,6 +38,8 @@ interface VisitaFlowProps {
     onClose: () => void
     onGeoBloqueada: (motivo: Exclude<GeoResult, { ok: true }>['motivo']) => void
     onAviso?: (tipo: NotificacionTipo, mensaje: string) => void
+    /** Si se pasa, los sheets del cliente ofrecen las apps externas. */
+    onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
 }
 
 /**
@@ -54,6 +57,7 @@ export default function VisitaFlow({
     onClose,
     onGeoBloqueada,
     onAviso,
+    onAbrirAppExterna,
 }: VisitaFlowProps) {
     const iniciar = useIniciarVisita()
     const cerrar = useCerrarVisita()
@@ -239,6 +243,8 @@ export default function VisitaFlow({
                 iniciando={iniciandoFlujo}
                 deshabilitado={bloqueadoPorOtraVisita}
                 error={errorIniciar ?? mensajeBloqueo}
+                cliente={cliente}
+                onAbrirAppExterna={onAbrirAppExterna}
                 onIniciarVisita={onConfirmarPropuesta}
                 onClose={cerrarFlujo}
             />
@@ -250,6 +256,8 @@ export default function VisitaFlow({
                     visitaCerrada={cliente.estado === 'visitada'}
                     enCurso={enCurso}
                     codigoParticularCliente={cliente.codigoParticularCliente}
+                    cliente={cliente}
+                    onAbrirAppExterna={onAbrirAppExterna}
                     onMinimize={cerrarFlujo}
                     cerrando={cerrandoFlujo}
                     onCerrarVisita={onCerrarVisita}
