@@ -298,3 +298,76 @@ caliente.
 Llamar/Reagendar al header como chips de 32px y dejó el área de acciones con dos botones de tier 1.
 Ese patrón existente resuelve el problema que el `⋯` intentaba resolver — no sumar altura a la card —
 sin costar un tap extra. No hay nada que decidir con uso real.
+
+## Verificación empírica (2026-08-06)
+
+Spike manual de la Task 1 del plan, con un `access_token` real de la app (usuario
+`CAVALLARI LUCAS`, `rol: VENDEDOR`, `codigoparticular: 07537`) y un cliente real de su agenda
+(`codigoParticularCliente: 05519`), sobre el deploy `https://pagos-lupa.web.app`.
+
+### Riesgo 1 (token cross-host) — **FALLA. Bloqueante.**
+
+`POST https://distrimdp.dvrdns.org/api/authorization/decode-token` responde **HTTP 200 con
+`ok: 0`**:
+
+```json
+{"ok":0,"error":[{"name":"JsonWebTokenError","message":"invalid signature",
+  "stack":"... at Object.decodeClientToken (api-distri-node/services/authService.js:44:9)"}]}
+```
+
+Reproducido 3 veces, incluso con el `localStorage` del origen de pagos-lupa borrado por completo.
+La causa es exactamente la que anticipaba el riesgo: nuestro token lo **emite** Laravel en
+`apidistri.distrisuper.com` (`iss: http://localhost/api/lupita/login`) y lo **verifica**
+api-distri-node en `distrimdp.dvrdns.org` con **otro secreto JWT**. La firma no valida.
+
+La consecuencia en la UI es la que temía el spec, y está en el código de pagos-lupa
+(`src/pages/Authentication/LoginBoxed.tsx:126-131`):
+
+```ts
+if (res.ok === 0) {
+    console.log('❌ lupaToken validation failed')
+    localStorage.clear()
+    sessionStorage.clear()
+    navigate('/auth/login')
+}
+```
+
+Es decir: **dentro del iframe el vendedor ve el formulario de login de pagos-lupa.** Verificado.
+
+Dato tranquilizador: el handoff **no invalida** nuestro token. Después del intento fallido,
+`GET /api/auth/me` y `GET /planificacion/ciclo/actual` siguen respondiendo 200 con el mismo
+`access_token`. El fallo es de verificación, no de revocación.
+
+### Riesgo 2 (`client` en la reapertura) — **FALLA, por una razón distinta a la prevista**
+
+No hace falta llegar a la reapertura: el `client` **se pierde ya en la primera apertura**. En
+`LoginBoxed.tsx` hay dos `useEffect` que compiten:
+
+- el de la línea 92 es el que preserva el contexto (`params.set('client', client)` →
+  `navigate('/?client=...')`), pero depende de `[lupaToken]`, que en el primer render vale `null`
+  porque se lee en la línea 21 **antes** de que el efecto de la línea 81 lo escriba;
+- el de la línea 141 depende de `[isAuthenticated]` y hace `navigate('/')` **pelado**. Solo
+  preserva `type_operation`, nunca `client`.
+
+Observado: la primera apertura terminó en `https://pagos-lupa.web.app/` con el selector de cliente
+vacío ("Por favor, ingrese el código del cliente…"). Como el plan decidió **omitir**
+`type_operation`, se cae siempre en la rama `navigate('/')` de la línea 148 — omitirlo no evita una
+rama de redirect, garantiza la peor.
+
+### Riesgo 3 (storage particionado en iframe) — **NO SE PUDO EVALUAR**
+
+Bloqueado por el riesgo 1: sin token válido no hay sesión que observar dentro del iframe. Queda
+pendiente para cuando el riesgo 1 esté resuelto.
+
+### Nota sobre el repo de pagos-lupa
+
+`C:\Users\matia\OneDrive\Documentos\distri\Pagos-Lupa`. El working copy tiene ediciones que **no
+compilan** y por lo tanto no son lo desplegado: `LoginBoxed.tsx:71` (`\ ELIMINADO`),
+`LoginBoxed.tsx:124` (`` navigate(`\?${query}`) ``, backslash literal en la query) y
+`api_auth.ts:34` (`` `${...}\api\auth\login` ``). Cualquier arreglo del handoff arranca por
+sincronizar ese repo con lo que está en producción.
+
+### Consecuencia para el plan
+
+El handoff por URL contra el deploy actual **no funciona**, y el arreglo no está del lado de esta
+app: hay que tocar pagos-lupa y/o el backend. Las tareas 2 a 8 quedan detenidas.
