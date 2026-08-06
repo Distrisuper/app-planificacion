@@ -25,6 +25,12 @@ function appDeVersus(): AppExterna {
     return app
 }
 
+function appDeCrm(): AppExterna {
+    const app = APPS_EXTERNAS.find(a => a.id === 'crm')
+    if (!app) throw new Error('la app "crm" tiene que estar registrada')
+    return app
+}
+
 describe('appsExternas', () => {
     beforeEach(() => {
         localStorage.clear()
@@ -163,5 +169,53 @@ describe('appsExternas', () => {
         const raro: IVisitClientCard = { ...CLIENTE, codigoParticularCliente: 'a&b=c' }
         const { url } = resolverHandoff(appDeVersus(), raro)
         expect(new URL(url).searchParams.get('q')).toBe('a&b=c')
+    })
+
+    it('registra el crm sin credencial en el handoff', () => {
+        const app = appDeCrm()
+        expect(app.label).toBe('CRM')
+        expect(app.token).toBe('ninguno')
+        expect(app.handoff.tipo).toBe('url')
+    })
+
+    it('arma la URL de handoff del crm con q en /assistant/<id>/crm', () => {
+        const { url } = resolverHandoff(appDeCrm(), CLIENTE)
+        const parsed = new URL(url)
+        expect(parsed.pathname).toBe('/assistant/asst_1a76009636b4edfa4c694e1b3116/crm')
+        expect(parsed.searchParams.get('q')).toBe('05519')
+    })
+
+    // Mismo riesgo que pagos-lupa y versus: no hay razón para mandar el token acá tampoco.
+    it('no filtra el token en la URL del crm', () => {
+        localStorage.setItem('access_token', 'tok-123')
+        const { url } = resolverHandoff(appDeCrm(), CLIENTE)
+        expect(url).not.toContain('tok-123')
+        expect(new URL(url).searchParams.has('token')).toBe(false)
+    })
+
+    it('escapa el código de cliente en el handoff del crm', () => {
+        const raro: IVisitClientCard = { ...CLIENTE, codigoParticularCliente: 'a&b=c' }
+        const { url } = resolverHandoff(appDeCrm(), raro)
+        expect(new URL(url).searchParams.get('q')).toBe('a&b=c')
+    })
+
+    // VITE_AOKI_URL sola compondría "https://.../assistant/", una URL absoluta http/https
+    // válida que pasaría el filtro de base pero apuntaría a una ruta que no existe. Por eso
+    // la falta del assistant id se resuelve ANTES del filtro: la base se fuerza a '' y cae
+    // en el mismo motivo ("falta su URL base en el entorno") que una base ausente.
+    it('no ofrece el crm si falta el assistant id, aunque la URL base esté seteada', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        vi.stubEnv('VITE_AOKI_URL', 'https://mi.aokitech.com.ar')
+        vi.stubEnv('VITE_AOKI_ASSISTANT_ID', '')
+        vi.resetModules()
+        try {
+            const { APPS_EXTERNAS: sinAssistantId } = await import('./appsExternas')
+            expect(sinAssistantId.find(a => a.id === 'crm')).toBeUndefined()
+            expect(error).toHaveBeenCalledWith(expect.stringContaining('"crm"'))
+        } finally {
+            vi.unstubAllEnvs()
+            vi.resetModules()
+            error.mockRestore()
+        }
     })
 })

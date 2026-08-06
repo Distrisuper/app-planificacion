@@ -1,4 +1,4 @@
-import { BarChart3, Wallet } from 'lucide-react'
+import { BarChart3, MessageSquare, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { IVisitClientCard } from '@/types/planificacion'
 
@@ -6,6 +6,18 @@ import type { IVisitClientCard } from '@/types/planificacion'
 // está configurada en este deploy" y no la ofrece.
 const PAGOS_LUPA_URL: string = import.meta.env.VITE_PAGOS_LUPA_URL || ''
 const VERSUS_URL: string = import.meta.env.VITE_VERSUS_URL || ''
+
+// Mismos nombres de variable y misma composición de base que ya usa app-vendedores para el
+// CRM (panel Aoki) en V2RightPanel.tsx: base = `${VITE_AOKI_URL}/assistant/${VITE_AOKI_ASSISTANT_ID}`.
+const AOKI_URL: string = import.meta.env.VITE_AOKI_URL || ''
+const AOKI_ASSISTANT_ID: string = import.meta.env.VITE_AOKI_ASSISTANT_ID || ''
+// Sin assistant id la base compuesta quedaría "https://.../assistant/", que sigue siendo una
+// URL absoluta http/https válida: pasaría el filtro de más abajo y ofrecería un botón que
+// apunta a una ruta que no existe. Se fuerza a '' para que caiga en el mismo motivo ("falta su
+// URL base en el entorno") que ya cubre ese filtro, en vez de sumar un chequeo nuevo.
+const CRM_URL: string = AOKI_URL && AOKI_ASSISTANT_ID
+    ? `${AOKI_URL.replace(/\/+$/, '')}/assistant/${AOKI_ASSISTANT_ID}`
+    : ''
 
 /** De dónde sale la credencial que se le pasa a la app externa. 'sesion' = el
  *  access_token de esta app. Es el caso normal (las apps propias comparten el login),
@@ -95,6 +107,30 @@ const DECLARADAS: AppExternaDeclarada[] = [
                         q: cliente.codigoParticularCliente,
                     })
                     return `${VERSUS_URL}/v2/rubro/clientes?${params}`
+                },
+            },
+        },
+    },
+    {
+        baseUrl: CRM_URL,
+        app: {
+            id: 'crm',
+            label: 'CRM',
+            icon: MessageSquare,
+            // Igual que Pagos y Versus: la sesión la crea el vendedor logueándose una vez
+            // dentro del iframe.
+            token: 'ninguno',
+            handoff: {
+                tipo: 'url',
+                // Mismo valor que ya le mandamos a Pagos (`client=`) y a Versus (`q=`):
+                // cliente.codigoParticularCliente, igual que hace app-vendedores en
+                // RubroV2Page.tsx:394 (handleCRMClick) antes de pasarlo al builder de
+                // V2RightPanel.tsx.
+                url: ({ cliente }) => {
+                    const params = new URLSearchParams({
+                        q: cliente.codigoParticularCliente,
+                    })
+                    return `${CRM_URL}/crm?${params}`
                 },
             },
         },
