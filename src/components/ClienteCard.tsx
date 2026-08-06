@@ -1,8 +1,10 @@
 import { Ban, Calendar, CalendarClock, Check, ChevronRight, Lock, MapPin, Phone, Play, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import AccionesExternas from './AccionesExternas'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { estaResuelto } from '@/lib/estadoCiclo'
-import type { IAgendaClient } from '@/types/planificacion'
+import type { AppExterna } from '@/lib/appsExternas'
+import type { IAgendaClient, IVisitClientCard } from '@/types/planificacion'
 
 interface ClienteCardProps {
     cliente: IAgendaClient
@@ -17,6 +19,7 @@ interface ClienteCardProps {
     /** Arranca la visita derecho, sin pasar por la propuesta: va directo al mapa
      *  de confirmación (o inicia sin más si el cliente no tiene coordenadas). */
     onIniciarVisita: (cliente: IAgendaClient) => void
+    onAbrirAppExterna: (app: AppExterna, cliente: IVisitClientCard) => void
 }
 
 // Utilidades (llamar/reagendar). Viven en el header, no en el área de acciones: son
@@ -45,6 +48,7 @@ export default function ClienteCard({
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
+    onAbrirAppExterna,
 }: ClienteCardProps) {
     const resuelto = estaResuelto(cliente.estado)
     const enCurso = cliente.estado === 'en_curso'
@@ -109,9 +113,12 @@ export default function ClienteCard({
                         <Check className="h-3 w-3" strokeWidth={3.5} />
                     </span>
                 )}
-                {operable && !resuelto && (
+                {/* Las apps externas (Pagos) aplican también a un cliente resuelto — sus
+                    pagos se siguen mirando después de la visita —, así que la compuerta
+                    `!resuelto` bajó del contenedor a Llamar/Reagendar, que sí son del ciclo. */}
+                {operable && (
                     <div className="-mr-0.5 -mt-0.5 flex shrink-0 gap-1">
-                        {telefonoLimpio && (
+                        {!resuelto && telefonoLimpio && (
                             <a
                                 href={`tel:+54${telefonoLimpio.replace(/\D/g, '')}`}
                                 onClick={e => e.stopPropagation()}
@@ -122,14 +129,21 @@ export default function ClienteCard({
                                 <Phone className="h-[15px] w-[15px]" strokeWidth={2} />
                             </a>
                         )}
-                        <button
-                            type="button"
-                            onClick={() => onEstadoVisita(cliente)}
-                            className={HEADER_WITH_LABEL}
-                        >
-                            <Calendar className="h-[13px] w-[13px]" strokeWidth={2} />
-                            Reagendar
-                        </button>
+                        {!resuelto && (
+                            <button
+                                type="button"
+                                onClick={() => onEstadoVisita(cliente)}
+                                className={HEADER_WITH_LABEL}
+                            >
+                                <Calendar className="h-[13px] w-[13px]" strokeWidth={2} />
+                                Reagendar
+                            </button>
+                        )}
+                        <AccionesExternas
+                            cliente={cliente}
+                            variante="header"
+                            onAbrir={onAbrirAppExterna}
+                        />
                     </div>
                 )}
             </div>

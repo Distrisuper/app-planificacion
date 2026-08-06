@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from 'react'
 import ClienteCard from './ClienteCard'
 import { getWeekDates, formatDayDate, isSameDay } from '@/lib/weekDates'
 import { estaResuelto } from '@/lib/estadoCiclo'
-import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
+import type { AppExterna } from '@/lib/appsExternas'
+import type { Dia, IAgendaClient, IVisitClientCard, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 const DIA_NOMBRE: Record<Dia, string> = { LUN: 'Lunes', MAR: 'Martes', MIE: 'Miércoles', JUE: 'Jueves', VIE: 'Viernes' }
@@ -18,6 +19,7 @@ interface AgendaBoardProps {
     onAbrir: (cliente: IAgendaClient) => void
     onEstadoVisita: (cliente: IAgendaClient) => void
     onIniciarVisita: (cliente: IAgendaClient) => void
+    onAbrirAppExterna: (app: AppExterna, cliente: IVisitClientCard) => void
 }
 
 export default function AgendaBoard({
@@ -29,6 +31,7 @@ export default function AgendaBoard({
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
+    onAbrirAppExterna,
 }: AgendaBoardProps) {
     const boardRef = useRef<HTMLDivElement>(null)
     const columnRefs = useRef<Partial<Record<Dia, HTMLDivElement>>>({})
@@ -153,6 +156,7 @@ export default function AgendaBoard({
                                         onAbrir={onAbrir}
                                         onEstadoVisita={onEstadoVisita}
                                         onIniciarVisita={onIniciarVisita}
+                                        onAbrirAppExterna={onAbrirAppExterna}
                                     />
                                 ))}
                                 {clientes.length === 0 && (

@@ -23,6 +23,7 @@ const handlers = {
     onAbrir: noop,
     onEstadoVisita: noop,
     onIniciarVisita: noop,
+    onAbrirAppExterna: noop,
 }
 
 it('un cliente pendiente muestra el código y las acciones', () => {
@@ -60,14 +61,17 @@ it('"Ver resumen" abre el mismo flujo que Propuesta, con el cliente completo', (
 })
 
 it('no_visita y reagendada (sin visita real) no muestran fila de acciones', () => {
+    // Se apunta a las acciones del ciclo por nombre y no a "ningún botón": las apps
+    // externas (Pagos) sí siguen ofreciéndose en un cliente resuelto.
+    const DEL_CICLO = /propuesta|iniciar visita|ver resumen|reagendar/i
     const { rerender } = render(
         <ClienteCard cliente={cliente({ estado: 'no_visita', telefono: '1140506070' })} {...handlers} />,
     )
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: DEL_CICLO })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
 
     rerender(<ClienteCard cliente={cliente({ estado: 'reagendada' })} {...handlers} />)
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: DEL_CICLO })).not.toBeInTheDocument()
 })
 
 it('un cliente resuelto muestra el nombre tachado', () => {
@@ -162,4 +166,33 @@ it('sin coordenadas, la dirección enlaza a Google Maps por texto', () => {
 it('sin teléfono limpio no se muestra el botón de llamar', () => {
     render(<ClienteCard cliente={cliente({ telefono: '1171473562 / 46641751' })} {...handlers} />)
     expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
+})
+
+it('ofrece las apps externas entre las utilidades del header', () => {
+    const onAbrirAppExterna = vi.fn()
+    render(
+        <ClienteCard
+            cliente={cliente()}
+            {...handlers}
+            onAbrirAppExterna={onAbrirAppExterna}
+        />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Pagos' }))
+    expect(onAbrirAppExterna).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'pagos' }),
+        expect.objectContaining({ codigoParticularCliente: '10034' }),
+    )
+})
+
+// En preview (hojeando otra semana) no se opera: nada de apps externas.
+it('no ofrece apps externas en modo preview', () => {
+    render(<ClienteCard cliente={cliente()} {...handlers} modo="preview" />)
+    expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
+})
+
+// Un cliente ya visitado también tiene pagos que mirar: la utilidad no depende de que
+// el ciclo esté pendiente, a diferencia de Llamar/Reagendar.
+it('sigue ofreciendo apps externas en un cliente ya resuelto', () => {
+    render(<ClienteCard cliente={cliente({ estado: 'visitada', visitaId: 7 })} {...handlers} />)
+    expect(screen.getByRole('button', { name: 'Pagos' })).toBeInTheDocument()
 })

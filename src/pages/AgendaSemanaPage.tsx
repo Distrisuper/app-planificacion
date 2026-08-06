@@ -10,11 +10,13 @@ import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import CerrarSemanaSheet from '@/components/CerrarSemanaSheet'
+import AppExternaSheet from '@/components/AppExternaSheet'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, useCicloPreview, useAbrirCiclo, useReagendar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useNoVisita } from '@/hooks/useVisitas'
 import { useNotificacion } from '@/hooks/useNotificacion'
+import { useAppExterna } from '@/hooks/useAppExterna'
 import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
@@ -54,6 +56,7 @@ export default function AgendaSemanaPage() {
     const noVisita = useNoVisita()
     const { data: motivosVisita = [] } = useMotivos('visita')
     const { notificacion, mostrar, ocultar } = useNotificacion()
+    const appExterna = useAppExterna()
 
     // La posición que el vendedor está mirando (semana + día) vive en la URL, no en
     // useState: al recargar la página — o cuando la PWA se resume desde cero — un useState
@@ -301,6 +304,7 @@ export default function AgendaSemanaPage() {
                 onAbrir={abrirPropuesta}
                 onEstadoVisita={setEstadoVisitaCliente}
                 onIniciarVisita={iniciarDirecto}
+                onAbrirAppExterna={appExterna.abrir}
             />
 
             {ciclo === null && preview && (
@@ -362,6 +366,15 @@ export default function AgendaSemanaPage() {
                     mostrar('exito', 'Semana cerrada')
                 }}
             />
+            {/* `ocultar` y no `desmontar`: cerrar deja la instancia viva para que reabrir
+                el mismo cliente sea instantáneo. */}
+            {appExterna.montada && (
+                <AppExternaSheet
+                    montada={appExterna.montada}
+                    visible={appExterna.visible}
+                    onClose={appExterna.ocultar}
+                />
+            )}
             <Notification notificacion={notificacion} onDismiss={ocultar} />
         </div>
     )

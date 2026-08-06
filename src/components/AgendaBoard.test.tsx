@@ -39,6 +39,7 @@ it('los clientes resueltos se listan al final, en su orden relativo original', (
             onAbrir={noop}
             onEstadoVisita={noop}
             onIniciarVisita={noop}
+            onAbrirAppExterna={noop}
         />,
     )
 
@@ -67,6 +68,7 @@ it('en_curso no se considera resuelto: se queda arriba con los pendientes', () =
             onAbrir={noop}
             onEstadoVisita={noop}
             onIniciarVisita={noop}
+            onAbrirAppExterna={noop}
         />,
     )
 

@@ -18,6 +18,17 @@ const cicloAbierto = {
 
 const semanaVacia = { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] }
 
+const clienteLunes = {
+    codigoCliente: 'C1',
+    codigoParticularCliente: '10034',
+    nombreCliente: 'ALMACEN DON JOSE',
+    cicloClienteId: 42,
+    dia: 1,
+    estado: 'pendiente' as const,
+    visitaId: null,
+    rubrosPendientes: 0,
+}
+
 /** `url` permite arrancar en una posición concreta (?dia=/?semana=), que es de donde la
  *  página lee el día y la semana que se están mirando. */
 function renderPage(url = '/') {
@@ -207,6 +218,26 @@ it('un usuario sin código de vendedor recibe un mensaje de cuenta, no "reintent
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /abrir semana/i }))
     expect(await screen.findByText(/avisá a sistemas/i)).toBeInTheDocument()
+})
+
+it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    // Se siembra el cliente en LUN y se entra con ?dia=LUN: sin `dia` la página arranca
+    // en HOY, que cambia según el día en que corra la suite.
+    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    renderPage('/?dia=LUN')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
+
+    const iframe = screen.getByTitle('Pagos')
+    const url = new URL(iframe.getAttribute('src') as string)
+    expect(url.pathname).toBe('/')
+    expect(url.searchParams.get('client')).toBe('10034')
+    expect(url.searchParams.has('token')).toBe(false)
+
+    fireEvent.click(screen.getByLabelText('Cerrar'))
+    // Oculto pero montado: reabrir tiene que ser instantáneo.
+    expect(screen.getByTitle('Pagos')).toBeInTheDocument()
 })
 
 it('volver a la semana abierta devuelve el modo operable', async () => {
