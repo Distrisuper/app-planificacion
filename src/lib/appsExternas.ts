@@ -72,10 +72,13 @@ export function resolverHandoff(app: AppExterna, cliente: IVisitClientCard): Han
         case 'url':
             return { tipo: 'url', url: app.handoff.url(ctx) }
         default: {
-            // Al sumar una variante a Handoff, esta asignación deja de compilar y marca
-            // exactamente el lugar donde falta la rama.
-            const noManejado: never = app.handoff
-            throw new Error(`Handoff no soportado: ${JSON.stringify(noManejado)}`)
+            // Se estrecha el discriminante (app.handoff.tipo), no el objeto: Handoff todavía
+            // tiene un solo miembro, así que no es una unión y TypeScript no puede angostar
+            // app.handoff a never. tipo sí es 'url' hoy, así que acá se angosta a never y
+            // compila. Al sumar una variante a Handoff, tipo pasa a ser una unión más grande,
+            // esta asignación deja de compilar y marca exactamente el lugar donde falta la rama.
+            const tipoNoManejado: never = app.handoff.tipo
+            throw new Error(`Handoff no soportado: ${tipoNoManejado}`)
         }
     }
 }
