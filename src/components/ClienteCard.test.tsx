@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { vi } from 'vitest'
 import ClienteCard from './ClienteCard'
 import type { IAgendaClient } from '@/types/planificacion'
@@ -169,7 +169,7 @@ it('sin teléfono limpio no se muestra el botón de llamar', () => {
     expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
 })
 
-it('ofrece las apps externas entre las utilidades del header', () => {
+it('ofrece las apps externas en la banda de contexto de la card', () => {
     const onAbrirAppExterna = vi.fn()
     render(
         <ClienteCard
@@ -195,5 +195,20 @@ it('no ofrece apps externas en modo preview', () => {
 // el ciclo esté pendiente, a diferencia de Llamar/Reagendar.
 it('sigue ofreciendo apps externas en un cliente ya resuelto', () => {
     render(<ClienteCard cliente={cliente({ estado: 'visitada', visitaId: 7 })} {...handlers} />)
+    expect(screen.getByRole('button', { name: 'Pagos' })).toBeInTheDocument()
+})
+
+// La regresión que motivó el rediseño: con cuatro chips el header envolvía a dos filas y
+// pesaba más que el nombre del cliente. Se fija el conjunto EXACTO de controles del
+// contenedor de utilidades (no un "no está Pagos"), así que cualquier chip nuevo que
+// alguien meta ahí — apps externas u otro — rompe el test.
+it('el header tiene exactamente dos utilidades: llamar y reagendar', () => {
+    render(<ClienteCard cliente={cliente({ telefono: '1140506070' })} {...handlers} />)
+    const header = screen.getByRole('link', { name: /llamar/i }).parentElement!
+    expect(
+        Array.from(header.children).map(el => el.getAttribute('aria-label') ?? el.textContent),
+    ).toEqual(['Llamar', 'Reagendar'])
+    // Y las apps siguen existiendo, pero fuera de ese contenedor.
+    expect(within(header).queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Pagos' })).toBeInTheDocument()
 })

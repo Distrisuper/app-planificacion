@@ -1,35 +1,33 @@
+import { ArrowUpRight } from 'lucide-react'
 import { APPS_EXTERNAS, type AppExterna } from '@/lib/appsExternas'
 import type { IVisitClientCard } from '@/types/planificacion'
 
-// La variante 'header' replica el chip de las utilidades de ClienteCard (Llamar /
-// Reagendar). Se duplica el string en vez de importarlo de ClienteCard para no invertir
-// la dependencia entre componentes hermanos; si alguna vez son tres los que lo usan,
-// el constante se muda a src/lib.
-const CHIP_HEADER =
-    'inline-flex h-8 shrink-0 items-center justify-center gap-1 rounded-lg bg-[#F4F6FA] px-2.5 text-[11.5px] font-semibold text-[#54607A] hover:bg-[#EAEEF6]'
+// Borde fino sobre blanco (en vez del relleno gris de la fila de dirección) más la flecha
+// al final le dan a estas acciones un vocabulario propio de "esto te saca de la app": así
+// la card distingue de un vistazo qué controles actúan sobre la visita y qué controles
+// navegan afuera. No unificar el estilo con los chips del ciclo — se pierde la distinción.
+const CHIP_CONTEXTO =
+    'inline-flex h-[30px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#E3E8F2] bg-white text-[11.5px] font-semibold text-[#54607A] hover:bg-[#F4F6FA]'
 const BOTON_FILA =
     'inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#D8DEEA] bg-white text-[13px] font-semibold text-dsnavy hover:bg-dsnavy/5'
 
 interface AccionesExternasProps {
     cliente: IVisitClientCard
-    /** 'header' = chip bajo entre las utilidades de la card (no suma altura a la card).
-     *  'fila' = botón táctil dentro de un sheet, donde hay espacio. */
-    variante: 'fila' | 'header'
+    /** 'contexto' = banda de consulta debajo de la dirección de la card, misma especie que
+     *  ella (abre un destino externo). 'fila' = botón táctil dentro de un sheet. */
+    variante: 'fila' | 'contexto'
     onAbrir: (app: AppExterna, cliente: IVisitClientCard) => void
 }
 
 /** Único lugar donde se listan las apps externas para el usuario. Se renderiza en dos
- *  contextos (header de la card y sheet del cliente) para que agregar una app no obligue
+ *  contextos (banda de la card y sheet del cliente) para que agregar una app no obligue
  *  a decidir de nuevo dónde va. */
 export default function AccionesExternas({ cliente, variante, onAbrir }: AccionesExternasProps) {
-    const header = variante === 'header'
-    // En 'header' los chips envuelven: a 360px de ancho, Llamar + Reagendar + una app entran
-    // justo, así que la app número tres se saldría de la card. `justify-end` porque el
-    // contenedor está pegado al borde derecho de la card (ver ClienteCard): la fila envuelta
-    // queda alineada con la de arriba en vez de colgada a la izquierda. La variante 'fila' no
-    // envuelve: vive en un sheet con espacio.
+    const contexto = variante === 'contexto'
+    // `flex-1` reparte el ancho en partes iguales entre las apps registradas: con dos queda
+    // una fila 50/50 y con tres se reparte en tercios, sin desbordar ni envolver.
     return (
-        <div className={header ? 'flex flex-wrap justify-end gap-1' : 'flex gap-1.5'}>
+        <div className={contexto ? 'mt-1.5 flex gap-1.5' : 'flex gap-1.5'}>
             {APPS_EXTERNAS.map(app => {
                 const Icono = app.icon
                 return (
@@ -37,13 +35,19 @@ export default function AccionesExternas({ cliente, variante, onAbrir }: Accione
                         key={app.id}
                         type="button"
                         onClick={() => onAbrir(app, cliente)}
-                        className={header ? CHIP_HEADER : BOTON_FILA}
+                        className={contexto ? CHIP_CONTEXTO : BOTON_FILA}
                     >
                         <Icono
-                            className={header ? 'h-[13px] w-[13px]' : 'h-[14px] w-[14px]'}
+                            className={contexto ? 'h-[13px] w-[13px]' : 'h-[14px] w-[14px]'}
                             strokeWidth={2}
                         />
                         {app.label}
+                        {contexto && (
+                            <ArrowUpRight
+                                className="h-2.5 w-2.5 text-[#98A2B8]"
+                                strokeWidth={2.4}
+                            />
+                        )}
                     </button>
                 )
             })}

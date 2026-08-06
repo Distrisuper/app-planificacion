@@ -113,16 +113,14 @@ export default function ClienteCard({
                         <Check className="h-3 w-3" strokeWidth={3.5} />
                     </span>
                 )}
-                {/* Las apps externas (Pagos) aplican también a un cliente resuelto — sus
-                    pagos se siguen mirando después de la visita —, así que la compuerta
-                    `!resuelto` bajó del contenedor a Llamar/Reagendar, que sí son del ciclo. */}
-                {/* Sin `shrink-0` y con `flex-wrap`: los chips son shrink-0 cada uno, así que
-                    cuando no entran en el ancho útil (una app externa más) el contenedor cede
-                    y la fila envuelve, en vez de desbordar la card. Envuelve solo si hace
-                    falta — un flex item no baja de su min-content. */}
-                {operable && (
-                    <div className="-mr-0.5 -mt-0.5 flex flex-wrap justify-end gap-1">
-                        {!resuelto && telefonoLimpio && (
+                {/* Acá van SOLO las utilidades del ciclo de la visita. Las apps externas no
+                    viven en el header: son consultas de contexto del cliente (misma especie
+                    que la dirección), y además cuatro chips no entran en una sola fila —
+                    envolvían a un punto de quiebre distinto por card. Van en la banda de
+                    contexto, debajo de la dirección. */}
+                {operable && !resuelto && (
+                    <div className="-mr-0.5 -mt-0.5 flex shrink-0 gap-1">
+                        {telefonoLimpio && (
                             <a
                                 href={`tel:+54${telefonoLimpio.replace(/\D/g, '')}`}
                                 onClick={e => e.stopPropagation()}
@@ -133,21 +131,14 @@ export default function ClienteCard({
                                 <Phone className="h-[15px] w-[15px]" strokeWidth={2} />
                             </a>
                         )}
-                        {!resuelto && (
-                            <button
-                                type="button"
-                                onClick={() => onEstadoVisita(cliente)}
-                                className={HEADER_WITH_LABEL}
-                            >
-                                <Calendar className="h-[13px] w-[13px]" strokeWidth={2} />
-                                Reagendar
-                            </button>
-                        )}
-                        <AccionesExternas
-                            cliente={cliente}
-                            variante="header"
-                            onAbrir={onAbrirAppExterna}
-                        />
+                        <button
+                            type="button"
+                            onClick={() => onEstadoVisita(cliente)}
+                            className={HEADER_WITH_LABEL}
+                        >
+                            <Calendar className="h-[13px] w-[13px]" strokeWidth={2} />
+                            Reagendar
+                        </button>
                     </div>
                 )}
             </div>
@@ -182,6 +173,15 @@ export default function ClienteCard({
                         <span>{direccionTexto}</span>
                     </div>
                 ))}
+
+            {/* Sin `!resuelto`: un cliente ya visitado también tiene pagos que mirar. */}
+            {operable && (
+                <AccionesExternas
+                    cliente={cliente}
+                    variante="contexto"
+                    onAbrir={onAbrirAppExterna}
+                />
+            )}
 
             {/* Resuelto sin visita real (no_visita/reagendada): no hay nada que resumir ni
                 ninguna acción que tenga sentido — llamar o reagendar a alguien ya resuelto

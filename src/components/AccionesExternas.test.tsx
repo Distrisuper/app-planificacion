@@ -30,11 +30,24 @@ describe('AccionesExternas', () => {
         )
     })
 
-    // La variante header comparte el lenguaje visual de las utilidades que ya viven
-    // arriba de la card (Llamar / Reagendar): chip bajo de 32px, no botón de 44px.
-    it('la variante header usa el alto de chip de las utilidades de la card', () => {
-        render(<AccionesExternas cliente={CLIENTE} variante="header" onAbrir={vi.fn()} />)
-        expect(screen.getByRole('button', { name: 'Pagos' }).className).toContain('h-8')
+    // La variante contexto es una banda de consulta dentro de la card: chip bajo de 30px,
+    // no botón táctil de 44px como en el sheet.
+    it('la variante contexto usa el alto de chip de la banda de la card', () => {
+        render(<AccionesExternas cliente={CLIENTE} variante="contexto" onAbrir={vi.fn()} />)
+        expect(screen.getByRole('button', { name: 'Pagos' }).className).toContain('h-[30px]')
+    })
+
+    // La flecha es lo que marca que el chip te saca de la app. Se cuenta el segundo svg
+    // (ícono de la app + flecha): si alguien la saca, queda uno solo y el test rompe.
+    it('la variante contexto marca el destino externo con una flecha', () => {
+        render(<AccionesExternas cliente={CLIENTE} variante="contexto" onAbrir={vi.fn()} />)
+        const chip = screen.getByRole('button', { name: 'Pagos' })
+        expect(chip.querySelectorAll('svg')).toHaveLength(2)
+
+        // En 'fila' no va: dentro del sheet ya se entiende que el destino es otra app.
+        render(<AccionesExternas cliente={CLIENTE} variante="fila" onAbrir={vi.fn()} />)
+        const enFila = screen.getAllByRole('button', { name: 'Pagos' })[1]
+        expect(enFila.querySelectorAll('svg')).toHaveLength(1)
     })
 
     it('la variante fila usa el alto de acción táctil', () => {
