@@ -116,8 +116,12 @@ export default function ClienteCard({
                 {/* Las apps externas (Pagos) aplican también a un cliente resuelto — sus
                     pagos se siguen mirando después de la visita —, así que la compuerta
                     `!resuelto` bajó del contenedor a Llamar/Reagendar, que sí son del ciclo. */}
+                {/* Sin `shrink-0` y con `flex-wrap`: los chips son shrink-0 cada uno, así que
+                    cuando no entran en el ancho útil (una app externa más) el contenedor cede
+                    y la fila envuelve, en vez de desbordar la card. Envuelve solo si hace
+                    falta — un flex item no baja de su min-content. */}
                 {operable && (
-                    <div className="-mr-0.5 -mt-0.5 flex shrink-0 gap-1">
+                    <div className="-mr-0.5 -mt-0.5 flex flex-wrap justify-end gap-1">
                         {!resuelto && telefonoLimpio && (
                             <a
                                 href={`tel:+54${telefonoLimpio.replace(/\D/g, '')}`}

@@ -1,3 +1,4 @@
+import { vi } from 'vitest'
 import {
     APPS_EXTERNAS,
     resolverHandoff,
@@ -30,6 +31,25 @@ describe('appsExternas', () => {
         // escribir en el localStorage de otro origen.
         expect(app.token).toBe('ninguno')
         expect(app.handoff.tipo).toBe('url')
+    })
+
+    // Sin la variable de entorno la base queda vacía y la URL saldría relativa: el iframe la
+    // resolvería contra nuestro propio origen y embebería app-planificacion dentro de
+    // app-planificacion, con el onLoad disparando normal. La app no se ofrece y la falta se
+    // grita por consola al cargar el módulo, antes de que el vendedor toque nada.
+    it('no ofrece una app cuya URL base falta en el entorno', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        vi.stubEnv('VITE_PAGOS_LUPA_URL', '')
+        vi.resetModules()
+        try {
+            const { APPS_EXTERNAS: sinConfigurar } = await import('./appsExternas')
+            expect(sinConfigurar.find(a => a.id === 'pagos')).toBeUndefined()
+            expect(error).toHaveBeenCalledWith(expect.stringContaining('"pagos"'))
+        } finally {
+            vi.unstubAllEnvs()
+            vi.resetModules()
+            error.mockRestore()
+        }
     })
 
     it('arma la URL de handoff con el client en la raíz', () => {

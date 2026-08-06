@@ -61,17 +61,18 @@ it('"Ver resumen" abre el mismo flujo que Propuesta, con el cliente completo', (
 })
 
 it('no_visita y reagendada (sin visita real) no muestran fila de acciones', () => {
-    // Se apunta a las acciones del ciclo por nombre y no a "ningún botón": las apps
-    // externas (Pagos) sí siguen ofreciéndose en un cliente resuelto.
-    const DEL_CICLO = /propuesta|iniciar visita|ver resumen|reagendar/i
+    // Se fija el conjunto EXACTO de botones y no un regex nominal: así un botón nuevo con
+    // cualquier otro nombre también rompe el test. Pagos es el único legítimo — las apps
+    // externas siguen ofreciéndose en un cliente resuelto, a diferencia de las del ciclo.
+    const botones = () => screen.getAllByRole('button').map(b => b.textContent)
     const { rerender } = render(
         <ClienteCard cliente={cliente({ estado: 'no_visita', telefono: '1140506070' })} {...handlers} />,
     )
-    expect(screen.queryByRole('button', { name: DEL_CICLO })).not.toBeInTheDocument()
+    expect(botones()).toEqual(['Pagos'])
     expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
 
     rerender(<ClienteCard cliente={cliente({ estado: 'reagendada' })} {...handlers} />)
-    expect(screen.queryByRole('button', { name: DEL_CICLO })).not.toBeInTheDocument()
+    expect(botones()).toEqual(['Pagos'])
 })
 
 it('un cliente resuelto muestra el nombre tachado', () => {

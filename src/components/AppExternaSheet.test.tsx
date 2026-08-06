@@ -19,7 +19,10 @@ const MONTADA: AppExternaMontada = {
         nombreCliente: 'KIOSCO RUBEN SRL',
         nombreFantasia: 'Kiosco Rubén',
     },
-    handoff: { tipo: 'url', url: 'https://ext.test/auth/login?token=t&client=12345' },
+    // La URL es arbitraria (el componente es genérico), pero refleja el contrato real: el
+    // cliente por query en la raíz y NADA de token en la URL — /auth/login?token= es
+    // justamente la forma que la verificación empírica del spec descartó.
+    handoff: { tipo: 'url', url: 'https://ext.test/?client=12345' },
 }
 
 function renderSheet(over: Partial<Parameters<typeof AppExternaSheet>[0]> = {}) {
@@ -32,7 +35,7 @@ describe('AppExternaSheet', () => {
     it('embebe la app externa en la url resuelta', () => {
         renderSheet()
         const iframe = screen.getByTitle('Pagos')
-        expect(iframe).toHaveAttribute('src', 'https://ext.test/auth/login?token=t&client=12345')
+        expect(iframe).toHaveAttribute('src', 'https://ext.test/?client=12345')
     })
 
     // El vendedor tiene que saber de quién está viendo los pagos.

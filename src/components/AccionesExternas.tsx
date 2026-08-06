@@ -23,8 +23,13 @@ interface AccionesExternasProps {
  *  a decidir de nuevo dónde va. */
 export default function AccionesExternas({ cliente, variante, onAbrir }: AccionesExternasProps) {
     const header = variante === 'header'
+    // En 'header' los chips envuelven: a 360px de ancho, Llamar + Reagendar + una app entran
+    // justo, así que la app número tres se saldría de la card. `justify-end` porque el
+    // contenedor está pegado al borde derecho de la card (ver ClienteCard): la fila envuelta
+    // queda alineada con la de arriba en vez de colgada a la izquierda. La variante 'fila' no
+    // envuelve: vive en un sheet con espacio.
     return (
-        <div className={header ? 'flex gap-1' : 'flex gap-1.5'}>
+        <div className={header ? 'flex flex-wrap justify-end gap-1' : 'flex gap-1.5'}>
             {APPS_EXTERNAS.map(app => {
                 const Icono = app.icon
                 return (
