@@ -2,12 +2,11 @@ import { ArrowUpRight } from 'lucide-react'
 import { APPS_EXTERNAS, type AppExterna } from '@/lib/appsExternas'
 import type { IVisitClientCard } from '@/types/planificacion'
 
-// Borde fino sobre blanco (en vez del relleno gris de la fila de dirección) más la flecha
-// al final le dan a estas acciones un vocabulario propio de "esto te saca de la app": así
-// la card distingue de un vistazo qué controles actúan sobre la visita y qué controles
-// navegan afuera. No unificar el estilo con los chips del ciclo — se pierde la distinción.
+// Misma especie visual que la fila de dirección (gris relleno): las tres son consultas
+// del contexto del cliente que llevan afuera. El borde blanco queda reservado al tier 1,
+// que opera la visita. La flecha ↗ es lo que marca el destino externo.
 const CHIP_CONTEXTO =
-    'inline-flex h-[30px] flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#E3E8F2] bg-white text-[11.5px] font-semibold text-[#54607A] hover:bg-[#F4F6FA]'
+    'inline-flex h-[30px] flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#F4F6FA] text-[11.5px] font-semibold text-dsmuted hover:bg-[#EAEEF6]'
 const BOTON_FILA =
     'inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg border border-[#D8DEEA] bg-white text-[13px] font-semibold text-dsnavy hover:bg-dsnavy/5'
 
