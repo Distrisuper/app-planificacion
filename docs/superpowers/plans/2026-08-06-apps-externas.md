@@ -22,13 +22,23 @@ botones, renderizados en dos contextos (menú `⋯` de la card y fila dentro del
 
 - **Cero dependencias nuevas.** `iframe-resizer` resuelve el problema opuesto (alto según contenido);
   `penpal`/`post-me` solo valen con RPC bidireccional real. No se instala nada.
-- **Contrato de handoff de pagos-lupa, verbatim:**
-  `{VITE_PAGOS_LUPA_URL}/auth/login?token=<access_token>&client=<codigoParticularCliente>`
-- **`type_operation` se omite.** Acepta `PPAL` o `DS`, nadie confirmó qué significan, y omitirlo evita
-  una rama de redirect extra en la app ajena.
+- **Contrato de handoff de pagos-lupa, verbatim (camino A, verificado en la Task 1):**
+  `{VITE_PAGOS_LUPA_URL}/?client=<codigoParticularCliente>`
+  **Sin token en la URL.** La sesión de pagos-lupa la crea el vendedor logueándose **una vez**
+  dentro del iframe; el token de esta app no puede escribirse en el `localStorage` de otro origen.
+  El lector del param es `ListPendings.tsx:519-526` del repo de pagos-lupa. **No** se usa
+  `/auth/login?token=`: esa ruta guarda el token en `lupaToken` y lo valida contra `decode-token`
+  de api-distri-node, que lo rechaza con `invalid signature` (ver "Verificación empírica" del spec).
+- **El token NO viaja en la query string.** Además de que el camino A no lo necesita, pagos-lupa
+  carga Microsoft Clarity (grabador de sesión): mandarlo ahí lo grabaría. Esto cierra el riesgo 4
+  del spec.
+- **`type_operation` se omite.** Acepta `PPAL` o `DS`, nadie confirmó qué significan.
 - **La URL base va en `VITE_PAGOS_LUPA_URL`**, nunca hardcodeada: hay al menos tres deploys vivos.
-- **El token se lee de `localStorage.getItem('access_token')`**, la misma fuente que el interceptor de
-  `src/api/apiClient.ts`. `AuthContext` **no** expone el token y **no se modifica**.
+- **`EstrategiaToken` y `resolverToken` se implementan igual**, aunque la app `pagos` declare
+  `'ninguno'`. Son el seam que mantiene vivo el camino B (que pagos-lupa lea el token de la URL) y
+  las apps futuras: de dónde sale la credencial es un campo declarado por app, no un supuesto del
+  código. `resolverToken` lee `localStorage.getItem('access_token')`, la misma fuente que el
+  interceptor de `src/api/apiClient.ts`. `AuthContext` **no** expone el token y **no se modifica**.
 - **Alto en `dvh`, nunca `vh`.** Con `vh` la barra de URL de mobile tapa el fondo del iframe.
 - **El iframe no lleva atributo `sandbox`.** Decisión explícita del spec: el `localStorage` de la app
   ajena exige `allow-same-origin`, y con eso más `allow-scripts` el sandbox no aporta defensa real
@@ -162,7 +172,6 @@ En `.env`, la misma línea con el valor `https://pagos-lupa.web.app`.
 Crear `src/lib/appsExternas.test.ts`:
 
 ```ts
-import { vi } from 'vitest'
 import {
     APPS_EXTERNAS,
     resolverHandoff,
@@ -173,8 +182,8 @@ import type { IVisitClientCard } from '@/types/planificacion'
 
 const CLIENTE: IVisitClientCard = {
     codigoCliente: '900123',
-    codigoParticularCliente: '12345',
-    nombreCliente: 'KIOSCO RUBEN SRL',
+    codigoParticularCliente: '05519',
+    nombreCliente: 'AMATUCCI CARLOS',
 }
 
 function appDePagos(): AppExterna {
@@ -188,54 +197,57 @@ describe('appsExternas', () => {
         localStorage.clear()
     })
 
-    it('registra pagos-lupa con la credencial de sesión', () => {
+    it('registra pagos-lupa sin credencial en el handoff', () => {
         const app = appDePagos()
         expect(app.label).toBe('Pagos')
-        expect(app.token).toBe('sesion')
+        // Camino A: la sesión la crea el vendedor una vez dentro del iframe. No se puede
+        // escribir en el localStorage de otro origen.
+        expect(app.token).toBe('ninguno')
         expect(app.handoff.tipo).toBe('url')
     })
 
-    it('resolverToken lee el access_token de la sesión', () => {
-        localStorage.setItem('access_token', 'tok-123')
-        expect(resolverToken(appDePagos())).toBe('tok-123')
-    })
-
-    it("resolverToken devuelve null cuando la app declara 'ninguno'", () => {
-        localStorage.setItem('access_token', 'tok-123')
-        const app: AppExterna = { ...appDePagos(), token: 'ninguno' }
-        expect(resolverToken(app)).toBeNull()
-    })
-
-    it('arma la URL de handoff con token y client', () => {
-        localStorage.setItem('access_token', 'tok-123')
+    it('arma la URL de handoff con el client en la raíz', () => {
         const resuelto = resolverHandoff(appDePagos(), CLIENTE)
         expect(resuelto.tipo).toBe('url')
         const url = new URL(resuelto.url)
-        expect(url.pathname).toBe('/auth/login')
-        expect(url.searchParams.get('token')).toBe('tok-123')
-        expect(url.searchParams.get('client')).toBe('12345')
+        expect(url.pathname).toBe('/')
+        expect(url.searchParams.get('client')).toBe('05519')
     })
 
-    // El token es un JWT: trae puntos, y su base64url puede traer '-' y '_'. Si algún día
-    // el emisor cambia a un token con '+' o '/', concatenar a mano rompería el param.
-    it('escapa el token en vez de concatenarlo crudo', () => {
-        localStorage.setItem('access_token', 'a+b/c=d&e')
+    // pagos-lupa carga Microsoft Clarity (grabador de sesión): un token en la query string
+    // quedaría grabado. El camino A no lo necesita, y así se cierra el riesgo 4 del spec.
+    it('no filtra el token en la URL', () => {
+        localStorage.setItem('access_token', 'tok-123')
         const { url } = resolverHandoff(appDePagos(), CLIENTE)
-        expect(url).not.toContain('a+b/c=d&e')
-        expect(new URL(url).searchParams.get('token')).toBe('a+b/c=d&e')
-    })
-
-    // Sin token en storage el handoff no debe tirar: pagos-lupa mostrará su login, que es
-    // una degradación aceptable y visible. Reventar acá dejaría la pantalla en blanco.
-    it('no explota si no hay token en storage', () => {
-        const { url } = resolverHandoff(appDePagos(), CLIENTE)
-        expect(new URL(url).searchParams.get('token')).toBe('')
+        expect(url).not.toContain('tok-123')
+        expect(new URL(url).searchParams.has('token')).toBe(false)
     })
 
     // type_operation se omite a propósito (ver Global Constraints del plan).
     it('no manda type_operation', () => {
         const { url } = resolverHandoff(appDePagos(), CLIENTE)
         expect(new URL(url).searchParams.has('type_operation')).toBe(false)
+    })
+
+    // El seam que mantiene vivo el camino B y las apps futuras: de dónde sale la credencial
+    // es un campo declarado por app, no un supuesto del código.
+    it("resolverToken lee el access_token cuando la app declara 'sesion'", () => {
+        localStorage.setItem('access_token', 'tok-123')
+        const app: AppExterna = { ...appDePagos(), token: 'sesion' }
+        expect(resolverToken(app)).toBe('tok-123')
+    })
+
+    it("resolverToken devuelve null cuando la app declara 'ninguno'", () => {
+        localStorage.setItem('access_token', 'tok-123')
+        expect(resolverToken(appDePagos())).toBeNull()
+    })
+
+    // El código sale de la API. Si alguna vez trajera un caracter reservado, concatenar a
+    // mano rompería el param.
+    it('escapa el código de cliente en vez de concatenarlo crudo', () => {
+        const raro: IVisitClientCard = { ...CLIENTE, codigoParticularCliente: 'a&b=c' }
+        const { url } = resolverHandoff(appDePagos(), raro)
+        expect(new URL(url).searchParams.get('client')).toBe('a&b=c')
     })
 })
 ```
@@ -292,18 +304,20 @@ export const APPS_EXTERNAS: AppExterna[] = [
         id: 'pagos',
         label: 'Pagos',
         icon: Wallet,
-        token: 'sesion',
+        // Camino A: no se manda credencial. El vendedor se loguea una vez dentro del iframe y
+        // pagos-lupa se queda con su propia sesión en el storage particionado de ese par
+        // (nuestra app, pagos-lupa). Ver "Verificación empírica" del spec.
+        token: 'ninguno',
         handoff: {
             tipo: 'url',
-            // Contrato que pagos-lupa ya implementa: guarda el token, lo valida, y preserva
-            // `client` en su redirect interno a /?client=. Solo aplica el client si el rol
-            // es VENDEDOR. type_operation se omite (ver spec).
-            url: ({ cliente, token }) => {
+            // Contrato verificado contra el deploy: ListPendings lee `client` de la query y,
+            // si el rol es VENDEDOR, carga ese cliente. NO se usa /auth/login?token=, que
+            // valida contra decode-token y rechaza nuestro token. type_operation se omite.
+            url: ({ cliente }) => {
                 const params = new URLSearchParams({
-                    token: token ?? '',
                     client: cliente.codigoParticularCliente,
                 })
-                return `${PAGOS_LUPA_URL}/auth/login?${params}`
+                return `${PAGOS_LUPA_URL}/?${params}`
             },
         },
     },
@@ -993,15 +1007,14 @@ Agregar al describe existente, siguiendo el helper de render de ese archivo:
 
 ```tsx
     it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async () => {
-        localStorage.setItem('access_token', 'tok-123')
         await renderPagina() // helper existente del archivo
         await userEvent.click(screen.getAllByRole('button', { name: 'Pagos' })[0])
 
         const iframe = screen.getByTitle('Pagos')
         const url = new URL(iframe.getAttribute('src') as string)
-        expect(url.pathname).toBe('/auth/login')
-        expect(url.searchParams.get('token')).toBe('tok-123')
+        expect(url.pathname).toBe('/')
         expect(url.searchParams.get('client')).toBeTruthy()
+        expect(url.searchParams.has('token')).toBe(false)
 
         await userEvent.click(screen.getByLabelText('Cerrar'))
         // Oculto pero montado: reabrir tiene que ser instantáneo.
@@ -1219,10 +1232,8 @@ En `AgendaSemanaPage.test.tsx`:
 
 ```tsx
     it('suelta la instancia embebida al cambiar de día', async () => {
-        localStorage.setItem('access_token', 'tok-123')
         await renderPagina()
-        await userEvent.click(screen.getAllByLabelText('Más opciones')[0])
-        await userEvent.click(screen.getByRole('button', { name: 'Pagos' }))
+        await userEvent.click(screen.getAllByRole('button', { name: 'Pagos' })[0])
         expect(screen.getByTitle('Pagos')).toBeInTheDocument()
 
         await userEvent.click(screen.getByRole('button', { name: /MAR/i }))
@@ -1267,7 +1278,11 @@ Expected: PASS, sin regresiones.
 Con `npm run dev -- --host` y el celular en la misma red (o el deploy de preview en Vercel), en
 **Android/Chrome** y en **iOS/Safari**, instalando la PWA:
 
-1. Abrir `⋯` → Pagos en un cliente: la app carga con el overlay y muestra **ese** cliente.
+0. **La primera vez** el iframe muestra el login de pagos-lupa (camino A): loguearse ahí con las
+   credenciales del vendedor. Verificar que **no se vuelva a pedir** en las aperturas siguientes,
+   ni después de cerrar y reabrir la PWA. Este punto es el que valida el camino A; en iOS es el que
+   más riesgo tiene (la ITP de Safari expira el storage escrito por script).
+1. Abrir Pagos en un cliente: la app carga con el overlay y muestra **ese** cliente.
 2. Cerrar y reabrir el mismo cliente: tiene que ser **instantáneo** (sin overlay de carga).
 3. Abrir otro cliente: carga de nuevo y muestra el cliente correcto (ejercita el riesgo 2 del spec).
 4. Scroll dentro del iframe: **un solo** scroll, sin franja blanca abajo (verifica el `dvh`).
