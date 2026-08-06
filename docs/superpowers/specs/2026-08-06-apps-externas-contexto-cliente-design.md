@@ -451,3 +451,53 @@ arriba, así que no hay incógnita técnica: solo hace falta que alguien toque e
 Recomendación: **B**, con A como puente si B tarda en coordinarse. Los dos comparten el mismo diseño
 del lado de esta app — cambia una línea del registro (`/?client=` vs `/auth/login?token=&client=`),
 que es justamente lo que `appsExternas.ts` aísla.
+
+## Segunda app del registro: Versus (2026-08-06)
+
+Versus (`versus-v2.distrisuper.com`) es el repo hermano **app-vendedores**
+(`business-platform/versus/app-vendedores`). Se agregó como segunda entrada de `APPS_EXTERNAS`
+para ejercitar la promesa del diseño. Resultado de la medición: **alcanzó con la entrada en el
+array, las tres variables de entorno y los tests.** Cero cambios en `AccionesExternas`,
+`useAppExterna` y `AppExternaSheet`. El único roce fue un test de `ClienteCard` que acotaba el
+conjunto exacto de botones a `['Pagos']` y pasó a `['Pagos', 'Versus']` — se decidió **no**
+derivarlo de `APPS_EXTERNAS`, porque un test que espeja el registro deja de poder detectar un
+botón que se cuele desde una app no registrada.
+
+### Contrato de handoff, verificado sobre el deploy
+
+```
+{VITE_VERSUS_URL}/v2/rubro/clientes?q=<codigoParticularCliente>
+```
+
+El param es **`q`**, no `client`. Lo lee `RubroV2Page.tsx:192` al montar
+(`search: searchParams.get('q') ?? ''`) y `:344` lo re-sincroniza cuando cambia en navegación
+same-route. Es el mismo buscador que el vendedor usaría a mano.
+
+Verificado en el navegador: `?q=05519` filtra a AMATUCCI CARLOS #05519 y muestra su tabla de
+rubros. Y **Versus se deja embeber** — iframe desde `http://localhost:5173`, `onload` dispara, la
+UI renderiza completa y encima responsive; cero errores de CSP o `X-Frame-Options`.
+
+### Versus SÍ acepta el token por URL — y deliberadamente no se lo mandamos
+
+A diferencia de pagos-lupa, el handoff por token de Versus **funciona**. `AuthContext.tsx:129-155`
+de su repo lee el param `token`, lo guarda en `access_token` y lo valida contra
+`apidistri.distrisuper.com/api/auth/me` — **nuestro mismo emisor**, así que la firma valida. Encima
+lo captura en `main.tsx` antes de que React monte (evitando la race que rompe el `client` de
+pagos-lupa) y después lo borra de la URL con `replaceState` preservando los demás params.
+
+Lo verifiqué de punta a punta: `?token=<TOKEN>&q=05519` dentro de un iframe autentica sin login
+manual y filtra al cliente. O sea, para Versus el "camino B" existe y anda hoy.
+
+**Se eligió igual el camino A** (sin token, login manual una vez dentro del iframe). Motivo:
+versus-v2 carga **Microsoft Clarity** (`clarity.ms/tag/stnl1e94j5`), un grabador de sesión, y su
+tag carga *antes* de que la app limpie el token de la URL — confirmado en la pestaña de red del
+deploy. El token de vendedor tiene `exp` a ~3 meses y da acceso completo a la API como ese
+vendedor. Ganarle una carrera a un grabador de sesión no es una postura de seguridad.
+
+Consecuencia deseada: la constraint "el token no viaja en la query string" vale para **todo** el
+registro, sin una app que la cumpla y otra que no.
+
+El arreglo que habilitaría cero logins **y** cero exposición sigue siendo el mismo de la deuda ya
+anotada: un **token de handoff de un solo uso** emitido por api-vendedores. Con él, Versus pasaría a
+`token: 'sesion'` sin discusión, porque su `?token=` ya está listo para recibirlo. Es la razón por
+la que `EstrategiaToken` y `resolverToken` existen aunque hoy las dos apps declaren `'ninguno'`.
