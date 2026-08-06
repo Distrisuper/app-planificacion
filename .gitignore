@@ -14,6 +14,10 @@ dist-ssr
 .env
 .env.*
 !.env-example
+# Vitest corre en mode 'test', así que Vite carga .env.test automáticamente. Va trackeado
+# a propósito: sin él, en un clone fresco o en CI (donde no hay .env) las variables VITE_*
+# caen a '' y los tests que construyen URLs absolutas fallan. Solo valores públicos acá.
+!.env.test
 *.tsbuildinfo
 coverage
 

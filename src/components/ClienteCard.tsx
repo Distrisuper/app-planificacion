@@ -1,8 +1,10 @@
 import { Ban, Calendar, CalendarClock, Check, ChevronRight, Lock, MapPin, Phone, Play, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import AccionesExternas from './AccionesExternas'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { estaResuelto } from '@/lib/estadoCiclo'
-import type { IAgendaClient } from '@/types/planificacion'
+import type { AppExterna } from '@/lib/appsExternas'
+import type { IAgendaClient, IVisitClientCard } from '@/types/planificacion'
 
 interface ClienteCardProps {
     cliente: IAgendaClient
@@ -17,6 +19,7 @@ interface ClienteCardProps {
     /** Arranca la visita derecho, sin pasar por la propuesta: va directo al mapa
      *  de confirmación (o inicia sin más si el cliente no tiene coordenadas). */
     onIniciarVisita: (cliente: IAgendaClient) => void
+    onAbrirAppExterna: (app: AppExterna, cliente: IVisitClientCard) => void
 }
 
 // Utilidades (llamar/reagendar). Viven en el header, no en el área de acciones: son
@@ -45,6 +48,7 @@ export default function ClienteCard({
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
+    onAbrirAppExterna,
 }: ClienteCardProps) {
     const resuelto = estaResuelto(cliente.estado)
     const enCurso = cliente.estado === 'en_curso'
@@ -109,6 +113,11 @@ export default function ClienteCard({
                         <Check className="h-3 w-3" strokeWidth={3.5} />
                     </span>
                 )}
+                {/* Acá van SOLO las utilidades del ciclo de la visita. Las apps externas no
+                    viven en el header: son consultas de contexto del cliente (misma especie
+                    que la dirección), y además cuatro chips no entran en una sola fila —
+                    envolvían a un punto de quiebre distinto por card. Van en la banda de
+                    contexto, debajo de la dirección. */}
                 {operable && !resuelto && (
                     <div className="-mr-0.5 -mt-0.5 flex shrink-0 gap-1">
                         {telefonoLimpio && (
@@ -164,6 +173,15 @@ export default function ClienteCard({
                         <span>{direccionTexto}</span>
                     </div>
                 ))}
+
+            {/* Sin `!resuelto`: un cliente ya visitado también tiene pagos que mirar. */}
+            {operable && (
+                <AccionesExternas
+                    cliente={cliente}
+                    variante="contexto"
+                    onAbrir={onAbrirAppExterna}
+                />
+            )}
 
             {/* Resuelto sin visita real (no_visita/reagendada): no hay nada que resumir ni
                 ninguna acción que tenga sentido — llamar o reagendar a alguien ya resuelto

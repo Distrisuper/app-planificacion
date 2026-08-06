@@ -10,11 +10,13 @@ import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import CerrarSemanaSheet from '@/components/CerrarSemanaSheet'
+import AppExternaSheet from '@/components/AppExternaSheet'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, useCicloPreview, useAbrirCiclo, useReagendar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useNoVisita } from '@/hooks/useVisitas'
 import { useNotificacion } from '@/hooks/useNotificacion'
+import { useAppExterna } from '@/hooks/useAppExterna'
 import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
@@ -54,6 +56,7 @@ export default function AgendaSemanaPage() {
     const noVisita = useNoVisita()
     const { data: motivosVisita = [] } = useMotivos('visita')
     const { notificacion, mostrar, ocultar } = useNotificacion()
+    const { desmontar: desmontarAppExterna, ...appExterna } = useAppExterna()
 
     // La posición que el vendedor está mirando (semana + día) vive en la URL, no en
     // useState: al recargar la página — o cuando la PWA se resume desde cero — un useState
@@ -128,6 +131,14 @@ export default function AgendaSemanaPage() {
     // (`visitaCliente`). Antes vivía adentro de VisitaFlow atada al cliente abierto: tocar
     // la propuesta de OTRO cliente y cerrarla la perdía, y la barra flotante desaparecía.
     const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(null)
+
+    // La instancia embebida es del cliente que se estaba mirando. Al cambiar de día — o de
+    // semana, que es el mismo tipo de cambio de contexto: el cliente deja de estar en
+    // pantalla — ese contexto ya no aplica: se suelta la memoria en vez de quedar una app
+    // React ajena viva.
+    useEffect(() => {
+        desmontarAppExterna()
+    }, [diaActivo, semanaEfectiva, desmontarAppExterna])
 
     // Mantiene `visitaEnCurso` sincronizada con el servidor:
     // - Si no hay puntero local (recién se abrió la app) pero la agenda ya trae un cliente
@@ -301,6 +312,7 @@ export default function AgendaSemanaPage() {
                 onAbrir={abrirPropuesta}
                 onEstadoVisita={setEstadoVisitaCliente}
                 onIniciarVisita={iniciarDirecto}
+                onAbrirAppExterna={appExterna.abrir}
             />
 
             {ciclo === null && preview && (
@@ -325,6 +337,7 @@ export default function AgendaSemanaPage() {
                 }}
                 onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
                 onAviso={mostrar}
+                onAbrirAppExterna={appExterna.abrir}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar
@@ -362,6 +375,24 @@ export default function AgendaSemanaPage() {
                     mostrar('exito', 'Semana cerrada')
                 }}
             />
+            {/* `ocultar` y no `desmontar`: cerrar deja la instancia viva para que reabrir
+                el mismo cliente sea instantáneo. */}
+            {appExterna.montada && (
+                /* La `key` NO es cosmética: sin ella React reusa el mismo <iframe> al abrir
+                   otro cliente y solo le reescribe el `src`. Navegar un browsing context
+                   anidado suma una entrada al historial del top-level, y en la PWA de Android
+                   el gesto de "atrás" pasa a retroceder DENTRO del iframe: para el vendedor
+                   el gesto "no hace nada". Con la key, cambiar de app o de cliente REMONTA el
+                   iframe. Es la misma identidad (app + cliente) que usa useAppExterna para
+                   decidir si reusa la instancia, así que ocultar y reabrir el mismo cliente
+                   deja la key igual y la instancia viva sigue siendo la misma. */
+                <AppExternaSheet
+                    key={`${appExterna.montada.app.id}:${appExterna.montada.cliente.codigoParticularCliente}`}
+                    montada={appExterna.montada}
+                    visible={appExterna.visible}
+                    onClose={appExterna.ocultar}
+                />
+            )}
             <Notification notificacion={notificacion} onDismiss={ocultar} />
         </div>
     )

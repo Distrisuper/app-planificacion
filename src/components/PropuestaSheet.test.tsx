@@ -3,12 +3,19 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import PropuestaSheet from './PropuestaSheet'
 import * as api from '@/api/planificacion'
+import type { IVisitClientCard } from '@/types/planificacion'
 
 vi.mock('@/api/planificacion')
 
 function wrap(ui: React.ReactNode) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     return <QueryClientProvider client={qc}>{ui}</QueryClientProvider>
+}
+
+const CLIENTE: IVisitClientCard = {
+    codigoCliente: '1-10034',
+    codigoParticularCliente: '10034',
+    nombreCliente: 'Don José',
 }
 
 const MES = {
@@ -239,4 +246,44 @@ it('propuesta vacía con otros rubros del cliente: "Ver más" trae la tabla', as
     fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     expect(await screen.findByText('Baterías')).toBeInTheDocument()
     expect(screen.queryByText('Sin oportunidades destacadas.')).not.toBeInTheDocument()
+})
+
+it('ofrece las apps externas cuando se le pasa el callback y el cliente', async () => {
+    mockPropuesta()
+    const onAbrirAppExterna = vi.fn()
+    render(
+        wrap(
+            <PropuestaSheet
+                open
+                codigoCliente="10034"
+                nombreCliente="Don José"
+                cliente={CLIENTE}
+                onAbrirAppExterna={onAbrirAppExterna}
+                onIniciarVisita={vi.fn()}
+                onClose={vi.fn()}
+            />,
+        ),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
+    expect(onAbrirAppExterna).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'pagos' }),
+        CLIENTE,
+    )
+})
+
+it('no muestra apps externas si no se le pasa el callback', async () => {
+    mockPropuesta()
+    render(
+        wrap(
+            <PropuestaSheet
+                open
+                codigoCliente="10034"
+                nombreCliente="Don José"
+                onIniciarVisita={vi.fn()}
+                onClose={vi.fn()}
+            />,
+        ),
+    )
+    await screen.findByText('Amortiguadores')
+    expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
 })

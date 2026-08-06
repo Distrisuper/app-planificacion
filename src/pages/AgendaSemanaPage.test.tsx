@@ -18,6 +18,27 @@ const cicloAbierto = {
 
 const semanaVacia = { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] }
 
+const clienteLunes = {
+    codigoCliente: 'C1',
+    codigoParticularCliente: '10034',
+    nombreCliente: 'ALMACEN DON JOSE',
+    cicloClienteId: 42,
+    dia: 1,
+    estado: 'pendiente' as const,
+    visitaId: null,
+    rubrosPendientes: 0,
+}
+
+/** Segundo cliente del mismo día: es lo que hace falta para cambiar de cliente sin cambiar
+ *  de día (el cambio de día desmonta la instancia por otro camino). */
+const otroClienteLunes = {
+    ...clienteLunes,
+    codigoCliente: 'C2',
+    codigoParticularCliente: '20077',
+    nombreCliente: 'KIOSCO RUBEN',
+    cicloClienteId: 43,
+}
+
 /** `url` permite arrancar en una posición concreta (?dia=/?semana=), que es de donde la
  *  página lee el día y la semana que se están mirando. */
 function renderPage(url = '/') {
@@ -207,6 +228,90 @@ it('un usuario sin código de vendedor recibe un mensaje de cuenta, no "reintent
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: /abrir semana/i }))
     expect(await screen.findByText(/avisá a sistemas/i)).toBeInTheDocument()
+})
+
+it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    // Se siembra el cliente en LUN y se entra con ?dia=LUN: sin `dia` la página arranca
+    // en HOY, que cambia según el día en que corra la suite.
+    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    renderPage('/?dia=LUN')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
+
+    const iframe = screen.getByTitle('Pagos')
+    const url = new URL(iframe.getAttribute('src') as string)
+    expect(url.pathname).toBe('/')
+    expect(url.searchParams.get('client')).toBe('10034')
+    expect(url.searchParams.has('token')).toBe(false)
+
+    fireEvent.click(screen.getByLabelText('Cerrar'))
+    // Oculto pero montado: reabrir tiene que ser instantáneo.
+    expect(screen.getByTitle('Pagos')).toBeInTheDocument()
+})
+
+// Cambiar de cliente tiene que REMONTAR el iframe, no reescribirle el `src`: navegar un
+// browsing context anidado suma una entrada al historial del top-level y en la PWA de
+// Android el gesto de "atrás" pasa a retroceder dentro del iframe.
+it('abrir otro cliente monta un iframe nuevo en vez de navegar el vivo', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [clienteLunes, otroClienteLunes],
+    })
+    renderPage('/?dia=LUN')
+
+    const [pagosA, pagosB] = await screen.findAllByRole('button', { name: 'Pagos' })
+    fireEvent.click(pagosA)
+    const antes = screen.getByTitle('Pagos')
+    expect(new URL(antes.getAttribute('src') as string).searchParams.get('client')).toBe('10034')
+
+    fireEvent.click(screen.getByLabelText('Cerrar'))
+    fireEvent.click(pagosB)
+
+    const despues = screen.getByTitle('Pagos')
+    expect(despues).not.toBe(antes)
+    expect(new URL(despues.getAttribute('src') as string).searchParams.get('client')).toBe('20077')
+})
+
+// La contracara: ocultar ≠ desmontar. Con el mismo cliente la key no cambia, así que el
+// nodo del iframe es el MISMO y reabrir es instantáneo (no recarga el bundle ajeno).
+it('reabrir el mismo cliente reusa el iframe vivo', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    renderPage('/?dia=LUN')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
+    const antes = screen.getByTitle('Pagos')
+
+    fireEvent.click(screen.getByLabelText('Cerrar'))
+    fireEvent.click(screen.getByRole('button', { name: 'Pagos' }))
+
+    expect(screen.getByTitle('Pagos')).toBe(antes)
+})
+
+it('suelta la instancia embebida al cambiar de semana', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    renderPage('/?dia=LUN')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
+    expect(screen.getByTitle('Pagos')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
+    await waitFor(() => expect(screen.queryByTitle('Pagos')).not.toBeInTheDocument())
+})
+
+it('suelta la instancia embebida al cambiar de día', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    renderPage('/?dia=LUN')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
+    expect(screen.getByTitle('Pagos')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^MAR/ }))
+    expect(screen.queryByTitle('Pagos')).not.toBeInTheDocument()
 })
 
 it('volver a la semana abierta devuelve el modo operable', async () => {

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { vi } from 'vitest'
 import ClienteCard from './ClienteCard'
 import type { IAgendaClient } from '@/types/planificacion'
@@ -23,6 +23,7 @@ const handlers = {
     onAbrir: noop,
     onEstadoVisita: noop,
     onIniciarVisita: noop,
+    onAbrirAppExterna: noop,
 }
 
 it('un cliente pendiente muestra el código y las acciones', () => {
@@ -60,14 +61,18 @@ it('"Ver resumen" abre el mismo flujo que Propuesta, con el cliente completo', (
 })
 
 it('no_visita y reagendada (sin visita real) no muestran fila de acciones', () => {
+    // Se fija el conjunto EXACTO de botones y no un regex nominal: así un botón nuevo con
+    // cualquier otro nombre también rompe el test. Pagos, Versus y CRM son las apps externas
+    // registradas — siguen ofreciéndose en un cliente resuelto, a diferencia de las del ciclo.
+    const botones = () => screen.getAllByRole('button').map(b => b.textContent)
     const { rerender } = render(
         <ClienteCard cliente={cliente({ estado: 'no_visita', telefono: '1140506070' })} {...handlers} />,
     )
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(botones()).toEqual(['Pagos', 'Versus', 'CRM'])
     expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
 
     rerender(<ClienteCard cliente={cliente({ estado: 'reagendada' })} {...handlers} />)
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+    expect(botones()).toEqual(['Pagos', 'Versus', 'CRM'])
 })
 
 it('un cliente resuelto muestra el nombre tachado', () => {
@@ -162,4 +167,48 @@ it('sin coordenadas, la dirección enlaza a Google Maps por texto', () => {
 it('sin teléfono limpio no se muestra el botón de llamar', () => {
     render(<ClienteCard cliente={cliente({ telefono: '1171473562 / 46641751' })} {...handlers} />)
     expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
+})
+
+it('ofrece las apps externas en la banda de contexto de la card', () => {
+    const onAbrirAppExterna = vi.fn()
+    render(
+        <ClienteCard
+            cliente={cliente()}
+            {...handlers}
+            onAbrirAppExterna={onAbrirAppExterna}
+        />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Pagos' }))
+    expect(onAbrirAppExterna).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'pagos' }),
+        expect.objectContaining({ codigoParticularCliente: '10034' }),
+    )
+})
+
+// En preview (hojeando otra semana) no se opera: nada de apps externas.
+it('no ofrece apps externas en modo preview', () => {
+    render(<ClienteCard cliente={cliente()} {...handlers} modo="preview" />)
+    expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
+})
+
+// Un cliente ya visitado también tiene pagos que mirar: la utilidad no depende de que
+// el ciclo esté pendiente, a diferencia de Llamar/Reagendar.
+it('sigue ofreciendo apps externas en un cliente ya resuelto', () => {
+    render(<ClienteCard cliente={cliente({ estado: 'visitada', visitaId: 7 })} {...handlers} />)
+    expect(screen.getByRole('button', { name: 'Pagos' })).toBeInTheDocument()
+})
+
+// La regresión que motivó el rediseño: con cuatro chips el header envolvía a dos filas y
+// pesaba más que el nombre del cliente. Se fija el conjunto EXACTO de controles del
+// contenedor de utilidades (no un "no está Pagos"), así que cualquier chip nuevo que
+// alguien meta ahí — apps externas u otro — rompe el test.
+it('el header tiene exactamente dos utilidades: llamar y reagendar', () => {
+    render(<ClienteCard cliente={cliente({ telefono: '1140506070' })} {...handlers} />)
+    const header = screen.getByRole('link', { name: /llamar/i }).parentElement!
+    expect(
+        Array.from(header.children).map(el => el.getAttribute('aria-label') ?? el.textContent),
+    ).toEqual(['Llamar', 'Reagendar'])
+    // Y las apps siguen existiendo, pero fuera de ese contenedor.
+    expect(within(header).queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pagos' })).toBeInTheDocument()
 })

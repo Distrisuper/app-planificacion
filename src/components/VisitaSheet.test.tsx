@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import VisitaSheet from './VisitaSheet'
 import * as api from '@/api/planificacion'
+import type { IVisitClientCard } from '@/types/planificacion'
 
 vi.mock('@/api/planificacion')
 
@@ -11,6 +12,12 @@ const motivos = [
     { motivoId: 13, nivel: 'rubro', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
     { motivoId: 16, nivel: 'rubro', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
 ]
+
+const CLIENTE: IVisitClientCard = {
+    codigoCliente: '1-10034',
+    codigoParticularCliente: '10034',
+    nombreCliente: 'Almacén Don José',
+}
 
 const rubros = [
     {
@@ -365,4 +372,27 @@ it('con la visita cerrada, "otros rubros del cliente" no son tocables para agreg
     fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     expect(await screen.findByText('Baterías')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /agregar baterías/i })).not.toBeInTheDocument()
+})
+
+it('ofrece las apps externas cuando se le pasa el callback y el cliente', async () => {
+    const onAbrirAppExterna = vi.fn()
+    renderSheet({ cliente: CLIENTE, onAbrirAppExterna })
+    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
+    expect(onAbrirAppExterna).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'pagos' }),
+        CLIENTE,
+    )
+})
+
+it('no muestra apps externas si no se le pasa el callback', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+    expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
+})
+
+it('dentro del wizard de resolución no aparecen las apps externas', async () => {
+    renderSheet({ cliente: CLIENTE, onAbrirAppExterna: vi.fn() })
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+    expect(await screen.findByText('1 de 2')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
 })
