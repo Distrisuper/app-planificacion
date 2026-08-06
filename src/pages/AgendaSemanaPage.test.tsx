@@ -240,6 +240,18 @@ it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async
     expect(screen.getByTitle('Pagos')).toBeInTheDocument()
 })
 
+it('suelta la instancia embebida al cambiar de día', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    renderPage('/?dia=LUN')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
+    expect(screen.getByTitle('Pagos')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /^MAR/ }))
+    expect(screen.queryByTitle('Pagos')).not.toBeInTheDocument()
+})
+
 it('volver a la semana abierta devuelve el modo operable', async () => {
     ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
     renderPage()

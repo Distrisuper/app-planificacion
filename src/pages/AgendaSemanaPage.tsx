@@ -56,7 +56,7 @@ export default function AgendaSemanaPage() {
     const noVisita = useNoVisita()
     const { data: motivosVisita = [] } = useMotivos('visita')
     const { notificacion, mostrar, ocultar } = useNotificacion()
-    const appExterna = useAppExterna()
+    const { desmontar: desmontarAppExterna, ...appExterna } = useAppExterna()
 
     // La posición que el vendedor está mirando (semana + día) vive en la URL, no en
     // useState: al recargar la página — o cuando la PWA se resume desde cero — un useState
@@ -131,6 +131,12 @@ export default function AgendaSemanaPage() {
     // (`visitaCliente`). Antes vivía adentro de VisitaFlow atada al cliente abierto: tocar
     // la propuesta de OTRO cliente y cerrarla la perdía, y la barra flotante desaparecía.
     const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(null)
+
+    // La instancia embebida es del cliente que se estaba mirando. Al cambiar de día ese
+    // contexto ya no aplica: se suelta la memoria en vez de quedar una app React ajena viva.
+    useEffect(() => {
+        desmontarAppExterna()
+    }, [diaActivo, desmontarAppExterna])
 
     // Mantiene `visitaEnCurso` sincronizada con el servidor:
     // - Si no hay puntero local (recién se abrió la app) pero la agenda ya trae un cliente
