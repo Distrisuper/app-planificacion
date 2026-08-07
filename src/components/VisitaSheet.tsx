@@ -297,6 +297,15 @@ export default function VisitaSheet({
                     {expandido ? 'Ver menos' : 'Ver más'}
                 </Button>
             )}
+            {/* Pegado arriba de "Cerrar visita", en el pie fijo: es la última acción a
+             *  mano antes de cerrar, para un vistazo de último momento a pagos/cuenta sin
+             *  scrollear hasta arriba a buscarlo. Mismo criterio que antes sobre el wizard
+             *  (no se muestra ahí): este bloque solo se arma en la rama de lista. */}
+            {cliente && onAbrirAppExterna && (
+                <div className="mb-2.5">
+                    <AccionesExternas cliente={cliente} variante="fila" onAbrir={onAbrirAppExterna} />
+                </div>
+            )}
             {!visitaCerrada && (
                 <Button
                     onClick={cerrarConBorrador}
@@ -332,18 +341,6 @@ export default function VisitaSheet({
                 />
             ) : (
                 <div>
-                    {/* Solo en la lista, nunca dentro del wizard: ahí el vendedor está
-                     *  cargando el resultado rubro por rubro y un botón que se lleva la
-                     *  pantalla completa a otra app le haría perder el hilo. */}
-                    {cliente && onAbrirAppExterna && (
-                        <div className="mb-3">
-                            <AccionesExternas
-                                cliente={cliente}
-                                variante="fila"
-                                onAbrir={onAbrirAppExterna}
-                            />
-                        </div>
-                    )}
                     <p className="mb-3 text-[13px] leading-snug text-dsmuted">
                         Cargá el resultado de cada rubro que ofreciste. Los que no ofreciste se
                         resuelven con <b className="font-bold text-[#182645]">"No lo ofrecí"</b>.

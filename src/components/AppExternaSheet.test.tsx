@@ -1,55 +1,105 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Wallet } from 'lucide-react'
+import { BarChart3, Wallet } from 'lucide-react'
 import { vi } from 'vitest'
 import AppExternaSheet from './AppExternaSheet'
 import type { AppExternaMontada } from '@/hooks/useAppExterna'
 
-const MONTADA: AppExternaMontada = {
-    app: {
-        id: 'pagos',
-        label: 'Pagos',
-        icon: Wallet,
-        token: 'sesion',
-        handoff: { tipo: 'url', url: () => 'https://ext.test/x' },
-    },
-    cliente: {
-        codigoCliente: '900123',
-        codigoParticularCliente: '12345',
-        nombreCliente: 'KIOSCO RUBEN SRL',
-        nombreFantasia: 'Kiosco Rubén',
-    },
-    // La URL es arbitraria (el componente es genérico), pero refleja el contrato real: el
-    // cliente por query en la raíz y NADA de token en la URL — /auth/login?token= es
-    // justamente la forma que la verificación empírica del spec descartó.
+const CLIENTE = {
+    codigoCliente: '900123',
+    codigoParticularCliente: '12345',
+    nombreCliente: 'KIOSCO RUBEN SRL',
+    nombreFantasia: 'Kiosco Rubén',
+}
+
+// La URL es arbitraria (el componente es genérico), pero refleja el contrato real: el
+// cliente por query en la raíz y NADA de token en la URL — /auth/login?token= es
+// justamente la forma que la verificación empírica del spec descartó.
+const MONTADA_PAGOS: AppExternaMontada = {
+    app: { id: 'pagos', label: 'Pagos', icon: Wallet, token: 'sesion', handoff: { tipo: 'url', url: () => 'https://ext.test/x' } },
+    cliente: CLIENTE,
     handoff: { tipo: 'url', url: 'https://ext.test/?client=12345' },
+}
+
+const MONTADA_VERSUS: AppExternaMontada = {
+    app: { id: 'versus', label: 'Versus', icon: BarChart3, token: 'ninguno', handoff: { tipo: 'url', url: () => 'https://ext2.test/x' } },
+    cliente: CLIENTE,
+    handoff: { tipo: 'url', url: 'https://ext2.test/?q=12345' },
 }
 
 function renderSheet(over: Partial<Parameters<typeof AppExternaSheet>[0]> = {}) {
     const onClose = vi.fn()
-    render(<AppExternaSheet montada={MONTADA} visible onClose={onClose} {...over} />)
-    return { onClose }
+    const onSeleccionarApp = vi.fn()
+    render(
+        <AppExternaSheet
+            cliente={CLIENTE}
+            montadas={{ pagos: MONTADA_PAGOS }}
+            appActivaId="pagos"
+            visible
+            onSeleccionarApp={onSeleccionarApp}
+            onClose={onClose}
+            {...over}
+        />,
+    )
+    return { onClose, onSeleccionarApp }
 }
 
 describe('AppExternaSheet', () => {
-    it('embebe la app externa en la url resuelta', () => {
+    it('embebe la app activa en la url resuelta', () => {
         renderSheet()
         const iframe = screen.getByTitle('Pagos')
         expect(iframe).toHaveAttribute('src', 'https://ext.test/?client=12345')
     })
 
     // El vendedor tiene que saber de quién está viendo los pagos.
-    it('muestra el nombre del cliente y la app en el header', () => {
+    it('muestra el nombre del cliente y las tabs de las apps del registro', () => {
         renderSheet()
         expect(screen.getByText('Kiosco Rubén')).toBeInTheDocument()
-        expect(screen.getByText('Pagos')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Pagos' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Versus' })).toBeInTheDocument()
     })
 
-    // Gancho para la variante de handoff 'form' (POST al iframe por su name). Va desde v1
-    // porque agregarlo después obliga a tocar el contenedor.
     it('le pone name al iframe', () => {
         renderSheet()
         expect(screen.getByTitle('Pagos')).toHaveAttribute('name', 'app-externa-pagos')
+    })
+
+    it('tocar la tab de otra app llama a onSeleccionarApp con esa app', async () => {
+        const { onSeleccionarApp } = renderSheet()
+        await userEvent.click(screen.getByRole('button', { name: 'Versus' }))
+        expect(onSeleccionarApp).toHaveBeenCalledTimes(1)
+        expect(onSeleccionarApp.mock.calls[0][0]).toMatchObject({ id: 'versus' })
+    })
+
+    // El corazón del pedido: cambiar de tab no desmonta el iframe de la app anterior.
+    it('cambiar a una segunda app montada mantiene viva la primera, oculta', () => {
+        const { rerender } = render(
+            <AppExternaSheet
+                cliente={CLIENTE}
+                montadas={{ pagos: MONTADA_PAGOS, versus: MONTADA_VERSUS }}
+                appActivaId="pagos"
+                visible
+                onSeleccionarApp={vi.fn()}
+                onClose={vi.fn()}
+            />,
+        )
+        const framePagos = screen.getByTitle('Pagos')
+        expect(screen.getByTitle('Versus')).toBeInTheDocument()
+
+        rerender(
+            <AppExternaSheet
+                cliente={CLIENTE}
+                montadas={{ pagos: MONTADA_PAGOS, versus: MONTADA_VERSUS }}
+                appActivaId="versus"
+                visible
+                onSeleccionarApp={vi.fn()}
+                onClose={vi.fn()}
+            />,
+        )
+
+        // Mismo nodo: no se recreó al cambiar de tab.
+        expect(screen.getByTitle('Pagos')).toBe(framePagos)
+        expect(screen.getByTitle('Pagos').closest('div')?.className).toContain('invisible')
     })
 
     // El bundle de pagos-lupa pesa 888 KB: sin overlay parece que se colgó.
@@ -63,6 +113,14 @@ describe('AppExternaSheet', () => {
     it('cierra con el botón de cerrar', async () => {
         const { onClose } = renderSheet()
         await userEvent.click(screen.getByLabelText('Cerrar'))
+        expect(onClose).toHaveBeenCalledTimes(1)
+    })
+
+    // El botón chico del header no es el único punto de salida: "Volver" ocupa el mismo
+    // lugar que "Cerrar visita" en VisitaSheet, al alcance del pulgar.
+    it('cierra con el botón Volver del pie', async () => {
+        const { onClose } = renderSheet()
+        await userEvent.click(screen.getByRole('button', { name: 'Volver' }))
         expect(onClose).toHaveBeenCalledTimes(1)
     })
 
@@ -90,7 +148,7 @@ describe('AppExternaSheet', () => {
         }
     })
 
-    it('el botón Recargar vuelve a mostrar el overlay de carga y cambia el src', async () => {
+    it('el botón Recargar (header) vuelve a mostrar el overlay de carga de la app activa y cambia el src', async () => {
         renderSheet()
         fireEvent.load(screen.getByTitle('Pagos'))
         expect(screen.queryByTestId('app-externa-cargando')).not.toBeInTheDocument()

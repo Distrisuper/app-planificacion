@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
@@ -285,9 +285,29 @@ it('reabrir el mismo cliente reusa el iframe vivo', async () => {
     const antes = screen.getByTitle('Pagos')
 
     fireEvent.click(screen.getByLabelText('Cerrar'))
-    fireEvent.click(screen.getByRole('button', { name: 'Pagos' }))
+    // Ocultar no desmonta: el sheet sigue en el DOM con su propia tab "Pagos", así que a
+    // partir de acá hay dos botones con ese nombre (el chip de la card y la tab). El de la
+    // card es el que sigue haciendo lo mismo que antes: reabrir el mismo cliente.
+    fireEvent.click(screen.getAllByRole('button', { name: 'Pagos' })[0])
 
     expect(screen.getByTitle('Pagos')).toBe(antes)
+})
+
+// El pedido original: pasar de una app a otra del mismo cliente sin cerrar el sheet.
+it('tocar otra tab dentro del sheet mantiene la primera app viva y cambia el frame visible', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    renderPage('/?dia=LUN')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
+    const framePagos = screen.getByTitle('Pagos')
+
+    const sheet = screen.getByTestId('app-externa-contenedor')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Versus' }))
+
+    expect(screen.getByTitle('Versus')).toBeInTheDocument()
+    // Pagos sigue en el DOM (no se recargó al volver): mismo nodo, ahora oculto.
+    expect(screen.getByTitle('Pagos')).toBe(framePagos)
 })
 
 it('suelta la instancia embebida al cambiar de semana', async () => {
