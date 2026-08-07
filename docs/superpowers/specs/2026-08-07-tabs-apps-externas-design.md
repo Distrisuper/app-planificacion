@@ -109,3 +109,30 @@ llamando a `onClose` (→ `ocultar`, no desmonta).
   iframe de la app previa sigue presente en el DOM, solo oculto).
 - `AgendaSemanaPage.test.tsx`: ajusta el mock de `useAppExterna` a la forma nueva
   (`montadas`/`appActivaId` en vez de `montada`).
+
+## Liberación de memoria en segundo plano (agregado 2026-08-07)
+
+Con hasta 3 apps ajenas vivas simultáneamente por cliente, ¿cuándo se liberan si nadie cambia de
+cliente ni de día/semana? Se evaluó (y se descartó) desmontar apenas la PWA pasa a segundo plano
+(`document.visibilitychange` → `hidden`): un salto rápido a WhatsApp o a atender un llamado —
+altamente frecuente en el trabajo de campo — dispararía la descarga completa, y volver a la app
+recargaría el iframe activo desde cero. Sería una mala versión de la idea: resuelve memoria
+rompiendo la UX que este mismo cambio existe para proteger.
+
+**Decisión: desmontar con un timeout de inactividad de fondo, no al instante.** Al pasar a
+`hidden` arranca un timer de **1 hora** (duración elegida por ser el promedio de una visita
+completa); si la PWA vuelve a `visible` antes de que cumpla, se cancela sin efecto. Solo si queda
+en segundo plano más que una visita entera (el vendedor terminó la jornada, dejó el teléfono
+guardado durante un trayecto largo) se llama `desmontar()` — la misma función que ya usa el cambio
+de día/semana.
+
+Vive dentro de `useAppExterna` (no en `AgendaSemanaPage`): es responsabilidad del ciclo de vida de
+las instancias, igual que el resto de las reglas de descarte. Un solo listener de
+`visibilitychange` por instancia del hook, sin depender de si hay algo montado en el momento de
+suscribirse (se chequea `montadas` al momento en que dispara el evento, no en el efecto).
+
+### Testing agregado
+
+- `useAppExterna.test.tsx`: pasar a `hidden` y volver a `visible` antes de una hora NO desmonta;
+  pasar a `hidden` y cumplir la hora completa SÍ desmonta; sin nada montado, pasar a `hidden` no
+  programa ningún timer (nada que verificar del lado observable, pero tampoco debe romper).

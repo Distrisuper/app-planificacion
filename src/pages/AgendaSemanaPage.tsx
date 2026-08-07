@@ -375,21 +375,23 @@ export default function AgendaSemanaPage() {
                     mostrar('exito', 'Semana cerrada')
                 }}
             />
-            {/* `ocultar` y no `desmontar`: cerrar deja la instancia viva para que reabrir
+            {/* `ocultar` y no `desmontar`: cerrar deja las instancias vivas para que reabrir
                 el mismo cliente sea instantáneo. */}
-            {appExterna.montada && (
-                /* La `key` NO es cosmética: sin ella React reusa el mismo <iframe> al abrir
-                   otro cliente y solo le reescribe el `src`. Navegar un browsing context
-                   anidado suma una entrada al historial del top-level, y en la PWA de Android
-                   el gesto de "atrás" pasa a retroceder DENTRO del iframe: para el vendedor
-                   el gesto "no hace nada". Con la key, cambiar de app o de cliente REMONTA el
-                   iframe. Es la misma identidad (app + cliente) que usa useAppExterna para
-                   decidir si reusa la instancia, así que ocultar y reabrir el mismo cliente
-                   deja la key igual y la instancia viva sigue siendo la misma. */
+            {appExterna.clienteActivo && Object.keys(appExterna.montadas).length > 0 && (
+                /* La `key` NO es cosmética: sin ella React reusa el mismo sheet al abrir otro
+                   cliente. Cambiar de tab (app) ya no remonta nada — pasa DENTRO del sheet,
+                   cambiando appActivaId — así que la key solo depende del cliente. Cada
+                   AppExternaFrame lleva además su propia key `app.id:cliente` en el sheet, que
+                   es la que remonta el iframe correspondiente si el cliente cambia. */
                 <AppExternaSheet
-                    key={`${appExterna.montada.app.id}:${appExterna.montada.cliente.codigoParticularCliente}`}
-                    montada={appExterna.montada}
+                    key={appExterna.clienteActivo.codigoParticularCliente}
+                    cliente={appExterna.clienteActivo}
+                    montadas={appExterna.montadas}
+                    appActivaId={appExterna.appActivaId}
                     visible={appExterna.visible}
+                    onSeleccionarApp={app => {
+                        if (appExterna.clienteActivo) appExterna.abrir(app, appExterna.clienteActivo)
+                    }}
                     onClose={appExterna.ocultar}
                 />
             )}
