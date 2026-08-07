@@ -27,8 +27,13 @@ const TIMEOUT_CARGA_MS = 15000
 // Abajo, no arriba: es la zona que el pulgar alcanza cómodo sosteniendo el teléfono con
 // una mano, y es donde el vendedor va a estar tocando repetidamente para saltar entre
 // Pagos/Versus/CRM del mismo cliente.
-const TAB_ACTIVA = 'flex flex-1 flex-col items-center gap-1 rounded-xl bg-dsnavy/10 py-2 text-dsnavy'
-const TAB_INACTIVA = 'flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-dsmuted'
+// Horizontal (ícono + label en una línea), no apilado: el layout apilado costaba ~70px de
+// alto por fila y, sumado al header propio de la app embebida, dejaba muy poco alto real
+// para el contenido — ver spec "Barra de tabs compacta".
+const TAB_ACTIVA =
+    'flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-dsnavy/10 py-2 text-dsnavy'
+const TAB_INACTIVA =
+    'flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-dsmuted'
 
 interface AppExternaFrameProps {
     montada: AppExternaMontada
@@ -234,15 +239,15 @@ export default function AppExternaSheet({
                                 onClick={() => onSeleccionarApp(app)}
                                 className={activa ? TAB_ACTIVA : TAB_INACTIVA}
                             >
-                                <Icono className="h-5 w-5" strokeWidth={activa ? 2.4 : 2} />
-                                <span className="text-[10.5px] font-extrabold uppercase tracking-wide">
+                                <Icono className="h-4 w-4" strokeWidth={activa ? 2.4 : 2} />
+                                <span className="text-[12px] font-extrabold uppercase tracking-wide">
                                     {app.label}
                                 </span>
                             </button>
                         )
                     })}
                 </div>
-                <Button onClick={onClose} className="h-12 w-full text-[15px]">
+                <Button onClick={onClose} className="h-11 w-full text-[14px]">
                     Volver
                 </Button>
             </div>

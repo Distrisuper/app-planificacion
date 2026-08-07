@@ -7,14 +7,14 @@ import type { IVisitClientCard } from '@/types/planificacion'
 // que opera la visita. La flecha ↗ es lo que marca el destino externo.
 const CHIP_CONTEXTO =
     'inline-flex h-[30px] flex-1 items-center justify-center gap-1.5 rounded-lg bg-[#F4F6FA] text-[11.5px] font-semibold text-dsmuted hover:bg-[#EAEEF6]'
-// Ícono arriba + label abajo, plano, sin borde: el mismo lenguaje visual que la barra de
-// tabs de AppExternaSheet (ver TAB_ACTIVA/TAB_INACTIVA ahí). A propósito — este botón es
-// lo último que se toca antes de que esa barra aparezca fija abajo, así que la transición
-// se lee como "el mismo control se ancla al fondo", no como un control nuevo y distinto.
-// min-h-11 en vez de h-11: preserva el mínimo de 44px de acción táctil sin forzar una
-// altura fija que compita con el layout vertical del ícono+label.
+// Ícono + label en una sola línea, plano, sin borde: el mismo lenguaje visual (y ahora el
+// mismo layout compacto) que la barra de tabs de AppExternaSheet (ver TAB_ACTIVA/
+// TAB_INACTIVA ahí). A propósito — este botón es lo último que se toca antes de que esa
+// barra aparezca fija abajo, así que la transición se lee como "el mismo control se ancla
+// al fondo", no como un control nuevo y distinto. Horizontal, no apilado: el apilado
+// costaba ~70px de alto y dejaba muy poco lugar para la tabla de rubros arriba.
 const BOTON_FILA =
-    'flex min-h-11 flex-1 flex-col items-center justify-center gap-1 rounded-xl py-1.5 text-dsnavy hover:bg-dsnavy/5'
+    'flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg text-dsnavy hover:bg-dsnavy/5'
 
 interface AccionesExternasProps {
     cliente: IVisitClientCard
@@ -43,13 +43,13 @@ export default function AccionesExternas({ cliente, variante, onAbrir }: Accione
                         className={contexto ? CHIP_CONTEXTO : BOTON_FILA}
                     >
                         <Icono
-                            className={contexto ? 'h-[13px] w-[13px]' : 'h-5 w-5'}
+                            className={contexto ? 'h-[13px] w-[13px]' : 'h-4 w-4'}
                             strokeWidth={2}
                         />
                         {contexto ? (
                             app.label
                         ) : (
-                            <span className="text-[10.5px] font-extrabold uppercase tracking-wide">
+                            <span className="text-[12px] font-extrabold uppercase tracking-wide">
                                 {app.label}
                             </span>
                         )}
