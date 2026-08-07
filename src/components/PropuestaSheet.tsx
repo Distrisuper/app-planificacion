@@ -107,6 +107,18 @@ export default function PropuestaSheet({
                             {expandido ? 'Ver menos' : 'Ver más'}
                         </Button>
                     )}
+                    {/* Pegado arriba de "Iniciar visita", en el pie fijo: mismo lugar que
+                     *  ocupa en VisitaSheet arriba de "Cerrar visita", para que el formato
+                     *  se mantenga entre las dos pantallas del mismo cliente. */}
+                    {cliente && onAbrirAppExterna && (
+                        <div className="mb-2.5">
+                            <AccionesExternas
+                                cliente={cliente}
+                                variante="fila"
+                                onAbrir={onAbrirAppExterna}
+                            />
+                        </div>
+                    )}
                     <Button
                         onClick={() => onIniciarVisita(rubros.map(toPropuestaDTO))}
                         disabled={deshabilitado}
@@ -120,17 +132,6 @@ export default function PropuestaSheet({
             }
         >
             <div>
-                {/* Arriba de la propuesta a propósito: el vendedor mira cómo viene el
-                 *  cliente (deuda, pagos) antes de leer qué ofrecerle. */}
-                {cliente && onAbrirAppExterna && (
-                    <div className="mb-3">
-                        <AccionesExternas
-                            cliente={cliente}
-                            variante="fila"
-                            onAbrir={onAbrirAppExterna}
-                        />
-                    </div>
-                )}
                 <p className="mb-3 text-[13px] leading-snug text-dsmuted">
                     Cayeron los <b className="font-bold text-dsred">últimos 2 meses</b> vs. el
                     promedio de 6 meses del cliente:
