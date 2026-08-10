@@ -11,5 +11,5 @@ import type { EstadoCicloCliente } from '@/types/planificacion'
  * datos que ya están en memoria.
  */
 export function estaResuelto(estado: EstadoCicloCliente): boolean {
-    return estado === 'visitada' || estado === 'no_visita' || estado === 'reagendada'
+    return estado === 'visitada' || estado === 'no_visita'
 }
