@@ -19,6 +19,7 @@
 - **El template no se escribe nunca.** `AgendaRepository.findVisitAssignments` es solo lectura.
 - **Una fila con resolución no se mueve.** Regla dura en el repositorio, no solo en la UI.
 - **No existe "quitar de la ruta":** todo movimiento tiene destino.
+- **Todo movimiento deja bitácora** en `pl_reacomodacion`, incluidos los del vendedor. El `UPDATE` y su fila de log van en la misma transacción.
 - **La cantidad de semanas NO es 5.** Sale del set de la rotación. Prohibido `% 5` y prohibido `<= 5`.
 - **Cerrar un ciclo NO crea resoluciones.** Los pendientes quedan pendientes.
 - **Convención del repo:** repositorios son clases con métodos `static`, cada uno con `try/catch` que lanza `CustomError(500, ...)`, y un mapper `toIXxx` al final del archivo. Modelos Sequelize con `field` explícito y `timestamps: false`. Tests en `*.spec.ts` con `jest.mock` de los repositorios.
@@ -40,6 +41,7 @@
 | `src/services/planificacion/semanaLaboral.ts` | `lunesDeLaSemana()` — la única implementación de "a qué semana laboral pertenece este instante" |
 | `src/models/planificacion/Rotacion.ts` | modelo de `pl_rotacion` |
 | `src/models/planificacion/RotacionCliente.ts` | modelo de `pl_rotacion_cliente` |
+| `src/models/planificacion/Reacomodacion.ts` | modelo de `pl_reacomodacion` — la bitácora de movimientos |
 | `src/repositories/RotacionRepository.ts` | CRUD de rotaciones + qué semanas ya se hicieron |
 | `src/repositories/RotacionClienteRepository.ts` | el plan: materializar, leer por semana, mover, pendientes |
 | `src/services/planificacion/RotacionService.ts` | materializar desde el template, set de semanas, proponer semana, sincronizar padrón |
@@ -288,9 +290,42 @@ CREATE TABLE IF NOT EXISTS pl_rotacion_cliente (
   -- o perderlo al reacomodar, y lo que vuelve estable el denominador de cobertura.
   UNIQUE KEY uq_rotacion_cliente (rotacion_id, codigo_particular_cliente),
   INDEX idx_semana (rotacion_id, semana),
-  FOREIGN KEY (rotacion_id) REFERENCES pl_rotacion (id)
+  FOREIGN KEY (rotacion_id) REFERENCES pl_rotacion (id),
+
+  -- Esta tabla se EDITA con UPDATE, al contrario de los snapshots inmutables del
+  -- diseño anterior. Por eso el rango va en la base y no solo en el servicio: un
+  -- UPDATE mal armado desde cualquier camino futuro rebota acá.
+  CONSTRAINT ck_rc_semana CHECK (semana >= 1),
+  CONSTRAINT ck_rc_dia    CHECK (dia BETWEEN 1 AND 5)
+);
+
+-- ③ BITÁCORA DE MOVIMIENTOS. Es la diferencia entre lo que dijo el template y lo que
+-- realmente pasó: el template se materializa una vez y de ahí en más las filas se
+-- mueven, así que sin esto los movimientos son irrastreables.
+--
+-- Se escribe para TODO movimiento, incluidos los del vendedor. Si solo se auditaran los
+-- de gerencia, el historial de una fila quedaría con saltos inexplicables.
+--
+-- Reemplaza a un `updated_at` en pl_rotacion_cliente: el log ya trae el cuándo, y
+-- además el antes, el después y el quién.
+CREATE TABLE IF NOT EXISTS pl_reacomodacion (
+  id                  INT AUTO_INCREMENT PRIMARY KEY,
+  rotacion_cliente_id INT          NOT NULL,
+  semana_antes        TINYINT      NOT NULL,
+  dia_antes           TINYINT      NOT NULL,
+  semana_despues      TINYINT      NOT NULL,
+  dia_despues         TINYINT      NOT NULL,
+  origen              VARCHAR(20)  NOT NULL,  -- 'vendedor' | 'gerencia'
+  usuario             VARCHAR(100) NOT NULL,
+  fecha               DATETIME     NOT NULL,
+
+  INDEX idx_rotacion_cliente (rotacion_cliente_id),
+  INDEX idx_fecha (fecha),
+  FOREIGN KEY (rotacion_cliente_id) REFERENCES pl_rotacion_cliente (id)
 );
 ```
+
+**Por qué `pl_reacomodacion` entra en esta entrega y no en el spec 2:** sin ella queda una ventana —desde este deploy hasta la vista de gerencia— en la que el plan es editable y ningún movimiento deja rastro. La tabla y su `INSERT` son baratos; lo que queda para el spec 2 es la pantalla, los permisos y el reporte de excepciones repetidas que se calcula sobre estas filas.
 
 - [ ] **Step 2: Repuntar `pl_resolucion` en el mismo archivo**
 
@@ -818,9 +853,12 @@ El corazón del cambio. `mover` es la única operación de movimiento del domini
   - `findById(id): Promise<IRotacionCliente | null>`
   - `findByRotacion(rotacionId): Promise<IRotacionCliente[]>`
   - `semanasDelSet(rotacionId): Promise<number[]>`
-  - `mover(id, semana, dia): Promise<void>` — lanza `CustomError(409, …, { code: 'FILA_RESUELTA' })` si la fila tiene resolución
+  - `type OrigenMovimiento = 'vendedor' | 'gerencia'`
+  - `mover(id, semana, dia, origen: OrigenMovimiento, usuario: string): Promise<void>` — lanza `CustomError(409, …, { code: 'FILA_RESUELTA' })` si la fila tiene resolución; escribe `pl_reacomodacion` en la misma transacción
   - `findCodigosSinResolver(rotacionId, semana): Promise<string[]>`
-  - `eliminarSinResolver(rotacionId, codigos: string[], semanas: number[]): Promise<number>`
+  - `eliminarSinResolver(rotacionId, codigos: string[], semanas: number[]): Promise<string[]>` — los códigos **efectivamente** borrados
+
+**Nota:** este task también crea `src/models/planificacion/Reacomodacion.ts`, con el mismo patrón que los modelos de la Task 4 (`fecha` como `DataTypes.DATE`, el resto `TINYINT`/`STRING`, `tableName: 'pl_reacomodacion'`, `timestamps: false`).
 
 - [ ] **Step 1: Write the failing test**
 
@@ -831,19 +869,26 @@ import RotacionCliente from '../models/planificacion/RotacionCliente'
 import { sequelizeWritePlanificacion } from '../database/connection'
 
 jest.mock('../models/planificacion/RotacionCliente')
+jest.mock('../models/planificacion/Reacomodacion')
 jest.mock('../database/connection', () => {
     const actual = jest.requireActual('../database/connection')
     return {
         ...actual,
         sequelizeWritePlanificacion: Object.assign(actual.sequelizeWritePlanificacion, {
             query: jest.fn(),
+            // La transacción se ejecuta de una: el callback corre y se devuelve su
+            // resultado. Mismo patrón que CicloService.spec.ts.
+            transaction: jest.fn(async (cb: any) => cb({ id: 'tx' })),
         }),
     }
 })
 
 const mockedBulkCreate = RotacionCliente.bulkCreate as jest.MockedFunction<any>
 const mockedFindAll = RotacionCliente.findAll as jest.MockedFunction<any>
+const mockedFindByPk = RotacionCliente.findByPk as jest.MockedFunction<any>
 const mockedUpdate = RotacionCliente.update as jest.MockedFunction<any>
+const mockedDestroy = RotacionCliente.destroy as jest.MockedFunction<any>
+const mockedCrearReacomodacion = Reacomodacion.create as jest.MockedFunction<any>
 const mockedQuery = sequelizeWritePlanificacion.query as jest.MockedFunction<any>
 
 beforeEach(() => jest.clearAllMocks())
@@ -884,28 +929,92 @@ describe('semanasDelSet', () => {
 })
 
 describe('mover', () => {
+    const fila103 = {
+        id: 103, rotacionId: 7, codigoParticularCliente: '4412', semana: 2, dia: 3,
+    }
+
     it('actualiza semana y dia cuando la fila no tiene resolución', async () => {
+        mockedFindByPk.mockResolvedValue(fila103 as any)
         mockedQuery.mockResolvedValue([]) // sin resolución
         mockedUpdate.mockResolvedValue([1])
 
-        await RotacionClienteRepository.mover(103, 4, 1)
+        await RotacionClienteRepository.mover(103, 4, 1, 'vendedor', 'matias')
 
         expect(mockedUpdate).toHaveBeenCalledWith(
             { semana: 4, dia: 1 },
-            { where: { id: 103 } },
+            { where: { id: 103 }, transaction: expect.anything() },
         )
+    })
+
+    it('deja bitácora con el antes y el después, en la misma transacción', async () => {
+        mockedFindByPk.mockResolvedValue(fila103 as any)
+        mockedQuery.mockResolvedValue([])
+        mockedUpdate.mockResolvedValue([1])
+        mockedCrearReacomodacion.mockResolvedValue({ id: 301 } as any)
+
+        await RotacionClienteRepository.mover(103, 4, 1, 'gerencia', 'jperez')
+
+        const [valores] = mockedCrearReacomodacion.mock.calls[0]
+        expect(valores).toMatchObject({
+            rotacionClienteId: 103,
+            semanaAntes: 2,
+            diaAntes: 3,
+            semanaDespues: 4,
+            diaDespues: 1,
+            origen: 'gerencia',
+            usuario: 'jperez',
+        })
     })
 
     it('RECHAZA mover una fila que ya tiene resolución', async () => {
         // El hecho ya ocurrió y no se reescribe. La regla vive en el repositorio para
         // que ningún camino futuro pueda saltearla.
+        mockedFindByPk.mockResolvedValue(fila103 as any)
         mockedQuery.mockResolvedValue([{ id: 51 }])
 
-        await expect(RotacionClienteRepository.mover(101, 4, 1)).rejects.toMatchObject({
+        await expect(
+            RotacionClienteRepository.mover(103, 4, 1, 'vendedor', 'matias'),
+        ).rejects.toMatchObject({
             statusCode: 409,
             details: { code: 'FILA_RESUELTA' },
         })
         expect(mockedUpdate).not.toHaveBeenCalled()
+        expect(mockedCrearReacomodacion).not.toHaveBeenCalled()
+    })
+})
+
+describe('eliminarSinResolver', () => {
+    it('devuelve los códigos EFECTIVAMENTE borrados, no los candidatos', async () => {
+        // 2088 es elegible; 6836 tiene resolución y no aparece en el SELECT. Reportar
+        // los dos haría que el aviso al vendedor mienta.
+        mockedQuery.mockResolvedValueOnce([
+            { id: 107, codigo_particular_cliente: '2088' },
+        ])
+        mockedQuery.mockResolvedValueOnce([]) // DELETE de bitácora
+        mockedDestroy.mockResolvedValue(1)
+
+        const borrados = await RotacionClienteRepository.eliminarSinResolver(
+            7, ['2088', '6836'], [1, 3, 4],
+        )
+
+        expect(borrados).toEqual(['2088'])
+        expect(mockedDestroy).toHaveBeenCalledWith({ where: { id: [107] } })
+    })
+
+    it('sin candidatos elegibles no borra nada y devuelve vacío', async () => {
+        mockedQuery.mockResolvedValueOnce([])
+
+        await expect(
+            RotacionClienteRepository.eliminarSinResolver(7, ['6836'], [1]),
+        ).resolves.toEqual([])
+        expect(mockedDestroy).not.toHaveBeenCalled()
+    })
+
+    it('con listas vacías no toca la base', async () => {
+        await expect(
+            RotacionClienteRepository.eliminarSinResolver(7, [], [1, 2]),
+        ).resolves.toEqual([])
+        expect(mockedQuery).not.toHaveBeenCalled()
     })
 })
 
@@ -1039,8 +1148,25 @@ export class RotacionClienteRepository {
      *
      * Rechaza mover una fila con resolución: el hecho ya ocurrió y no se reescribe.
      * La regla vive acá y no en el servicio para que ningún camino futuro la saltee.
+     *
+     * El UPDATE y su fila de bitácora van en UNA transacción: un movimiento sin rastro
+     * es indistinguible de un dato mal materializado, y es lo que después alimenta el
+     * reporte de excepciones repetidas.
      */
-    static async mover(id: number, semana: number, dia: number): Promise<void> {
+    static async mover(
+        id: number,
+        semana: number,
+        dia: number,
+        origen: OrigenMovimiento,
+        usuario: string,
+    ): Promise<void> {
+        const fila = await RotacionClienteRepository.findById(id)
+        if (!fila) {
+            throw new CustomError(404, 'Cliente no encontrado en el plan.', {
+                code: 'FILA_NOT_FOUND',
+            })
+        }
+
         const resueltas = await sequelizeWritePlanificacion.query<IdRow>(
             `SELECT id FROM pl_resolucion WHERE rotacion_cliente_id = :id LIMIT 1`,
             { replacements: { id }, type: QueryTypes.SELECT },
@@ -1055,7 +1181,25 @@ export class RotacionClienteRepository {
         }
 
         try {
-            await RotacionCliente.update({ semana, dia }, { where: { id } })
+            await sequelizeWritePlanificacion.transaction(async transaction => {
+                await RotacionCliente.update(
+                    { semana, dia },
+                    { where: { id }, transaction },
+                )
+                await Reacomodacion.create(
+                    {
+                        rotacionClienteId: id,
+                        semanaAntes: fila.semana,
+                        diaAntes: fila.dia,
+                        semanaDespues: semana,
+                        diaDespues: dia,
+                        origen,
+                        usuario,
+                        fecha: new Date(),
+                    },
+                    { transaction },
+                )
+            })
         } catch (err) {
             throw new CustomError(500, `Error reacomodando: ${err}`)
         }
@@ -1095,25 +1239,48 @@ export class RotacionClienteRepository {
      * resolución y su semana está entre las habilitadas (las que no cerraron). Las dos
      * condiciones son lo que hace idempotente al sincronizador de padrón: no puede
      * pisar trabajo hecho ni cambiarle la cobertura a una semana ya reportada.
+     *
+     * Devuelve los códigos EFECTIVAMENTE borrados, no los candidatos. De 5 candidatos
+     * puede borrar 1 —los otros tienen resolución o están en semanas cerradas— y el
+     * aviso al vendedor tiene que decir la verdad. Por eso se seleccionan primero los
+     * ids elegibles y después se borra por id, en vez de confiar en `affectedRows`, que
+     * además cambia de forma según el driver.
      */
     static async eliminarSinResolver(
         rotacionId: number,
         codigos: string[],
         semanas: number[],
-    ): Promise<number> {
-        if (codigos.length === 0 || semanas.length === 0) return 0
+    ): Promise<string[]> {
+        if (codigos.length === 0 || semanas.length === 0) return []
 
         try {
-            const [, meta] = await sequelizeWritePlanificacion.query(
-                `DELETE rc FROM pl_rotacion_cliente rc
-                  LEFT JOIN pl_resolucion r ON r.rotacion_cliente_id = rc.id
+            const elegibles = await sequelizeWritePlanificacion.query<{
+                id: number
+                codigo_particular_cliente: string
+            }>(
+                `SELECT rc.id, rc.codigo_particular_cliente
+                   FROM pl_rotacion_cliente rc
+                   LEFT JOIN pl_resolucion r ON r.rotacion_cliente_id = rc.id
                   WHERE rc.rotacion_id = :rotacionId
                     AND rc.codigo_particular_cliente IN (:codigos)
                     AND rc.semana IN (:semanas)
                     AND r.id IS NULL`,
-                { replacements: { rotacionId, codigos, semanas } },
+                { replacements: { rotacionId, codigos, semanas }, type: QueryTypes.SELECT },
             )
-            return Number((meta as unknown as { affectedRows?: number })?.affectedRows ?? 0)
+
+            if (elegibles.length === 0) return []
+
+            // La bitácora referencia pl_rotacion_cliente, así que sus filas se van con la
+            // baja: un movimiento de un cliente que ya no está en la rotación no tiene a
+            // qué apuntar. Va antes del DELETE para no chocar con la FK.
+            const ids = elegibles.map(e => e.id)
+            await sequelizeWritePlanificacion.query(
+                `DELETE FROM pl_reacomodacion WHERE rotacion_cliente_id IN (:ids)`,
+                { replacements: { ids } },
+            )
+            await RotacionCliente.destroy({ where: { id: ids } })
+
+            return elegibles.map(e => e.codigo_particular_cliente)
         } catch (err) {
             throw new CustomError(500, `Error dando de baja del plan: ${err}`)
         }
@@ -1687,22 +1854,48 @@ Reemplazar `abrir()` por `asegurar()` en `CicloService`:
             )
         }
 
-        const cicloId = await sequelizeWritePlanificacion.transaction(async transaction => {
-            if (abierto) {
-                // Cerrar NO crea resoluciones: los pendientes quedan pendientes y la
-                // cobertura los cuenta como no cubiertos.
-                await CicloRepository.cerrar(abierto.id, transaction)
+        let cicloId: number
+        try {
+            cicloId = await sequelizeWritePlanificacion.transaction(async transaction => {
+                if (abierto) {
+                    // Cerrar NO crea resoluciones: los pendientes quedan pendientes y la
+                    // cobertura los cuenta como no cubiertos.
+                    await CicloRepository.cerrar(abierto.id, transaction)
+                }
+                return CicloRepository.crear(
+                    {
+                        rotacionId,
+                        codigoParticularVendedor: vendedor,
+                        semana,
+                        fechaLunes: lunesDeLaSemana(new Date()),
+                    },
+                    transaction,
+                )
+            })
+        } catch (err) {
+            // Check-then-act: entre el `findAbiertoByVendedor` de arriba y este INSERT,
+            // otro dispositivo pudo abrir el ciclo. El UNIQUE vendedor_abierto lo
+            // atrapa, y sin esto el vendedor vería un 500 en vez de su agenda.
+            const ganado = await CicloRepository.findAbiertoByVendedor(vendedor)
+            if (ganado && ganado.semana === semana) {
+                return {
+                    ciclo: ganado,
+                    rotacionMaterializada: materializada,
+                    cicloAnteriorCerrado: false,
+                }
             }
-            return CicloRepository.crear(
-                {
-                    rotacionId,
-                    codigoParticularVendedor: vendedor,
-                    semana,
-                    fechaLunes: lunesDeLaSemana(new Date()),
-                },
-                transaction,
-            )
-        })
+            if (ganado) {
+                throw new CustomError(409, `Tenés la semana ${ganado.semana} abierta.`, {
+                    code: 'CAMBIO_DE_SEMANA',
+                    semanaAbierta: ganado.semana,
+                    clientesPendientes: await RotacionClienteRepository.findCodigosSinResolver(
+                        ganado.rotacionId,
+                        ganado.semana,
+                    ),
+                })
+            }
+            throw err
+        }
 
         const ciclo = await CicloRepository.findById(cicloId)
         if (!ciclo) throw new CustomError(500, 'El ciclo recién creado no se pudo leer')
@@ -1988,7 +2181,7 @@ describe('sincronizarPadron', () => {
         ])
         mockedCards.mockResolvedValue(new Map([card('6836'), card('8890')]) as any)
         mockedFindByRotacion.mockResolvedValue([filaPlan(101, '6836', 2)])
-        mockedEliminarSinResolver.mockResolvedValue(0)
+        mockedEliminarSinResolver.mockResolvedValue([])
 
         const res = await RotacionService.sincronizarPadron('V 2', 7)
 
@@ -2005,7 +2198,7 @@ describe('sincronizarPadron', () => {
         ])
         mockedCards.mockResolvedValue(new Map([card('8890')]) as any)
         mockedFindByRotacion.mockResolvedValue([])
-        mockedEliminarSinResolver.mockResolvedValue(0)
+        mockedEliminarSinResolver.mockResolvedValue([])
 
         const res = await RotacionService.sincronizarPadron('V 2', 7)
 
@@ -2013,11 +2206,11 @@ describe('sincronizarPadron', () => {
         expect(res.altas).toEqual([])
     })
 
-    it('da de baja solo en semanas pendientes y solo sin resolución', async () => {
+    it('reporta como baja SOLO lo que el repositorio borró de verdad', async () => {
         mockedAssignments.mockReturnValue([]) // 2088 desapareció del template
         mockedCards.mockResolvedValue(new Map() as any)
         mockedFindByRotacion.mockResolvedValue([filaPlan(107, '2088', 1)])
-        mockedEliminarSinResolver.mockResolvedValue(1)
+        mockedEliminarSinResolver.mockResolvedValue(['2088'])
 
         const res = await RotacionService.sincronizarPadron('V 2', 7)
 
@@ -2032,7 +2225,7 @@ describe('sincronizarPadron', () => {
         ])
         mockedCards.mockResolvedValue(new Map([card('6836')]) as any)
         mockedFindByRotacion.mockResolvedValue([filaPlan(101, '6836', 2)])
-        mockedEliminarSinResolver.mockResolvedValue(0)
+        mockedEliminarSinResolver.mockResolvedValue([])
 
         const res = await RotacionService.sincronizarPadron('V 2', 7)
 
@@ -2048,7 +2241,7 @@ describe('sincronizarPadron', () => {
         ])
         mockedCards.mockResolvedValue(new Map([card('6836')]) as any)
         mockedFindByRotacion.mockResolvedValue([filaPlan(101, '6836', 2)])
-        mockedEliminarSinResolver.mockResolvedValue(0)
+        mockedEliminarSinResolver.mockResolvedValue([])
 
         const res = await RotacionService.sincronizarPadron('V 2', 7)
 
@@ -2186,16 +2379,16 @@ Expected: FAIL — `sincronizarPadron is not a function`, `sincronizar is not a 
             .filter(f => !enTemplate.has(f.codigoParticularCliente))
             .map(f => f.codigoParticularCliente)
 
-        const borradas = await RotacionClienteRepository.eliminarSinResolver(
+        // `bajas` son los códigos que el repositorio borró de verdad, no los candidatos:
+        // de 5 candidatos puede borrar 1 (los otros tienen resolución o están en semanas
+        // cerradas), y el aviso al vendedor tiene que decir la verdad.
+        const bajas = await RotacionClienteRepository.eliminarSinResolver(
             rotacionId,
             candidatasBaja,
             pendientes,
         )
 
-        return {
-            altas: aAltar.map(a => a.codigoParticularCliente),
-            bajas: borradas > 0 ? candidatasBaja : [],
-        }
+        return { altas: aAltar.map(a => a.codigoParticularCliente), bajas }
     }
 ```
 
@@ -2303,7 +2496,7 @@ describe('reacomodar', () => {
 
         await VisitasService.reacomodar(user, 103, { dia: 4 })
 
-        expect(mockedMover).toHaveBeenCalledWith(103, 2, 4)
+        expect(mockedMover).toHaveBeenCalledWith(103, 2, 4, 'vendedor', expect.any(String))
     })
 
     it('con semana mueve a otra semana de la rotación', async () => {
@@ -2319,7 +2512,7 @@ describe('reacomodar', () => {
 
         await VisitasService.reacomodar(user, 103, { semana: 4, dia: 1 })
 
-        expect(mockedMover).toHaveBeenCalledWith(103, 4, 1)
+        expect(mockedMover).toHaveBeenCalledWith(103, 4, 1, 'vendedor', expect.any(String))
     })
 
     it('rechaza un día fuera de 1..5', async () => {
@@ -2435,7 +2628,15 @@ Expected: FAIL — `VisitasService.reacomodar is not a function`
             }
         }
 
-        await RotacionClienteRepository.mover(rotacionClienteId, semana, dto.dia)
+        // Origen 'vendedor': la bitácora distingue esto de un movimiento de gerencia, y
+        // sin el origen el reporte de excepciones repetidas del spec 2 no se puede armar.
+        await RotacionClienteRepository.mover(
+            rotacionClienteId,
+            semana,
+            dto.dia,
+            'vendedor',
+            user.email ?? String(user.id),
+        )
     }
 ```
 
@@ -2495,7 +2696,7 @@ Sin esto la apertura implícita no existe en la práctica: `asegurar` está escr
 - Consumes: `CicloService.asegurar` (Task 8), `RotacionRepository.findAbiertaByVendedor` (Task 5), `RotacionClienteRepository.findById` (Task 6).
 - Produces:
   - `IIniciarVisitaDTO` y `INoVisitaDTO` ganan `semana: number` y `codigoParticularCliente: string` como alternativa al id, más `confirmarCambioDeSemana?: boolean`
-  - `VisitasService.resolverFilaDelPlan(vendedor, dto): Promise<IRotacionCliente>` — resuelve la fila desde el id, o desde `(semana, codigo)` asegurando el ciclo
+  - `VisitasService.resolverFilaDelPlan(user, dto): Promise<IRotacionCliente>` — resuelve la fila desde el id, o desde `(semana, codigo)` asegurando el ciclo
 
 - [ ] **Step 1: Write the failing test**
 
@@ -2516,7 +2717,7 @@ describe('iniciarVisita desde standby', () => {
             id: 105, rotacionId: 7, codigoParticularCliente: '7750', semana: 4, dia: 2,
         })
 
-        const fila = await VisitasService.resolverFilaDelPlan('V 2', {
+        const fila = await VisitasService.resolverFilaDelPlan(user, {
             semana: 4,
             codigoParticularCliente: '7750',
         } as any)
@@ -2538,7 +2739,7 @@ describe('iniciarVisita desde standby', () => {
         )
 
         await expect(
-            VisitasService.resolverFilaDelPlan('V 2', {
+            VisitasService.resolverFilaDelPlan(user, {
                 semana: 4,
                 codigoParticularCliente: '7750',
             } as any),
@@ -2558,7 +2759,7 @@ describe('iniciarVisita desde standby', () => {
             id: 105, rotacionId: 7, codigoParticularCliente: '7750', semana: 4, dia: 2,
         })
 
-        const fila = await VisitasService.resolverFilaDelPlan('V 2', {
+        const fila = await VisitasService.resolverFilaDelPlan(user, {
             rotacionClienteId: 105,
         } as any)
 
@@ -2661,10 +2862,14 @@ En `VisitasService`:
      * arma el front.
      */
     static async resolverFilaDelPlan(
-        vendedor: string,
+        user: IUser,
         dto: IObjetivoDelPlan,
-        user?: IUser,
     ): Promise<IRotacionCliente> {
+        // Recibe SOLO el user: pasarle además el `vendedor` ya resuelto obligaba a un
+        // tercer parámetro opcional que en una de las ramas era obligatorio, y `asegurar`
+        // lo re-resuelve igual por dentro.
+        const vendedor = await resolveSellerCode(user)
+
         if (dto.rotacionClienteId !== undefined) {
             const fila = await RotacionClienteRepository.findById(dto.rotacionClienteId)
             if (!fila) {
@@ -2690,7 +2895,7 @@ En `VisitasService`:
         }
 
         const { ciclo } = await CicloService.asegurar(
-            user as IUser,
+            user,
             dto.semana,
             dto.confirmarCambioDeSemana,
         )
@@ -2727,7 +2932,7 @@ Y en `RotacionClienteRepository`:
 ```
 
 `iniciarVisita` y `noVisita` reemplazan su lectura de `cicloClienteId` por
-`const fila = await VisitasService.resolverFilaDelPlan(vendedor, dto, user)` y usan `fila.id`
+`const fila = await VisitasService.resolverFilaDelPlan(user, dto)` y usan `fila.id`
 como `rotacionClienteId` de la resolución.
 
 En `RubrosService.resolveVisitaPropia`, reemplazar el guard:
@@ -3018,32 +3223,65 @@ import { RotacionRepository } from '../src/repositories/RotacionRepository'
 
 const VENDEDOR = 'V 2'
 
+/** Assert propio: el script tiene que FALLAR, no imprimir un número distinto. */
+function chequear(descripcion: string, condicion: boolean, detalle: string): void {
+    if (!condicion) {
+        throw new Error(`✗ ${descripcion} — ${detalle}`)
+    }
+    console.log(`✓ ${descripcion} · ${detalle}`)
+}
+
 async function main() {
     const rotacionId = await RotacionService.materializar(VENDEDOR)
     const set = await RotacionClienteRepository.semanasDelSet(rotacionId)
     const plan = await RotacionClienteRepository.findByRotacion(rotacionId)
-    console.log(`rotación ${rotacionId} · ${plan.length} clientes · semanas ${set.join(',')}`)
+
+    chequear('el plan se materializó', plan.length > 0, `${plan.length} clientes`)
+    chequear('el set de semanas no está vacío', set.length > 0, `semanas ${set.join(',')}`)
+    chequear(
+        'el set no se asume de 5 ni contiguo',
+        set.every(s => s >= 1),
+        `set = [${set.join(',')}]`,
+    )
 
     const [primera] = plan
     const destino = set.find(s => s !== primera.semana) ?? primera.semana
-    await RotacionClienteRepository.mover(primera.id, destino, 1)
+    await RotacionClienteRepository.mover(primera.id, destino, 1, 'gerencia', 'smoke')
 
     const movida = await RotacionClienteRepository.findById(primera.id)
-    console.log(
-        `reacomodado ${movida!.codigoParticularCliente}: ` +
-            `s${primera.semana}d${primera.dia} → s${movida!.semana}d${movida!.dia}`,
+    chequear(
+        'reacomodar movió la fila',
+        movida!.semana === destino && movida!.dia === 1,
+        `s${primera.semana}d${primera.dia} → s${movida!.semana}d${movida!.dia}`,
     )
 
+    const bitacora = await sequelizeWritePlanificacion.query<{ n: number }>(
+        'SELECT COUNT(*) AS n FROM pl_reacomodacion WHERE rotacion_cliente_id = :id',
+        { replacements: { id: primera.id }, type: QueryTypes.SELECT },
+    )
+    chequear('el movimiento dejó bitácora', Number(bitacora[0].n) === 1, `${bitacora[0].n} fila`)
+
     const total = await RotacionClienteRepository.findByRotacion(rotacionId)
-    console.log(
-        `denominador antes/después: ${plan.length}/${total.length} ` +
-            `(reacomodar NO debe moverlo)`,
+    chequear(
+        'reacomodar NO cambió el denominador de la rotación',
+        total.length === plan.length,
+        `${plan.length} → ${total.length}`,
     )
 
     const pendientes = await RotacionService.semanasPendientes(rotacionId)
-    console.log(`semanas pendientes: ${pendientes.join(',')}`)
+    chequear(
+        'sin ciclos todavía, todas las semanas están pendientes',
+        pendientes.length === set.length,
+        `pendientes = [${pendientes.join(',')}]`,
+    )
 
-    // Limpieza: el script es re-ejecutable.
+    // Limpieza: el script es re-ejecutable. La bitácora va primero por la FK.
+    await sequelizeWritePlanificacion.query(
+        `DELETE m FROM pl_reacomodacion m
+           JOIN pl_rotacion_cliente rc ON rc.id = m.rotacion_cliente_id
+          WHERE rc.rotacion_id = :rotacionId`,
+        { replacements: { rotacionId } },
+    )
     await sequelizeWritePlanificacion.query(
         'DELETE FROM pl_rotacion_cliente WHERE rotacion_id = :rotacionId',
         { replacements: { rotacionId } },
@@ -3161,7 +3399,26 @@ CREATE TABLE pl_rotacion_cliente (
   dia                       TINYINT     NOT NULL,
   UNIQUE KEY uq_rotacion_cliente (rotacion_id, codigo_particular_cliente),
   INDEX idx_semana (rotacion_id, semana),
-  FOREIGN KEY (rotacion_id) REFERENCES pl_rotacion (id)
+  FOREIGN KEY (rotacion_id) REFERENCES pl_rotacion (id),
+  CONSTRAINT ck_rc_semana CHECK (semana >= 1),
+  CONSTRAINT ck_rc_dia    CHECK (dia BETWEEN 1 AND 5)
+);
+
+-- Bitácora de movimientos. Nace vacía: el historial migrado no tiene movimientos que
+-- registrar, porque antes de esta entrega el plan no se podía editar.
+CREATE TABLE pl_reacomodacion (
+  id                  INT AUTO_INCREMENT PRIMARY KEY,
+  rotacion_cliente_id INT          NOT NULL,
+  semana_antes        TINYINT      NOT NULL,
+  dia_antes           TINYINT      NOT NULL,
+  semana_despues      TINYINT      NOT NULL,
+  dia_despues         TINYINT      NOT NULL,
+  origen              VARCHAR(20)  NOT NULL,
+  usuario             VARCHAR(100) NOT NULL,
+  fecha               DATETIME     NOT NULL,
+  INDEX idx_rotacion_cliente (rotacion_cliente_id),
+  INDEX idx_fecha (fecha),
+  FOREIGN KEY (rotacion_cliente_id) REFERENCES pl_rotacion_cliente (id)
 );
 
 -- ② Una rotación por vendedor con historial. Queda ABIERTA (fecha_fin NULL) para que el
@@ -3197,14 +3454,27 @@ ALTER TABLE pl_ciclo_semana
   ADD FOREIGN KEY (rotacion_id) REFERENCES pl_rotacion (id);
 
 -- ④ Volcar el plan. Un cliente puede aparecer en varios ciclos del historial y el
--- UNIQUE admite una sola fila por rotación: gana la del ciclo más reciente, que es la
--- posición vigente del cliente.
+-- UNIQUE admite una sola fila por rotación: gana la posición del ciclo más reciente.
+--
+-- La fila ganadora se elige EXPLÍCITAMENTE con ROW_NUMBER() y no con
+-- `ORDER BY ... ON DUPLICATE KEY UPDATE`. Esa segunda forma funciona en la práctica
+-- porque el INSERT..SELECT inserta en orden, pero es un comportamiento del motor y no
+-- un contrato — y esta migración no es reversible.
 INSERT INTO pl_rotacion_cliente (rotacion_id, codigo_particular_cliente, semana, dia)
-SELECT cs.rotacion_id, cc.codigo_particular_cliente, cs.semana, cc.dia
-  FROM pl_ciclo_cliente cc
-  JOIN pl_ciclo_semana cs ON cs.id = cc.ciclo_semana_id
- ORDER BY cs.fecha_apertura ASC
-ON DUPLICATE KEY UPDATE semana = VALUES(semana), dia = VALUES(dia);
+SELECT rotacion_id, codigo_particular_cliente, semana, dia
+  FROM (
+    SELECT cs.rotacion_id,
+           cc.codigo_particular_cliente,
+           cs.semana,
+           cc.dia,
+           ROW_NUMBER() OVER (
+               PARTITION BY cs.rotacion_id, cc.codigo_particular_cliente
+               ORDER BY cs.fecha_apertura DESC, cs.id DESC
+           ) AS rn
+      FROM pl_ciclo_cliente cc
+      JOIN pl_ciclo_semana cs ON cs.id = cc.ciclo_semana_id
+  ) ranked
+ WHERE rn = 1;
 
 -- ⑤ Repuntar las resoluciones.
 ALTER TABLE pl_resolucion ADD COLUMN rotacion_cliente_id INT NULL;
@@ -3265,8 +3535,16 @@ UNION ALL SELECT 'plan nuevo', COUNT(*) FROM pl_rotacion_cliente;"
 ```
 
 Expected: `resoluciones` = el número anotado en el Step 2 (7). `rotaciones` = cantidad de
-vendedores distintos (2). `plan nuevo` ≤ 85 y ≥ los clientes distintos por vendedor — el
-`ON DUPLICATE KEY` colapsa un cliente repetido en varios ciclos.
+vendedores distintos (2). `plan nuevo` = la cantidad de pares `(vendedor, cliente)`
+distintos del plan viejo — el `ROW_NUMBER() = 1` colapsa un cliente que aparecía en
+varios ciclos. Ese número se puede calcular de antemano contra el fixture:
+
+```sql
+SELECT COUNT(*) FROM (
+  SELECT DISTINCT cs.codigo_particular_vendedor, cc.codigo_particular_cliente
+    FROM pl_ciclo_cliente cc JOIN pl_ciclo_semana cs ON cs.id = cc.ciclo_semana_id
+) v;
+```
 
 - [ ] **Step 5: Limpiar la base de prueba**
 
