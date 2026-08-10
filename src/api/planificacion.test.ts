@@ -2,10 +2,9 @@ import { vi } from 'vitest'
 import { apiClient } from './apiClient'
 import {
     getCicloActual,
-    getCicloPreview,
-    abrirCiclo,
-    cerrarCiclo,
-    reagendarCicloCliente,
+    previewSemana,
+    sincronizar,
+    reacomodar,
     getAgendaSemana,
     getAgendaDia,
     getMotivos,
@@ -33,49 +32,69 @@ vi.mock('./apiClient', () => ({
 
 const ok = (data: unknown) => ({ data: { ok: 1, data } })
 
+const PREVIEW_MOCK = {
+    semana: 3,
+    clientes: 2,
+    omitidos: [],
+    dias: { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] },
+}
+const SINCRONIZAR_MOCK = {
+    semanaCerrada: null,
+    sinVisitar: [],
+    rubrosAutocompletados: 0,
+    altas: [],
+    bajas: [],
+    rotacionCerrada: false,
+}
+
 beforeEach(() => vi.clearAllMocks())
 
-describe('ciclo', () => {
-    it('getCicloActual devuelve null cuando no hay vuelta abierta', async () => {
-        ;(apiClient.get as any).mockResolvedValue(ok(null))
-        await expect(getCicloActual()).resolves.toBeNull()
+describe('getCicloActual', () => {
+    it('devuelve el ciclo y el set de semanas', async () => {
+        vi.mocked(apiClient.get).mockResolvedValue({
+            data: { data: { ciclo: null, semanas: [1, 2, 3, 4], semanasPendientes: [2, 4] } },
+        })
+        const res = await getCicloActual()
         expect(apiClient.get).toHaveBeenCalledWith('/planificacion/ciclo/actual')
+        expect(res).toEqual({ ciclo: null, semanas: [1, 2, 3, 4], semanasPendientes: [2, 4] })
+    })
+})
+
+describe('previewSemana', () => {
+    it('pide la semana indicada de solo lectura', async () => {
+        vi.mocked(apiClient.get).mockResolvedValue({ data: { data: PREVIEW_MOCK } })
+        const res = await previewSemana(3)
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/rotacion/semana/3')
+        expect(res).toEqual(PREVIEW_MOCK)
+    })
+})
+
+describe('sincronizar', () => {
+    it('postea sin body', async () => {
+        vi.mocked(apiClient.post).mockResolvedValue({ data: { data: SINCRONIZAR_MOCK } })
+        const res = await sincronizar()
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/ciclo/sincronizar')
+        expect(res).toEqual(SINCRONIZAR_MOCK)
+    })
+})
+
+describe('reacomodar', () => {
+    it('usa PATCH sobre el rotacionClienteId con semana y dia', async () => {
+        vi.mocked(apiClient.patch).mockResolvedValue({ data: { ok: 1 } })
+        await reacomodar(42, { semana: 3, dia: 2 })
+        expect(apiClient.patch).toHaveBeenCalledWith(
+            '/planificacion/rotacion-cliente/42/reacomodar',
+            { semana: 3, dia: 2 },
+        )
     })
 
-    it('getCicloPreview sin semana no manda params', async () => {
-        ;(apiClient.get as any).mockResolvedValue(ok({ semana: 3 }))
-        await getCicloPreview()
-        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/ciclo/preview', {
-            params: undefined,
-        })
-    })
-
-    it('getCicloPreview con semana la manda como param', async () => {
-        ;(apiClient.get as any).mockResolvedValue(ok({ semana: 4 }))
-        await getCicloPreview(4)
-        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/ciclo/preview', {
-            params: { semana: 4 },
-        })
-    })
-
-    it('abrirCiclo sin semana manda un body vacío', async () => {
-        ;(apiClient.post as any).mockResolvedValue(ok({ cicloId: 1 }))
-        await abrirCiclo()
-        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/ciclo/abrir', {})
-    })
-
-    it('cerrarCiclo postea sin body', async () => {
-        ;(apiClient.post as any).mockResolvedValue(ok({ cerrado: true }))
-        await cerrarCiclo()
-        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/ciclo/cerrar')
-    })
-
-    it('reagendarCicloCliente usa PATCH sobre el cicloClienteId', async () => {
-        ;(apiClient.patch as any).mockResolvedValue({ data: { ok: 1 } })
-        await reagendarCicloCliente(42, 3)
-        expect(apiClient.patch).toHaveBeenCalledWith('/planificacion/ciclo-cliente/42/reagendar', {
-            dia: 3,
-        })
+    it('sin semana solo manda dia', async () => {
+        vi.mocked(apiClient.patch).mockResolvedValue({ data: { ok: 1 } })
+        await reacomodar(42, { dia: 2 })
+        expect(apiClient.patch).toHaveBeenCalledWith(
+            '/planificacion/rotacion-cliente/42/reacomodar',
+            { dia: 2 },
+        )
     })
 })
 
@@ -116,17 +135,17 @@ describe('motivos', () => {
 
 describe('visitas', () => {
     it('getVisitaActiva devuelve la resolución cruda o null', async () => {
-        ;(apiClient.get as any).mockResolvedValue(ok({ id: 5, cicloClienteId: 11 }))
+        ;(apiClient.get as any).mockResolvedValue(ok({ id: 5, rotacionClienteId: 11 }))
         const res = await getVisitaActiva()
         expect(res?.id).toBe(5)
     })
 
-    it('iniciarVisita manda cicloClienteId, NO codigoParticularCliente', async () => {
+    it('iniciarVisita manda rotacionClienteId, NO codigoParticularCliente', async () => {
         // Regresión del contrato viejo, que mandaba código + nombre del cliente.
         ;(apiClient.post as any).mockResolvedValue(ok({ visitaId: 42, rubros: 3 }))
-        const res = await iniciarVisita({ cicloClienteId: 11, coordInicio: '-34.6,-58.4' })
+        const res = await iniciarVisita({ rotacionClienteId: 11, coordInicio: '-34.6,-58.4' })
         expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas', {
-            cicloClienteId: 11,
+            rotacionClienteId: 11,
             coordInicio: '-34.6,-58.4',
         })
         expect(res).toEqual({ visitaId: 42, rubros: 3 })
@@ -142,11 +161,11 @@ describe('visitas', () => {
         expect(res.rubrosPendientes).toBe(2)
     })
 
-    it('registrarNoVisita manda cicloClienteId y motivoIds', async () => {
-        ;(apiClient.post as any).mockResolvedValue(ok({ cicloClienteId: 11 }))
-        await registrarNoVisita({ cicloClienteId: 11, motivoIds: [1, 3] })
+    it('registrarNoVisita manda rotacionClienteId y motivoIds', async () => {
+        ;(apiClient.post as any).mockResolvedValue(ok({ rotacionClienteId: 11 }))
+        await registrarNoVisita({ rotacionClienteId: 11, motivoIds: [1, 3] })
         expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas/no-visita', {
-            cicloClienteId: 11,
+            rotacionClienteId: 11,
             motivoIds: [1, 3],
         })
     })
