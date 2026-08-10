@@ -7,7 +7,7 @@ import IniciarVisitaMapa from './IniciarVisitaMapa'
 import { useCerrarVisita, useIniciarVisita } from '@/hooks/useVisitas'
 import { usePropuesta } from '@/hooks/usePropuesta'
 import { capturarUbicacion, type GeoResult } from '@/lib/geolocation'
-import { errorCode } from '@/lib/apiError'
+import { errorCode, errorData } from '@/lib/apiError'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
@@ -40,6 +40,13 @@ interface VisitaFlowProps {
     onAviso?: (tipo: NotificacionTipo, mensaje: string) => void
     /** Si se pasa, los sheets del cliente ofrecen las apps externas. */
     onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
+    /** El backend rechazó la acción porque el vendedor está mirando una semana distinta a la
+     *  que tiene abierta. `reintentar` repite la MISMA acción con confirmarCambioDeSemana. */
+    onCambioDeSemana?: (info: {
+        semanaAbierta: number
+        clientesPendientes: string[]
+        reintentar: () => Promise<void>
+    }) => void
 }
 
 /**
@@ -58,6 +65,7 @@ export default function VisitaFlow({
     onGeoBloqueada,
     onAviso,
     onAbrirAppExterna,
+    onCambioDeSemana,
 }: VisitaFlowProps) {
     const iniciar = useIniciarVisita()
     const cerrar = useCerrarVisita()
@@ -84,14 +92,14 @@ export default function VisitaFlow({
     useEffect(() => {
         setPropuestaPendiente(null)
         setErrorIniciar(null)
-    }, [cliente?.cicloClienteId])
+    }, [cliente?.rotacionClienteId])
 
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
     // vendedor mire mientras tanto queda en modo consulta: el backend igual rechazaría un
     // segundo POST /visitas con VISITA_ACTIVA_EXISTENTE (no se puede estar en dos lugares
     // a la vez), así que el bloqueo se muestra acá antes de gastar un viaje al servidor.
     const esClienteEnCurso =
-        visitaEnCurso !== null && cliente !== null && visitaEnCurso.cliente.cicloClienteId === cliente.cicloClienteId
+        visitaEnCurso !== null && cliente !== null && visitaEnCurso.cliente.rotacionClienteId === cliente.rotacionClienteId
     const bloqueadoPorOtraVisita = visitaEnCurso !== null && !esClienteEnCurso
 
     // Un cliente con visita ya abierta (o cerrada con rubros pendientes) entra derecho
@@ -150,7 +158,7 @@ export default function VisitaFlow({
         onIniciar(propuestaPendiente ?? [])
     }
 
-    async function onIniciar(propuesta: IPropuestaRubroDTO[]) {
+    async function onIniciar(propuesta: IPropuestaRubroDTO[], confirmar = false) {
         if (iniciandoFlujo || bloqueadoPorOtraVisita) return
         setErrorIniciar(null)
         setIniciandoFlujo(true)
@@ -158,9 +166,10 @@ export default function VisitaFlow({
             await conUbicacion(async coord => {
                 try {
                     const { visitaId: id } = await iniciar.mutateAsync({
-                        cicloClienteId: cliente!.cicloClienteId,
+                        rotacionClienteId: cliente!.rotacionClienteId,
                         coordInicio: coord,
                         propuesta,
+                        confirmarCambioDeSemana: confirmar || undefined,
                     })
                     setPropuestaPendiente(null)
                     onVisitaIniciada(cliente!, id)
@@ -174,6 +183,17 @@ export default function VisitaFlow({
                         onAviso?.('info', 'Este cliente ya fue resuelto. Actualizamos tu agenda.')
                         cerrarFlujo()
                         return
+                    }
+                    if (code === 'CAMBIO_DE_SEMANA' && onCambioDeSemana) {
+                        const data = errorData<{ semanaAbierta: number; clientesPendientes: string[] }>(err)
+                        if (data) {
+                            onCambioDeSemana({
+                                semanaAbierta: data.semanaAbierta,
+                                clientesPendientes: data.clientesPendientes,
+                                reintentar: () => onIniciar(propuesta, true),
+                            })
+                            return
+                        }
                     }
                     setErrorIniciar('No se pudo iniciar la visita. Volvé a intentar.')
                 }

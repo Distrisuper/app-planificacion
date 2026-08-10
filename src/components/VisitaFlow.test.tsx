@@ -28,7 +28,7 @@ const cliente: IAgendaClient = {
     codigoCliente: 'C1',
     codigoParticularCliente: '10034',
     nombreCliente: 'ALMACEN DON JOSE',
-    cicloClienteId: 42,
+    rotacionClienteId: 42,
     dia: 1,
     estado: 'pendiente',
     visitaId: null,
@@ -46,6 +46,11 @@ interface HarnessProps {
     onClose: () => void
     onVisitaIniciada: (cliente: IAgendaClient, visitaId: number) => void
     onVisitaCerrada: () => void
+    onCambioDeSemana?: (info: {
+        semanaAbierta: number
+        clientesPendientes: string[]
+        reintentar: () => Promise<void>
+    }) => void
 }
 
 /**
@@ -64,6 +69,7 @@ function Harness({
     onClose,
     onVisitaIniciada,
     onVisitaCerrada,
+    onCambioDeSemana,
 }: HarnessProps) {
     const [cliente, setCliente] = useState<IAgendaClient | null>(clienteInicial)
     const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(
@@ -72,7 +78,7 @@ function Harness({
             : null,
     )
     const viendoVisitaEnCurso =
-        visitaEnCurso !== null && cliente !== null && cliente.cicloClienteId === visitaEnCurso.cliente.cicloClienteId
+        visitaEnCurso !== null && cliente !== null && cliente.rotacionClienteId === visitaEnCurso.cliente.rotacionClienteId
 
     return (
         <>
@@ -97,6 +103,7 @@ function Harness({
                 }}
                 onGeoBloqueada={onGeoBloqueada}
                 onAviso={onAviso}
+                onCambioDeSemana={onCambioDeSemana}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar
@@ -110,7 +117,12 @@ function Harness({
 }
 
 function renderFlow(
-    over: { cliente?: IAgendaClient; otroCliente?: IAgendaClient; directoAMapa?: boolean } = {},
+    over: {
+        cliente?: IAgendaClient
+        otroCliente?: IAgendaClient
+        directoAMapa?: boolean
+        onCambioDeSemana?: HarnessProps['onCambioDeSemana']
+    } = {},
 ) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onGeoBloqueada = vi.fn()
@@ -129,6 +141,7 @@ function renderFlow(
                 onClose={onClose}
                 onVisitaIniciada={onVisitaIniciada}
                 onVisitaCerrada={onVisitaCerrada}
+                onCambioDeSemana={over.onCambioDeSemana}
             />
         </QueryClientProvider>,
     )
@@ -148,12 +161,12 @@ beforeEach(() => {
     })
 })
 
-it('iniciar visita captura la ubicación y manda el cicloClienteId', async () => {
+it('iniciar visita captura la ubicación y manda el rotacionClienteId', async () => {
     renderFlow()
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
     await waitFor(() =>
         expect(api.iniciarVisita).toHaveBeenCalledWith({
-            cicloClienteId: 42,
+            rotacionClienteId: 42,
             coordInicio: '-34.6,-58.4',
             propuesta: [],
         }),
@@ -278,6 +291,31 @@ it('si iniciar falla porque el ciclo cliente ya estaba resuelto, avisa y cierra 
     expect(onClose).toHaveBeenCalled()
 })
 
+it('si iniciar falla por CAMBIO_DE_SEMANA, avisa al padre con los datos y una función de reintento', async () => {
+    const onCambioDeSemana = vi.fn()
+    ;(api.iniciarVisita as any).mockRejectedValueOnce({
+        response: {
+            status: 409,
+            data: { code: 'CAMBIO_DE_SEMANA', semanaAbierta: 3, clientesPendientes: ['1'] },
+        },
+    })
+    renderFlow({ onCambioDeSemana })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() =>
+        expect(onCambioDeSemana).toHaveBeenCalledWith(
+            expect.objectContaining({ semanaAbierta: 3, clientesPendientes: ['1'] }),
+        ),
+    )
+
+    // Reintentar manda confirmarCambioDeSemana: true con el mismo payload
+    ;(api.iniciarVisita as any).mockResolvedValueOnce({ visitaId: 99, rubros: 0 })
+    const { reintentar } = onCambioDeSemana.mock.calls[0][0]
+    await reintentar()
+    expect(api.iniciarVisita).toHaveBeenLastCalledWith(
+        expect.objectContaining({ confirmarCambioDeSemana: true }),
+    )
+})
+
 it('si iniciar falla por un error genérico, muestra el error inline y NO cierra el flujo', async () => {
     ;(api.iniciarVisita as any).mockRejectedValue({
         response: { data: { code: 'ALGO_INESPERADO' } },
@@ -370,7 +408,7 @@ it('confirmar en el mapa recién ahí arranca la visita', async () => {
     fireEvent.click(screen.getByRole('button', { name: /^iniciar visita$/i }))
     await waitFor(() =>
         expect(api.iniciarVisita).toHaveBeenCalledWith({
-            cicloClienteId: 42,
+            rotacionClienteId: 42,
             coordInicio: '-34.6,-58.4',
             propuesta: [],
         }),
@@ -409,7 +447,7 @@ it('directoAMapa con coordenadas salta la propuesta y va derecho al mapa', async
     fireEvent.click(screen.getByRole('button', { name: /^iniciar visita$/i }))
     await waitFor(() =>
         expect(api.iniciarVisita).toHaveBeenCalledWith({
-            cicloClienteId: 42,
+            rotacionClienteId: 42,
             coordInicio: '-34.6,-58.4',
             propuesta: [],
         }),
@@ -486,7 +524,7 @@ const otroCliente: IAgendaClient = {
     codigoCliente: 'C2',
     codigoParticularCliente: '20099',
     nombreCliente: 'KIOSCO SUR',
-    cicloClienteId: 77,
+    rotacionClienteId: 77,
     dia: 1,
     estado: 'pendiente',
     visitaId: null,
