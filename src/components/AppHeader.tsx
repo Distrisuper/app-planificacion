@@ -12,7 +12,6 @@ interface AppHeaderProps {
     /** 'preview' = hojeando una semana que no es la abierta. */
     modo?: 'operable' | 'preview'
     onLogout?: () => void
-    onCerrarSemana?: () => void
     onPrevWeek?: () => void
     onNextWeek?: () => void
 }
@@ -34,7 +33,6 @@ export default function AppHeader({
     tituloSemana,
     modo,
     onLogout,
-    onCerrarSemana,
     onPrevWeek,
     onNextWeek,
 }: AppHeaderProps) {
@@ -54,7 +52,7 @@ export default function AppHeader({
                 </div>
                 <div className="flex shrink-0 items-center">
                     {onLogout ? (
-                        <AccountMenu nombre={vendedorNombre} onLogout={onLogout} onCerrarSemana={onCerrarSemana} />
+                        <AccountMenu nombre={vendedorNombre} onLogout={onLogout} />
                     ) : (
                         <Avatar initials={initialsOf(vendedorNombre)} />
                     )}
