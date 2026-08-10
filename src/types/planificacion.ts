@@ -74,20 +74,16 @@ export interface IAgendaClient extends IVisitClientCard {
     rubrosPendientes: number
 }
 
-/** Card de una semana que no es necesariamente la abierta. A diferencia del modelo viejo,
- *  SÍ trae un rotacionClienteId real (GET /rotacion/semana/:semana lee el plan ya
- *  materializado) — se puede actuar sobre ella igual que sobre una de la agenda. */
-export interface IPreviewClient extends IVisitClientCard {
-    rotacionClienteId: number
-    dia: number
-}
-
+/** El plan de una semana que no es necesariamente la abierta, con el estado REAL de
+ *  cada cliente (visitada/no_visita/pendiente/en_curso) — incluso si esa semana ya
+ *  está cerrada. `IAgendaClient`, no un tipo aparte: se puede actuar sobre estas cards
+ *  igual que sobre las de la agenda (mismo rotacionClienteId real). */
 export interface IPreviewCiclo {
     /** La semana previsualizada. */
     semana: number
     clientes: number
     omitidos: string[]
-    dias: Record<Dia, IPreviewClient[]>
+    dias: Record<Dia, IAgendaClient[]>
 }
 
 export interface ICicloSemana {

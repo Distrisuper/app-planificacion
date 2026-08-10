@@ -209,24 +209,12 @@ export default function AgendaSemanaPage() {
         visitaCliente !== null &&
         visitaCliente.rotacionClienteId === visitaEnCurso.cliente.rotacionClienteId
 
-    // Con ciclo abierto y coincidente, la fuente es la agenda real (con estado/visitaId/
-    // rubrosPendientes reales). Cualquier otra semana —incluido el standby, que también usa
-    // esta rama— sale del preview de solo lectura, con estado 'pendiente' de relleno: el
-    // rotacionClienteId SÍ es real, así que las acciones de ClienteCard funcionan igual.
-    const semana: SemanaAgenda | undefined = useMemo(() => {
-        if (operable && ciclo != null) return agenda
-        if (!preview) return undefined
-        const out = {} as SemanaAgenda
-        for (const d of DIAS) {
-            out[d] = (preview.dias[d] ?? []).map(c => ({
-                ...c,
-                estado: 'pendiente' as const,
-                visitaId: null,
-                rubrosPendientes: 0,
-            }))
-        }
-        return out
-    }, [operable, ciclo, agenda, preview])
+    // Con ciclo abierto y coincidente, la fuente es la agenda real. Cualquier otra
+    // semana —incluido el standby, que también usa esta rama— sale del preview: trae el
+    // mismo estado real (visitada/no_visita/pendiente/en_curso), sea esa semana la que
+    // sea, incluso una ya cerrada — no hace falta ningún relleno acá.
+    const semana: SemanaAgenda | undefined =
+        operable && ciclo != null ? agenda : preview?.dias
 
     const counts = useMemo(() => {
         const c = {} as Record<Dia, { done: number; total: number }>
