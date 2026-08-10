@@ -118,6 +118,30 @@ it('sin ciclo abierto arranca en la primera semana pendiente', async () => {
     await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(3))
 })
 
+// ── Problema de cuenta ──────────────────────────────────────────────────────────
+// resolveSellerCode() en el backend lo usan ciclo/actual, sincronizar Y las acciones —
+// no es exclusivo del viejo abrirCiclo. Sin este manejo, un usuario sin código de
+// vendedor asociado se queda viendo "Cargando…" para siempre, sin ningún aviso.
+
+it('un usuario sin código de vendedor resoluble recibe un mensaje de cuenta, no "Cargando…" infinito', async () => {
+    ;(api.getCicloActual as any).mockRejectedValue({
+        response: { data: { code: 'SELLER_CODE_UNRESOLVED' } },
+    })
+    renderPage()
+
+    expect(await screen.findByText(/no tiene un código de vendedor asignado/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^Cargando…$/)).not.toBeInTheDocument()
+})
+
+it('un usuario con más de un código de vendedor también recibe su propio mensaje de cuenta', async () => {
+    ;(api.getCicloActual as any).mockRejectedValue({
+        response: { data: { code: 'SELLER_CODE_AMBIGUOUS' } },
+    })
+    renderPage()
+
+    expect(await screen.findByText(/más de un código de vendedor/i)).toBeInTheDocument()
+})
+
 // ── Posición (semana + día) en la URL ──────────────────────────────────────────
 // Recargar la página volvía al lunes de la vuelta abierta y le hacía perder al vendedor
 // dónde estaba. Ahora la posición vive en la URL, así que sobrevive la recarga.

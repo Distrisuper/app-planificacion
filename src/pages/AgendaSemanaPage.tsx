@@ -33,9 +33,24 @@ const MENSAJE_GEO = {
         'Este dispositivo no puede tomar la ubicación. Avisá a sistemas.',
 } as const
 
+/**
+ * Problema de configuración de la cuenta, no algo que el vendedor pueda resolver
+ * reintentando: su usuario no tiene un código de vendedor resoluble. resolveSellerCode()
+ * lo usan ciclo/actual, sincronizar y todas las acciones (no es exclusivo del viejo
+ * abrirCiclo) — sin este chequeo, la página se queda en "Cargando…" para siempre.
+ */
+function mensajeDeCuenta(code: string | null): string | null {
+    if (code === 'SELLER_CODE_UNRESOLVED')
+        return 'Tu usuario no tiene un código de vendedor asignado. Avisá a sistemas.'
+    if (code === 'SELLER_CODE_AMBIGUOUS')
+        return 'Tu usuario tiene más de un código de vendedor. Avisá a sistemas.'
+    return null
+}
+
 export default function AgendaSemanaPage() {
     const { user, logout } = useAuth()
-    const { data: cicloActual } = useCicloActual()
+    const { data: cicloActual, error: cicloActualError } = useCicloActual()
+    const mensajeCuenta = mensajeDeCuenta(errorCode(cicloActualError))
     const ciclo = cicloActual?.ciclo ?? null
     const semanas = cicloActual?.semanas
     const semanasPendientes = cicloActual?.semanasPendientes
@@ -331,6 +346,21 @@ export default function AgendaSemanaPage() {
                     : 'No se pudo registrar. Volvé a intentar.',
             )
         }
+    }
+
+    if (mensajeCuenta) {
+        return (
+            <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
+                <p className="text-[14px] font-semibold leading-snug text-[#182645]">{mensajeCuenta}</p>
+                <button
+                    type="button"
+                    onClick={logout}
+                    className="text-[13px] font-semibold text-dsmuted underline"
+                >
+                    Cerrar sesión
+                </button>
+            </div>
+        )
     }
 
     return (
