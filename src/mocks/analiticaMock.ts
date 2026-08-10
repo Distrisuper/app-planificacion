@@ -400,7 +400,7 @@ function resolucionNoVisita(
     v: IVendedorMetricas,
     i: number,
     fecha: string,
-    tipo: 'no_visita' | 'reagendada',
+    tipo: 'no_visita',
 ): IVisitaFila {
     return {
         visitaId: seqVisita++,
@@ -414,16 +414,15 @@ function resolucionNoVisita(
         codigoParticularVendedor: v.codigoParticularVendedor,
         nombreVendedor: v.nombreVendedor,
         tipo,
-        motivos: tipo === 'no_visita' ? [MOTIVOS_NO_VISITA[i % MOTIVOS_NO_VISITA.length]] : [],
+        motivos: [MOTIVOS_NO_VISITA[i % MOTIVOS_NO_VISITA.length]],
         resultado: null,
     }
 }
 
-/** Las no-visitas y reagendadas de la semana del fixture, para que la tabla de
- *  actividad tenga las tres resoluciones también en un rango histórico. */
+/** Las no-visitas de la semana del fixture, para que la tabla de actividad tenga las dos
+ *  resoluciones también en un rango histórico. */
 export const MOCK_OTRAS_RESOLUCIONES: IVisitaFila[] = VENDEDORES.flatMap((v, i) => [
     resolucionNoVisita(v, i, '2026-07-21', 'no_visita'),
-    ...(i % 3 === 0 ? [resolucionNoVisita(v, i + 50, '2026-07-23', 'reagendada')] : []),
 ])
 
 /** Actividad anclada al día de HOY: sin esto la vista de actividad abre vacía en su

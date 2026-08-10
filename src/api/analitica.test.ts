@@ -75,7 +75,7 @@ it('getVisitas ordena de la más reciente a la más vieja', async () => {
 it('getVisitas trae las tres resoluciones y las filtra por tipo', async () => {
     const todas = await getVisitas(FILTRO)
     const tipos = new Set(todas.visitas.map(v => v.tipo))
-    expect(tipos).toEqual(new Set(['visita', 'no_visita', 'reagendada']))
+    expect(tipos).toEqual(new Set(['visita', 'no_visita']))
 
     const soloNoVisita = await getVisitas({ ...FILTRO, tipo: ['no_visita'] })
     expect(soloNoVisita.visitas.every(v => v.tipo === 'no_visita')).toBe(true)
@@ -89,11 +89,6 @@ it('una no-visita trae motivos pero no resultado ni duración', async () => {
     expect(fila.resultado).toBeNull()
     expect(fila.fechaFin).toBeNull()
     expect(fila.duracionMin).toBeNull()
-})
-
-it('una reagendada no trae motivos', async () => {
-    const res = await getVisitas({ ...FILTRO, tipo: ['reagendada'] })
-    expect(res.visitas[0].motivos).toEqual([])
 })
 
 it('el rango de hoy trae actividad, incluida una visita en curso', async () => {
