@@ -56,6 +56,38 @@ arranca el martes, no hay nada que ajustar.
 pendiente, y el vendedor decide antes del viernes: moverlo a otro día de esta semana, pasarlo a la
 próxima vuelta, o marcarlo como no visité. No hay "día vencido".
 
+## La rotación es una entidad
+
+Una **rotación** se completa cuando se hicieron las cinco semanas, `s1` a `s5`. **Siempre las
+cinco, y no necesariamente en orden.**
+
+Hoy eso no existe en el modelo: `pl_ciclo_semana` guarda `semana` (1..5) y nada agrupa las cinco
+vueltas. `proponerSemana()` calcula `(última cerrada % 5) + 1`, que asume orden y no sabe nada de
+completitud — si el vendedor saltea la 3, la 3 no vuelve hasta la próxima vuelta completa, cinco
+semanas sin pisar esa zona y sin que nada lo avise.
+
+Se agrega `pl_rotacion` y un `rotacion_id` en `pl_ciclo_semana`. El argumento es el mismo que
+justificó `pl_ciclo_semana`: igual que la etiqueta `s2` se repite cada cinco semanas, "la rotación"
+se repite, y sin la instancia concreta no se puede responder qué semanas faltan.
+
+Con eso:
+
+- **`proponerSemana()` propone una de las semanas que faltan en la rotación abierta**, no la
+  siguiente por número. Saltear deja de tener un costo escondido.
+- Al congelar un ciclo se lo asigna a la rotación abierta del vendedor; si no hay o la anterior ya
+  tiene sus cinco semanas, se abre una nueva.
+- Una rotación se cierra cuando sus ciclos cubren las cinco semanas.
+- **Señal, no bloqueo:** si el vendedor viene trabajando y le falta una semana para completar la
+  rotación, eso se puede reportar ("te falta la s3"). No se le impide nada.
+
+La rotación es además el reloj natural de las excepciones de ruta (spec 2): una excepción que mueve
+un cliente de `s2` a `s1` atraviesa dos ciclos por definición, y **la garantía de que las dos puntas
+se consuman es que las cinco semanas tienen que completarse.**
+
+Fuera de alcance por ahora, pero vale anotarlo: la cobertura por rotación ("¿visité a todos mis
+clientes en esta rotación?") es probablemente el número de negocio más importante, y hoy no se puede
+calcular por falta de esta entidad.
+
 ## Las dos transiciones
 
 Son distintas y no hay que fundirlas: en una el vendedor no elige nada, en la otra está por partir
@@ -258,8 +290,19 @@ notificación menciona el cambio de día, así que el vendedor lo ve.
 ## Cambios de esquema
 
 ```sql
+-- La rotacion concreta: s1..s5 completas, en cualquier orden.
+CREATE TABLE pl_rotacion (
+  id                         INT AUTO_INCREMENT PRIMARY KEY,
+  codigo_particular_vendedor VARCHAR(50) NOT NULL,
+  fecha_inicio               DATETIME    NOT NULL,
+  fecha_fin                  DATETIME    NULL,      -- se completo (5 semanas)
+  INDEX idx_vendedor (codigo_particular_vendedor)
+);
+
 ALTER TABLE pl_ciclo_semana
-  ADD COLUMN fecha_lunes DATE NOT NULL;              -- la semana laboral del ciclo
+  ADD COLUMN fecha_lunes DATE NOT NULL,             -- la semana laboral del ciclo
+  ADD COLUMN rotacion_id INT  NOT NULL,
+  ADD FOREIGN KEY (rotacion_id) REFERENCES pl_rotacion (id);
 
 ALTER TABLE pl_resolucion
   ADD COLUMN dia_deseado TINYINT NULL;               -- 1..5, solo en tipo='reagendada'
@@ -314,8 +357,8 @@ Los ALTER en este repo son intervención manual de ops, así que van documentado
   confirmación: el cambio ya se aplicó.
 - Badge para las cards con `reagendado_de` (vienen de otra vuelta). El badge "Reagendada" del lado
   que empuja ya existe.
-- `proponerSemana()` pasa de `(última cerrada % 5) + 1` a **la vuelta cerrada más antigua**, para
-  que saltear una zona no la deje cinco semanas sin visitar en silencio.
+- `proponerSemana()` pasa de `(última cerrada % 5) + 1` a **una de las semanas que faltan en la
+  rotación abierta** (ver "La rotación es una entidad").
 
 ## Analítica
 
@@ -366,8 +409,13 @@ No hace falta ningún bucket nuevo: `reagendados` ya existe en `indicadores/cobe
   cinco semanas sin abrir un ciclo, la fila sigue en la bandeja derivada y entra en el primer ciclo
   que congele, con un `dia_deseado` que ya no significa nada. Aceptado: entra en el día pedido de
   la vuelta que sea.
-- **`fecha_lunes` en los ciclos existentes.** El ALTER es `NOT NULL`: hay que backfillearlo desde
-  `fecha_apertura` en la misma intervención.
+- **`fecha_lunes` y `rotacion_id` en los ciclos existentes.** Los dos ALTER son `NOT NULL`:
+  `fecha_lunes` se backfillea desde `fecha_apertura`, y hay que fabricar rotaciones para el
+  historial existente (lo más simple: una rotación por vendedor que agrupe todo lo ya cerrado, sin
+  pretender reconstruir dónde empezaba y terminaba cada una).
+- **Una rotación que nunca se completa.** Si el vendedor deja de hacer una semana para siempre, la
+  rotación queda abierta indefinidamente y `proponerSemana` va a insistir con esa semana. Es la
+  señal correcta, pero conviene que el reporte lo muestre en vez de dejarlo solo en la propuesta.
 - **La resincronización corre en cada montada y cada vuelta al foco.** Si el insumo se edita a mano
   y queda a medio guardar, el vendedor puede ver un cambio que se revierte al rato. La
   resincronización es idempotente y converge, pero el aviso puede aparecer dos veces con
@@ -391,6 +439,13 @@ No hace falta ningún bucket nuevo: `reagendados` ya existe en `indicadores/cobe
   `uq_reagendado_de`).
 - El 409 de cambio de zona trae la lista en `data`, y con `confirmarCambioDeSemana` la acción pasa.
 - En standby, actuar sobre la semana que se está mirando congela **esa** semana y no la propuesta.
+
+Rotación:
+
+- `proponerSemana` nunca propone una semana ya hecha en la rotación abierta.
+- Hacer las cinco semanas en orden salteado (`s3, s1, s5, s2, s4`) completa la rotación igual.
+- Al completarse la quinta, la rotación se cierra y la siguiente semana congelada abre una nueva.
+- Un vendedor sin historial arranca con una rotación nueva y las cinco semanas pendientes.
 
 Resincronización:
 
