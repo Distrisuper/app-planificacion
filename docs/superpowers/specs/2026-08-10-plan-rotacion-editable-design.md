@@ -262,6 +262,158 @@ colgando de la rotación, ese guard pasa naturalmente a ser "la resolución es t
 autocompletado **deja de ser una necesidad técnica**. Se mantiene igual porque es la decisión de
 producto que ya se tomó: cerrar la semana cierra la carga.
 
+## Ejemplo completo
+
+Vendedor `V 2`, con **4 semanas** (su template no tiene ningún `s5*`). Se usan 8 clientes para que
+se lea; en la realidad son ~200 filas.
+
+### ① Template — lo que viene del warehouse (hoy `agendaMock.json`)
+
+Read-only. Nunca lo escribimos.
+
+| cliente | visit |
+|---|---|
+| 6836 | `s2d1` |
+| 9301 | `s2d3` |
+| 4412 | `s2d3` |
+| 6612 | `s2d5` |
+| 7750 | `s4d2` |
+| 5120 | `s4d4` |
+| 2088 | `s1d1` |
+| 3401 | `s3d5` |
+
+### ② Lunes 03/08 — standby, el vendedor toca "iniciar visita" en 6836
+
+No hay rotación abierta, así que se materializa. Y no hay ciclo abierto, así que se abre el de la
+semana 2 — **la que el vendedor estaba mirando**, no la que propone el sistema.
+
+`pl_rotacion`
+
+| id | vendedor | fecha_inicio | fecha_fin |
+|---|---|---|---|
+| 7 | V 2 | 2026-08-03 09:12 | NULL |
+
+`pl_rotacion_cliente` — **el plan, y ya es editable**
+
+| id | rotacion_id | cliente | semana | dia |
+|---|---|---|---|---|
+| 101 | 7 | 6836 | 2 | 1 |
+| 102 | 7 | 9301 | 2 | 3 |
+| 103 | 7 | 4412 | 2 | 3 |
+| 104 | 7 | 6612 | 2 | 5 |
+| 105 | 7 | 7750 | 4 | 2 |
+| 106 | 7 | 5120 | 4 | 4 |
+| 107 | 7 | 2088 | 1 | 1 |
+| 108 | 7 | 3401 | 3 | 5 |
+
+**El set de semanas de la rotación es `{1, 2, 3, 4}`** — los valores distintos de esta columna. No
+está declarado en ninguna parte y no hace falta: este vendedor tiene 4 semanas y su rotación se
+completa con 4.
+
+`pl_ciclo_semana` — solo *cuándo*, ningún plan
+
+| id | rotacion_id | vendedor | semana | fecha_lunes | fecha_apertura | fecha_cierre | estado |
+|---|---|---|---|---|---|---|---|
+| 31 | 7 | V 2 | 2 | 2026-08-03 | 2026-08-03 09:12 | NULL | abierta |
+
+### ③ Durante la semana
+
+**Lunes:** visita 6836 y carga un rubro de los dos que le propuso el sistema.
+
+`pl_resolucion`
+
+| id | rotacion_cliente_id | tipo | fecha_inicio | fecha_fin | coord_inicio | coord_final |
+|---|---|---|---|---|---|---|
+| 51 | 101 | visita | 2026-08-03 10:05 | 2026-08-03 10:41 | -34.61,-58.43 | -34.61,-58.43 |
+
+`pl_visita_rubro`
+
+| id | resolucion_id | rubro_code | pesos_perdidos | origen | es_propuesto |
+|---|---|---|---|---|---|
+| 71 | 51 | LACTEOS | 48200.00 | caida | 1 |
+| 72 | 51 | GALLETITAS | 15300.00 | caida | 1 |
+
+`pl_visita_rubro_motivo` — el rubro 72 queda **sin cargar**
+
+| visita_rubro_id | motivo_id |
+|---|---|
+| 71 | 10 (Saqué pedido) |
+
+**Miércoles:** 9301 está cerrado.
+
+`pl_resolucion` (+1) y `pl_resolucion_motivo`
+
+| id | rotacion_cliente_id | tipo | fecha_inicio | fecha_fin |
+|---|---|---|---|---|
+| 52 | 102 | no_visita | 2026-08-05 11:20 | 2026-08-05 11:20 |
+
+| resolucion_id | motivo_id |
+|---|---|
+| 52 | 1 (Cerrado) |
+
+**Miércoles:** a 4412 no llega y lo pasa a la semana 4, día 1. **Esto es todo lo que pasa:**
+
+```sql
+UPDATE pl_rotacion_cliente SET semana = 4, dia = 1 WHERE id = 103;
+```
+
+| id | rotacion_id | cliente | semana | dia |
+|---|---|---|---|---|
+| 103 | 7 | 4412 | **4** ← era 2 | **1** ← era 3 |
+
+Sin bandeja, sin resolución `reagendada`, sin nada que consumir después. La fila ya está donde tiene
+que estar.
+
+**Viernes:** a 6612 no lo visita y no hace nada con él. Su fila 104 sigue sin resolución.
+
+### ④ Lunes 10/08 — `sincronizar`
+
+**Cierra el ciclo 31** (su `fecha_lunes` 03/08 es anterior al lunes de esta semana):
+
+- El rubro 72 no tiene motivos → se autocompleta: `pl_visita_rubro_motivo (72, 16)` — *No lo ofrecí*.
+- Ciclo 31 → `cerrada`, `fecha_cierre = 2026-08-10 08:30`.
+- La rotación 7 cubrió `{2}` de `{1, 2, 3, 4}` → **sigue abierta**.
+- **La fila 104 (6612) queda sin resolución para siempre en esta rotación.** No se arrastra a ningún
+  lado. Cuenta como no cubierto, que es el dato honesto.
+
+**Sincroniza el padrón:** 2088 fue dado de baja, y hay un cliente nuevo 8890 (`s3d2`).
+
+| id | rotacion_id | cliente | semana | dia | |
+|---|---|---|---|---|---|
+| ~~107~~ | ~~7~~ | ~~2088~~ | ~~1~~ | ~~1~~ | sale: sin resolución y la semana 1 no está cerrada |
+| 109 | 7 | 8890 | 3 | 2 | entra: semana 3 está pendiente |
+
+Si 2088 **hubiera tenido** una resolución, o si su semana 1 ya estuviera cerrada, la fila **no se
+tocaría**. Esas son las dos invariantes que hacen que esto se pueda correr en cada apertura de la
+app sin pisar nada.
+
+### ⑤ Lunes 10/08 — arranca la semana 4, salteando la 1 y la 3
+
+Está permitido: la rotación exige todas sus semanas, no un orden.
+
+| id | rotacion_id | vendedor | semana | fecha_lunes | fecha_apertura | estado |
+|---|---|---|---|---|---|---|
+| 32 | 7 | V 2 | 4 | 2026-08-10 | 2026-08-10 08:31 | abierta |
+
+Y la agenda de la semana 4 sale de leer `pl_rotacion_cliente WHERE rotacion_id = 7 AND semana = 4`:
+
+| día | cliente | |
+|---|---|---|
+| 1 | 4412 | **el reacomodado de la semana 2, sin ningún paso de consumo** |
+| 2 | 7750 | del template |
+| 4 | 5120 | del template |
+
+### ⑥ Cómo queda la cobertura
+
+**Por rotación** (la medida): denominador = las 8 filas vivas de la rotación 7. Resueltas: 2 (una
+visita, un no visité). El movimiento de 4412 **no cambió el denominador** — el trabajo se reubicó,
+no desapareció ni se duplicó. La baja de 2088 lo bajó a 8 legítimamente: ese cliente ya no existe.
+
+**Por semana** (el desglose): la semana 2 quedó con 3 filas (101, 102, 104) y no 4, porque 4412 se
+fue a la 4. O sea que **la cobertura de la semana 2 mejoró cuando el vendedor reacomodó** — y eso es
+exactamente por lo que el número que se reporta hacia arriba es el de la rotación cerrada y no el
+semanal en vivo.
+
 ## Cambios de esquema
 
 Esto **no es un ALTER, es una reestructuración** del dominio: cambia de qué cuelgan las
