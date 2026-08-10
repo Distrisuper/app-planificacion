@@ -15,7 +15,10 @@ interface EstadoVisitaSheetProps {
     nombreCliente: string
     diaActual: Dia | null
     estadoActual: EstadoCicloCliente | null
+    semanaActual: number
+    semanasDisponibles: number[]
     onElegirDia: (dia: Dia) => void
+    onElegirSemana: (semana: number) => void
     onElegirNoVisita: () => void
     onClose: () => void
 }
@@ -25,7 +28,10 @@ export default function EstadoVisitaSheet({
     nombreCliente,
     diaActual,
     estadoActual,
+    semanaActual,
+    semanasDisponibles,
     onElegirDia,
+    onElegirSemana,
     onElegirNoVisita,
     onClose,
 }: EstadoVisitaSheetProps) {
@@ -43,6 +49,8 @@ export default function EstadoVisitaSheet({
         if (seleccion === 'no_visita') onElegirNoVisita()
         else if (seleccion) onElegirDia(seleccion)
     }
+
+    const otrasSemanas = semanasDisponibles.filter(s => s !== semanaActual)
 
     return (
         <BottomSheet open={open} onClose={onClose} title={nombreCliente} eyebrow="Estado de la visita">
@@ -72,6 +80,29 @@ export default function EstadoVisitaSheet({
                     )
                 })}
             </div>
+
+            {otrasSemanas.length > 0 && (
+                <>
+                    <div className="my-4 flex items-center gap-2">
+                        <div className="h-px flex-1 bg-[#E7E9F0]" />
+                        <span className="text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
+                            O mover a otra semana
+                        </span>
+                        <div className="h-px flex-1 bg-[#E7E9F0]" />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        {otrasSemanas.map(s => (
+                            <button
+                                key={s}
+                                onClick={() => onElegirSemana(s)}
+                                className="h-10 rounded-lg border-[1.5px] border-[#E1E6F0] px-3.5 text-[13px] font-semibold text-[#182645]"
+                            >
+                                Semana {s}
+                            </button>
+                        ))}
+                    </div>
+                </>
+            )}
 
             <div className="my-4 flex items-center gap-2">
                 <div className="h-px flex-1 bg-[#E7E9F0]" />
