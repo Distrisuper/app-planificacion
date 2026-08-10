@@ -4,27 +4,25 @@ import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
 import DiaTabs from '@/components/DiaTabs'
 import AgendaBoard from '@/components/AgendaBoard'
-import CicloVacio from '@/components/CicloVacio'
 import VisitaFlow, { type IVisitaEnCurso } from '@/components/VisitaFlow'
 import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
-import CerrarSemanaSheet from '@/components/CerrarSemanaSheet'
+import CambioDeSemanaDialog from '@/components/CambioDeSemanaDialog'
 import AppExternaSheet from '@/components/AppExternaSheet'
 import { useAgendaSemana } from '@/hooks/useAgenda'
-import { useCicloActual, useCicloPreview, useAbrirCiclo, useReagendar } from '@/hooks/useCiclo'
+import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useNoVisita } from '@/hooks/useVisitas'
 import { useNotificacion } from '@/hooks/useNotificacion'
 import { useAppExterna } from '@/hooks/useAppExterna'
 import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
-import { errorCode } from '@/lib/apiError'
+import { errorCode, errorData } from '@/lib/apiError'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
 import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
-const SEMANAS = 5
 
 const MENSAJE_GEO = {
     denegado:
@@ -35,24 +33,14 @@ const MENSAJE_GEO = {
         'Este dispositivo no puede tomar la ubicación. Avisá a sistemas.',
 } as const
 
-/**
- * Problema de configuración de la cuenta, no algo que el vendedor pueda resolver
- * reintentando: su usuario no tiene un código de vendedor resoluble. Merece un mensaje
- * distinto para que no siga tocando el botón.
- */
-function mensajeDeCuenta(code: string | null): string | null {
-    if (code === 'SELLER_CODE_UNRESOLVED')
-        return 'Tu usuario no tiene un código de vendedor asignado. Avisá a sistemas.'
-    if (code === 'SELLER_CODE_AMBIGUOUS')
-        return 'Tu usuario tiene más de un código de vendedor. Avisá a sistemas.'
-    return null
-}
-
 export default function AgendaSemanaPage() {
     const { user, logout } = useAuth()
-    const { data: ciclo } = useCicloActual()
-    const abrir = useAbrirCiclo()
-    const reagendar = useReagendar()
+    const { data: cicloActual } = useCicloActual()
+    const ciclo = cicloActual?.ciclo ?? null
+    const semanas = cicloActual?.semanas
+    const semanasPendientes = cicloActual?.semanasPendientes
+    const sincronizar = useSincronizar()
+    const reacomodar = useReacomodar()
     const noVisita = useNoVisita()
     const { data: motivosVisita = [] } = useMotivos('visita')
     const { notificacion, mostrar, ocultar } = useNotificacion()
@@ -87,30 +75,57 @@ export default function AgendaSemanaPage() {
         )
     }
 
+    // Se llama UNA vez al montar y cada vez que la PWA vuelve a primer plano — nunca por
+    // acción del usuario. Cierra la semana vencida (si la hay) y sincroniza el padrón; nunca
+    // abre nada, así que no hace falta esperarla para pintar la página.
+    useEffect(() => {
+        function correr() {
+            sincronizar.mutateAsync().then(res => {
+                if (res.semanaCerrada !== null) {
+                    mostrar(
+                        'info',
+                        `Cerramos tu semana ${res.semanaCerrada}` +
+                            (res.sinVisitar.length > 0
+                                ? ` — ${res.sinVisitar.length} clientes quedaron sin visitar.`
+                                : '.'),
+                    )
+                }
+                if (res.altas.length > 0 || res.bajas.length > 0) {
+                    mostrar(
+                        'info',
+                        `Tu ruta cambió: ${res.altas.length} clientes nuevos, ${res.bajas.length} de baja.`,
+                    )
+                }
+            }).catch(() => {})
+        }
+        correr()
+        function onVisible() {
+            if (document.visibilityState === 'visible') correr()
+        }
+        document.addEventListener('visibilitychange', onVisible)
+        return () => document.removeEventListener('visibilitychange', onVisible)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
     // La semana que se está MIRANDO. null hasta que se sepa cuál: con vuelta abierta es
-    // la suya; sin vuelta, la que proponga el preview.
+    // la suya; sin vuelta, la primera pendiente/conocida del backend.
     const semanaParam = Number(searchParams.get('semana'))
     const semanaVista =
-        Number.isInteger(semanaParam) && semanaParam >= 1 && semanaParam <= SEMANAS
-            ? semanaParam
-            : null
+        Number.isInteger(semanaParam) && (semanas ?? []).includes(semanaParam) ? semanaParam : null
     const setSemanaVista = (semana: number | null) => actualizarPosicion({ semana })
-    const semanaEfectiva = semanaVista ?? ciclo?.semana ?? null
-    const operable = ciclo != null && semanaEfectiva === ciclo.semana
 
-    const { data: agenda } = useAgendaSemana(operable)
-    const { data: preview } = useCicloPreview(
+    // Con ciclo abierto, esa es la semana. Sin ciclo (standby, de pie casi todos los lunes),
+    // arranca en la primera semana PENDIENTE si se conoce — es la que `asegurar` abriría de
+    // todas formas ante la primera acción real — y si no, en la primera semana conocida.
+    const semanaEfectiva =
+        semanaVista ?? ciclo?.semana ?? semanasPendientes?.[0] ?? semanas?.[0] ?? null
+    const operable = ciclo == null || semanaEfectiva === ciclo.semana
+
+    const { data: agenda } = useAgendaSemana(operable && ciclo != null)
+    const { data: preview } = usePreviewSemana(
         semanaEfectiva ?? undefined,
-        ciclo !== undefined && !operable,
+        semanaEfectiva !== null && !(operable && ciclo != null),
     )
-
-    // Sin vuelta abierta y sin haber tocado las flechas todavía, semanaEfectiva es null:
-    // no hay `ciclo.semana` de dónde arrancar. La única semana conocida en ese momento es
-    // la que el backend ya propuso en el preview "propuesta" (sin filtro). Se usa SOLO
-    // como base para calcular hacia dónde moverse — no se vuelca a semanaVista, porque
-    // eso cambiaría la query key de useCicloPreview (de "propuesta" a un número) y
-    // tumbaría el preview ya cargado durante el refetch, ocultando momentáneamente el CTA.
-    const semanaBase = semanaEfectiva ?? preview?.semana ?? null
 
     // Sin `?dia=`, arranca en HOY y no en LUN: un jueves, LUN obligaba a swipear cuatro
     // columnas para llegar a lo que el vendedor está recorriendo. El fin de semana no hay
@@ -126,11 +141,18 @@ export default function AgendaSemanaPage() {
     const [directoAMapa, setDirectoAMapa] = useState(false)
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
-    const [cerrandoSemana, setCerrandoSemana] = useState(false)
     // La visita en curso del vendedor, independiente de qué card esté mirando ahora
     // (`visitaCliente`). Antes vivía adentro de VisitaFlow atada al cliente abierto: tocar
     // la propuesta de OTRO cliente y cerrarla la perdía, y la barra flotante desaparecía.
     const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(null)
+    // El cartel de confirmación del 409 CAMBIO_DE_SEMANA: el vendedor tocó una acción sobre
+    // una semana distinta a la que tenía abierta. `reintentar` repite la MISMA acción con
+    // confirmarCambioDeSemana: true.
+    const [cambioDeSemana, setCambioDeSemana] = useState<{
+        semanaAbierta: number
+        clientesPendientes: string[]
+        reintentar: () => Promise<void>
+    } | null>(null)
 
     // La instancia embebida es del cliente que se estaba mirando. Al cambiar de día — o de
     // semana, que es el mismo tipo de cambio de contexto: el cliente deja de estar en
@@ -149,7 +171,7 @@ export default function AgendaSemanaPage() {
         if (!agenda) return
         if (visitaEnCurso) {
             const actual = DIAS.flatMap(d => agenda[d] ?? []).find(
-                c => c.cicloClienteId === visitaEnCurso.cliente.cicloClienteId,
+                c => c.rotacionClienteId === visitaEnCurso.cliente.rotacionClienteId,
             )
             // 'pendiente' es el hueco entre iniciar y que el refetch de la agenda catchee:
             // no se toca acá. Cualquier otro estado que no sea 'en_curso' significa que la
@@ -170,69 +192,59 @@ export default function AgendaSemanaPage() {
     const viendoVisitaEnCurso =
         visitaEnCurso !== null &&
         visitaCliente !== null &&
-        visitaCliente.cicloClienteId === visitaEnCurso.cliente.cicloClienteId
+        visitaCliente.rotacionClienteId === visitaEnCurso.cliente.rotacionClienteId
 
-    // Las cards del preview no tienen cicloClienteId ni estado, así que se adaptan a la
-    // forma de la agenda SOLO para render. El board queda en modo preview, sin acciones,
-    // de modo que estos valores de relleno nunca llegan a una mutación.
+    // Con ciclo abierto y coincidente, la fuente es la agenda real (con estado/visitaId/
+    // rubrosPendientes reales). Cualquier otra semana —incluido el standby, que también usa
+    // esta rama— sale del preview de solo lectura, con estado 'pendiente' de relleno: el
+    // rotacionClienteId SÍ es real, así que las acciones de ClienteCard funcionan igual.
     const semana: SemanaAgenda | undefined = useMemo(() => {
-        if (operable) return agenda
+        if (operable && ciclo != null) return agenda
         if (!preview) return undefined
         const out = {} as SemanaAgenda
         for (const d of DIAS) {
             out[d] = (preview.dias[d] ?? []).map(c => ({
                 ...c,
-                cicloClienteId: -1,
                 estado: 'pendiente' as const,
                 visitaId: null,
                 rubrosPendientes: 0,
             }))
         }
         return out
-    }, [operable, agenda, preview])
+    }, [operable, ciclo, agenda, preview])
 
     const counts = useMemo(() => {
         const c = {} as Record<Dia, { done: number; total: number }>
         for (const d of DIAS) {
             const clientes = semana?.[d] ?? []
-            c[d] = {
-                done: operable ? clientes.filter(x => estaResuelto(x.estado)).length : 0,
-                total: clientes.length,
-            }
+            c[d] = { done: clientes.filter(x => estaResuelto(x.estado)).length, total: clientes.length }
         }
         return c
-    }, [semana, operable])
+    }, [semana])
 
     const totalClientes = DIAS.reduce((n, d) => n + (semana?.[d]?.length ?? 0), 0)
     const totalDone = DIAS.reduce((n, d) => n + counts[d].done, 0)
 
     function moverSemana(delta: number) {
-        const base = semanaBase ?? 1
-        // Wrap 1..5: la rotación es circular, así que las flechas nunca quedan sin salida.
-        setSemanaVista(((base - 1 + delta + SEMANAS) % SEMANAS) + 1)
+        if (!semanas || semanas.length === 0) return
+        const base = semanaEfectiva ?? semanas[0]
+        const idx = semanas.indexOf(base)
+        const nextIdx = ((idx === -1 ? 0 : idx) + delta + semanas.length) % semanas.length
+        setSemanaVista(semanas[nextIdx])
     }
 
-    async function onAbrirSemana() {
-        try {
-            const res = await abrir.mutateAsync(semanaBase ?? undefined)
-            setSemanaVista(res.semana)
-            mostrar('exito', `Semana ${res.semana} abierta con ${res.clientes} clientes`)
-        } catch (err) {
-            const code = errorCode(err)
-            if (code === 'CICLO_ABIERTO_EXISTENTE') {
-                // Otra pestaña o un doble tap ganaron: el hook ya invalidó cicloActual.
-                setSemanaVista(null)
-                return
-            }
-            const deCuenta = mensajeDeCuenta(code)
-            mostrar(
-                'error',
-                deCuenta ??
-                    (code === 'CICLO_SIN_CLIENTES'
-                        ? 'Esa semana ya no tiene clientes asignados.'
-                        : 'No se pudo abrir la semana. Volvé a intentar.'),
-            )
-        }
+    function manejarCambioDeSemana(
+        data: unknown,
+        reintentar: () => Promise<void>,
+    ): boolean {
+        const info = errorData<{ semanaAbierta: number; clientesPendientes: string[] }>(data)
+        if (errorCode(data) !== 'CAMBIO_DE_SEMANA' || !info) return false
+        setCambioDeSemana({
+            semanaAbierta: info.semanaAbierta,
+            clientesPendientes: info.clientesPendientes,
+            reintentar,
+        })
+        return true
     }
 
     async function onElegirDia(dia: Dia) {
@@ -240,14 +252,45 @@ export default function AgendaSemanaPage() {
         setEstadoVisitaCliente(null)
         if (!cliente) return
         try {
-            await reagendar.mutateAsync({
-                cicloClienteId: cliente.cicloClienteId,
+            await reacomodar.mutateAsync({
+                rotacionClienteId: cliente.rotacionClienteId,
                 dia: DIAS.indexOf(dia) + 1,
             })
-            // Reagendar mueve el día y deja al cliente PENDIENTE: no lo resuelve.
+            // Reacomodar mueve el día y deja al cliente PENDIENTE: no lo resuelve.
             mostrar('exito', 'Cliente reagendado')
-        } catch {
+        } catch (err) {
+            if (manejarCambioDeSemana(err, async () => {
+                await reacomodar.mutateAsync({
+                    rotacionClienteId: cliente.rotacionClienteId,
+                    dia: DIAS.indexOf(dia) + 1,
+                })
+                mostrar('exito', 'Cliente reagendado')
+            })) return
             mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
+        }
+    }
+
+    async function onElegirSemanaReagendar(semanaDestino: number) {
+        const cliente = estadoVisitaCliente
+        setEstadoVisitaCliente(null)
+        if (!cliente) return
+        try {
+            await reacomodar.mutateAsync({
+                rotacionClienteId: cliente.rotacionClienteId,
+                semana: semanaDestino,
+                dia: cliente.dia,
+            })
+            mostrar('exito', `Cliente movido a la semana ${semanaDestino}`)
+        } catch (err) {
+            if (manejarCambioDeSemana(err, async () => {
+                await reacomodar.mutateAsync({
+                    rotacionClienteId: cliente.rotacionClienteId,
+                    semana: semanaDestino,
+                    dia: cliente.dia,
+                })
+                mostrar('exito', `Cliente movido a la semana ${semanaDestino}`)
+            })) return
+            mostrar('error', 'No se pudo mover de semana. Volvé a intentar.')
         }
     }
 
@@ -267,14 +310,19 @@ export default function AgendaSemanaPage() {
         setNoVisitaCliente(cliente)
     }
 
-    async function onConfirmNoVisita(motivoIds: number[]) {
+    async function onConfirmNoVisita(motivoIds: number[], confirmar = false) {
         const cliente = noVisitaCliente
         setNoVisitaCliente(null)
         if (!cliente) return
         try {
-            await noVisita.mutateAsync({ cicloClienteId: cliente.cicloClienteId, motivoIds })
+            await noVisita.mutateAsync({
+                rotacionClienteId: cliente.rotacionClienteId,
+                motivoIds,
+                confirmarCambioDeSemana: confirmar || undefined,
+            })
             mostrar('exito', 'Registrado')
         } catch (err) {
+            if (manejarCambioDeSemana(err, () => onConfirmNoVisita(motivoIds, true))) return
             const yaResuelto = errorCode(err) === 'CICLO_CLIENTE_YA_RESUELTO'
             mostrar(
                 yaResuelto ? 'info' : 'error',
@@ -292,13 +340,12 @@ export default function AgendaSemanaPage() {
                 completadas={totalDone}
                 total={totalClientes}
                 tituloSemana={
-                    semanaBase
-                        ? `Semana ${semanaBase}${operable ? ` · ${getWeekRangeLabel()}` : ''}`
+                    semanaEfectiva
+                        ? `Semana ${semanaEfectiva}${operable && ciclo != null ? ` · ${getWeekRangeLabel()}` : ''}`
                         : 'Cargando…'
                 }
-                modo={operable ? 'operable' : 'preview'}
+                modo={operable && ciclo != null ? 'operable' : 'preview'}
                 onLogout={logout}
-                onCerrarSemana={operable ? () => setCerrandoSemana(true) : undefined}
                 onPrevWeek={() => moverSemana(-1)}
                 onNextWeek={() => moverSemana(1)}
             />
@@ -306,7 +353,7 @@ export default function AgendaSemanaPage() {
             <AgendaBoard
                 semana={semana}
                 activo={diaActivo}
-                modo={operable ? 'operable' : 'preview'}
+                modo={operable && ciclo != null ? 'operable' : 'preview'}
                 hayVisitaEnCurso={visitaEnCurso !== null}
                 onActivoChange={setDiaActivo}
                 onAbrir={abrirPropuesta}
@@ -314,16 +361,6 @@ export default function AgendaSemanaPage() {
                 onIniciarVisita={iniciarDirecto}
                 onAbrirAppExterna={appExterna.abrir}
             />
-
-            {ciclo === null && preview && (
-                <CicloVacio
-                    semana={preview.semana}
-                    clientes={preview.clientes}
-                    omitidos={preview.omitidos}
-                    abriendo={abrir.isPending}
-                    onAbrir={onAbrirSemana}
-                />
-            )}
 
             <VisitaFlow
                 cliente={visitaCliente}
@@ -338,6 +375,7 @@ export default function AgendaSemanaPage() {
                 onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
                 onAviso={mostrar}
                 onAbrirAppExterna={appExterna.abrir}
+                onCambioDeSemana={info => setCambioDeSemana(info)}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar
@@ -354,7 +392,7 @@ export default function AgendaSemanaPage() {
                 confirmLabel="Registrar"
                 eyebrow="No visité"
                 submitting={noVisita.isPending}
-                onConfirm={onConfirmNoVisita}
+                onConfirm={motivoIds => onConfirmNoVisita(motivoIds)}
                 onClose={() => setNoVisitaCliente(null)}
             />
             <EstadoVisitaSheet
@@ -362,18 +400,23 @@ export default function AgendaSemanaPage() {
                 nombreCliente={estadoVisitaCliente?.nombreCliente ?? ''}
                 diaActual={estadoVisitaCliente ? DIAS[estadoVisitaCliente.dia - 1] : null}
                 estadoActual={estadoVisitaCliente?.estado ?? null}
+                semanaActual={semanaEfectiva ?? 1}
+                semanasDisponibles={semanas ?? []}
                 onElegirDia={onElegirDia}
+                onElegirSemana={onElegirSemanaReagendar}
                 onElegirNoVisita={onElegirNoVisita}
                 onClose={() => setEstadoVisitaCliente(null)}
             />
-            <CerrarSemanaSheet
-                open={cerrandoSemana}
-                onClose={() => setCerrandoSemana(false)}
-                onCerrado={() => {
-                    setCerrandoSemana(false)
-                    setSemanaVista(null)
-                    mostrar('exito', 'Semana cerrada')
+            <CambioDeSemanaDialog
+                open={cambioDeSemana !== null}
+                semanaAbierta={cambioDeSemana?.semanaAbierta ?? 0}
+                clientesPendientes={cambioDeSemana?.clientesPendientes ?? []}
+                onConfirmar={async () => {
+                    const info = cambioDeSemana
+                    setCambioDeSemana(null)
+                    await info?.reintentar()
                 }}
+                onCancelar={() => setCambioDeSemana(null)}
             />
             {/* `ocultar` y no `desmontar`: cerrar deja las instancias vivas para que reabrir
                 el mismo cliente sea instantáneo. */}
