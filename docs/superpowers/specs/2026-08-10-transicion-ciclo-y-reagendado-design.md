@@ -80,6 +80,29 @@ Con eso:
 - **Señal, no bloqueo:** si el vendedor viene trabajando y le falta una semana para completar la
   rotación, eso se puede reportar ("te falta la s3"). No se le impide nada.
 
+### Cuántas semanas tiene un vendedor
+
+**No son siempre cinco.** Hay vendedores con 4, y el número tiene que ser un dato del vendedor, no
+una constante. Hoy el 5 está clavado en cuatro lugares:
+
+- `CicloService.ts:20` (`SEMANAS_DEL_CICLO = 5`) y `:190` (la aritmética `(última % 5) + 1`)
+- `planificacionController.ts:66` (la validación del rango de `semana`)
+- `AgendaSemanaPage.tsx:27, 94, 212` (la constante, la validación de la URL y el wrap de las flechas)
+
+Con un vendedor de 4 semanas, hoy: al cerrar su `s4`, `proponerSemana` devuelve
+`(4 % 5) + 1 = 5`, y abrirla explota con 422 `CICLO_SIN_CLIENTES`. Con `pl_rotacion` es peor: la
+rotación esperaría cinco semanas, **nunca se completaría**, y la propuesta insistiría para siempre
+con una semana que ese vendedor no tiene.
+
+**El set de semanas se deriva del insumo:** los prefijos `sN` distintos que aparecen en
+`AgendaRepository.findVisitAssignments(vendedor)`. Si no hay ningún `s5*`, ese vendedor tiene 4
+semanas. No hace falta configuración nueva ni pedirle a otra área que cargue un campo extra, y **no
+se asume contigüidad**: un vendedor podría tener `s1, s2, s3, s5`.
+
+**La rotación congela su set esperado al crearse** (`semanas_esperadas`), por el mismo motivo por el
+que el ciclo congela su plan: si la hoja gana una semana a mitad de rotación, no debe reescribirse
+hacia atrás qué significaba "completa". El set nuevo aplica desde la rotación siguiente.
+
 La rotación es además el reloj natural de las excepciones de ruta (spec 2): una excepción que mueve
 un cliente de `s2` a `s1` atraviesa dos ciclos por definición, y **la garantía de que las dos puntas
 se consuman es que las cinco semanas tienen que completarse.**
@@ -295,7 +318,12 @@ CREATE TABLE pl_rotacion (
   id                         INT AUTO_INCREMENT PRIMARY KEY,
   codigo_particular_vendedor VARCHAR(50) NOT NULL,
   fecha_inicio               DATETIME    NOT NULL,
-  fecha_fin                  DATETIME    NULL,      -- se completo (5 semanas)
+  fecha_fin                  DATETIME    NULL,      -- se completo
+  -- Set congelado de semanas que esta rotacion tiene que cubrir, derivado del
+  -- insumo al crearla. NO son siempre 5 y no son necesariamente contiguas:
+  -- "1,2,3,5" es valido. Congelado para que un cambio del insumo a mitad de
+  -- rotacion no reescriba que significaba "completa".
+  semanas_esperadas          VARCHAR(20) NOT NULL,
   INDEX idx_vendedor (codigo_particular_vendedor)
 );
 
@@ -338,6 +366,10 @@ Los ALTER en este repo son intervención manual de ops, así que van documentado
   preview no tienen `cicloClienteId` y el front lo rellena con `-1`.
 - **`PATCH /ciclo-cliente/:id/reagendar`**: acepta `proximaVuelta: true`, que en vez de mover el
   `dia` graba la resolución `reagendada` con `dia_deseado`.
+- **`GET /ciclo/actual` y `GET /ciclo/preview`** devuelven el **set de semanas del vendedor** y
+  cuáles faltan en la rotación abierta. Es lo que le permite al front dejar de tener el 5 clavado.
+  Y la validación de `semana` en `planificacionController.ts:66` pasa de `<= SEMANAS_DEL_CICLO` a
+  pertenencia al set del vendedor.
 - **`POST /ciclo/abrir` y `POST /ciclo/cerrar`**: el front deja de llamarlos.
 
 ## Cambios de front
@@ -359,6 +391,10 @@ Los ALTER en este repo son intervención manual de ops, así que van documentado
   que empuja ya existe.
 - `proponerSemana()` pasa de `(última cerrada % 5) + 1` a **una de las semanas que faltan en la
   rotación abierta** (ver "La rotación es una entidad").
+- **Se va la constante `SEMANAS = 5`** (`AgendaSemanaPage.tsx:27`). El set de semanas del vendedor
+  viene de la API: la validación de `?semana=` (`:94`) valida pertenencia al set, y `moverSemana`
+  (`:212`) recorre el set en vez de hacer aritmética módulo 5 — que asume cinco semanas contiguas y
+  se rompe con un vendedor de cuatro, o con un set `1,2,3,5`.
 
 ## Analítica
 
@@ -443,9 +479,20 @@ No hace falta ningún bucket nuevo: `reagendados` ya existe en `indicadores/cobe
 Rotación:
 
 - `proponerSemana` nunca propone una semana ya hecha en la rotación abierta.
-- Hacer las cinco semanas en orden salteado (`s3, s1, s5, s2, s4`) completa la rotación igual.
-- Al completarse la quinta, la rotación se cierra y la siguiente semana congelada abre una nueva.
-- Un vendedor sin historial arranca con una rotación nueva y las cinco semanas pendientes.
+- Hacer las semanas en orden salteado (`s3, s1, s5, s2, s4`) completa la rotación igual.
+- Al completarse la última, la rotación se cierra y la siguiente semana congelada abre una nueva.
+- Un vendedor sin historial arranca con una rotación nueva y todas sus semanas pendientes.
+
+Vendedores con menos de cinco semanas:
+
+- Un vendedor cuyo insumo solo tiene `s1..s4` **completa la rotación con cuatro semanas**, y
+  `proponerSemana` nunca propone la 5.
+- Un set no contiguo (`1,2,3,5`) funciona igual: `moverSemana` recorre el set y no salta a una
+  semana inexistente.
+- El set de la rotación está **congelado**: si el insumo le agrega la `s5` a mitad de rotación, esa
+  rotación se completa igual con cuatro y la siguiente ya espera cinco.
+- Un vendedor sin ninguna asignación no tiene set: es el error de cuenta que ya existe, no una
+  rotación vacía.
 
 Resincronización:
 
