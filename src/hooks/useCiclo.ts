@@ -1,62 +1,49 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-    abrirCiclo,
-    cerrarCiclo,
-    getCicloActual,
-    getCicloPreview,
-    reagendarCicloCliente,
-} from '@/api/planificacion'
+import { getCicloActual, previewSemana, reacomodar, sincronizar } from '@/api/planificacion'
 import { agendaKeys } from './useAgenda'
+import type { IReacomodarDTO } from '@/types/planificacion'
 
 export const cicloKeys = {
     actual: ['ciclo', 'actual'] as const,
-    preview: (semana: number | undefined) => ['ciclo', 'preview', semana ?? 'propuesta'] as const,
+    preview: (semana: number | undefined) => ['ciclo', 'preview', semana] as const,
 }
 
 export function useCicloActual() {
-    // getCicloActual no toma argumentos, así que pasarla directo como queryFn es seguro:
-    // React Query le inyecta un QueryFunctionContext que la función ignora.
     return useQuery({ queryKey: cicloKeys.actual, queryFn: getCicloActual })
 }
 
-/** El plan de una semana sin abrirla. `enabled` en false mientras no se sepa qué mostrar. */
-export function useCicloPreview(semana: number | undefined, enabled: boolean) {
+export function usePreviewSemana(semana: number | undefined, enabled: boolean) {
     return useQuery({
         queryKey: cicloKeys.preview(semana),
-        queryFn: () => getCicloPreview(semana),
-        enabled,
+        queryFn: () => previewSemana(semana as number),
+        enabled: enabled && semana !== undefined,
     })
 }
 
-/** Abrir CONGELA el plan y no hay endpoint para descartarlo: invalidar todo lo que
- *  dependa de la vuelta para que nada quede mostrando el estado previo. */
-export function useAbrirCiclo() {
+/** Idempotente: se llama al montar la página y al volver de background, nunca por acción del
+ *  usuario. Invalida ciclo/agenda/preview porque puede haber cerrado una semana y cambiado el
+ *  padrón. */
+export function useSincronizar() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: (semana?: number) => abrirCiclo(semana),
+        mutationFn: sincronizar,
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: cicloKeys.actual })
             qc.invalidateQueries({ queryKey: agendaKeys.semana })
+            qc.invalidateQueries({ queryKey: ['ciclo', 'preview'] })
         },
     })
 }
 
-export function useCerrarCiclo() {
+export function useReacomodar() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: () => cerrarCiclo(),
+        mutationFn: (args: { rotacionClienteId: number } & IReacomodarDTO) =>
+            reacomodar(args.rotacionClienteId, { semana: args.semana, dia: args.dia }),
         onSuccess: () => {
-            qc.invalidateQueries({ queryKey: cicloKeys.actual })
             qc.invalidateQueries({ queryKey: agendaKeys.semana })
+            qc.invalidateQueries({ queryKey: ['ciclo', 'preview'] })
+            qc.invalidateQueries({ queryKey: cicloKeys.actual })
         },
-    })
-}
-
-export function useReagendar() {
-    const qc = useQueryClient()
-    return useMutation({
-        mutationFn: (args: { cicloClienteId: number; dia: number }) =>
-            reagendarCicloCliente(args.cicloClienteId, args.dia),
-        onSuccess: () => qc.invalidateQueries({ queryKey: agendaKeys.semana }),
     })
 }
