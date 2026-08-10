@@ -252,6 +252,28 @@ Una sola transacción:
 
 Y nada más. **Los clientes sin resolver quedan sin resolver.**
 
+### Pendiente y "no visité" NO son lo mismo
+
+Es tentador que el cierre resuelva los pendientes como `no_visita` — parece prolijo y deja la semana
+sin filas colgadas. **No hay que hacerlo**, y conviene que quede escrito porque es el tipo de detalle
+que se agrega "para mejorar":
+
+| | qué es | qué aporta |
+|---|---|---|
+| **sin resolución** | la ausencia de un hecho: nadie hizo nada | nada, y eso es el dato: no se cubrió |
+| **`no_visita`** | un hecho declarado: el vendedor fue o intentó | un motivo agrupable (Cerrado, Vacaciones, No atiende) |
+
+Auto-resolverlos rompe las dos puntas: inventa un hecho comercial que nadie declaró, y lo hace **sin
+motivo**, así que llena `pl_resolucion_motivo` de filas vacías — la tabla existe justamente para
+poder responder "cuál es la objeción más frecuente en la zona norte".
+
+Es el mismo error que quitar el arrastre evitó, con otra etiqueta: auto-resolver un pendiente lo hace
+desaparecer del problema en vez de registrarlo.
+
+**Para la cobertura los dos casos son idénticos:** cero visitas. `noVisita` es un bucket separado de
+`visitados` en `indicadores/cobertura.ts`, así que declarar un no visité **no sube la cobertura**.
+Donde sí difieren es en *resueltos / total*, y de ahí sale la advertencia de la sección de riesgos.
+
 `cerrar()` deja de exigir que no haya pendientes. Ese chequeo era el bloqueo circular, y la
 cobertura ya mide lo que el bloqueo pretendía proteger.
 
@@ -567,6 +589,17 @@ filas fuera del plan.
   conviene que el reporte lo muestre en vez de dejarlo solo en la propuesta.
 - **Materializar dos rotaciones a la vez** (dos dispositivos en standby actuando al mismo tiempo).
   Hace falta que la materialización sea atómica y que el segundo la encuentre hecha.
+- **`resueltos / total` es gameable, y `no_visita` no deja rastro de presencia.** Si alguna vez se usa
+  *resueltos* como número de cumplimiento del vendedor —tentador, porque `estaResuelto` ya devuelve
+  `true` para `no_visita`— apretar "No visité · Cerrado" el viernes sobre todos los pendientes da
+  100% con cero visitas. Hoy la protección es que el indicador que importa son las visitas.
+  Agrava el hueco que **un `no_visita` no captura ubicación**: `pl_resolucion` tiene
+  `coord_inicio`/`coord_final` nullables, pero el flujo (`onConfirmNoVisita` manda solo `motivoIds`)
+  no las llena, así que doce "Cerrado" cargados desde el sillón son indistinguibles de doce clientes
+  realmente cerrados — mientras una visita sí deja dos puntos comparables contra `coord_cliente`.
+  Y es raro conceptualmente: "Cerrado" significa "fui y estaba cerrado", así que la ubicación en ese
+  momento es tan relevante como en una visita. Fuera de alcance acá; sería un spec chico que reusa el
+  mismo `navigator.geolocation` y el mismo manejo de permisos de `VisitaFlow`.
 
 ## Testing
 
