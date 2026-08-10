@@ -27,11 +27,11 @@ como resuelto y la analítica tiene el bucket `reagendados`.
 
 ## Qué decide este spec
 
-Cómo empieza y termina un ciclo sin que el vendedor tenga que pensar en ciclos, y el reagendado a
-la próxima vuelta.
+Cómo empieza y termina un ciclo sin que el vendedor tenga que pensar en ciclos, el reagendado a la
+próxima vuelta, y cómo llega a un plan ya congelado un cambio de ruta hecho por el área.
 
-**Qué NO decide:** nada mueve clientes solo. No hay arrastre automático de pendientes — ver
-"Por qué no hay arrastre".
+**Qué NO decide:** los pendientes no se mueven solos. No hay arrastre automático — ver "Por qué no
+hay arrastre".
 
 ## El modelo: el ciclo es la semana laboral
 
@@ -188,6 +188,73 @@ Eso es lo que se busca: la cobertura de la semana 3 mide la zona 3. El cliente r
 contó en la semana 2 —donde se decidió sobre él— y visitarlo en la 3 no infla ni desinfla el
 denominador de esa zona.
 
+## Cuando el área cambia la ruta
+
+El caso real: el vendedor ya tenía planificados sus ciclos 1 al 5, y el jefe de área hace un viaje
+excepcional porque necesita hablar con unos clientes urgente. Para eso **hizo cambiar el día de
+visita de esos clientes** en la hoja de ruta, porque esas visitas pasan a ser prioridad.
+
+El congelamiento del plan **bloquea eso a propósito**: existe para que un cambio ajeno a mitad de
+semana no le mueva la agenda al vendedor. Con el ciclo ya congelado, el cambio del jefe no llega, y
+recién entraría en la próxima vuelta por esa semana — hasta cinco semanas de demora para algo
+urgente.
+
+La salida no es darle al vendedor una herramienta para reacomodar días. **La decisión no es suya:**
+la tomó el área, y ya está expresada en la hoja de ruta. Lo que falta es que ese cambio llegue.
+
+**Un solo mecanismo cubre todos los casos.** "Mover un día completo", "traer clientes de otra
+semana" e "intercambiar días entre semanas" son, desde nuestro lado, la misma cosa: **cambió la
+asignación `sNdM` de un puñado de clientes**. No hay tres operaciones que modelar, hay una:
+resincronizar el plan congelado contra el insumo.
+
+Además mantiene la decisión donde corresponde. El jefe cambia la hoja y eso vale para todas las
+vueltas futuras. Un botón en la app para reacomodar días viviría solo en nuestro snapshot, se
+evaporaría en la próxima vuelta, y el área que administra las rutas nunca se enteraría de que la
+ruta real era otra.
+
+### Cómo funciona
+
+Detectarlo es la misma lectura en vivo que ya hace `preview`
+(`AgendaRepository.findVisitAssignments`, filtrada por `s{semana}d*`), comparada contra el plan
+congelado del ciclo abierto. **Se compara solo contra las filas `en_plan = 1`**: las de
+`en_plan = 0` vienen de reagendados y no salen del insumo, así que la resincronización no las toca
+nunca.
+
+Se aplica **solo, sin confirmación**, y se le notifica al vendedor qué cambió. Es una urgencia del
+área: si el vendedor pudiera posponerla o ignorarla, no se cumpliría. Pero se entera siempre.
+
+Cuatro deltas, y las dos reglas que importan son las de los clientes ya resueltos:
+
+| delta | qué se hace |
+|---|---|
+| entra un cliente a la semana | `INSERT` con `en_plan = 1` y el `dia` del insumo — el área dice que este cliente es de esta semana, así que cuenta en el denominador |
+| cambia el día, sin resolver | `UPDATE dia` |
+| sale de la semana, sin resolver | se excluye **con motivo** (ver abajo) |
+| ya resuelto (visitado, no visité, reagendado) | **no se toca**, cambie de día o salga. El hecho ya ocurrió y no se reescribe |
+
+### Los que salen: exclusión con motivo, no baja silenciosa
+
+Sacar un cliente del plan es **el único movimiento capaz de inflar el cumplimiento**:
+`AnaliticaRepository` (línea 121) y `CicloClienteRepository.findCodigosSinResolver` (línea 84)
+filtran `cc.en_plan = 1`, así que bajar esa columna a 0 borra la fila del denominador y la cobertura
+sube sin que nadie haya visitado a nadie.
+
+Acá la baja es legítima —el área movió al cliente, el vendedor no tiene culpa y no corresponde
+penalizarlo— pero tiene que quedar **auditable**: se setea `en_plan = 0` **y** `excluido_en`. Las
+queries existentes siguen siendo correctas sin tocarlas, y la exclusión queda distinguible.
+
+Eso deja `en_plan = 0` con dos causas opuestas, así que conviene decirlo explícito para que nadie lo
+lea mal: **`en_plan = 1` significa "cuenta en el denominador de cobertura de esta vuelta"**, y hay
+dos motivos distintos para valer 0 — `reagendado_de` seteado (llegó de otra vuelta) o `excluido_en`
+seteado (el área lo sacó de esta semana).
+
+### Decisión asumida: la hoja gana
+
+Si el vendedor había movido a un cliente de día dentro de la semana y después la hoja cambia el día
+de ese mismo cliente, **gana la hoja**. `pl_ciclo_cliente` no tiene `updated_at`, así que no hay
+forma de saber cuál de las dos decisiones es más nueva, y la hoja es la autoridad de ruta. La
+notificación menciona el cambio de día, así que el vendedor lo ve.
+
 ## Cambios de esquema
 
 ```sql
@@ -198,7 +265,8 @@ ALTER TABLE pl_resolucion
   ADD COLUMN dia_deseado TINYINT NULL;               -- 1..5, solo en tipo='reagendada'
 
 ALTER TABLE pl_ciclo_cliente
-  ADD COLUMN reagendado_de INT NULL,
+  ADD COLUMN reagendado_de INT      NULL,
+  ADD COLUMN excluido_en   DATETIME NULL,           -- el area lo saco de esta semana
   ADD UNIQUE KEY uq_reagendado_de (reagendado_de),   -- imposible consumir dos veces
   ADD FOREIGN KEY (reagendado_de) REFERENCES pl_resolucion (id);
 ```
@@ -213,11 +281,14 @@ Los ALTER en este repo son intervención manual de ops, así que van documentado
 ## Cambios de API
 
 - **`POST /planificacion/ciclo/sincronizar`** (nuevo). Idempotente. El front lo llama al montar y
-  al volver al foco. Si hay un ciclo abierto cuya `fecha_lunes` es anterior al lunes de esta
-  semana, lo cierra. Devuelve el resumen (semana cerrada, clientes que quedaron sin visitar,
-  visitas autocompletadas) para el aviso. Endpoint propio y no un efecto lateral de
-  `GET /ciclo/actual`, para que un GET no mute. Sin ciclo abierto, o con uno de esta misma semana
-  laboral, es un no-op con resumen vacío — nunca un error.
+  al volver al foco. Endpoint propio y no un efecto lateral de `GET /ciclo/actual`, para que un GET
+  no mute. Hace dos cosas, en este orden:
+  1. Si hay un ciclo abierto cuya `fecha_lunes` es anterior al lunes de esta semana, **lo cierra**.
+  2. Si queda un ciclo abierto (el de esta semana), **resincroniza su plan** contra el insumo.
+
+  Devuelve un resumen de las dos cosas (semana cerrada, clientes que quedaron sin visitar, visitas
+  autocompletadas, y los deltas de ruta) para los avisos. Sin ciclo abierto es un no-op con resumen
+  vacío — nunca un error.
 - **Acciones sobre clientes** (iniciar visita, no visité, reagendar): aceptan
   `(semana, codigoParticularCliente)` además de `cicloClienteId`, y un flag
   `confirmarCambioDeSemana`. Es el cambio de contrato más grande de la entrega: hoy las cards del
@@ -238,6 +309,9 @@ Los ALTER en este repo son intervención manual de ops, así que van documentado
   clientes quedan sin visitar.
 - Aviso post-cierre con `useNotificacion` ("Cerramos la semana 2 · 3 clientes quedaron sin
   visitar").
+- Aviso de cambio de ruta, también con `useNotificacion` ("La hoja de ruta cambió · 2 clientes
+  nuevos, 1 pasó al jueves, 1 salió de tu semana"), con acceso a esa lista. No bloqueante y sin
+  confirmación: el cambio ya se aplicó.
 - Badge para las cards con `reagendado_de` (vienen de otra vuelta). El badge "Reagendada" del lado
   que empuja ya existe.
 - `proponerSemana()` pasa de `(última cerrada % 5) + 1` a **la vuelta cerrada más antigua**, para
@@ -272,7 +346,12 @@ No hace falta ningún bucket nuevo: `reagendados` ya existe en `indicadores/cobe
   (`en_plan = 0` con `reagendado_de` nullable); la pantalla no se hace.
 - **Arrastre automático de pendientes**, en cualquier forma.
 - Fechas o calendario en el reagendado.
-- Sumar clientes puntuales de otra zona a la vuelta en curso sin pasar por la primitiva.
+- **UI para que el vendedor mueva días de a lote** — ni dentro de su semana, ni trayendo un día de
+  otra, ni intercambiando días entre semanas. Las tres se evaluaron y se descartaron: cuando el
+  cambio viene del área (que es el caso real), ya lo cubre la resincronización, y la decisión no es
+  del vendedor. Si en algún momento se pide "llovió el miércoles, paso todo al jueves" por decisión
+  propia del vendedor, eso sí es una función nueva: reagendar en lote dentro del plan congelado, sin
+  riesgo de cobertura porque no saca a nadie del denominador.
 
 ## Riesgos y casos borde
 
@@ -289,6 +368,14 @@ No hace falta ningún bucket nuevo: `reagendados` ya existe en `indicadores/cobe
   la vuelta que sea.
 - **`fecha_lunes` en los ciclos existentes.** El ALTER es `NOT NULL`: hay que backfillearlo desde
   `fecha_apertura` en la misma intervención.
+- **La resincronización corre en cada montada y cada vuelta al foco.** Si el insumo se edita a mano
+  y queda a medio guardar, el vendedor puede ver un cambio que se revierte al rato. La
+  resincronización es idempotente y converge, pero el aviso puede aparecer dos veces con
+  información distinta.
+- **Un cliente excluido por el área y después devuelto a la semana.** El insumo vuelve a apuntar a
+  `sNdX` y la resincronización lo trata como "entra": hay que reactivar la fila existente
+  (`en_plan = 1`, `excluido_en = NULL`) en vez de intentar un `INSERT` que choca contra
+  `uq_ciclo_cliente`.
 
 ## Testing
 
@@ -304,3 +391,14 @@ No hace falta ningún bucket nuevo: `reagendados` ya existe en `indicadores/cobe
   `uq_reagendado_de`).
 - El 409 de cambio de zona trae la lista en `data`, y con `confirmarCambioDeSemana` la acción pasa.
 - En standby, actuar sobre la semana que se está mirando congela **esa** semana y no la propuesta.
+
+Resincronización:
+
+- No toca las filas `en_plan = 0`: un cliente que llegó por reagendado no se excluye porque el
+  insumo no lo mencione.
+- Un cliente **ya resuelto** no se toca, ni si le cambia el día ni si sale de la semana.
+- Un cliente sin resolver que sale queda con `en_plan = 0` **y** `excluido_en`, y desaparece del
+  denominador — no queda contado como no cubierto.
+- Un cliente excluido que vuelve reactiva la fila existente y no rompe `uq_ciclo_cliente`.
+- Correrla dos veces seguidas sin que el insumo cambie no produce ningún delta.
+- Si el vendedor movió el día y el insumo lo mueve a otro, gana el insumo.
