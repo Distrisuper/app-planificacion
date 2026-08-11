@@ -302,3 +302,49 @@ export interface IAgregarRubroDTO {
 export interface IAgregarRubroResult {
     visitaRubroId: number
 }
+
+// ── Gerencia: la rotación de OTRO vendedor ─────────────────────────────────────
+
+export type EstadoRotacion = 'programada' | 'abierta' | 'cerrada' | 'cancelada'
+
+/** Quién movió una fila del plan por última vez. `usuario` es un email (o el id como
+ *  string): los usuarios viven en el servicio de auth externo, así que la bitácora del
+ *  backend guarda texto, no una FK. */
+export interface IReacomodacionInfo {
+    origen: 'vendedor' | 'gerencia'
+    usuario: string
+    /** Instante ISO en UTC. Se muestra con fechaHoraNegocio(), nunca crudo. */
+    fecha: string
+}
+
+/** Una card del grid de gerencia: los mismos datos que ve el vendedor, más la autoría. */
+export interface IAgendaClientAdmin extends IAgendaClient {
+    ultimoMovimiento: IReacomodacionInfo | null
+}
+
+export interface ISemanaRotacionAdmin {
+    semana: number
+    /** El nombre de la zona, ej. "Buenos Aires". null = sin nombre todavía. */
+    descripcion: string | null
+    dias: Record<Dia, IAgendaClientAdmin[]>
+}
+
+/** Una rotación de la cola del vendedor, sin su grid. */
+export interface IRotacionResumen {
+    id: number
+    codigoParticularVendedor: string
+    estado: EstadoRotacion
+    /** null mientras está 'programada': todavía no se sabe cuándo arranca. */
+    fechaInicio: string | null
+    fechaFin: string | null
+    descripcion: string | null
+    /** Posición en la cola. null en cualquier estado que no sea 'programada'. */
+    orden: number | null
+}
+
+/** El grid completo de una rotación, en un solo payload. */
+export interface IRotacionCompleta extends IRotacionResumen {
+    semanas: ISemanaRotacionAdmin[]
+    /** Códigos que el template traía pero no se pudieron materializar. */
+    omitidos?: string[]
+}
