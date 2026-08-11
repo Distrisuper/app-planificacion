@@ -60,16 +60,16 @@
 
 **Por qué:** la lista es "los roles de scope `unrestricted`", no "los roles de analítica", y a partir de este plan también guarda una ruta que no es analítica. El nombre viejo quedaría mintiendo en el único archivo donde se decide quién entra.
 
-- [ ] **Step 1: Actualizar el test**
+- [x] **Step 1: Actualizar el test**
 
 En `src/lib/roles.test.ts`, reemplazá cada `esRolAnalitica` por `esRolGerencia` (import incluido). El contenido de las aserciones no cambia: mismos tres roles, misma normalización de espacios y mayúsculas.
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/lib/roles.test.ts`
 Expected: FAIL — `esRolGerencia is not a function` (o error de import).
 
-- [ ] **Step 3: Renombrar en `src/lib/roles.ts`**
+- [x] **Step 3: Renombrar en `src/lib/roles.ts`**
 
 ```ts
 /** Los roles de scope 'unrestricted' en api-vendedores/src/config/roles.ts.
@@ -96,17 +96,17 @@ export const rutaInicialPara = (rol: string | undefined | null): string | null =
 }
 ```
 
-- [ ] **Step 4: Actualizar los dos consumidores**
+- [x] **Step 4: Actualizar los dos consumidores**
 
 En `src/App.tsx`, línea 6 y línea 30: `esRolAnalitica` → `esRolGerencia`.
 En `src/router/ProtectedRoute.test.tsx`, línea 5 y línea 33: lo mismo.
 
-- [ ] **Step 5: Compilar y correr la suite**
+- [x] **Step 5: Compilar y correr la suite**
 
 Run: `npx tsc -b && npm test`
 Expected: compila limpio (si queda algún `esRolAnalitica`, `tsc` lo marca) y la suite pasa completa.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/lib/roles.ts src/lib/roles.test.ts src/App.tsx src/router/ProtectedRoute.test.tsx
@@ -135,7 +135,7 @@ git commit -m "refactor(roles): ROLES_GERENCIA describe mejor que ROLES_ANALITIC
   - `editarDescripcionRotacion(codigo, rotacionId, descripcion): Promise<void>`
   - `editarDescripcionSemana(codigo, rotacionId, semana, descripcion): Promise<void>`
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
 
 Creá `src/api/planificacionAdmin.test.ts`:
 
@@ -293,12 +293,12 @@ describe('descripciones', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/api/planificacionAdmin.test.ts`
 Expected: FAIL — no existe el módulo `./planificacionAdmin`.
 
-- [ ] **Step 3: Agregar los tipos**
+- [x] **Step 3: Agregar los tipos**
 
 En `src/types/planificacion.ts`, agregá al final:
 
@@ -350,7 +350,7 @@ export interface IRotacionCompleta extends IRotacionResumen {
 }
 ```
 
-- [ ] **Step 4: Crear el módulo de API**
+- [x] **Step 4: Crear el módulo de API**
 
 Creá `src/api/planificacionAdmin.ts`:
 
@@ -448,12 +448,12 @@ export const editarDescripcionSemana = async (
 
 **Nota sobre `IReacomodarDTO`:** ya existe en `src/types/planificacion.ts:120` como `{ semana?: number; dia: number }`. Se reusa tal cual — es el mismo contrato que el self-service.
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
 
 Run: `npx vitest run src/api/planificacionAdmin.test.ts`
 Expected: PASS (10 tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/types/planificacion.ts src/api/planificacionAdmin.ts src/api/planificacionAdmin.test.ts
@@ -476,7 +476,7 @@ git commit -m "feat(ruta): tipos y capa de API de gerencia para la rotacion de u
   - `useRotacion(codigo: string | null, rotacionId: number | null)`
   - `useCrearRotacion(codigo)`, `useReacomodarAdmin(codigo)`, `useReordenarRotacion(codigo)`, `useCancelarRotacion(codigo)`, `useEditarDescripcionRotacion(codigo)`, `useEditarDescripcionSemana(codigo)`
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
 
 Creá `src/hooks/useRotacionAdmin.test.tsx`:
 
@@ -595,12 +595,12 @@ describe('useCancelarRotacion', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/hooks/useRotacionAdmin.test.tsx`
 Expected: FAIL — no existe `./useRotacionAdmin`.
 
-- [ ] **Step 3: Implementar los hooks**
+- [x] **Step 3: Implementar los hooks**
 
 Creá `src/hooks/useRotacionAdmin.ts`:
 
@@ -726,12 +726,12 @@ export function useEditarDescripcionSemana(codigo: string) {
 }
 ```
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
 
 Run: `npx vitest run src/hooks/useRotacionAdmin.test.tsx`
 Expected: PASS (7 tests).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/hooks/useRotacionAdmin.ts src/hooks/useRotacionAdmin.test.tsx
@@ -755,7 +755,7 @@ git commit -m "feat(ruta): hooks de React Query para la rotacion de gerencia"
 - Consumes: `useVendedores()` de `src/hooks/useAnalitica.ts` (devuelve `IVendedorOpcion[]`), `useRotaciones` (Task 3), `esRolGerencia` (Task 1).
 - Produces: ruta `/analitica/ruta` navegable; `RutaPage` con el vendedor elegido en estado local; `SelectorVendedor` con props `{ vendedores, elegido, onElegir }`.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 En `src/components/analitica/AnaliticaTabs.test.tsx`, agregá la pestaña nueva a los dos tests existentes y uno propio:
 
@@ -884,12 +884,12 @@ describe('RutaPage', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/components/ruta src/pages/RutaPage.test.tsx src/components/analitica/AnaliticaTabs.test.tsx`
 Expected: FAIL — no existen `SelectorVendedor` ni `RutaPage`, y no hay link "Ruta".
 
-- [ ] **Step 3: Agregar la pestaña**
+- [x] **Step 3: Agregar la pestaña**
 
 En `src/components/analitica/AnaliticaTabs.tsx`, agregá después del `NavLink` de Actividad (antes de cerrar `</nav>`):
 
@@ -902,7 +902,7 @@ En `src/components/analitica/AnaliticaTabs.tsx`, agregá después del `NavLink` 
             </NavLink>
 ```
 
-- [ ] **Step 4: Crear el selector**
+- [x] **Step 4: Crear el selector**
 
 Creá `src/components/ruta/SelectorVendedor.tsx`:
 
@@ -953,7 +953,7 @@ export default function SelectorVendedor({
 }
 ```
 
-- [ ] **Step 5: Crear la página**
+- [x] **Step 5: Crear la página**
 
 Creá `src/pages/RutaPage.tsx`:
 
@@ -1026,7 +1026,7 @@ export default function RutaPage() {
 }
 ```
 
-- [ ] **Step 6: Montar la ruta**
+- [x] **Step 6: Montar la ruta**
 
 En `src/App.tsx`, agregá el import y la ruta dentro del grupo de `esRolGerencia`:
 
@@ -1038,12 +1038,12 @@ import RutaPage from '@/pages/RutaPage'
                             <Route path="/analitica/ruta" element={<RutaPage />} />
 ```
 
-- [ ] **Step 7: Correr y verificar que pasa**
+- [x] **Step 7: Correr y verificar que pasa**
 
 Run: `npx tsc -b && npm test`
 Expected: compila y la suite pasa completa, incluidos los tests nuevos.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/components/analitica/AnaliticaTabs.tsx src/components/analitica/AnaliticaTabs.test.tsx src/App.tsx src/components/ruta/ src/pages/RutaPage.tsx src/pages/RutaPage.test.tsx
@@ -1064,7 +1064,7 @@ git commit -m "feat(ruta): pestana Ruta con selector de vendedor"
 - Consumes: `IRotacionResumen` (Task 2), `useCrearRotacion`/`useCancelarRotacion` (Task 3).
 - Produces: `ColaRotaciones` con props `{ rotaciones, activaId, onElegir, onCrear, onCancelar, creando }`. `RutaPage` sostiene `rotacionActivaId` en estado local.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Creá `src/components/ruta/ColaRotaciones.test.tsx`:
 
@@ -1164,12 +1164,12 @@ describe('ColaRotaciones', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/components/ruta/ColaRotaciones.test.tsx`
 Expected: FAIL — no existe `./ColaRotaciones`.
 
-- [ ] **Step 3: Crear el componente**
+- [x] **Step 3: Crear el componente**
 
 Creá `src/components/ruta/ColaRotaciones.tsx`:
 
@@ -1274,7 +1274,7 @@ export default function ColaRotaciones({
             >
 ```
 
-- [ ] **Step 4: Enchufar la cola en la página**
+- [x] **Step 4: Enchufar la cola en la página**
 
 En `src/pages/RutaPage.tsx`:
 
@@ -1354,7 +1354,7 @@ y pasale `onElegir={elegirVendedor}` al `SelectorVendedor`.
                 )}
 ```
 
-- [ ] **Step 5: Agregar el test de integración de la página**
+- [x] **Step 5: Agregar el test de integración de la página**
 
 En `src/pages/RutaPage.test.tsx`, agregá:
 
@@ -1400,12 +1400,12 @@ En `src/pages/RutaPage.test.tsx`, agregá:
     })
 ```
 
-- [ ] **Step 6: Correr y verificar que pasa**
+- [x] **Step 6: Correr y verificar que pasa**
 
 Run: `npx tsc -b && npm test`
 Expected: compila y suite verde.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/components/ruta/ColaRotaciones.tsx src/components/ruta/ColaRotaciones.test.tsx src/pages/RutaPage.tsx src/pages/RutaPage.test.tsx
@@ -1429,7 +1429,7 @@ git commit -m "feat(ruta): cola de rotaciones con alta y cancelacion"
 - Consumes: `IAgendaClientAdmin`, `ISemanaRotacionAdmin` (Task 2), `useRotacion` (Task 3), `titleCaseNombre` (`src/lib/textFormat.ts`), `estaResuelto` (`src/lib/estadoCiclo.ts`).
 - Produces: `fechaHoraNegocio(iso)`; `ClienteCardRuta` con props `{ cliente }`; `GridRotacion` con props `{ semanas }`.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 En `src/lib/fechas.test.ts`, agregá:
 
@@ -1571,12 +1571,12 @@ describe('GridRotacion', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/lib/fechas.test.ts src/components/ruta`
 Expected: FAIL — `fechaHoraNegocio` no existe, ni los dos componentes.
 
-- [ ] **Step 3: Agregar `fechaHoraNegocio`**
+- [x] **Step 3: Agregar `fechaHoraNegocio`**
 
 En `src/lib/fechas.ts`, después de `horaNegocio`:
 
@@ -1609,7 +1609,7 @@ export function fechaHoraNegocio(iso: string | null | undefined): string {
 
 **Si el test falla por el separador:** distintos runtimes de ICU emiten `'11/08, 11:05'` o `'11/08 11:05'`. El `.replace(', ', ' ')` cubre el primero. Si aparece otro separador (ej. un espacio fino U+202F), normalizá con `.replace(/[\s,\u202f]+/g, ' ').trim()` en lugar del replace simple.
 
-- [ ] **Step 4: Crear la card**
+- [x] **Step 4: Crear la card**
 
 Creá `src/components/ruta/ClienteCardRuta.tsx`:
 
@@ -1673,7 +1673,7 @@ export default function ClienteCardRuta({ cliente }: ClienteCardRutaProps) {
 }
 ```
 
-- [ ] **Step 5: Crear el grid**
+- [x] **Step 5: Crear el grid**
 
 Creá `src/components/ruta/GridRotacion.tsx`:
 
@@ -1749,7 +1749,7 @@ export default function GridRotacion({ semanas }: GridRotacionProps) {
 }
 ```
 
-- [ ] **Step 6: Enchufar el grid en la página**
+- [x] **Step 6: Enchufar el grid en la página**
 
 En `src/pages/RutaPage.tsx`, agregá el import de `GridRotacion` y el hook del grid, y renderizalo después de la cola:
 
@@ -1777,12 +1777,12 @@ import { useRotacion } from '@/hooks/useRotacionAdmin'
                 )}
 ```
 
-- [ ] **Step 7: Correr y verificar que pasa**
+- [x] **Step 7: Correr y verificar que pasa**
 
 Run: `npx tsc -b && npm test`
 Expected: compila y suite verde.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/lib/fechas.ts src/lib/fechas.test.ts src/components/ruta/ src/pages/RutaPage.tsx
@@ -1804,7 +1804,7 @@ git commit -m "feat(ruta): grid de semanas por dia con card propia de gerencia"
 - Consumes: `useReacomodarAdmin` (Task 3), `GridRotacion`/`ClienteCardRuta` (Task 6).
 - Produces: `GridRotacion` gana la prop `onMover: (rotacionClienteId: number, semana: number, dia: number) => void`. `ClienteCardRuta` gana `arrastrable?: boolean`.
 
-- [ ] **Step 1: Instalar `@dnd-kit/core` en su versión 6**
+- [x] **Step 1: Instalar `@dnd-kit/core` en su versión 6**
 
 Run: `npm install @dnd-kit/core@^6.3.1`
 Expected: queda `"@dnd-kit/core": "^6.3.1"` en `dependencies`. Es la primera librería de drag and drop del repo (verificado: no hay ninguna hoy). Sus peer deps son `react >=16.8.0`, así que React 19 está soportado.
@@ -1826,7 +1826,7 @@ Expected: queda `"@dnd-kit/core": "^6.3.1"` en `dependencies`. Es la primera lib
 > correctos para `@dnd-kit/core@6`. Si algo no compila, la fuente de verdad son los `.d.ts`
 > dentro de `node_modules/@dnd-kit/core`, no el sitio.
 
-- [ ] **Step 2: Escribir el test que falla**
+- [x] **Step 2: Escribir el test que falla**
 
 La regla de qué implica un drop se prueba como **función pura**, no simulando un arrastre de puntero: los gestos en jsdom son frágiles y lentos, y lo que hay que blindar son los tres casos que NO son un movimiento. Nada de exportar el handler del componente solo para el test.
 
@@ -1875,12 +1875,12 @@ describe('parsearCelda', () => {
 })
 ```
 
-- [ ] **Step 3: Correr y verificar que falla**
+- [x] **Step 3: Correr y verificar que falla**
 
 Run: `npx vitest run src/components/ruta/GridRotacion.test.tsx`
 Expected: FAIL — `movimientoDeDrop is not a function` / `parsearCelda is not a function`.
 
-- [ ] **Step 4: Implementar la decisión del drop**
+- [x] **Step 4: Implementar la decisión del drop**
 
 En `src/components/ruta/GridRotacion.tsx`, agregá arriba del componente:
 
@@ -1927,12 +1927,12 @@ export function movimientoDeDrop(
 }
 ```
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
 
 Run: `npx vitest run src/components/ruta/GridRotacion.test.tsx`
 Expected: PASS — los 6 tests nuevos de `movimientoDeDrop` y `parsearCelda`. Los tests de render del Task 6 siguen fallando hasta el Step 8, donde se les agrega la prop `onMover`.
 
-- [ ] **Step 6: Hacer arrastrable la card y receptivas las celdas**
+- [x] **Step 6: Hacer arrastrable la card y receptivas las celdas**
 
 En `src/components/ruta/ClienteCardRuta.tsx`, agregá el draggable:
 
@@ -2048,7 +2048,7 @@ interface GridRotacionProps {
 
 envolviendo el `<div className="overflow-x-auto">` en `<DndContext onDragEnd={alSoltar}>` y reemplazando los `<td>` del `.map` por `<Celda ... arrastrable={editable ?? true} />`.
 
-- [ ] **Step 7: Enchufar el movimiento en la página**
+- [x] **Step 7: Enchufar el movimiento en la página**
 
 En `src/pages/RutaPage.tsx`:
 
@@ -2092,16 +2092,16 @@ Y mostrá el error de un movimiento rechazado, que es el caso real más probable
                 )}
 ```
 
-- [ ] **Step 8: Actualizar los tests del grid que ahora necesitan `onMover`**
+- [x] **Step 8: Actualizar los tests del grid que ahora necesitan `onMover`**
 
 Los tests del Task 6 renderizan `<GridRotacion semanas={SEMANAS} />` sin `onMover`, que ahora es obligatoria. Agregales `onMover={vi.fn()}`.
 
-- [ ] **Step 9: Correr y verificar que pasa**
+- [x] **Step 9: Correr y verificar que pasa**
 
 Run: `npx tsc -b && npm test`
 Expected: compila y suite verde. Si `jsdom` se queja por APIs de puntero que `@dnd-kit` toca al montar `DndContext`, no agregues polyfills a ciegas: los tests no simulan gestos, así que montar el contexto tiene que alcanzar. Leé el error antes de tocar la config de Vitest.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add package.json package-lock.json src/components/ruta/ src/pages/RutaPage.tsx
@@ -2123,7 +2123,7 @@ git commit -m "feat(ruta): mover clientes entre dias y semanas arrastrando"
 - Consumes: `useEditarDescripcionRotacion`/`useEditarDescripcionSemana` (Task 3).
 - Produces: `DescripcionInline` con props `{ valor, placeholder, etiquetaAccesible, onGuardar }`. `GridRotacion` gana `onRenombrarSemana`; `ColaRotaciones` gana `onRenombrarRotacion`.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Creá `src/components/ruta/DescripcionInline.test.tsx`:
 
@@ -2195,12 +2195,12 @@ describe('DescripcionInline', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/components/ruta/DescripcionInline.test.tsx`
 Expected: FAIL — no existe `./DescripcionInline`.
 
-- [ ] **Step 3: Crear el componente**
+- [x] **Step 3: Crear el componente**
 
 Creá `src/components/ruta/DescripcionInline.tsx`:
 
@@ -2292,7 +2292,7 @@ export default function DescripcionInline({
 
 Implementá directamente la versión con bandera si el test de Escape no pasa sin ella.
 
-- [ ] **Step 4: Nombrar cada semana desde el grid**
+- [x] **Step 4: Nombrar cada semana desde el grid**
 
 En `src/components/ruta/GridRotacion.tsx`, agregá la prop y usala en el encabezado de fila:
 
@@ -2315,7 +2315,7 @@ Reemplazá el `<span>` de la descripción de semana por:
 
 (el `{semana.descripcion && (...)}` desaparece: el lápiz tiene que estar visible también cuando no hay nombre, que es justo cuando hace falta ponerlo)
 
-- [ ] **Step 5: Nombrar la rotación desde su chip**
+- [x] **Step 5: Nombrar la rotación desde su chip**
 
 En `src/components/ruta/ColaRotaciones.tsx`, agregá la prop `onRenombrarRotacion: (rotacionId: number, descripcion: string | null) => void` y, **solo en el chip activo** (para no llenar la fila de lápices), renderizá el editor al lado de la cola:
 
@@ -2332,7 +2332,7 @@ En `src/components/ruta/ColaRotaciones.tsx`, agregá la prop `onRenombrarRotacio
             )}
 ```
 
-- [ ] **Step 6: Enchufar las mutations en la página**
+- [x] **Step 6: Enchufar las mutations en la página**
 
 En `src/pages/RutaPage.tsx`:
 
@@ -2366,11 +2366,11 @@ y pasá los handlers:
                         }
 ```
 
-- [ ] **Step 7: Actualizar los tests que ahora necesitan las props nuevas**
+- [x] **Step 7: Actualizar los tests que ahora necesitan las props nuevas**
 
 Los tests de `GridRotacion` y `ColaRotaciones` de las tareas anteriores no pasan `onRenombrarSemana`/`onRenombrarRotacion`, que ahora son obligatorias. Agregáselas con `vi.fn()`.
 
-- [ ] **Step 8: Correr y verificar que pasa**
+- [x] **Step 8: Correr y verificar que pasa**
 
 Run: `npx tsc -b && npm test`
 Expected: compila y suite verde.
@@ -2390,7 +2390,7 @@ Levantá el front (`npm run dev`), entrá con un usuario `admin` y verificá:
 7. Nombrar la semana 2 como "Buenos Aires" persiste al recargar la página.
 8. "Agregar rotación" suma un chip nuevo al final y abre su grid.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/components/ruta/ src/pages/RutaPage.tsx
@@ -2418,7 +2418,7 @@ git commit -m "feat(ruta): nombrar la rotacion y sus semanas en el lugar"
 > posición destino (`{ orden }`) en ambos casos, así que cambiar a drag después no toca
 > backend ni hooks. **Si preferís el arrastre, decilo y lo cambio antes de implementar.**
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 En `src/components/ruta/ColaRotaciones.test.tsx`, agregá al `describe` existente:
 
@@ -2465,12 +2465,12 @@ En `src/components/ruta/ColaRotaciones.test.tsx`, agregá al `describe` existent
 
 Y agregá `onReordenar: vi.fn()` al objeto `props` de `renderCola`.
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/components/ruta/ColaRotaciones.test.tsx`
 Expected: FAIL — no existen los botones de adelantar/atrasar.
 
-- [ ] **Step 3: Implementar las flechas**
+- [x] **Step 3: Implementar las flechas**
 
 En `src/components/ruta/ColaRotaciones.tsx`:
 
@@ -2525,7 +2525,7 @@ En `src/components/ruta/ColaRotaciones.tsx`:
                         )}
 ```
 
-- [ ] **Step 4: Enchufar la mutation en la página**
+- [x] **Step 4: Enchufar la mutation en la página**
 
 En `src/pages/RutaPage.tsx`, agregá `useReordenarRotacion` al import de hooks, y:
 
@@ -2541,12 +2541,12 @@ pasándole a los dos usos de `ColaRotaciones`:
                         }
 ```
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
 
 Run: `npx tsc -b && npm test`
 Expected: compila y suite verde.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/ruta/ColaRotaciones.tsx src/components/ruta/ColaRotaciones.test.tsx src/pages/RutaPage.tsx
