@@ -71,6 +71,41 @@ export default function ColaRotaciones({
                         >
                             {etiquetaDe(rotacion)}
                         </button>
+
+                        {/* La señal de estado va SEPARADA del nombre, y fuera del botón
+                            (cambiarle el nombre accesible rompería a quien lo busque por
+                            texto). `etiquetaDe` cae a "Actual"/"Programada #N" solo cuando no
+                            hay descripción: al nombrar la rotación vigente se perdía el único
+                            indicio de que está viva, y quedaba igual a una programada — justo
+                            la que hay que tocar con cuidado porque el vendedor está encima. */}
+                        {rotacion.estado === 'abierta' && (
+                            <span
+                                title="El vendedor está trabajando sobre esta rotación"
+                                className={`mr-1 inline-flex items-center gap-1 text-[11px] font-medium ${
+                                    activa ? 'text-emerald-300' : 'text-emerald-700'
+                                }`}
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className="h-1.5 w-1.5 rounded-full bg-current"
+                                />
+                                en curso
+                            </span>
+                        )}
+
+                        {/* Nombrarla también borraba el "#N", con lo que no se sabía qué lugar
+                            ocupa en la cola. Solo cuando tiene nombre: sin él la etiqueta ya
+                            dice "Programada #N" y repetirlo sería ruido. */}
+                        {rotacion.estado === 'programada' && rotacion.descripcion && (
+                            <span
+                                title={`Posición ${rotacion.orden} en la cola`}
+                                className={`text-[11px] font-medium ${
+                                    activa ? 'text-slate-300' : 'text-slate-400'
+                                }`}
+                            >
+                                {`#${rotacion.orden}`}
+                            </span>
+                        )}
                         {activa && rotacion.estado !== 'cerrada' && (
                             <span className="ml-1 mr-1 text-xs">
                                 <DescripcionInline
@@ -78,6 +113,11 @@ export default function ColaRotaciones({
                                     placeholder="Sin nombre"
                                     etiquetaAccesible={`Nombrar ${etiquetaDe(rotacion)}`}
                                     onGuardar={d => onRenombrarRotacion(rotacion.id, d)}
+                                    // Con nombre, el chip ya lo muestra como etiqueta: acá
+                                    // solo va el lápiz. Sin nombre sí se muestra el
+                                    // "Sin nombre", que es la única pista de que se puede
+                                    // ponerle uno.
+                                    mostrarValor={!rotacion.descripcion}
                                 />
                             </span>
                         )}

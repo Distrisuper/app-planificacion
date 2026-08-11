@@ -8,6 +8,10 @@ interface DescripcionInlineProps {
     etiquetaAccesible: string
     /** null = borrar el nombre. */
     onGuardar: (descripcion: string | null) => void
+    /** false = mostrar solo el lápiz, sin repetir el valor. Para cuando quien nos usa YA
+     *  muestra ese texto: el chip de la rotación activa lo pone como su etiqueta, y sin
+     *  esto el nombre salía dos veces ("Ronda Septiembre #2 Ronda Septiembre ✎"). */
+    mostrarValor?: boolean
 }
 
 /**
@@ -23,6 +27,7 @@ export default function DescripcionInline({
     placeholder,
     etiquetaAccesible,
     onGuardar,
+    mostrarValor,
 }: DescripcionInlineProps) {
     const [editando, setEditando] = useState(false)
     const [borrador, setBorrador] = useState('')
@@ -70,9 +75,11 @@ export default function DescripcionInline({
 
     return (
         <span className="inline-flex items-center gap-1">
-            <span className={valor ? 'text-slate-500' : 'text-slate-400 italic'}>
-                {valor ?? placeholder}
-            </span>
+            {(mostrarValor ?? true) && (
+                <span className={valor ? 'text-slate-500' : 'text-slate-400 italic'}>
+                    {valor ?? placeholder}
+                </span>
+            )}
             <button
                 type="button"
                 aria-label={etiquetaAccesible}

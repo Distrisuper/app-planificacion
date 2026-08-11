@@ -15,6 +15,30 @@ function renderInline(overrides = {}) {
     return props
 }
 
+describe('mostrarValor', () => {
+    it('con mostrarValor en false deja solo el lápiz, sin repetir el valor', () => {
+        // El chip de la rotación activa ya muestra el nombre como su etiqueta; sin esto
+        // salía dos veces ("Ronda Septiembre #2 Ronda Septiembre ✎").
+        renderInline({ valor: 'Ronda Septiembre', mostrarValor: false })
+
+        expect(screen.queryByText('Ronda Septiembre')).not.toBeInTheDocument()
+        expect(
+            screen.getByRole('button', { name: 'Nombrar semana 2' }),
+        ).toBeInTheDocument()
+    })
+
+    it('sigue editable: el input arranca con el valor aunque no se muestre', async () => {
+        const props = renderInline({ valor: 'Ronda Septiembre', mostrarValor: false })
+
+        await userEvent.click(screen.getByRole('button', { name: 'Nombrar semana 2' }))
+        expect(screen.getByRole('textbox')).toHaveValue('Ronda Septiembre')
+
+        await userEvent.clear(screen.getByRole('textbox'))
+        await userEvent.type(screen.getByRole('textbox'), 'Ronda Octubre{Enter}')
+        expect(props.onGuardar).toHaveBeenCalledWith('Ronda Octubre')
+    })
+})
+
 describe('DescripcionInline', () => {
     it('muestra el placeholder cuando no hay nombre', () => {
         renderInline()

@@ -33,6 +33,39 @@ function renderCola(overrides = {}) {
     return props
 }
 
+describe('señal de estado, independiente del nombre', () => {
+    it('la rotación en curso se distingue AUNQUE tenga nombre propio', () => {
+        // El caso que importa: al nombrar la rotación vigente, su etiqueta pasa a ser el
+        // nombre y se perdía el cartel "Actual" — quedaba visualmente igual a una
+        // programada. Justo en la que el vendedor está trabajando encima ahora.
+        renderCola()
+        expect(screen.getByText('en curso')).toBeInTheDocument()
+    })
+
+    it('una programada con nombre sigue mostrando su posición en la cola', () => {
+        // Mismo problema del otro lado: nombrarla borraba el "#N" y no se sabía qué lugar
+        // ocupa en la cola.
+        renderCola()
+        expect(screen.getByText('#2')).toBeInTheDocument()
+    })
+
+    it('la rotación en curso no muestra posición: no está en la cola', () => {
+        renderCola()
+        expect(screen.queryByText('#null')).not.toBeInTheDocument()
+        // Solo la programada con nombre (orden 2) aporta un "#N".
+        expect(screen.getAllByText(/^#\d+$/)).toHaveLength(1)
+    })
+
+    it('sin nombre no duplica la señal: la etiqueta ya dice Programada #N', () => {
+        renderCola({
+            rotaciones: [{ ...base, id: 30, estado: 'programada', orden: 1 }],
+            activaId: 30,
+        })
+        expect(screen.getByRole('button', { name: 'Programada #1' })).toBeInTheDocument()
+        expect(screen.queryByText('#1')).not.toBeInTheDocument()
+    })
+})
+
 describe('ColaRotaciones', () => {
     it('usa la descripción como etiqueta cuando la rotación tiene una', () => {
         renderCola()
