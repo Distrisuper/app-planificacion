@@ -24,6 +24,7 @@ function renderCola(overrides = {}) {
         onElegir: vi.fn(),
         onCrear: vi.fn(),
         onCancelar: vi.fn(),
+        onRenombrarRotacion: vi.fn(),
         creando: false,
         ...overrides,
     }
@@ -34,9 +35,11 @@ function renderCola(overrides = {}) {
 describe('ColaRotaciones', () => {
     it('usa la descripción como etiqueta cuando la rotación tiene una', () => {
         renderCola()
-        expect(screen.getByRole('button', { name: /Ronda Agosto/ })).toBeInTheDocument()
-        // Nombre exacto (no regex): "Ronda Octubre" con regex también matchea el botón de
-        // cancelar de esa misma card ("Cancelar Ronda Octubre" lo contiene como substring).
+        // Nombres exactos (no regex): la card activa (id 7) también tiene un botón
+        // "Nombrar Ronda Agosto" (el lápiz de DescripcionInline) que /Ronda Agosto/
+        // matchea como substring, y "Ronda Octubre" colisiona con su propio
+        // "Cancelar Ronda Octubre" por la misma razón.
+        expect(screen.getByRole('button', { name: 'Ronda Agosto' })).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Ronda Octubre' })).toBeInTheDocument()
     })
 
@@ -47,8 +50,8 @@ describe('ColaRotaciones', () => {
                 { ...base, id: 30, estado: 'programada', orden: 1 },
             ],
         })
-        expect(screen.getByRole('button', { name: /Actual/ })).toBeInTheDocument()
-        // Ídem: "Cancelar Programada #1" matchea /Programada #1/ como substring.
+        // Ídem: "Nombrar Actual" y "Cancelar Programada #1" matchean como substring.
+        expect(screen.getByRole('button', { name: 'Actual' })).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Programada #1' })).toBeInTheDocument()
     })
 

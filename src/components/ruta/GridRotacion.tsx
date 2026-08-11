@@ -1,5 +1,6 @@
 import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import ClienteCardRuta from './ClienteCardRuta'
+import DescripcionInline from './DescripcionInline'
 import type { Dia, IAgendaClientAdmin, ISemanaRotacionAdmin } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
@@ -75,6 +76,7 @@ function Celda({ semana, dia, clientes, arrastrable }: CeldaProps) {
 interface GridRotacionProps {
     semanas: ISemanaRotacionAdmin[]
     onMover: (rotacionClienteId: number, semana: number, dia: number) => void
+    onRenombrarSemana: (semana: number, descripcion: string | null) => void
     /** false = rotación cerrada: se ve pero no se toca. */
     editable?: boolean
 }
@@ -86,7 +88,12 @@ interface GridRotacionProps {
  * las deriva del SET de la rotación (`pl_rotacion_semana`) y no de los clientes. Una
  * semana sin clientes sigue siendo un destino válido para arrastrar una card.
  */
-export default function GridRotacion({ semanas, onMover, editable }: GridRotacionProps) {
+export default function GridRotacion({
+    semanas,
+    onMover,
+    onRenombrarSemana,
+    editable,
+}: GridRotacionProps) {
     // Índice fila → su posición actual, para descartar el drop en la misma celda.
     const origenDe = (rotacionClienteId: number) => {
         for (const semana of semanas) {
@@ -136,11 +143,14 @@ export default function GridRotacion({ semanas, onMover, editable }: GridRotacio
                                     <span className="block text-sm font-semibold text-slate-900">
                                         Semana {semana.semana}
                                     </span>
-                                    {semana.descripcion && (
-                                        <span className="block text-xs font-normal text-slate-500">
-                                            {semana.descripcion}
-                                        </span>
-                                    )}
+                                    <span className="block text-xs font-normal">
+                                        <DescripcionInline
+                                            valor={semana.descripcion}
+                                            placeholder="Sin zona"
+                                            etiquetaAccesible={`Nombrar semana ${semana.semana}`}
+                                            onGuardar={d => onRenombrarSemana(semana.semana, d)}
+                                        />
+                                    </span>
                                 </th>
                                 {DIAS.map(dia => (
                                     <Celda

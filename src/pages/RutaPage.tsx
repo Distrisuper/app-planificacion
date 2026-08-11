@@ -9,6 +9,8 @@ import { useVendedores } from '@/hooks/useAnalitica'
 import {
     useCancelarRotacion,
     useCrearRotacion,
+    useEditarDescripcionRotacion,
+    useEditarDescripcionSemana,
     useReacomodarAdmin,
     useRotacion,
     useRotaciones,
@@ -47,6 +49,8 @@ export default function RutaPage() {
 
     const { data: grid, isLoading: cargandoGrid } = useRotacion(vendedor, rotacionElegida)
     const mover = useReacomodarAdmin(vendedor ?? '')
+    const renombrarRotacion = useEditarDescripcionRotacion(vendedor ?? '')
+    const renombrarSemana = useEditarDescripcionSemana(vendedor ?? '')
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -90,6 +94,9 @@ export default function RutaPage() {
                         onElegir={setRotacionActivaId}
                         onCrear={() => crear.mutate()}
                         onCancelar={id => cancelar.mutate(id)}
+                        onRenombrarRotacion={(rotacionId, descripcion) =>
+                            renombrarRotacion.mutate({ rotacionId, descripcion })
+                        }
                         creando={crear.isPending}
                     />
                 )}
@@ -106,6 +113,9 @@ export default function RutaPage() {
                                 onElegir={setRotacionActivaId}
                                 onCrear={() => crear.mutate()}
                                 onCancelar={id => cancelar.mutate(id)}
+                                onRenombrarRotacion={(rotacionId, descripcion) =>
+                                    renombrarRotacion.mutate({ rotacionId, descripcion })
+                                }
                                 creando={crear.isPending}
                             />
                         </div>
@@ -128,6 +138,13 @@ export default function RutaPage() {
                                 rotacionClienteId,
                                 semana,
                                 dia,
+                            })
+                        }
+                        onRenombrarSemana={(semana, descripcion) =>
+                            renombrarSemana.mutate({
+                                rotacionId: grid.id,
+                                semana,
+                                descripcion,
                             })
                         }
                     />

@@ -93,9 +93,10 @@ describe('RutaPage', () => {
         await screen.findByRole('option', { name: 'Juan Pérez' })
         await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
 
-        expect(await screen.findByRole('button', { name: /Ronda Agosto/ })).toBeInTheDocument()
-        // Nombre exacto: "Cancelar Programada #1" también matchea la regex /Programada #1/
-        // como substring (ver la misma nota en ColaRotaciones.test.tsx).
+        // Nombres exactos: la card activa también tiene un botón "Nombrar Ronda Agosto"
+        // (DescripcionInline) y "Cancelar Programada #1" que colisionan por substring con
+        // estas regexes (ver la misma nota en ColaRotaciones.test.tsx).
+        expect(await screen.findByRole('button', { name: 'Ronda Agosto' })).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Programada #1' })).toBeInTheDocument()
     })
 })

@@ -1,5 +1,6 @@
 import { Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import DescripcionInline from './DescripcionInline'
 import type { IRotacionResumen } from '@/types/planificacion'
 
 interface ColaRotacionesProps {
@@ -8,6 +9,7 @@ interface ColaRotacionesProps {
     onElegir: (rotacionId: number) => void
     onCrear: () => void
     onCancelar: (rotacionId: number) => void
+    onRenombrarRotacion: (rotacionId: number, descripcion: string | null) => void
     creando: boolean
 }
 
@@ -30,6 +32,7 @@ export default function ColaRotaciones({
     onElegir,
     onCrear,
     onCancelar,
+    onRenombrarRotacion,
     creando,
 }: ColaRotacionesProps) {
     // Cancelar borra trabajo de planificación que puede haber llevado un rato, y el
@@ -61,6 +64,16 @@ export default function ColaRotaciones({
                         >
                             {etiquetaDe(rotacion)}
                         </button>
+                        {activa && rotacion.estado !== 'cerrada' && (
+                            <span className="ml-1 mr-1 text-xs">
+                                <DescripcionInline
+                                    valor={rotacion.descripcion}
+                                    placeholder="Sin nombre"
+                                    etiquetaAccesible={`Nombrar ${etiquetaDe(rotacion)}`}
+                                    onGuardar={d => onRenombrarRotacion(rotacion.id, d)}
+                                />
+                            </span>
+                        )}
                         {rotacion.estado === 'programada' && (
                             <button
                                 type="button"
