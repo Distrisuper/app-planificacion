@@ -1,4 +1,4 @@
-import { Plus, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import DescripcionInline from './DescripcionInline'
 import type { IRotacionResumen } from '@/types/planificacion'
@@ -10,6 +10,7 @@ interface ColaRotacionesProps {
     onCrear: () => void
     onCancelar: (rotacionId: number) => void
     onRenombrarRotacion: (rotacionId: number, descripcion: string | null) => void
+    onReordenar: (rotacionId: number, orden: number) => void
     creando: boolean
 }
 
@@ -33,6 +34,7 @@ export default function ColaRotaciones({
     onCrear,
     onCancelar,
     onRenombrarRotacion,
+    onReordenar,
     creando,
 }: ColaRotacionesProps) {
     // Cancelar borra trabajo de planificación que puede haber llevado un rato, y el
@@ -43,6 +45,11 @@ export default function ColaRotaciones({
         )
         if (ok) onCancelar(rotacion.id)
     }
+
+    // Solo las programadas forman la cola: la vigente ya se está ejecutando y las
+    // cerradas/canceladas no viajan en este payload.
+    const programadas = rotaciones.filter(r => r.estado === 'programada')
+    const ultimoOrden = programadas.length
 
     return (
         <div className="flex flex-wrap items-center gap-2">
@@ -73,6 +80,36 @@ export default function ColaRotaciones({
                                     onGuardar={d => onRenombrarRotacion(rotacion.id, d)}
                                 />
                             </span>
+                        )}
+                        {rotacion.estado === 'programada' && (
+                            <>
+                                <button
+                                    type="button"
+                                    aria-label={`Adelantar ${etiquetaDe(rotacion)}`}
+                                    disabled={(rotacion.orden ?? 1) <= 1}
+                                    onClick={() =>
+                                        onReordenar(rotacion.id, (rotacion.orden ?? 1) - 1)
+                                    }
+                                    className={`rounded-full p-1 disabled:opacity-30 ${
+                                        activa ? 'hover:bg-white/20' : 'hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <ChevronLeft className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    aria-label={`Atrasar ${etiquetaDe(rotacion)}`}
+                                    disabled={(rotacion.orden ?? 1) >= ultimoOrden}
+                                    onClick={() =>
+                                        onReordenar(rotacion.id, (rotacion.orden ?? 1) + 1)
+                                    }
+                                    className={`rounded-full p-1 disabled:opacity-30 ${
+                                        activa ? 'hover:bg-white/20' : 'hover:bg-slate-100'
+                                    }`}
+                                >
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                </button>
+                            </>
                         )}
                         {rotacion.estado === 'programada' && (
                             <button

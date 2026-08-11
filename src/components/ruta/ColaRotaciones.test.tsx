@@ -25,6 +25,7 @@ function renderCola(overrides = {}) {
         onCrear: vi.fn(),
         onCancelar: vi.fn(),
         onRenombrarRotacion: vi.fn(),
+        onReordenar: vi.fn(),
         creando: false,
         ...overrides,
     }
@@ -95,5 +96,44 @@ describe('ColaRotaciones', () => {
         expect(agregar).toBeDisabled()
         await userEvent.click(agregar)
         expect(props.onCrear).not.toHaveBeenCalled()
+    })
+
+    it('la primera programada no puede subir más', () => {
+        renderCola()
+        // COLA tiene 30 (orden 1) y 31 (orden 2). La 30 ya es la próxima en activarse.
+        expect(
+            screen.getByRole('button', { name: /adelantar programada #1/i }),
+        ).toBeDisabled()
+    })
+
+    it('la última programada no puede bajar más', () => {
+        renderCola()
+        expect(
+            screen.getByRole('button', { name: /atrasar ronda octubre/i }),
+        ).toBeDisabled()
+    })
+
+    it('adelantar manda la posición anterior', async () => {
+        const props = renderCola()
+
+        await userEvent.click(screen.getByRole('button', { name: /adelantar ronda octubre/i }))
+
+        // 31 estaba en orden 2: adelantar la lleva a 1.
+        expect(props.onReordenar).toHaveBeenCalledWith(31, 1)
+    })
+
+    it('atrasar manda la posición siguiente', async () => {
+        const props = renderCola()
+
+        await userEvent.click(screen.getByRole('button', { name: /atrasar programada #1/i }))
+
+        expect(props.onReordenar).toHaveBeenCalledWith(30, 2)
+    })
+
+    it('la rotación vigente no tiene flechas: no está en la cola', () => {
+        renderCola()
+        expect(
+            screen.queryByRole('button', { name: /adelantar ronda agosto/i }),
+        ).not.toBeInTheDocument()
     })
 })

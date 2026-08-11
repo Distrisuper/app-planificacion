@@ -12,6 +12,7 @@ import {
     useEditarDescripcionRotacion,
     useEditarDescripcionSemana,
     useReacomodarAdmin,
+    useReordenarRotacion,
     useRotacion,
     useRotaciones,
 } from '@/hooks/useRotacionAdmin'
@@ -51,6 +52,7 @@ export default function RutaPage() {
     const mover = useReacomodarAdmin(vendedor ?? '')
     const renombrarRotacion = useEditarDescripcionRotacion(vendedor ?? '')
     const renombrarSemana = useEditarDescripcionSemana(vendedor ?? '')
+    const reordenar = useReordenarRotacion(vendedor ?? '')
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -97,6 +99,9 @@ export default function RutaPage() {
                         onRenombrarRotacion={(rotacionId, descripcion) =>
                             renombrarRotacion.mutate({ rotacionId, descripcion })
                         }
+                        onReordenar={(rotacionId, orden) =>
+                            reordenar.mutate({ rotacionId, orden })
+                        }
                         creando={crear.isPending}
                     />
                 )}
@@ -115,6 +120,9 @@ export default function RutaPage() {
                                 onCancelar={id => cancelar.mutate(id)}
                                 onRenombrarRotacion={(rotacionId, descripcion) =>
                                     renombrarRotacion.mutate({ rotacionId, descripcion })
+                                }
+                                onReordenar={(rotacionId, orden) =>
+                                    reordenar.mutate({ rotacionId, orden })
                                 }
                                 creando={crear.isPending}
                             />
