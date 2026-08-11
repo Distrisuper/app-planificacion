@@ -54,7 +54,7 @@
 - Consumes: nada (primera tarea).
 - Produces: el esquema que todas las tareas siguientes asumen — `pl_rotacion.estado` (ENUM NOT NULL), `pl_rotacion.orden` (INT NULL), `pl_rotacion.descripcion` (VARCHAR(120) NULL), `pl_rotacion.fecha_inicio` (DATETIME **NULL**), tabla `pl_rotacion_semana (rotacion_id, semana, descripcion)`.
 
-- [ ] **Step 1: Reemplazar el `CREATE TABLE pl_rotacion` de `planificacion-ciclo-tables.sql`**
+- [x] **Step 1: Reemplazar el `CREATE TABLE pl_rotacion` de `planificacion-ciclo-tables.sql`**
 
 Reemplazá el bloque de las líneas 52-65 por:
 
@@ -120,11 +120,11 @@ CREATE TABLE IF NOT EXISTS pl_rotacion_semana (
 );
 ```
 
-- [ ] **Step 2: Aplicar la misma forma al `CREATE TABLE pl_rotacion` de la migración**
+- [x] **Step 2: Aplicar la misma forma al `CREATE TABLE pl_rotacion` de la migración**
 
 En `planificacion-migracion-rotacion.sql`, reemplazá el bloque de las líneas 14-23 por la misma definición de `pl_rotacion` del Step 1 (sin el `IF NOT EXISTS`, para mantener el estilo del archivo de migración), y agregá el `CREATE TABLE pl_rotacion_semana` (también sin `IF NOT EXISTS`) justo después del `CREATE TABLE pl_reacomodacion` de la línea 53.
 
-- [ ] **Step 3: Poblar `estado` en el INSERT de rotaciones migradas**
+- [x] **Step 3: Poblar `estado` en el INSERT de rotaciones migradas**
 
 Las rotaciones fabricadas para el historial quedan abiertas. Con `estado` NOT NULL el INSERT de la línea 57-60 ya no compila. Reemplazalo por:
 
@@ -138,7 +138,7 @@ SELECT codigo_particular_vendedor, 'abierta', MIN(fecha_apertura)
  GROUP BY codigo_particular_vendedor;
 ```
 
-- [ ] **Step 4: Poblar el set de semanas de lo migrado**
+- [x] **Step 4: Poblar el set de semanas de lo migrado**
 
 Agregá este bloque inmediatamente después del `INSERT INTO pl_rotacion_cliente` que termina en la línea 108 (paso ④):
 
@@ -152,7 +152,7 @@ SELECT DISTINCT rotacion_id, semana
   FROM pl_rotacion_cliente;
 ```
 
-- [ ] **Step 5: Agregar el chequeo del set a la verificación**
+- [x] **Step 5: Agregar el chequeo del set a la verificación**
 
 En el `SELECT` de verificación (paso ⑥, líneas 123-136), agregá una cuarta fila antes del `;` final. El `UNION ALL` que cierra la tercera consulta necesita quedar así:
 
@@ -170,7 +170,7 @@ LEFT JOIN pl_rotacion_semana rs
 WHERE rs.rotacion_id IS NULL;
 ```
 
-- [ ] **Step 6: Verificar la migración contra el fixture**
+- [x] **Step 6: Verificar la migración contra el fixture**
 
 El fixture reconstruye el esquema viejo en una base aparte. Levantá MySQL local (`docker compose -f docker-compose.local.yml up -d mysql`) y corré:
 
@@ -186,7 +186,7 @@ Expected: sin errores de SQL, y las **cuatro** filas de la verificación con `de
 
 Si `mysql` pide otra credencial, sacala de `docker-compose.local.yml` (servicio mysql, `MYSQL_ROOT_PASSWORD`).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add docs/db-notes/planificacion-ciclo-tables.sql docs/db-notes/planificacion-migracion-rotacion.sql
@@ -206,7 +206,7 @@ git commit -m "feat(planificacion): estado/orden/descripcion en pl_rotacion y se
 - Consumes: el esquema de la Task 1.
 - Produces: `EstadoRotacion` (union type) e `IRotacion` con `estado`, `descripcion`, `orden` y `fechaInicio: string | null`. Todas las tareas siguientes usan estos nombres.
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
 
 `fecha_inicio` pasó a nullable, y `toIRotacion` hoy hace `r.fechaInicio.toISOString()` sin guard: una rotación programada lo revienta. Agregá al final de `src/repositories/RotacionRepository.spec.ts`:
 
@@ -238,12 +238,12 @@ describe('toIRotacion (vía findAbiertaByVendedor)', () => {
 })
 ```
 
-- [ ] **Step 2: Correr el test y verificar que falla**
+- [x] **Step 2: Correr el test y verificar que falla**
 
 Run: `npx jest src/repositories/RotacionRepository.spec.ts -t "sin fechaInicio"`
 Expected: FAIL — `Cannot read properties of null (reading 'toISOString')`.
 
-- [ ] **Step 3: Extender el tipo `IRotacion`**
+- [x] **Step 3: Extender el tipo `IRotacion`**
 
 En `src/types/planificacion.ts`, reemplazá el bloque de `IRotacion` (líneas 61-66) por:
 
@@ -266,7 +266,7 @@ export interface IRotacion {
 }
 ```
 
-- [ ] **Step 4: Extender el modelo Sequelize**
+- [x] **Step 4: Extender el modelo Sequelize**
 
 En `src/models/planificacion/Rotacion.ts`, reemplazá la interfaz, la clase y el `init` por:
 
@@ -328,7 +328,7 @@ Rotacion.init(
 export default Rotacion
 ```
 
-- [ ] **Step 5: Agregar el guard en `toIRotacion`**
+- [x] **Step 5: Agregar el guard en `toIRotacion`**
 
 En `src/repositories/RotacionRepository.ts`, reemplazá `toIRotacion` (líneas 68-75) por:
 
@@ -347,12 +347,12 @@ function toIRotacion(r: Rotacion): IRotacion {
 }
 ```
 
-- [ ] **Step 6: Correr el test y verificar que pasa**
+- [x] **Step 6: Correr el test y verificar que pasa**
 
 Run: `npx jest src/repositories/RotacionRepository.spec.ts`
 Expected: el test nuevo PASA. El test viejo `'busca por fechaFin null y mapea la fila'` **falla** — su fila mock no tiene los campos nuevos y su assert de `where` es el viejo. Se arregla en la Task 3, que es donde cambia ese comportamiento. Si querés dejar la suite verde entre tareas, corré solo el archivo con `-t "sin fechaInicio"`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/models/planificacion/Rotacion.ts src/types/planificacion.ts src/repositories/RotacionRepository.ts src/repositories/RotacionRepository.spec.ts
@@ -373,7 +373,7 @@ git commit -m "feat(planificacion): IRotacion con estado/orden/descripcion y fec
 
 **Por qué importa:** es la regresión más peligrosa de toda la entrega. Si `findAbiertaByVendedor` sigue filtrando por `fechaFin: null`, una rotación `'programada'` (que también tiene `fecha_fin` NULL) se devuelve como la rotación vigente del vendedor — y el vendedor terminaría trabajando sobre un plan que todavía no arrancó.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Reemplazá el `describe('findAbiertaByVendedor')` (líneas 23-49) y el `describe('cerrar')` (líneas 66-75) por:
 
@@ -440,12 +440,12 @@ describe('cerrar', () => {
 })
 ```
 
-- [ ] **Step 2: Correr los tests y verificar que fallan**
+- [x] **Step 2: Correr los tests y verificar que fallan**
 
 Run: `npx jest src/repositories/RotacionRepository.spec.ts`
 Expected: FAIL en los tres — el `where` esperado no coincide, y `valores.estado` es `undefined`.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 En `src/repositories/RotacionRepository.ts`, reemplazá los tres métodos (líneas 12-45) por:
 
@@ -496,12 +496,12 @@ En `src/repositories/RotacionRepository.ts`, reemplazá los tres métodos (líne
     }
 ```
 
-- [ ] **Step 4: Correr toda la suite**
+- [x] **Step 4: Correr toda la suite**
 
 Run: `npm test`
 Expected: `RotacionRepository.spec.ts` PASA completo. Si algún otro spec falla, es porque mockeaba una fila de rotación sin `estado` — agregale `estado: 'abierta'` al mock; no cambies la lógica de producción para acomodar un mock.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/repositories/RotacionRepository.ts src/repositories/RotacionRepository.spec.ts
@@ -526,7 +526,7 @@ git commit -m "fix(planificacion): la rotacion vigente se resuelve por estado, n
   - `RotacionSemanaRepository.editarDescripcion(rotacionId, semana, descripcion): Promise<boolean>` (false = la semana no existe)
   - Tipo `ISemanaDescripcion = { semana: number; descripcion: string | null }` en `src/types/planificacion.ts`
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Creá `src/repositories/RotacionSemanaRepository.spec.ts`:
 
@@ -616,12 +616,12 @@ describe('editarDescripcion', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx jest src/repositories/RotacionSemanaRepository.spec.ts`
 Expected: FAIL — `Cannot find module './RotacionSemanaRepository'`.
 
-- [ ] **Step 3: Crear el modelo**
+- [x] **Step 3: Crear el modelo**
 
 Creá `src/models/planificacion/RotacionSemana.ts`:
 
@@ -677,7 +677,7 @@ RotacionSemana.init(
 export default RotacionSemana
 ```
 
-- [ ] **Step 4: Agregar el tipo `ISemanaDescripcion`**
+- [x] **Step 4: Agregar el tipo `ISemanaDescripcion`**
 
 En `src/types/planificacion.ts`, después del bloque de `IRotacion`:
 
@@ -689,7 +689,7 @@ export interface ISemanaDescripcion {
 }
 ```
 
-- [ ] **Step 5: Crear el repositorio**
+- [x] **Step 5: Crear el repositorio**
 
 Creá `src/repositories/RotacionSemanaRepository.ts`:
 
@@ -775,12 +775,12 @@ export class RotacionSemanaRepository {
 }
 ```
 
-- [ ] **Step 6: Correr y verificar que pasa**
+- [x] **Step 6: Correr y verificar que pasa**
 
 Run: `npx jest src/repositories/RotacionSemanaRepository.spec.ts`
 Expected: PASS (8 tests).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/models/planificacion/RotacionSemana.ts src/repositories/RotacionSemanaRepository.ts src/repositories/RotacionSemanaRepository.spec.ts src/types/planificacion.ts
@@ -801,16 +801,16 @@ git commit -m "feat(planificacion): pl_rotacion_semana como set autoritativo de 
 - Consumes: `RotacionSemanaRepository.semanasDelSet` (Task 4).
 - Produces: ningún cambio de firma pública. `RotacionClienteRepository.semanasDelSet` deja de existir — cualquier import que quede rompe la compilación, que es justo lo que se quiere.
 
-- [ ] **Step 1: Borrar `semanasDelSet` de `RotacionClienteRepository`**
+- [x] **Step 1: Borrar `semanasDelSet` de `RotacionClienteRepository`**
 
 Eliminá el bloque completo de las líneas 99-118 (el comentario de doc y el método). Si `SemanaRow` queda sin usar en ese archivo, borralo también.
 
-- [ ] **Step 2: Compilar para encontrar todos los call sites**
+- [x] **Step 2: Compilar para encontrar todos los call sites**
 
 Run: `npx tsc --noEmit`
 Expected: errores en `RotacionService.ts`, `AgendaService.ts` y `VisitasService.ts` — exactamente los tres consumidores. Anotalos; son los que se arreglan en los pasos siguientes.
 
-- [ ] **Step 3: Rewire `RotacionService.semanasPendientes`**
+- [x] **Step 3: Rewire `RotacionService.semanasPendientes`**
 
 En `src/services/planificacion/RotacionService.ts`, agregá el import:
 
@@ -829,7 +829,7 @@ y reemplazá el cuerpo de `semanasPendientes` (líneas 111-115) por:
     }
 ```
 
-- [ ] **Step 4: Rewire `AgendaService`**
+- [x] **Step 4: Rewire `AgendaService`**
 
 En `src/services/planificacion/AgendaService.ts`, agregá el mismo import y reemplazá, dentro de `previewSemana`, la línea que pide el set:
 
@@ -843,7 +843,7 @@ y en `getContextoRotacion`:
         const semanas = await RotacionSemanaRepository.semanasDelSet(rotacionId)
 ```
 
-- [ ] **Step 5: Rewire `VisitasService.reacomodar`**
+- [x] **Step 5: Rewire `VisitasService.reacomodar`**
 
 En `src/services/planificacion/VisitasService.ts`, agregá el import y reemplazá el bloque de validación (líneas 191-200) por:
 
@@ -860,12 +860,12 @@ En `src/services/planificacion/VisitasService.ts`, agregá el import y reemplaz�
         }
 ```
 
-- [ ] **Step 6: Compilar y correr toda la suite**
+- [x] **Step 6: Compilar y correr toda la suite**
 
 Run: `npx tsc --noEmit && npm test`
 Expected: compila limpio. Los specs que mockeaban `RotacionClienteRepository.semanasDelSet` ahora tienen que mockear `RotacionSemanaRepository.semanasDelSet` — actualizá el mock (mismo valor de retorno, otro módulo). No cambies la lógica de producción para acomodarlos.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/repositories/RotacionClienteRepository.ts src/services/planificacion/
@@ -884,7 +884,7 @@ git commit -m "refactor(planificacion): el set de semanas sale de pl_rotacion_se
 - Consumes: `RotacionSemanaRepository.crearMuchas`/`findDescripciones` (Task 4).
 - Produces: `RotacionService.materializar` deja el set de semanas creado, con las descripciones heredadas de la última rotación del vendedor que tuviera esa misma semana. Nuevo método `RotacionRepository.findUltimaConSemanas(vendedor): Promise<number | null>`.
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
 
 Creá (o extendé) `src/services/planificacion/RotacionService.spec.ts`:
 
@@ -956,12 +956,12 @@ describe('materializar', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx jest src/services/planificacion/RotacionService.spec.ts`
 Expected: FAIL — `RotacionSemanaRepository.crearMuchas` no fue llamado.
 
-- [ ] **Step 3: Agregar `findUltimaConSemanas` al repositorio**
+- [x] **Step 3: Agregar `findUltimaConSemanas` al repositorio**
 
 En `src/repositories/RotacionRepository.ts`, agregá dentro de la clase:
 
@@ -985,7 +985,7 @@ En `src/repositories/RotacionRepository.ts`, agregá dentro de la clase:
     }
 ```
 
-- [ ] **Step 4: Poblar el set en `materializar`**
+- [x] **Step 4: Poblar el set en `materializar`**
 
 En `src/services/planificacion/RotacionService.ts`, agregá el import de `RotacionSemanaRepository` (si la Task 5 no lo dejó ya) y reemplazá el cuerpo de `materializar` (líneas 82-97) por:
 
@@ -1034,12 +1034,12 @@ En `src/services/planificacion/RotacionService.ts`, agregá el import de `Rotaci
     }
 ```
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
 
 Run: `npx jest src/services/planificacion/RotacionService.spec.ts`
 Expected: PASS (2 tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/repositories/RotacionRepository.ts src/services/planificacion/RotacionService.ts src/services/planificacion/RotacionService.spec.ts
@@ -1065,7 +1065,7 @@ git commit -m "feat(planificacion): materializar declara el set de semanas y her
   - `cancelar(rotacionId): Promise<void>` — `estado='cancelada'`, `orden=null`.
   - `renumerarCola(idsEnOrden: number[]): Promise<void>` — `orden = índice + 1`, en transacción.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Agregá a `src/repositories/RotacionRepository.spec.ts`:
 
@@ -1229,12 +1229,12 @@ jest.mock('../database/connection', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx jest src/repositories/RotacionRepository.spec.ts`
 Expected: FAIL — `RotacionRepository.crearProgramada is not a function`.
 
-- [ ] **Step 3: Implementar las primitivas**
+- [x] **Step 3: Implementar las primitivas**
 
 En `src/repositories/RotacionRepository.ts`, agregá dentro de la clase:
 
@@ -1366,12 +1366,12 @@ En `src/repositories/RotacionRepository.ts`, agregá dentro de la clase:
     }
 ```
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
 
 Run: `npx jest src/repositories/RotacionRepository.spec.ts`
 Expected: PASS, incluidos los tests de las Tasks 2 y 3.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/repositories/RotacionRepository.ts src/repositories/RotacionRepository.spec.ts
@@ -1390,7 +1390,7 @@ git commit -m "feat(planificacion): primitivas de la cola de rotaciones programa
 - Consumes: `RotacionRepository.findProximaProgramada`/`activar` (Task 7).
 - Produces: `asegurarRotacion` sin cambio de firma — sigue devolviendo `{ rotacionId, materializada }`. `materializada: false` cuando activó una programada: no se leyó ningún template.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Agregá a `src/services/planificacion/RotacionService.spec.ts`:
 
@@ -1441,12 +1441,12 @@ describe('asegurarRotacion', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx jest src/services/planificacion/RotacionService.spec.ts -t "activa la programada"`
 Expected: FAIL — `RotacionRepository.activar` no fue llamado (hoy materializa de una).
 
-- [ ] **Step 3: Implementar la activación en cadena**
+- [x] **Step 3: Implementar la activación en cadena**
 
 En `src/services/planificacion/RotacionService.ts`, reemplazá `asegurarRotacion` (líneas 99-108) por:
 
@@ -1484,17 +1484,17 @@ En `src/services/planificacion/RotacionService.ts`, reemplazá `asegurarRotacion
     }
 ```
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
 
 Run: `npx jest src/services/planificacion/RotacionService.spec.ts`
 Expected: PASS (5 tests).
 
-- [ ] **Step 5: Correr toda la suite**
+- [x] **Step 5: Correr toda la suite**
 
 Run: `npm test`
 Expected: verde. Los specs de `CicloService`/`VisitasService` que mockean `RotacionRepository` pueden necesitar `findProximaProgramada` devolviendo `null` — agregalo al mock.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/services/planificacion/RotacionService.ts src/services/planificacion/RotacionService.spec.ts
@@ -1516,7 +1516,7 @@ git commit -m "feat(planificacion): asegurarRotacion activa la cola de programad
   - Tipo `IReacomodacionInfo = { origen: 'vendedor' | 'gerencia'; usuario: string; fecha: string }`
   - `RotacionClienteRepository.findUltimosMovimientos(rotacionId): Promise<Map<number, IReacomodacionInfo>>` — clave = `rotacionClienteId`.
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
 
 Creá `src/repositories/RotacionClienteRepository.spec.ts` (o agregá el describe si ya existe):
 
@@ -1577,12 +1577,12 @@ describe('findUltimosMovimientos', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx jest src/repositories/RotacionClienteRepository.spec.ts -t "findUltimosMovimientos"`
 Expected: FAIL — `findUltimosMovimientos is not a function`.
 
-- [ ] **Step 3: Agregar el tipo**
+- [x] **Step 3: Agregar el tipo**
 
 En `src/types/planificacion.ts`, después de `ISemanaDescripcion`:
 
@@ -1596,7 +1596,7 @@ export interface IReacomodacionInfo {
 }
 ```
 
-- [ ] **Step 4: Implementar la query**
+- [x] **Step 4: Implementar la query**
 
 En `src/repositories/RotacionClienteRepository.ts`, agregá el import del tipo y este método dentro de la clase:
 
@@ -1661,12 +1661,12 @@ interface MovimientoRow {
 }
 ```
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
 
 Run: `npx jest src/repositories/RotacionClienteRepository.spec.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/repositories/RotacionClienteRepository.ts src/repositories/RotacionClienteRepository.spec.ts src/types/planificacion.ts
@@ -1689,7 +1689,7 @@ git commit -m "feat(planificacion): ultimo movimiento por fila del plan, en una 
   - `GerenciaRotacionService.listarRotaciones(vendedor): Promise<IRotacion[]>`
   - `GerenciaRotacionService.getRotacion(vendedor, rotacionId): Promise<IRotacionAdmin>`
 
-- [ ] **Step 1: Escribir el test que falla**
+- [x] **Step 1: Escribir el test que falla**
 
 Creá `src/services/planificacion/GerenciaRotacionService.spec.ts`:
 
@@ -1829,12 +1829,12 @@ describe('getRotacion', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx jest src/services/planificacion/GerenciaRotacionService.spec.ts`
 Expected: FAIL — `Cannot find module './GerenciaRotacionService'`.
 
-- [ ] **Step 3: Exponer `enriquecer` y mover `EMPTY_WEEK` a `dias.ts`**
+- [x] **Step 3: Exponer `enriquecer` y mover `EMPTY_WEEK` a `dias.ts`**
 
 `DiaSemana` y `DIA_KEYS` ya viven en `src/services/planificacion/dias.ts` (un módulo sin imports, creado justamente para que `CicloService` no importe `AgendaService`) y AgendaService los re-exporta. `EMPTY_WEEK`, en cambio, es una const local de `AgendaService.ts:21` y no está exportada.
 
@@ -1869,7 +1869,7 @@ Los usos existentes dentro de AgendaService quedan igual: `EMPTY_WEEK()` infiere
     static async enriquecer(
 ```
 
-- [ ] **Step 4: Agregar los tipos del grid**
+- [x] **Step 4: Agregar los tipos del grid**
 
 En `src/types/planificacion.ts`, después de `IReacomodacionInfo`:
 
@@ -1899,7 +1899,7 @@ import { DiaSemana } from '../services/planificacion/dias'
 
 `dias.ts` no importa nada, así que no hay ciclo posible.
 
-- [ ] **Step 5: Crear el service**
+- [x] **Step 5: Crear el service**
 
 Creá `src/services/planificacion/GerenciaRotacionService.ts`:
 
@@ -2012,12 +2012,12 @@ export class GerenciaRotacionService {
         const semana = porSemana.get(semanaPorFila.get(cliente.rotacionClienteId)!)
 ```
 
-- [ ] **Step 6: Correr y verificar que pasa**
+- [x] **Step 6: Correr y verificar que pasa**
 
 Run: `npx jest src/services/planificacion/GerenciaRotacionService.spec.ts`
 Expected: PASS (4 tests).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/services/planificacion/GerenciaRotacionService.ts src/services/planificacion/GerenciaRotacionService.spec.ts src/services/planificacion/AgendaService.ts src/types/planificacion.ts
@@ -2043,7 +2043,7 @@ git commit -m "feat(planificacion): grid completo de la rotacion de un vendedor 
   - `editarDescripcionSemana(vendedor, rotacionId, semana, descripcion): Promise<void>`
   - `RotacionRepository.editarDescripcion(rotacionId, descripcion): Promise<void>`
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Agregá a `src/services/planificacion/GerenciaRotacionService.spec.ts`:
 
@@ -2220,12 +2220,12 @@ describe('editarDescripcionSemana', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx jest src/services/planificacion/GerenciaRotacionService.spec.ts`
 Expected: FAIL — `GerenciaRotacionService.reacomodar is not a function`.
 
-- [ ] **Step 3: Agregar `editarDescripcion` a `RotacionRepository`**
+- [x] **Step 3: Agregar `editarDescripcion` a `RotacionRepository`**
 
 En `src/repositories/RotacionRepository.ts`, dentro de la clase:
 
@@ -2242,7 +2242,7 @@ En `src/repositories/RotacionRepository.ts`, dentro de la clase:
     }
 ```
 
-- [ ] **Step 4: Implementar las escrituras**
+- [x] **Step 4: Implementar las escrituras**
 
 En `src/services/planificacion/GerenciaRotacionService.ts`, agregá los imports que falten (`IUser`, `IReacomodarDTO`, `RotacionSemanaRepository` ya está) y estos métodos dentro de la clase:
 
@@ -2411,7 +2411,7 @@ En `src/services/planificacion/GerenciaRotacionService.ts`, agregá los imports 
     }
 ```
 
-- [ ] **Step 5: Agregar `materializarProgramada` a `RotacionService`**
+- [x] **Step 5: Agregar `materializarProgramada` a `RotacionService`**
 
 `crearProgramada` necesita materializar contra una rotación que nace `'programada'`, no `'abierta'`. En `src/services/planificacion/RotacionService.ts`, agregá:
 
@@ -2457,12 +2457,12 @@ Importá `RotacionService` en `GerenciaRotacionService.ts`.
 
 **Nota de DRY:** `materializar` y `materializarProgramada` comparten todo menos la llamada de creación. Si preferís una sola función, extraé un privado `materializarEn(rotacionId, validas, heredadas)` y dejá las dos públicas como wrappers de tres líneas. Cualquiera de las dos formas es aceptable; lo que no es aceptable es duplicar la herencia de descripciones en un tercer lugar más adelante.
 
-- [ ] **Step 6: Correr y verificar que pasa**
+- [x] **Step 6: Correr y verificar que pasa**
 
 Run: `npx jest src/services/planificacion/GerenciaRotacionService.spec.ts`
 Expected: PASS (todos, incluidos los 4 de la Task 10).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/services/planificacion/ src/repositories/RotacionRepository.ts
@@ -2481,7 +2481,7 @@ git commit -m "feat(planificacion): escrituras de gerencia sobre la rotacion y s
 - Consumes: todos los métodos de `GerenciaRotacionService` (Tasks 10-11).
 - Produces: los 8 endpoints del contrato, montados bajo `/planificacion/vendedores/:codigo/...`.
 
-- [ ] **Step 1: Agregar los handlers al controller**
+- [x] **Step 1: Agregar los handlers al controller**
 
 En `src/controllers/planificacionController.ts`, importá el service:
 
@@ -2652,7 +2652,7 @@ Y dos helpers privados al final de la clase:
     }
 ```
 
-- [ ] **Step 2: Montar las rutas**
+- [x] **Step 2: Montar las rutas**
 
 En `src/routes/planificacion.ts`, agregá antes del `export default router`:
 
@@ -2747,7 +2747,7 @@ router.patch(
 
 **Ojo con el orden de las rutas:** estas van DESPUÉS de las de self-service. `/vendedores/...` no colisiona con ninguna existente (`/agenda/*`, `/rotacion/*`, `/rotacion-cliente/*`, `/visitas/*`, `/ciclo/*`, `/motivos`), así que no hay ambigüedad de matching.
 
-- [ ] **Step 3: Compilar y correr toda la suite**
+- [x] **Step 3: Compilar y correr toda la suite**
 
 Run: `npx tsc --noEmit && npm test`
 Expected: compila limpio, suite verde.
@@ -2780,7 +2780,7 @@ curl -s -X PATCH -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application
 
 Expected: 1 y 2 devuelven `ok: 1`; 3 persiste el nombre y se ve en el grid del paso 2; 4 devuelve 422 con `code: "SEMANA_FUERA_DEL_SET"`; 5 devuelve 403.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/controllers/planificacionController.ts src/routes/planificacion.ts
