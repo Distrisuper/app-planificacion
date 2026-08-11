@@ -28,6 +28,12 @@ export default function AnaliticaTabs({ enVivo }: AnaliticaTabsProps) {
                     </span>
                 )}
             </NavLink>
+            <NavLink
+                to="/analitica/ruta"
+                className={({ isActive }) => tabClase(isActive)}
+            >
+                Ruta
+            </NavLink>
         </nav>
     )
 }

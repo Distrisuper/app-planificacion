@@ -9,6 +9,7 @@ import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
 import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
+import RutaPage from '@/pages/RutaPage'
 import SinPermisosPage from '@/pages/SinPermisosPage'
 
 /** Cualquier ruta no reconocida manda al usuario a la pantalla de su propio rol,
@@ -37,6 +38,7 @@ export default function App() {
                                 path="/analitica/vendedor/:codigo"
                                 element={<AnaliticaVendedorPage />}
                             />
+                            <Route path="/analitica/ruta" element={<RutaPage />} />
                         </Route>
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/sin-permisos" element={<SinPermisosPage />} />
