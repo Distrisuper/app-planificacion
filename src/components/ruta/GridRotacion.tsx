@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 import ClienteCardRuta from './ClienteCardRuta'
 import DescripcionInline from './DescripcionInline'
@@ -44,15 +45,44 @@ export function movimientoDeDrop(
     return { rotacionClienteId, ...destino }
 }
 
+interface Celda {
+    semana: number
+    dia: number
+}
+
 interface CeldaProps {
     semana: number
     dia: Dia
     clientes: IAgendaClientAdmin[]
     arrastrable: boolean
+    /** false = rotación cerrada: no se ofrece intercambiar. */
+    intercambiable: boolean
+    /** Esta celda es el origen del intercambio en curso. */
+    esOrigen: boolean
+    /** Hay un intercambio empezado en OTRA celda: esta es un destino posible. */
+    esDestinoPosible: boolean
+    onTocarIntercambio: (celda: { semana: number; dia: number }) => void
 }
 
-function Celda({ semana, dia, clientes, arrastrable }: CeldaProps) {
+function Celda({
+    semana,
+    dia,
+    clientes,
+    arrastrable,
+    intercambiable,
+    esOrigen,
+    esDestinoPosible,
+    onTocarIntercambio,
+}: CeldaProps) {
     const { setNodeRef, isOver } = useDroppable({ id: `celda-${semana}-${dia}` })
+
+    // El label lleva semana y día porque hay 25 celdas: sin eso, 25 botones con el mismo
+    // nombre accesible son indistinguibles para un lector de pantalla y para los tests.
+    const etiqueta = esOrigen
+        ? 'Cancelar intercambio'
+        : esDestinoPosible
+          ? 'Intercambiar con este día'
+          : 'Intercambiar este día'
 
     return (
         <td
@@ -60,8 +90,30 @@ function Celda({ semana, dia, clientes, arrastrable }: CeldaProps) {
             data-testid={`celda-${semana}-${dia}`}
             className={`min-w-40 space-y-1 rounded-md p-1.5 align-top ${
                 isOver ? 'bg-slate-200 ring-2 ring-slate-400' : 'bg-white'
-            }`}
+            } ${esOrigen ? 'ring-2 ring-slate-900' : ''}`}
         >
+            {intercambiable && (
+                <button
+                    type="button"
+                    aria-label={`${etiqueta}: semana ${semana}, ${dia}`}
+                    // `dia` acá es la clave ('LUN'), pero el estado del intercambio guarda
+                    // el número (1..5) que viaja al backend — misma conversión que ya usa
+                    // `parsearCelda`. Sin esto, la celda de origen nunca se reconoce a sí
+                    // misma y todas las celdas se muestran como destino posible.
+                    onClick={() =>
+                        onTocarIntercambio({ semana, dia: DIAS.indexOf(dia) + 1 })
+                    }
+                    className={`mb-1 w-full rounded border border-dashed px-1 py-0.5 text-[10px] font-medium ${
+                        esOrigen
+                            ? 'border-slate-900 bg-slate-900 text-white'
+                            : esDestinoPosible
+                              ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                              : 'border-slate-200 text-slate-400 hover:border-slate-400 hover:text-slate-600'
+                    }`}
+                >
+                    {esOrigen ? 'Cancelar' : esDestinoPosible ? 'Intercambiar acá' : '⇄'}
+                </button>
+            )}
             {clientes.map(cliente => (
                 <ClienteCardRuta
                     key={cliente.rotacionClienteId}
@@ -77,6 +129,7 @@ interface GridRotacionProps {
     semanas: ISemanaRotacionAdmin[]
     onMover: (rotacionClienteId: number, semana: number, dia: number) => void
     onRenombrarSemana: (semana: number, descripcion: string | null) => void
+    onIntercambiar: (a: Celda, b: Celda) => void
     /** false = rotación cerrada: se ve pero no se toca. */
     editable?: boolean
 }
@@ -92,8 +145,36 @@ export default function GridRotacion({
     semanas,
     onMover,
     onRenombrarSemana,
+    onIntercambiar,
     editable,
 }: GridRotacionProps) {
+    // Celda origen del intercambio en curso. null = no hay intercambio empezado.
+    const [origen, setOrigen] = useState<Celda | null>(null)
+
+    // Escape cancela: es la salida que el usuario espera de un modo, y sin ella la única
+    // forma de salir era acertarle de nuevo al botón de origen.
+    useEffect(() => {
+        if (!origen) return
+        const alTecla = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setOrigen(null)
+        }
+        window.addEventListener('keydown', alTecla)
+        return () => window.removeEventListener('keydown', alTecla)
+    }, [origen])
+
+    const tocarCelda = (celda: Celda) => {
+        if (!origen) {
+            setOrigen(celda)
+            return
+        }
+        if (origen.semana === celda.semana && origen.dia === celda.dia) {
+            setOrigen(null) // volver a tocar el origen cancela
+            return
+        }
+        onIntercambiar(origen, celda)
+        setOrigen(null)
+    }
+
     // Índice fila → su posición actual, para descartar el drop en la misma celda.
     const origenDe = (rotacionClienteId: number) => {
         for (const semana of semanas) {
@@ -159,6 +240,19 @@ export default function GridRotacion({
                                         dia={dia}
                                         clientes={semana.dias[dia]}
                                         arrastrable={editable ?? true}
+                                        intercambiable={editable ?? true}
+                                        esOrigen={
+                                            origen?.semana === semana.semana &&
+                                            origen?.dia === DIAS.indexOf(dia) + 1
+                                        }
+                                        esDestinoPosible={
+                                            origen !== null &&
+                                            !(
+                                                origen.semana === semana.semana &&
+                                                origen.dia === DIAS.indexOf(dia) + 1
+                                            )
+                                        }
+                                        onTocarIntercambio={tocarCelda}
                                     />
                                 ))}
                             </tr>

@@ -11,6 +11,7 @@ import {
     useCrearRotacion,
     useEditarDescripcionRotacion,
     useEditarDescripcionSemana,
+    useIntercambiarDias,
     useReacomodarAdmin,
     useReordenarRotacion,
     useRotacion,
@@ -53,6 +54,7 @@ export default function RutaPage() {
     const renombrarRotacion = useEditarDescripcionRotacion(vendedor ?? '')
     const renombrarSemana = useEditarDescripcionSemana(vendedor ?? '')
     const reordenar = useReordenarRotacion(vendedor ?? '')
+    const intercambiar = useIntercambiarDias(vendedor ?? '')
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -155,6 +157,15 @@ export default function RutaPage() {
                                 descripcion,
                             })
                         }
+                        onIntercambiar={(a, b) =>
+                            intercambiar.mutate({
+                                rotacionId: grid.id,
+                                semanaA: a.semana,
+                                diaA: a.dia,
+                                semanaB: b.semana,
+                                diaB: b.dia,
+                            })
+                        }
                     />
                 )}
 
@@ -162,6 +173,33 @@ export default function RutaPage() {
                     <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                         No se pudo mover ese cliente. Puede que ya lo hayan visitado en esta
                         vuelta, o que la semana destino no exista en su ruta.
+                    </p>
+                )}
+
+                {intercambiar.isError && (
+                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {(() => {
+                            const data = (
+                                intercambiar.error as {
+                                    response?: { data?: { clientes?: string[] } }
+                                }
+                            )?.response?.data
+                            const codigos = data?.clientes ?? []
+                            if (codigos.length === 0) {
+                                return 'No se pudo intercambiar los días. Probá de nuevo en un momento.'
+                            }
+                            // El backend manda códigos; los nombres salen del grid que ya
+                            // tenemos, así ese camino no vuelve a consultar el warehouse.
+                            const porCodigo = new Map(
+                                (grid?.semanas ?? [])
+                                    .flatMap(s => Object.values(s.dias).flat())
+                                    .map(c => [c.codigoParticularCliente, c.nombreCliente]),
+                            )
+                            const nombres = codigos.map(c => porCodigo.get(c) ?? c)
+                            return `No se puede intercambiar: ${nombres.join(', ')} ya ${
+                                nombres.length === 1 ? 'fue' : 'fueron'
+                            } resuelto${nombres.length === 1 ? '' : 's'} en esta vuelta.`
+                        })()}
                     </p>
                 )}
 
