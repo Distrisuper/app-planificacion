@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import AccountMenu from '@/components/AccountMenu'
+import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import SelectorVendedor from '@/components/ruta/SelectorVendedor'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
-import { useRotaciones } from '@/hooks/useRotacionAdmin'
+import { useCancelarRotacion, useCrearRotacion, useRotaciones } from '@/hooks/useRotacionAdmin'
 
 /**
  * Edición de la ruta (rotación) de un vendedor, para gerencia.
@@ -16,9 +17,26 @@ import { useRotaciones } from '@/hooks/useRotacionAdmin'
 export default function RutaPage() {
     const { user, logout } = useAuth()
     const [vendedor, setVendedor] = useState<string | null>(null)
+    const [rotacionActivaId, setRotacionActivaId] = useState<number | null>(null)
 
     const { data: roster } = useVendedores()
     const { data: cola, isLoading, isError } = useRotaciones(vendedor)
+
+    const crear = useCrearRotacion(vendedor ?? '')
+    const cancelar = useCancelarRotacion(vendedor ?? '')
+
+    const elegirVendedor = (codigo: string) => {
+        setVendedor(codigo === '' ? null : codigo)
+        // La rotación activa era del vendedor anterior: sin esto, el grid pediría un id
+        // que no le pertenece y el backend contestaría 404.
+        setRotacionActivaId(null)
+    }
+
+    const rotacionElegida =
+        rotacionActivaId ??
+        cola?.find(r => r.estado === 'abierta')?.id ??
+        cola?.[0]?.id ??
+        null
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -33,7 +51,7 @@ export default function RutaPage() {
                 <SelectorVendedor
                     vendedores={roster ?? []}
                     elegido={vendedor}
-                    onElegir={codigo => setVendedor(codigo === '' ? null : codigo)}
+                    onElegir={elegirVendedor}
                 />
             </div>
 
@@ -55,10 +73,33 @@ export default function RutaPage() {
                     </p>
                 )}
 
+                {vendedor !== null && cola && cola.length > 0 && (
+                    <ColaRotaciones
+                        rotaciones={cola}
+                        activaId={rotacionElegida}
+                        onElegir={setRotacionActivaId}
+                        onCrear={() => crear.mutate()}
+                        onCancelar={id => cancelar.mutate(id)}
+                        creando={crear.isPending}
+                    />
+                )}
+
                 {vendedor !== null && cola?.length === 0 && (
-                    <p className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600">
-                        Este vendedor todavía no tiene ninguna rotación.
-                    </p>
+                    <div className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
+                        <p className="text-sm text-slate-600">
+                            Este vendedor todavía no tiene ninguna rotación.
+                        </p>
+                        <div className="mt-3 flex justify-center">
+                            <ColaRotaciones
+                                rotaciones={[]}
+                                activaId={null}
+                                onElegir={setRotacionActivaId}
+                                onCrear={() => crear.mutate()}
+                                onCancelar={id => cancelar.mutate(id)}
+                                creando={crear.isPending}
+                            />
+                        </div>
+                    </div>
                 )}
             </main>
         </div>

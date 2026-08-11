@@ -56,4 +56,46 @@ describe('RutaPage', () => {
             await screen.findByText(/elegí un vendedor para ver y editar su ruta/i),
         ).toBeInTheDocument()
     })
+
+    it('muestra los chips de la cola y preselecciona la rotación vigente', async () => {
+        vi.mocked(apiAdmin.getRotaciones).mockResolvedValue([
+            {
+                id: 7,
+                codigoParticularVendedor: 'V 2',
+                estado: 'abierta',
+                fechaInicio: '2026-08-03T12:00:00.000Z',
+                fechaFin: null,
+                descripcion: 'Ronda Agosto',
+                orden: null,
+            },
+            {
+                id: 30,
+                codigoParticularVendedor: 'V 2',
+                estado: 'programada',
+                fechaInicio: null,
+                fechaFin: null,
+                descripcion: null,
+                orden: 1,
+            },
+        ])
+        vi.mocked(apiAdmin.getRotacion).mockResolvedValue({
+            id: 7,
+            codigoParticularVendedor: 'V 2',
+            estado: 'abierta',
+            fechaInicio: '2026-08-03T12:00:00.000Z',
+            fechaFin: null,
+            descripcion: 'Ronda Agosto',
+            orden: null,
+            semanas: [],
+        })
+
+        renderPage()
+        await screen.findByRole('option', { name: 'Juan Pérez' })
+        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+
+        expect(await screen.findByRole('button', { name: /Ronda Agosto/ })).toBeInTheDocument()
+        // Nombre exacto: "Cancelar Programada #1" también matchea la regex /Programada #1/
+        // como substring (ver la misma nota en ColaRotaciones.test.tsx).
+        expect(screen.getByRole('button', { name: 'Programada #1' })).toBeInTheDocument()
+    })
 })
