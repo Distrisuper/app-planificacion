@@ -2,10 +2,16 @@ import { useState } from 'react'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import AccountMenu from '@/components/AccountMenu'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
+import GridRotacion from '@/components/ruta/GridRotacion'
 import SelectorVendedor from '@/components/ruta/SelectorVendedor'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
-import { useCancelarRotacion, useCrearRotacion, useRotaciones } from '@/hooks/useRotacionAdmin'
+import {
+    useCancelarRotacion,
+    useCrearRotacion,
+    useRotacion,
+    useRotaciones,
+} from '@/hooks/useRotacionAdmin'
 
 /**
  * Edición de la ruta (rotación) de un vendedor, para gerencia.
@@ -37,6 +43,8 @@ export default function RutaPage() {
         cola?.find(r => r.estado === 'abierta')?.id ??
         cola?.[0]?.id ??
         null
+
+    const { data: grid, isLoading: cargandoGrid } = useRotacion(vendedor, rotacionElegida)
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -100,6 +108,19 @@ export default function RutaPage() {
                             />
                         </div>
                     </div>
+                )}
+
+                {rotacionElegida !== null && cargandoGrid && (
+                    <p className="text-sm text-slate-500">Cargando la ruta…</p>
+                )}
+
+                {grid && <GridRotacion semanas={grid.semanas} />}
+
+                {grid?.omitidos && grid.omitidos.length > 0 && (
+                    <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        {grid.omitidos.length} cliente(s) del template quedaron afuera por
+                        no estar en el padrón: {grid.omitidos.join(', ')}.
+                    </p>
                 )}
             </main>
         </div>

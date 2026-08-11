@@ -1,5 +1,5 @@
 import { afterEach, vi } from 'vitest'
-import { horaNegocio, incluyeHoy, isoLocal, rangoHoy } from './fechas'
+import { fechaHoraNegocio, horaNegocio, incluyeHoy, isoLocal, rangoHoy } from './fechas'
 
 afterEach(() => vi.useRealTimers())
 
@@ -60,4 +60,16 @@ it('incluyeHoy es falso para un rango enteramente pasado', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 7, 3, 10, 0))
     expect(incluyeHoy('2026-07-20', '2026-07-24')).toBe(false)
+})
+
+describe('fechaHoraNegocio', () => {
+    it('formatea en hora argentina, no en la del dispositivo', () => {
+        // 14:05 UTC son 11:05 en Buenos Aires (-03:00).
+        expect(fechaHoraNegocio('2026-08-11T14:05:00.000Z')).toBe('11/08 11:05')
+    })
+
+    it('null o basura devuelven guión', () => {
+        expect(fechaHoraNegocio(null)).toBe('—')
+        expect(fechaHoraNegocio('no-es-una-fecha')).toBe('—')
+    })
 })
