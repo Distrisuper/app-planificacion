@@ -9,6 +9,7 @@ import { useVendedores } from '@/hooks/useAnalitica'
 import {
     useCancelarRotacion,
     useCrearRotacion,
+    useReacomodarAdmin,
     useRotacion,
     useRotaciones,
 } from '@/hooks/useRotacionAdmin'
@@ -45,6 +46,7 @@ export default function RutaPage() {
         null
 
     const { data: grid, isLoading: cargandoGrid } = useRotacion(vendedor, rotacionElegida)
+    const mover = useReacomodarAdmin(vendedor ?? '')
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -114,7 +116,29 @@ export default function RutaPage() {
                     <p className="text-sm text-slate-500">Cargando la ruta…</p>
                 )}
 
-                {grid && <GridRotacion semanas={grid.semanas} />}
+                {grid && (
+                    <GridRotacion
+                        semanas={grid.semanas}
+                        // Una rotación cerrada se ve pero no se edita: el backend contesta
+                        // 409 ROTACION_CERRADA.
+                        editable={grid.estado === 'abierta' || grid.estado === 'programada'}
+                        onMover={(rotacionClienteId, semana, dia) =>
+                            mover.mutate({
+                                rotacionId: grid.id,
+                                rotacionClienteId,
+                                semana,
+                                dia,
+                            })
+                        }
+                    />
+                )}
+
+                {mover.isError && (
+                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        No se pudo mover ese cliente. Puede que ya lo hayan visitado en esta
+                        vuelta, o que la semana destino no exista en su ruta.
+                    </p>
+                )}
 
                 {grid?.omitidos && grid.omitidos.length > 0 && (
                     <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
