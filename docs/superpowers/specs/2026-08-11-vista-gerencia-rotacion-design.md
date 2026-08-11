@@ -83,12 +83,24 @@ rotaciones de ese vendedor.
 ### 2. Modelo de datos — extensión de `pl_rotacion` (backend, `api-vendedores`)
 
 ```sql
+-- ① Columnas nuevas SIN default ciego — fecha_inicio pasa a ser nullable porque
+--   una 'programada' todavía no tiene fecha de arranque (se activa cuando la
+--   anterior cierra en la realidad, no en una fecha calendario conocida de antemano).
 ALTER TABLE pl_rotacion
-  ADD COLUMN estado ENUM('programada','abierta','cerrada','cancelada') NOT NULL DEFAULT 'abierta',
+  ADD COLUMN estado ENUM('programada','abierta','cerrada','cancelada') NULL,
   ADD COLUMN orden INT NULL,
-  ADD COLUMN descripcion VARCHAR(120) NULL;   -- ej. "Ronda Agosto"
+  ADD COLUMN descripcion VARCHAR(120) NULL,
+  MODIFY COLUMN fecha_inicio DATETIME NULL;
 
--- Reemplaza la UNIQUE actual basada en fecha_fin IS NULL:
+-- ② Backfill de las filas existentes ANTES de exigir NOT NULL — un DEFAULT ciego
+--   marcaría también las rotaciones cerradas históricas como 'abierta' y rompería
+--   la UNIQUE de abajo (colisión contra la abierta real del mismo vendedor).
+UPDATE pl_rotacion SET estado = IF(fecha_fin IS NULL, 'abierta', 'cerrada');
+
+ALTER TABLE pl_rotacion MODIFY COLUMN estado
+  ENUM('programada','abierta','cerrada','cancelada') NOT NULL;
+
+-- ③ Reemplaza la UNIQUE actual basada en fecha_fin IS NULL:
 ALTER TABLE pl_rotacion DROP COLUMN vendedor_abierta;
 ALTER TABLE pl_rotacion
   ADD COLUMN vendedor_abierta VARCHAR(50)
@@ -116,8 +128,9 @@ ALTER TABLE pl_reacomodacion
   ADD COLUMN actor_nombre VARCHAR(120) NOT NULL;
 ```
 
-- `'programada'`: creada por gerencia, todavía no vigente, `orden` define su posición en la cola
-  (1 = la próxima a activarse).
+- `'programada'`: creada por gerencia, todavía no vigente, `fecha_inicio` **NULL** (no se sabe
+  cuándo va a arrancar — depende de cuándo cierre en la realidad la rotación anterior, no es una
+  fecha calendario fija), `orden` define su posición en la cola (1 = la próxima a activarse).
 - `'abierta'`: la única vigente por vendedor (mismo invariante de hoy, ahora expresado vía `estado`
   en vez de `fecha_fin IS NULL`).
 - `'cerrada'`: ya vivida — no editable (`409 ROTACION_CERRADA` si se intenta reacomodar o
