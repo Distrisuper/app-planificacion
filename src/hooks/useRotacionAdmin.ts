@@ -6,11 +6,16 @@ import {
     editarDescripcionSemana,
     getRotacion,
     getRotaciones,
+    intercambiarDias,
     reacomodarAdmin,
     reordenarRotacion,
 } from '@/api/planificacionAdmin'
 import { moverEnGrid } from '@/lib/moverEnGrid'
-import type { IReacomodarDTO, IRotacionCompleta } from '@/types/planificacion'
+import type {
+    IIntercambiarDiasDTO,
+    IReacomodarDTO,
+    IRotacionCompleta,
+} from '@/types/planificacion'
 
 export const rotacionAdminKeys = {
     /** Toda la data de gerencia de un vendedor, para invalidar de una. */
@@ -141,6 +146,29 @@ export function useEditarDescripcionSemana(codigo: string) {
             semana: number
             descripcion: string | null
         }) => editarDescripcionSemana(codigo, args.rotacionId, args.semana, args.descripcion),
+        onSuccess: (_data, args) => {
+            qc.invalidateQueries({
+                queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
+            })
+        },
+    })
+}
+
+/**
+ * Sin update optimista, a diferencia del arrastre de una card: acá se mueven hasta ~20
+ * filas de golpe y el rechazo por clientes resueltos es un caso esperado, no un borde. Con
+ * el grid recortado a ~31 KB, esperar la confirmación y releer es más simple y no se nota.
+ */
+export function useIntercambiarDias(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: { rotacionId: number } & IIntercambiarDiasDTO) =>
+            intercambiarDias(codigo, args.rotacionId, {
+                semanaA: args.semanaA,
+                diaA: args.diaA,
+                semanaB: args.semanaB,
+                diaB: args.diaB,
+            }),
         onSuccess: (_data, args) => {
             qc.invalidateQueries({
                 queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),

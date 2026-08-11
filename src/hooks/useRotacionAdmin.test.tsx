@@ -10,6 +10,7 @@ import type {
 import {
     useCancelarRotacion,
     useCrearRotacion,
+    useIntercambiarDias,
     useReacomodarAdmin,
     useRotacion,
     useRotaciones,
@@ -202,5 +203,27 @@ describe('useCancelarRotacion', () => {
         await result.current.mutateAsync(30)
 
         expect(api.cancelarRotacion).toHaveBeenCalledWith('V 2', 30)
+    })
+})
+
+describe('useIntercambiarDias', () => {
+    it('manda vendedor, rotación y las dos celdas', async () => {
+        vi.mocked(api.intercambiarDias).mockResolvedValue(18)
+
+        const { result } = renderHook(() => useIntercambiarDias('V 2'), { wrapper })
+        await result.current.mutateAsync({
+            rotacionId: 7,
+            semanaA: 1,
+            diaA: 2,
+            semanaB: 3,
+            diaB: 5,
+        })
+
+        expect(api.intercambiarDias).toHaveBeenCalledWith('V 2', 7, {
+            semanaA: 1,
+            diaA: 2,
+            semanaB: 3,
+            diaB: 5,
+        })
     })
 })

@@ -122,6 +122,14 @@ export interface IReacomodarDTO {
     dia: number
 }
 
+/** Permutar todos los clientes de una celda (semana, día) por los de otra. */
+export interface IIntercambiarDiasDTO {
+    semanaA: number
+    diaA: number
+    semanaB: number
+    diaB: number
+}
+
 /** La visita activa: el backend devuelve la resolución cruda. */
 export interface IResolucion {
     id: number

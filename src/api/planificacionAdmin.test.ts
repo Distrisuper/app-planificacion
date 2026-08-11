@@ -7,6 +7,7 @@ import {
     editarDescripcionSemana,
     getRotacion,
     getRotaciones,
+    intercambiarDias,
     reacomodarAdmin,
     reordenarRotacion,
 } from './planificacionAdmin'
@@ -147,5 +148,26 @@ describe('descripciones', () => {
             '/planificacion/vendedores/V%202/rotaciones/7/semanas/2',
             { descripcion: null },
         )
+    })
+})
+
+describe('intercambiarDias', () => {
+    it('manda las dos celdas y devuelve cuántas filas movió', async () => {
+        vi.mocked(apiClient.post).mockResolvedValue({
+            data: { ok: 1, data: { movidas: 18 } },
+        } as never)
+
+        const movidas = await intercambiarDias('V 2', 7, {
+            semanaA: 1,
+            diaA: 2,
+            semanaB: 1,
+            diaB: 4,
+        })
+
+        expect(apiClient.post).toHaveBeenCalledWith(
+            '/planificacion/vendedores/V%202/rotaciones/7/intercambiar-dias',
+            { semanaA: 1, diaA: 2, semanaB: 1, diaB: 4 },
+        )
+        expect(movidas).toBe(18)
     })
 })

@@ -1,5 +1,6 @@
 import { apiClient } from './apiClient'
 import type {
+    IIntercambiarDiasDTO,
     IReacomodarDTO,
     IRotacionCompleta,
     IRotacionResumen,
@@ -86,4 +87,17 @@ export const editarDescripcionSemana = async (
     await apiClient.patch(`${base(codigo)}/${rotacionId}/semanas/${semana}`, {
         descripcion,
     })
+}
+
+/** Permuta dos días completos. Devuelve cuántas filas se movieron. */
+export const intercambiarDias = async (
+    codigo: string,
+    rotacionId: number,
+    dto: IIntercambiarDiasDTO,
+): Promise<number> => {
+    const res = await apiClient.post(
+        `${base(codigo)}/${rotacionId}/intercambiar-dias`,
+        dto,
+    )
+    return res.data.data.movidas
 }
