@@ -68,7 +68,7 @@ Y si se arrastra el martes (10) al jueves (8), el jueves queda con 18 **mezclado
     }): Promise<number>
     ```
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Agregá a `src/repositories/RotacionClienteRepository.spec.ts`:
 
@@ -217,12 +217,12 @@ const mockedBulkCreate = Reacomodacion.bulkCreate as jest.MockedFunction<any>
 
 (importá `RotacionCliente` y `Reacomodacion` de `../models/planificacion/...` si el archivo todavía no los importa; ya están mockeados con `jest.mock` al tope)
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx jest src/repositories/RotacionClienteRepository.spec.ts -t intercambiarDias`
 Expected: FAIL — `intercambiarDias is not a function`.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 En `src/repositories/RotacionClienteRepository.ts`, agregá dentro de la clase. Si no existe un helper para leer una celda, agregá también `findByCelda`:
 
@@ -351,14 +351,14 @@ En `src/repositories/RotacionClienteRepository.ts`, agregá dentro de la clase. 
 
 Agregá `Op` al import de sequelize del archivo (`import { Op, QueryTypes, Transaction } from 'sequelize'`) si no está.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
 
 Run: `npx jest src/repositories/RotacionClienteRepository.spec.ts`
 Expected: PASS, incluidos los tests preexistentes de ese archivo.
 
 **Si el assert de `destinos[].ids` falla** por la forma del objeto `Op.in`: el símbolo no se serializa como una clave normal. Simplificá esa aserción a verificar solo `semana`/`dia` de cada UPDATE (que es lo que importa del comportamiento) y dejá la verificación de qué filas se movieron a los asserts de bitácora, que sí las nombran por id.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/repositories/RotacionClienteRepository.ts src/repositories/RotacionClienteRepository.spec.ts
@@ -385,7 +385,7 @@ git commit -m "feat(planificacion): primitiva para intercambiar dos dias complet
   - `GerenciaRotacionService.intercambiarDias(user, vendedor, rotacionId, dto): Promise<{ movidas: number }>`
   - `POST /planificacion/vendedores/:codigo/rotaciones/:rotacionId/intercambiar-dias`
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Agregá a `src/services/planificacion/GerenciaRotacionService.spec.ts`:
 
@@ -481,12 +481,12 @@ describe('intercambiarDias', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx jest src/services/planificacion/GerenciaRotacionService.spec.ts -t intercambiarDias`
 Expected: FAIL — `GerenciaRotacionService.intercambiarDias is not a function`.
 
-- [ ] **Step 3: Agregar el DTO**
+- [x] **Step 3: Agregar el DTO**
 
 En `src/types/planificacion.ts`, junto a `IReacomodarDTO`:
 
@@ -500,7 +500,7 @@ export interface IIntercambiarDiasDTO {
 }
 ```
 
-- [ ] **Step 4: Implementar el service**
+- [x] **Step 4: Implementar el service**
 
 En `src/services/planificacion/GerenciaRotacionService.ts`, agregá el import del DTO y este método:
 
@@ -596,12 +596,12 @@ En `src/services/planificacion/GerenciaRotacionService.ts`, agregá el import de
     }
 ```
 
-- [ ] **Step 5: Correr y verificar que pasa**
+- [x] **Step 5: Correr y verificar que pasa**
 
 Run: `npx jest src/services/planificacion/GerenciaRotacionService.spec.ts`
 Expected: PASS, incluidos los tests preexistentes.
 
-- [ ] **Step 6: Handler y ruta**
+- [x] **Step 6: Handler y ruta**
 
 En `src/controllers/planificacionController.ts`, dentro de la clase:
 
@@ -663,12 +663,12 @@ router.post(
 )
 ```
 
-- [ ] **Step 7: Compilar y correr toda la suite**
+- [x] **Step 7: Compilar y correr toda la suite**
 
 Run: `npx tsc --noEmit && npm test`
 Expected: compila limpio, suite verde.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/types/planificacion.ts src/services/planificacion/GerenciaRotacionService.ts src/services/planificacion/GerenciaRotacionService.spec.ts src/controllers/planificacionController.ts src/routes/planificacion.ts
@@ -695,7 +695,7 @@ git commit -m "feat(planificacion): endpoint para intercambiar dos dias, con rec
   - `intercambiarDias(codigo, rotacionId, dto): Promise<number>` — devuelve `movidas`
   - `useIntercambiarDias(codigo)` — mutation que invalida el grid de esa rotación
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 En `src/api/planificacionAdmin.test.ts`:
 
@@ -752,12 +752,12 @@ describe('useIntercambiarDias', () => {
 
 (agregá `useIntercambiarDias` al import)
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/api/planificacionAdmin.test.ts src/hooks/useRotacionAdmin.test.tsx`
 Expected: FAIL — no existen `intercambiarDias` ni `useIntercambiarDias`.
 
-- [ ] **Step 3: Implementar**
+- [x] **Step 3: Implementar**
 
 En `src/types/planificacion.ts`:
 
@@ -815,12 +815,12 @@ export function useIntercambiarDias(codigo: string) {
 }
 ```
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
 
 Run: `npx vitest run src/api/planificacionAdmin.test.ts src/hooks/useRotacionAdmin.test.tsx`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/types/planificacion.ts src/api/planificacionAdmin.ts src/api/planificacionAdmin.test.ts src/hooks/useRotacionAdmin.ts src/hooks/useRotacionAdmin.test.tsx
@@ -844,7 +844,7 @@ git commit -m "feat(ruta): api y hook para intercambiar dos dias"
 
 **La interacción:** cada celda tiene un botón "Intercambiar este día". Al tocarlo, el grid entra en modo selección: ese botón queda marcado como origen y los demás pasan a decir "Intercambiar con este día". El segundo click confirma y sale del modo. `Escape` o volver a tocar el origen cancela. Así el intercambio entre semanas sale gratis, sin un menú de 25 opciones.
 
-- [ ] **Step 1: Escribir los tests que fallan**
+- [x] **Step 1: Escribir los tests que fallan**
 
 Agregá a `src/components/ruta/GridRotacion.test.tsx`:
 
@@ -944,12 +944,12 @@ describe('intercambiar días', () => {
 })
 ```
 
-- [ ] **Step 2: Correr y verificar que falla**
+- [x] **Step 2: Correr y verificar que falla**
 
 Run: `npx vitest run src/components/ruta/GridRotacion.test.tsx`
 Expected: FAIL — no existen los botones de intercambio.
 
-- [ ] **Step 3: Implementar en `GridRotacion`**
+- [x] **Step 3: Implementar en `GridRotacion`**
 
 Agregá la prop y el estado del modo. `GridRotacion` ya tiene `editable`; el intercambio se ofrece solo cuando es `true`.
 
@@ -1096,12 +1096,12 @@ Y en el `.map` de días de `GridRotacion`, donde hoy se renderiza `<Celda ... ar
 
 Importá `useEffect` y `useState` de React.
 
-- [ ] **Step 4: Correr y verificar que pasa**
+- [x] **Step 4: Correr y verificar que pasa**
 
 Run: `npx vitest run src/components/ruta/GridRotacion.test.tsx`
 Expected: PASS, incluidos los tests preexistentes de drag and drop.
 
-- [ ] **Step 5: Enchufar en la página, con el error nombrando clientes**
+- [x] **Step 5: Enchufar en la página, con el error nombrando clientes**
 
 En `src/pages/RutaPage.tsx`, agregá `useIntercambiarDias` al import de hooks y:
 
@@ -1154,7 +1154,7 @@ Y el error, que resuelve los códigos bloqueados a nombres con el grid que ya es
                 )}
 ```
 
-- [ ] **Step 6: Compilar y correr toda la suite**
+- [x] **Step 6: Compilar y correr toda la suite**
 
 Run: `npx tsc -b` (sin pipe, para no perder el exit code), y después `npm test`
 Expected: compila limpio, suite verde.
@@ -1175,7 +1175,7 @@ El backend local ya está corriendo (`localhost:4002`, MySQL en docker) y el fro
 
 El caso de rechazo por resueltos **no se puede probar sin una visita cerrada en la base**; si no hay ninguna, dejalo registrado como pendiente en vez de forzarlo.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/components/ruta/GridRotacion.tsx src/components/ruta/GridRotacion.test.tsx src/pages/RutaPage.tsx
