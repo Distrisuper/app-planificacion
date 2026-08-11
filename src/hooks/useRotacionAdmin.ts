@@ -9,7 +9,8 @@ import {
     reacomodarAdmin,
     reordenarRotacion,
 } from '@/api/planificacionAdmin'
-import type { IReacomodarDTO } from '@/types/planificacion'
+import { moverEnGrid } from '@/lib/moverEnGrid'
+import type { IReacomodarDTO, IRotacionCompleta } from '@/types/planificacion'
 
 export const rotacionAdminKeys = {
     /** Toda la data de gerencia de un vendedor, para invalidar de una. */
@@ -61,7 +62,37 @@ export function useReacomodarAdmin(codigo: string) {
                 semana: args.semana,
                 dia: args.dia,
             }),
-        onSuccess: (_data, args) => {
+        /**
+         * Update optimista: la card se mueve en la caché antes de que el backend conteste,
+         * así el arrastre se siente instantáneo. Sin esto había que esperar el PATCH más la
+         * relectura del grid entero para ver la card en su lugar nuevo.
+         */
+        onMutate: async args => {
+            const key = rotacionAdminKeys.grid(codigo, args.rotacionId)
+            // Cancelar lo que esté en vuelo: si una relectura anterior llega después de
+            // escribir la caché, la pisa con el estado viejo y la card "vuelve" sola.
+            await qc.cancelQueries({ queryKey: key })
+
+            const previo = qc.getQueryData<IRotacionCompleta>(key)
+            if (previo) {
+                qc.setQueryData(
+                    key,
+                    moverEnGrid(previo, args.rotacionClienteId, args.semana, args.dia),
+                )
+            }
+            return { previo, key }
+        },
+        onError: (_err, _args, context) => {
+            // Rollback. Importa de verdad: el backend rechaza mover un cliente ya resuelto
+            // (409 FILA_RESUELTA) y una semana fuera del set (422), y sin esto la card
+            // quedaba visualmente en un lugar donde no está.
+            if (context?.previo) qc.setQueryData(context.key, context.previo)
+        },
+        onSettled: (_data, _err, args) => {
+            // Reconciliar igual, en éxito y en error: la autoría (`ultimoMovimiento`: quién
+            // movió y cuándo) la calcula el backend y no se puede adivinar acá. Con la card
+            // recortada el grid pesa ~30 KB, así que este refetch es barato — antes eran
+            // 1.46 MB por movimiento.
             qc.invalidateQueries({
                 queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
             })

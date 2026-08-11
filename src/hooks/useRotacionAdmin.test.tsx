@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import * as api from '@/api/planificacionAdmin'
+import type {
+    Dia,
+    IAgendaClientAdmin,
+    IRotacionCompleta,
+} from '@/types/planificacion'
 import {
     useCancelarRotacion,
     useCrearRotacion,
@@ -86,6 +91,95 @@ describe('useReacomodarAdmin', () => {
             semana: 3,
             dia: 4,
         })
+    })
+})
+
+describe('useReacomodarAdmin — update optimista', () => {
+    // Anotada: sin el tipo, las celdas que no se sobrescriben quedan `never[]` y leerles
+    // un campo no compila.
+    const vacia = (): Record<Dia, IAgendaClientAdmin[]> => ({
+        LUN: [],
+        MAR: [],
+        MIE: [],
+        JUE: [],
+        VIE: [],
+    })
+
+    const gridInicial: IRotacionCompleta = {
+        id: 7,
+        codigoParticularVendedor: 'V 2',
+        estado: 'abierta' as const,
+        fechaInicio: null,
+        fechaFin: null,
+        descripcion: null,
+        orden: null,
+        semanas: [
+            {
+                semana: 1,
+                descripcion: null,
+                dias: {
+                    ...vacia(),
+                    LUN: [
+                        {
+                            rotacionClienteId: 11,
+                            codigoParticularCliente: 'C001',
+                            nombreCliente: 'Kiosco Uno',
+                            dia: 1,
+                            estado: 'pendiente' as const,
+                            ultimoMovimiento: null,
+                        },
+                    ],
+                },
+            },
+        ],
+    }
+
+    /** Wrapper con un QueryClient propio, para poder inspeccionar su caché. */
+    function conCache() {
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        qc.setQueryData(['rotacionAdmin', 'V 2', 'grid', 7], gridInicial)
+        const wrap = ({ children }: { children: React.ReactNode }) => (
+            <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+        )
+        return { qc, wrapper: wrap }
+    }
+
+    const celdas = (qc: QueryClient) => {
+        const g = qc.getQueryData(['rotacionAdmin', 'V 2', 'grid', 7]) as typeof gridInicial
+        return {
+            LUN: g.semanas[0].dias.LUN.map(c => c.rotacionClienteId),
+            JUE: g.semanas[0].dias.JUE.map(c => c.rotacionClienteId),
+        }
+    }
+
+    it('mueve la card en la caché antes de que el backend conteste', async () => {
+        const { qc, wrapper: w } = conCache()
+        // Promesa que no resuelve: simula el PATCH todavía en vuelo.
+        vi.mocked(api.reacomodarAdmin).mockReturnValue(new Promise(() => {}) as never)
+
+        const { result } = renderHook(() => useReacomodarAdmin('V 2'), { wrapper: w })
+        result.current.mutate({ rotacionId: 7, rotacionClienteId: 11, dia: 4 })
+
+        // Sin esperar la respuesta, la card ya cambió de celda.
+        await waitFor(() => expect(celdas(qc).JUE).toEqual([11]))
+        expect(celdas(qc).LUN).toEqual([])
+    })
+
+    it('revierte si el backend rechaza el movimiento', async () => {
+        const { qc, wrapper: w } = conCache()
+        // El caso real: mover un cliente ya resuelto → 409 FILA_RESUELTA.
+        vi.mocked(api.reacomodarAdmin).mockRejectedValue(new Error('409'))
+
+        const { result } = renderHook(() => useReacomodarAdmin('V 2'), { wrapper: w })
+        await result.current.mutateAsync({
+            rotacionId: 7,
+            rotacionClienteId: 11,
+            dia: 4,
+        }).catch(() => {})
+
+        // Vuelve a su celda original: dejarla movida mostraría un estado que no existe.
+        await waitFor(() => expect(celdas(qc).LUN).toEqual([11]))
+        expect(celdas(qc).JUE).toEqual([])
     })
 })
 

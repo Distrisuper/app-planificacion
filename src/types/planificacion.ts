@@ -317,8 +317,21 @@ export interface IReacomodacionInfo {
     fecha: string
 }
 
-/** Una card del grid de gerencia: los mismos datos que ve el vendedor, más la autoría. */
-export interface IAgendaClientAdmin extends IAgendaClient {
+/**
+ * Una card del grid de gerencia: SOLO lo que esa vista dibuja, más la autoría.
+ *
+ * NO extiende `IAgendaClient` a propósito. La card del vendedor trae 28 campos porque los
+ * necesita para operar la visita (dirección, teléfono, coords, descuentos, condiciones de
+ * pago); el grid dibuja nombre, código y estado. Mandar el resto costaba 7833 bytes por
+ * card contra 152 útiles: 1.46 MB por rotación de 200 clientes donde alcanzan ~30 KB.
+ * El backend proyecta estos campos explícitamente (GerenciaRotacionService.getRotacion).
+ */
+export interface IAgendaClientAdmin {
+    rotacionClienteId: number
+    codigoParticularCliente: string
+    nombreCliente: string
+    dia: number
+    estado: EstadoCicloCliente
     ultimoMovimiento: IReacomodacionInfo | null
 }
 
