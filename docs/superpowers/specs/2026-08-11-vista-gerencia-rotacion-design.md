@@ -43,7 +43,11 @@ cliente→sNdM a un modelo materializado y editable (`pl_rotacion_cliente`, ver
   y cancelar una programada.
 - Extensión del modelo `pl_rotacion` en `api-vendedores` para soportar esa cola (detallado abajo).
 - Bitácora: todo reacomodo de gerencia queda en `pl_reacomodacion` con `origen='gerencia'` (la
-  columna ya existe, hoy solo se escribe `'vendedor'`).
+  columna ya existe, hoy solo se escribe `'vendedor'`) **y con el usuario autenticado que lo hizo**
+  (falta agregar esa columna — ver Modelo de datos).
+- Descripción editable de una rotación completa (ej. "Ronda Agosto") y de cada semana dentro de
+  ella (ej. "Semana Buenos Aires") — las semanas de una rotación suelen corresponder a una zona, y
+  hoy solo se identifican por número.
 
 **No entra (fuera de esta entrega):**
 
@@ -81,7 +85,8 @@ rotaciones de ese vendedor.
 ```sql
 ALTER TABLE pl_rotacion
   ADD COLUMN estado ENUM('programada','abierta','cerrada','cancelada') NOT NULL DEFAULT 'abierta',
-  ADD COLUMN orden INT NULL;
+  ADD COLUMN orden INT NULL,
+  ADD COLUMN descripcion VARCHAR(120) NULL;   -- ej. "Ronda Agosto"
 
 -- Reemplaza la UNIQUE actual basada en fecha_fin IS NULL:
 ALTER TABLE pl_rotacion DROP COLUMN vendedor_abierta;
@@ -92,6 +97,23 @@ ALTER TABLE pl_rotacion
 
 ALTER TABLE pl_rotacion
   ADD UNIQUE KEY uq_orden_programada (codigo_particular_vendedor, orden);
+
+-- Descripción por semana dentro de una rotación (suelen mapear a una zona).
+-- Se crea una fila por semana al materializar (semana 1..N, descripcion NULL),
+-- editable después por gerencia — independiente del ciclo real (pl_ciclo_semana),
+-- que recién existe cuando esa semana se abre de verdad.
+CREATE TABLE pl_rotacion_semana (
+  rotacion_id INT NOT NULL,
+  semana INT NOT NULL,
+  descripcion VARCHAR(120) NULL,
+  PRIMARY KEY (rotacion_id, semana),
+  CONSTRAINT fk_rs_rotacion FOREIGN KEY (rotacion_id) REFERENCES pl_rotacion (id)
+);
+
+-- Quién hizo cada reacomodo, no solo el origen.
+ALTER TABLE pl_reacomodacion
+  ADD COLUMN actor_user_id INT NOT NULL,
+  ADD COLUMN actor_nombre VARCHAR(120) NOT NULL;
 ```
 
 - `'programada'`: creada por gerencia, todavía no vigente, `orden` define su posición en la cola
@@ -126,10 +148,16 @@ existentes (que no se tocan). Todas exigen rol `admin`/`supervisor`/`versus-ger`
 | `GET` | `/planificacion/vendedores` | Roster de vendedores (reusar el de Analítica si el dataset alcanza). |
 | `GET` | `/planificacion/vendedores/:codigo/rotaciones` | Lista la abierta + las programadas en orden. |
 | `POST` | `/planificacion/vendedores/:codigo/rotaciones` | Crea una programada al final de la cola, materializa contra el template actual. Devuelve `omitidos` si hay clientes sin asignación sNdM. |
-| `GET` | `/planificacion/vendedores/:codigo/rotaciones/:rotacionId` | Grid completo de esa rotación: todas sus semanas × 5 días × clientes, en un solo payload. |
-| `PATCH` | `/planificacion/vendedores/:codigo/rotaciones/:rotacionId/rotacion-cliente/:id/reacomodar` | `UPDATE (semana, dia)` de esa fila. `409 ROTACION_CERRADA` si `estado='cerrada'`. Escribe `pl_reacomodacion` con `origen='gerencia'`. |
+| `GET` | `/planificacion/vendedores/:codigo/rotaciones/:rotacionId` | Grid completo de esa rotación: todas sus semanas × 5 días × clientes, en un solo payload, con la `descripcion` de la rotación y de cada semana. |
+| `PATCH` | `/planificacion/vendedores/:codigo/rotaciones/:rotacionId/rotacion-cliente/:id/reacomodar` | `UPDATE (semana, dia)` de esa fila. `409 ROTACION_CERRADA` si `estado='cerrada'`. Escribe `pl_reacomodacion` con `origen='gerencia'`, `actorUserId`/`actorNombre` del token. |
 | `PATCH` | `/planificacion/vendedores/:codigo/rotaciones/:rotacionId/orden` | Reordena una programada dentro de la cola. `409` si ya se activó. |
 | `DELETE` | `/planificacion/vendedores/:codigo/rotaciones/:rotacionId` | Cancela una programada (soft-delete, `estado='cancelada'`). `409 ROTACION_CERRADA`/`ROTACION_ABIERTA` si no aplica. |
+| `PATCH` | `/planificacion/vendedores/:codigo/rotaciones/:rotacionId` | Edita `descripcion` de la rotación completa. |
+| `PATCH` | `/planificacion/vendedores/:codigo/rotaciones/:rotacionId/semanas/:semana` | Edita `descripcion` de esa semana puntual (ej. "Buenos Aires"). No requiere que la semana ya tenga un ciclo abierto. |
+
+El endpoint de reacomodar de **self-service** (`PATCH /planificacion/rotacion-cliente/:id/reacomodar`,
+el del vendedor) también pasa a grabar `actorUserId`/`actorNombre` — así "quién hizo el cambio" queda
+resuelto para ambos orígenes, no solo para gerencia.
 
 ### 4. Tipos y hooks (front)
 
@@ -139,6 +167,7 @@ export type EstadoRotacion = 'programada' | 'abierta' | 'cerrada' | 'cancelada'
 export interface ISemanaRotacion {
     semana: number
     estado: EstadoCiclo | 'futura'
+    descripcion: string | null
     dias: Record<Dia, IAgendaClient[]>
 }
 
@@ -147,33 +176,56 @@ export interface IRotacionResumen {
     estado: EstadoRotacion
     orden: number | null
     fechaInicio: string | null
+    descripcion: string | null
 }
 
 export interface IRotacionCompleta extends IRotacionResumen {
     semanas: ISemanaRotacion[]
     omitidos?: string[]
 }
+
+/** Quién movió una fila por última vez — se muestra como detalle en la card, no como reporte. */
+export interface IReacomodacionInfo {
+    origen: 'vendedor' | 'gerencia'
+    actorNombre: string
+    fecha: string
+}
 ```
 
-Reusa `IAgendaClient` tal cual para las cards — mismo `rotacionClienteId` real, mismas cards que ya
-existen en la agenda del vendedor.
+Reusa `IAgendaClient` tal cual para las cards en cuanto a datos del cliente/visita, pero en el grid
+de gerencia cada card viaja con un campo extra, no presente en la agenda del vendedor:
+
+```ts
+export interface IAgendaClientAdmin extends IAgendaClient {
+    ultimoMovimiento: IReacomodacionInfo | null
+}
+```
 
 `src/api/planificacionAdmin.ts` (nuevo, separado de `src/api/planificacion.ts` que es self-service):
 `getVendedores`, `getRotaciones(codigo)`, `crearRotacion(codigo)`, `getRotacion(codigo, rotacionId)`,
 `reacomodar(codigo, rotacionId, rotacionClienteId, dto)`, `reordenar(codigo, rotacionId, orden)`,
-`cancelarRotacion(codigo, rotacionId)`.
+`cancelarRotacion(codigo, rotacionId)`, `editarDescripcionRotacion(codigo, rotacionId, descripcion)`,
+`editarDescripcionSemana(codigo, rotacionId, semana, descripcion)`.
 
 `src/hooks/useRotacionAdmin.ts`, patrón React Query: `useVendedoresRoster`, `useRotaciones(codigo)`,
 `useRotacion(codigo, rotacionId)`, `useCrearRotacion`, `useReacomodarAdmin`, `useReordenarRotacion`,
-`useCancelarRotacion` — cada mutation invalida `useRotaciones`/`useRotacion` según corresponda.
+`useCancelarRotacion`, `useEditarDescripcionRotacion`, `useEditarDescripcionSemana` — cada mutation
+invalida `useRotaciones`/`useRotacion` según corresponda.
 
 ### 5. UI — cola de rotaciones + grid
 
-- Fila de chips horizontal debajo del selector de vendedor: `Actual (semana 3 de 5)` ·
-  `Programada #1` · `Programada #2` · `+ Agregar rotación`. El chip de la abierta no se puede
-  cancelar ni reordenar; los de programadas sí (drag del chip mismo para reordenar).
-- Click en un chip carga su grid: filas = semanas, columnas = LUN–VIE, celdas = cards de cliente
-  (reusa `ClienteCard` o una versión compacta).
+- Fila de chips horizontal debajo del selector de vendedor: cada chip muestra la `descripcion` de
+  la rotación si tiene una (ej. "Ronda Agosto"), o "Actual"/"Programada #N" si no. El chip de la
+  abierta no se puede cancelar ni reordenar; los de programadas sí (drag del chip mismo para
+  reordenar). Un ícono de lápiz al lado del chip activo abre un input inline para editar/asignar
+  su descripción (`useEditarDescripcionRotacion`).
+- Click en un chip carga su grid: filas = semanas, columnas = LUN–VIE. Cada fila de semana muestra
+  su número **y** su `descripcion` si la tiene (ej. "Semana 2 — Buenos Aires"), con el mismo lápiz
+  inline para editarla/asignarla (`useEditarDescripcionSemana`) aunque esa semana todavía no se
+  haya abierto como ciclo real.
+- Celdas con cards de cliente (reusa `ClienteCard` o una versión compacta). Al hacer hover/tap
+  sobre una card se ve quién la movió por última vez y cuándo (`ultimoMovimiento`) — solo como dato
+  visible en la card, no como pantalla de reporte aparte (eso queda fuera de esta entrega).
 - Arrastrar una card de una celda a otra dispara `reacomodar` con el `{semana, dia}` de la celda
   destino.
 - `+ Agregar rotación` dispara `crearRotacion`, agrega el chip al final y abre su grid
@@ -204,5 +256,6 @@ correcta con `{semana, dia}` — sin necesidad de simular gestos de puntero real
 
 - Confirmar si el roster de `GET /planificacion/vendedores` puede reusar el dataset que ya expone
   Analítica, o si necesita un endpoint propio dentro de `planificacion`.
-- Definir quién (`actorUserId`) queda registrado en `pl_reacomodacion` cuando `origen='gerencia'` —
-  confirmar si esa columna ya existe o hay que agregarla.
+- Confirmar de dónde sale `actorUserId` — si el token ya trae un id de usuario numérico utilizable
+  como FK, o si `pl_reacomodacion.actor_user_id` debe apuntar a otra tabla de usuarios existente en
+  el sistema (a revisar contra el modelo de auth real de `api-vendedores`).
