@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { queryClient } from '@/lib/queryClient'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import ProtectedRoute from '@/router/ProtectedRoute'
-import { esRolAnalitica, esRolVendedor } from '@/lib/roles'
+import { esRolGerencia, esRolVendedor } from '@/lib/roles'
 import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
 import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
@@ -27,7 +27,7 @@ export default function App() {
                         <Route element={<ProtectedRoute permitirRol={esRolVendedor} />}>
                             <Route path="/" element={<AgendaSemanaPage />} />
                         </Route>
-                        <Route element={<ProtectedRoute permitirRol={esRolAnalitica} />}>
+                        <Route element={<ProtectedRoute permitirRol={esRolGerencia} />}>
                             <Route path="/analitica" element={<AnaliticaPage />} />
                             <Route
                                 path="/analitica/actividad"

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { vi } from 'vitest'
 import ProtectedRoute from './ProtectedRoute'
-import { esRolAnalitica, esRolVendedor } from '@/lib/roles'
+import { esRolGerencia, esRolVendedor } from '@/lib/roles'
 
 const useAuthMock = vi.fn()
 vi.mock('@/context/AuthContext', () => ({
@@ -30,7 +30,7 @@ function renderConRoles(path: string) {
                 <Route element={<ProtectedRoute permitirRol={esRolVendedor} />}>
                     <Route path="/" element={<div>agenda</div>} />
                 </Route>
-                <Route element={<ProtectedRoute permitirRol={esRolAnalitica} />}>
+                <Route element={<ProtectedRoute permitirRol={esRolGerencia} />}>
                     <Route path="/analitica" element={<div>analitica</div>} />
                 </Route>
                 <Route path="/login" element={<div>login</div>} />
