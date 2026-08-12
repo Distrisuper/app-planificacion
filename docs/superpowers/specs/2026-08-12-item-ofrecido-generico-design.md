@@ -241,7 +241,9 @@ Los tres viajan en respuestas de otras pantallas y son fáciles de olvidar:
 - `codigo` debe existir en el catálogo de su `tipo` (`pl_accion` para acciones, warehouse para el
   resto). **Sin esto `tipo` es decorativo** y el `GROUP BY` se rompe igual que con texto libre.
   Misma validación para cada fila de `alcance`.
-- `gapUnits` solo se acepta con `tipo = 'rubro'`.
+- `gapUnits` **no necesita validación de tipo**: no está en `IAgregarItemDTO`. Solo lo escribe
+  `crearMuchos` desde la propuesta congelada, que siempre es `tipo = 'rubro'`. Un check en el DTO
+  sería código muerto. (Corregido después de revisar el código; el diseño original lo pedía.)
 - Rechazo del duplicado exacto (mismo `tipo`, mismo `codigo`, mismo conjunto de alcance) — la
   garantía que dejó de dar el unique.
 - `RUBRO_DE_PROPUESTA` → `ITEM_DE_PROPUESTA`, mismo significado: no se borra lo que propuso el
@@ -337,8 +339,8 @@ confunde a un dev; un 404 deja al vendedor sin poder cargar la visita.
   `ResolucionWizard.test.tsx`, `resolucionRubro.test.ts`, `useRubros.test.tsx` y compañía se
   renombran y **deben pasar sin cambios de comportamiento, solo de nombres**. Si alguno necesita
   cambiar una aserción, es señal de que el rename se llevó puesta lógica.
-- Tests nuevos: validación de `codigo` contra el catálogo de su `tipo`; rechazo de `gapUnits` fuera
-  de `rubro`; alta con alcance y alta global; rechazo del duplicado exacto; tabla de precedencia de
+- Tests nuevos: validación de `codigo` contra el catálogo de su `tipo`; alcance inválido y
+  duplicado; alta con alcance y alta global; rechazo del duplicado exacto; tabla de precedencia de
   resultado.
 - Test de regresión sobre el alias de ruta temporal, para que se note si alguien lo borra antes de
   tiempo.
