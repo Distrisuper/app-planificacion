@@ -17,7 +17,7 @@ describe('errorCode', () => {
 
 describe('errorData', () => {
     it('devuelve el body completo de un error de negocio', () => {
-        const data = { code: 'CAMBIO_DE_SEMANA', semanaAbierta: 3, clientesPendientes: ['1', '2'] }
+        const data = { code: 'SEMANA_FUERA_DEL_SET', semanas: [1, 2, 3, 4] }
         expect(errorData(conBody(data))).toEqual(data)
     })
 

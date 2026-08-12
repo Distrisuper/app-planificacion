@@ -11,6 +11,10 @@ vi.mock('@/context/AuthContext', () => ({
     useAuth: () => ({ user: { name: 'Martín Rossi' }, logout: vi.fn() }),
 }))
 
+// `descripcion: null` en todas a propósito: estos tests cubren el fallback al número
+// ("Semana N"). El caso con nombre de zona ("Zárate · …") tiene su propio test.
+const ZONAS = [1, 2, 3, 4].map(semana => ({ semana, descripcion: null }))
+
 const CICLO_ACTUAL_ABIERTO = {
     ciclo: {
         id: 1,
@@ -22,19 +26,19 @@ const CICLO_ACTUAL_ABIERTO = {
         fechaCierre: null,
         estado: 'abierta' as const,
     },
-    semanas: [1, 2, 3, 4],
+    semanas: ZONAS,
     semanasPendientes: [3, 4],
 }
 const CICLO_ACTUAL_STANDBY = {
     ciclo: null,
-    semanas: [1, 2, 3, 4],
+    semanas: ZONAS,
     semanasPendientes: [3, 4],
 }
 /** Sin pendientes conocidos: fuerza la caída al primer elemento de `semanas` (no de
  *  `semanasPendientes`) — es el caso que exige el test de wrap sobre el set real. */
 const CICLO_ACTUAL_STANDBY_SIN_PENDIENTES = {
     ciclo: null,
-    semanas: [1, 2, 3, 4],
+    semanas: ZONAS,
     semanasPendientes: [],
 }
 
@@ -93,6 +97,7 @@ beforeEach(() => {
     ;(api.getAgendaSemana as any).mockResolvedValue(semanaVacia)
     ;(api.sincronizar as any).mockResolvedValue({
         semanaCerrada: null,
+        descripcionSemanaCerrada: null,
         sinVisitar: [],
         rubrosAutocompletados: 0,
         altas: [],
@@ -224,7 +229,7 @@ it('moverse de semana lo escribe en la URL', async () => {
     const { urlActual } = renderPage()
     await screen.findByText(/Semana 3/)
 
-    fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
+    fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
 
     await waitFor(() => expect(urlActual()).toContain('semana=4'))
 })
@@ -246,20 +251,38 @@ it('las flechas hacen wrap sobre el set real de semanas, no sobre 5 fijo', async
     )
     renderPage()
     await screen.findByText(/semana 1/i) // arranca en la primera semana conocida
-    fireEvent.click(screen.getByRole('button', { name: /semana anterior/i }))
+    fireEvent.click(screen.getByRole('button', { name: /zona anterior/i }))
     await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4)) // wrap 1 -> 4, no -> 0
 })
 
-it('sincroniza al montar y avisa si cerró una semana con pendientes', async () => {
+it('sincroniza al montar y avisa cuántas visitas quedaron sin hacer, sin lenguaje de cierre', async () => {
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
     ;(api.sincronizar as any).mockResolvedValue({
-        semanaCerrada: 2, sinVisitar: ['101', '102'], rubrosAutocompletados: 0,
+        semanaCerrada: 2, descripcionSemanaCerrada: null, sinVisitar: ['101', '102'], rubrosAutocompletados: 0,
         altas: [], bajas: [], rotacionCerrada: false,
     })
     ;(api.previewSemana as any).mockResolvedValue({ semana: 3, clientes: 0, omitidos: [], dias: semanaVacia })
     renderPage()
     await waitFor(() => expect(api.sincronizar).toHaveBeenCalled())
-    expect(await screen.findByText(/semana 2/i)).toBeInTheDocument()
+    // "Zona", no "semana", y "visitas" (cuenta filas del plan, no clientes distintos) —
+    // nunca "cerramos"/"cerrada": el vendedor no ve que algo se cerró.
+    expect(await screen.findByText(/zona 2: 2 visitas quedaron sin hacer/i)).toBeInTheDocument()
+    expect(screen.queryByText(/cerr/i)).not.toBeInTheDocument()
+})
+
+it('con descripción de zona disponible, el aviso dice el nombre y no el número', async () => {
+    // Misma fuente que el header (RotacionSemanaRepository.findDescripciones): sin esto
+    // el aviso decía "Zona 2" mientras el header, dos taps después, ya decía "Zárate".
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
+    ;(api.sincronizar as any).mockResolvedValue({
+        semanaCerrada: 2, descripcionSemanaCerrada: 'Zárate', sinVisitar: ['101'], rubrosAutocompletados: 0,
+        altas: [], bajas: [], rotacionCerrada: false,
+    })
+    ;(api.previewSemana as any).mockResolvedValue({ semana: 3, clientes: 0, omitidos: [], dias: semanaVacia })
+    renderPage()
+    await waitFor(() => expect(api.sincronizar).toHaveBeenCalled())
+    expect(await screen.findByText(/zárate: 1 visitas quedaron sin hacer/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^zona 2/i)).not.toBeInTheDocument()
 })
 
 it('sin rotación materializada muestra el cartel, no un "Cargando…" eterno', async () => {
@@ -276,14 +299,37 @@ it('el cierre de semana no se pierde cuando además cambió el padrón', async (
     // cola: el de la ruta borraba el del cierre, que es el que importa.
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
     ;(api.sincronizar as any).mockResolvedValue({
-        semanaCerrada: 2, sinVisitar: ['101', '102'], rubrosAutocompletados: 0,
+        semanaCerrada: 2, descripcionSemanaCerrada: null, sinVisitar: ['101', '102'], rubrosAutocompletados: 0,
         altas: ['201'], bajas: ['301'], rotacionCerrada: false,
     })
     ;(api.previewSemana as any).mockResolvedValue({ semana: 3, clientes: 0, omitidos: [], dias: semanaVacia })
     renderPage()
     await waitFor(() => expect(api.sincronizar).toHaveBeenCalled())
-    expect(await screen.findByText(/cerramos tu semana 2/i)).toBeInTheDocument()
+    expect(await screen.findByText(/zona 2: 2 visitas quedaron sin hacer/i)).toBeInTheDocument()
     expect(screen.getByText(/tu ruta cambió/i)).toBeInTheDocument()
+})
+
+// ── Vocabulario: zona, no semana (spec 2026-08-12-semana-hecha-cierre-invisible) ──
+
+it('el header muestra el nombre de la zona cuando la tiene', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue({
+        ...CICLO_ACTUAL_ABIERTO,
+        semanas: [
+            { semana: 1, descripcion: null },
+            { semana: 2, descripcion: null },
+            { semana: 3, descripcion: 'Zárate' },
+            { semana: 4, descripcion: null },
+        ],
+    })
+    renderPage()
+    expect(await screen.findByText(/^Zárate/)).toBeInTheDocument()
+    expect(screen.queryByText(/^Semana 3/)).not.toBeInTheDocument()
+})
+
+it('el header cae al número de semana si la zona no tiene descripción', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO) // ZONAS: descripcion null
+    renderPage()
+    expect(await screen.findByText(/^Semana 3/)).toBeInTheDocument()
 })
 
 it('con vuelta abierta muestra la agenda operable, sin preview', async () => {
@@ -298,7 +344,7 @@ it('con vuelta abierta se puede espiar otra semana en solo lectura', async () =>
     renderPage()
     await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
 
-    fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
+    fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
 
     await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4))
     expect(await screen.findByText(/vista previa/i)).toBeInTheDocument()
@@ -392,7 +438,7 @@ it('suelta la instancia embebida al cambiar de semana', async () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
     expect(screen.getByTitle('Pagos')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
+    fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
     await waitFor(() => expect(screen.queryByTitle('Pagos')).not.toBeInTheDocument())
 })
 
@@ -413,9 +459,9 @@ it('volver a la semana abierta devuelve el modo operable', async () => {
     renderPage()
     await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
 
-    fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
+    fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
     await screen.findByText(/vista previa/i)
-    fireEvent.click(screen.getByRole('button', { name: /semana anterior/i }))
+    fireEvent.click(screen.getByRole('button', { name: /zona anterior/i }))
 
     await waitFor(() => expect(screen.queryByText(/vista previa/i)).not.toBeInTheDocument())
 })

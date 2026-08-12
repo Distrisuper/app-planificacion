@@ -29,7 +29,9 @@ import type {
 // ── Ciclo ──────────────────────────────────────────────────────────────────────
 
 /** La rotación/ciclo del vendedor. `semanas`/`semanasPendientes` viajan siempre que haya una
- *  rotación abierta, tenga o no ciclo/semana abierto encima ahora mismo. */
+ *  rotación abierta, tenga o no ciclo/semana abierto encima ahora mismo. `semanas` trae
+ *  `{ semana, descripcion }` (el nombre de la zona); `semanasPendientes` sigue siendo
+ *  `number[]` — ver el comentario en `ICicloActualResult`. */
 export const getCicloActual = async (): Promise<ICicloActualResult> => {
     const res = await apiClient.get('/planificacion/ciclo/actual')
     return res.data.data
@@ -51,10 +53,9 @@ export const sincronizar = async (): Promise<ISincronizarResult> => {
 /** Mueve la fila del plan a otro día (y opcionalmente otra semana de la rotación). NO la
  *  resuelve: el cliente queda pendiente en su nueva posición.
  *
- *  NO abre nada, y por lo tanto NUNCA tira 409 CAMBIO_DE_SEMANA: en api-vendedores solo
- *  iniciarVisita y noVisita pasan por `CicloService.asegurar`, que es quien lo lanza —
- *  `VisitasService.reacomodar` ni lo llama. Sus errores propios son 403 FILA_AJENA,
- *  404 FILA_NOT_FOUND, 422 SEMANA_FUERA_DEL_SET y 400 DIA_INVALIDO. */
+ *  NO abre nada: en api-vendedores no pasa por `CicloService.asegurar` (a diferencia de
+ *  iniciarVisita y noVisita). Sus errores propios son 403 FILA_AJENA, 404 FILA_NOT_FOUND,
+ *  422 SEMANA_FUERA_DEL_SET y 400 DIA_INVALIDO. */
 export const reacomodar = async (
     rotacionClienteId: number,
     dto: IReacomodarDTO,

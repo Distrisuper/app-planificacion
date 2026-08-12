@@ -12,8 +12,8 @@ export function errorCode(err: unknown): string | null {
 
 /**
  * El body completo de un error de negocio (además de `code`, trae los campos extra que
- * CustomError.details serializa: `semanaAbierta`/`clientesPendientes` en CAMBIO_DE_SEMANA,
- * `semanas` en SEMANA_FUERA_DEL_SET). null si no es un error de negocio con body.
+ * CustomError.details serializa: por ejemplo `semanas` en SEMANA_FUERA_DEL_SET). null si no
+ * es un error de negocio con body.
  */
 export function errorData<T extends Record<string, unknown> = Record<string, unknown>>(
     err: unknown,

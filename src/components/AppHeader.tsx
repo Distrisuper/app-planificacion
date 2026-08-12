@@ -7,7 +7,8 @@ interface AppHeaderProps {
     vendedorNombre: string
     completadas: number
     total: number
-    /** Texto central: "Semana 3 · 13 – 17 Jul" o similar. */
+    /** Texto central, ya armado por el caller: "Zárate · 13 – 17 Jul" (o "Semana 3 · …" si la
+     *  zona no tiene descripción). Este componente no arma el string, solo lo pinta. */
     tituloSemana: string
     /** 'preview' = hojeando una semana que no es la abierta. */
     modo?: 'operable' | 'preview'
@@ -59,14 +60,15 @@ export default function AppHeader({
                 </div>
             </div>
 
-            {/* Las flechas ya no son decorativas: son el navegador de ciclos. aria-label porque
+            {/* Las flechas ya no son decorativas: son el navegador de zonas. aria-label porque
                 los tests (y el lector de pantalla) las identifican por nombre accesible, no por
-                el ícono. */}
+                el ícono. "Zona", no "semana": el vendedor no ve vocabulario de ciclo/rotación
+                (ver docs/dominio/modelo.md y el spec de 2026-08-12). */}
             <div className="mt-2.5 flex items-center justify-between gap-2">
                 <Button
                     variant="ghost"
                     size="icon"
-                    aria-label="Semana anterior"
+                    aria-label="Zona anterior"
                     onClick={onPrevWeek}
                     className="h-7 w-7 shrink-0 text-white/70 hover:bg-white/10 hover:text-white"
                 >
@@ -85,7 +87,7 @@ export default function AppHeader({
                 <Button
                     variant="ghost"
                     size="icon"
-                    aria-label="Semana siguiente"
+                    aria-label="Zona siguiente"
                     onClick={onNextWeek}
                     className="h-7 w-7 shrink-0 text-white/70 hover:bg-white/10 hover:text-white"
                 >

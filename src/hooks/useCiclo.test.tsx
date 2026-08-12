@@ -20,16 +20,21 @@ beforeEach(() => vi.clearAllMocks())
 
 describe('useCicloActual', () => {
     it('expone ciclo y semanas', async () => {
+        const semanas = [
+            { semana: 1, descripcion: null },
+            { semana: 2, descripcion: 'Zárate' },
+            { semana: 3, descripcion: null },
+        ]
         vi.mocked(api.getCicloActual).mockResolvedValue({
             ciclo: null,
-            semanas: [1, 2, 3],
+            semanas,
             semanasPendientes: [2],
         })
         const { result } = renderHook(() => useCicloActual(), { wrapper })
         await waitFor(() => expect(result.current.data).toBeDefined())
         expect(result.current.data).toEqual({
             ciclo: null,
-            semanas: [1, 2, 3],
+            semanas,
             semanasPendientes: [2],
         })
     })
@@ -57,6 +62,7 @@ describe('useSincronizar', () => {
     it('llama a sincronizar', async () => {
         vi.mocked(api.sincronizar).mockResolvedValue({
             semanaCerrada: null,
+            descripcionSemanaCerrada: null,
             sinVisitar: [],
             rubrosAutocompletados: 0,
             altas: [],

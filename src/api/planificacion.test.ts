@@ -50,13 +50,19 @@ const SINCRONIZAR_MOCK = {
 beforeEach(() => vi.clearAllMocks())
 
 describe('getCicloActual', () => {
-    it('devuelve el ciclo y el set de semanas', async () => {
+    it('devuelve el ciclo y el set de zonas (semana + descripcion)', async () => {
+        const semanas = [
+            { semana: 1, descripcion: null },
+            { semana: 2, descripcion: 'Zárate' },
+            { semana: 3, descripcion: null },
+            { semana: 4, descripcion: 'Buenos Aires' },
+        ]
         vi.mocked(apiClient.get).mockResolvedValue({
-            data: { data: { ciclo: null, semanas: [1, 2, 3, 4], semanasPendientes: [2, 4] } },
+            data: { data: { ciclo: null, semanas, semanasPendientes: [2, 4] } },
         })
         const res = await getCicloActual()
         expect(apiClient.get).toHaveBeenCalledWith('/planificacion/ciclo/actual')
-        expect(res).toEqual({ ciclo: null, semanas: [1, 2, 3, 4], semanasPendientes: [2, 4] })
+        expect(res).toEqual({ ciclo: null, semanas, semanasPendientes: [2, 4] })
     })
 })
 
