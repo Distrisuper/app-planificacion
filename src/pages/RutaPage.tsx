@@ -6,6 +6,7 @@ import GridRotacion from '@/components/ruta/GridRotacion'
 import SelectorVendedor from '@/components/ruta/SelectorVendedor'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
+import { errorData } from '@/lib/apiError'
 import {
     useCancelarRotacion,
     useCrearRotacion,
@@ -43,13 +44,25 @@ export default function RutaPage() {
         setRotacionActivaId(null)
     }
 
+    // La elección solo vale si sigue estando en la cola. Cancelar la rotación elegida la
+    // saca del payload pero no del estado local, y sin este chequeo el grid seguía pidiendo
+    // un id que ya no existe: 404, pantalla en blanco y ningún chip marcado como activo.
+    const elegidaVigente =
+        rotacionActivaId !== null && cola?.some(r => r.id === rotacionActivaId)
+            ? rotacionActivaId
+            : null
+
     const rotacionElegida =
-        rotacionActivaId ??
+        elegidaVigente ??
         cola?.find(r => r.estado === 'abierta')?.id ??
         cola?.[0]?.id ??
         null
 
-    const { data: grid, isLoading: cargandoGrid } = useRotacion(vendedor, rotacionElegida)
+    const {
+        data: grid,
+        isLoading: cargandoGrid,
+        isError: errorGrid,
+    } = useRotacion(vendedor, rotacionElegida)
     const mover = useReacomodarAdmin(vendedor ?? '')
     const renombrarRotacion = useEditarDescripcionRotacion(vendedor ?? '')
     const renombrarSemana = useEditarDescripcionSemana(vendedor ?? '')
@@ -136,6 +149,16 @@ export default function RutaPage() {
                     <p className="text-sm text-slate-500">Cargando la ruta…</p>
                 )}
 
+                {/* Sin esto el fallo del grid era mudo: `grid` queda undefined y la página
+                    mostraba los chips sobre un vacío, indistinguible de una rotación sin
+                    semanas. */}
+                {rotacionElegida !== null && errorGrid && (
+                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        No se pudo cargar el plan de esta rotación. Probá de nuevo en un
+                        momento.
+                    </p>
+                )}
+
                 {grid && (
                     <GridRotacion
                         semanas={grid.semanas}
@@ -179,11 +202,9 @@ export default function RutaPage() {
                 {intercambiar.isError && (
                     <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                         {(() => {
-                            const data = (
-                                intercambiar.error as {
-                                    response?: { data?: { clientes?: string[] } }
-                                }
-                            )?.response?.data
+                            const data = errorData<{ clientes?: string[] }>(
+                                intercambiar.error,
+                            )
                             const codigos = data?.clientes ?? []
                             if (codigos.length === 0) {
                                 return 'No se pudo intercambiar los días. Probá de nuevo en un momento.'

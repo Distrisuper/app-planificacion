@@ -99,4 +99,70 @@ describe('RutaPage', () => {
         expect(await screen.findByRole('button', { name: 'Ronda Agosto' })).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Programada #1' })).toBeInTheDocument()
     })
+
+    it('al cancelar la rotación elegida vuelve a la vigente, sin pedir el id muerto', async () => {
+        const vigente = {
+            id: 7,
+            codigoParticularVendedor: 'V 2',
+            estado: 'abierta' as const,
+            fechaInicio: '2026-08-03T12:00:00.000Z',
+            fechaFin: null,
+            descripcion: 'Ronda Agosto',
+            orden: null,
+        }
+        const programada = {
+            id: 30,
+            codigoParticularVendedor: 'V 2',
+            estado: 'programada' as const,
+            fechaInicio: null,
+            fechaFin: null,
+            descripcion: null,
+            orden: 1,
+        }
+        // Después de cancelar, la cola ya no trae la #30: es el estado que deja el backend.
+        vi.mocked(apiAdmin.getRotaciones)
+            .mockResolvedValueOnce([vigente, programada])
+            .mockResolvedValue([vigente])
+        vi.mocked(apiAdmin.getRotacion).mockImplementation(async (_codigo, rotacionId) => ({
+            ...vigente,
+            id: rotacionId,
+            semanas: [],
+        }))
+        vi.mocked(apiAdmin.cancelarRotacion).mockResolvedValue(undefined)
+        const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+        renderPage()
+        await screen.findByRole('option', { name: 'Juan Pérez' })
+        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Programada #1' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Cancelar Programada #1' }))
+
+        // El id 30 ya no existe: seguir pidiéndolo devuelve 404 y deja el grid en blanco.
+        await screen.findByRole('button', { name: 'Ronda Agosto' })
+        expect(apiAdmin.getRotacion).toHaveBeenLastCalledWith('V 2', 7)
+
+        confirmar.mockRestore()
+    })
+
+    it('avisa cuando el grid de la rotación no se pudo cargar', async () => {
+        vi.mocked(apiAdmin.getRotaciones).mockResolvedValue([
+            {
+                id: 7,
+                codigoParticularVendedor: 'V 2',
+                estado: 'abierta',
+                fechaInicio: '2026-08-03T12:00:00.000Z',
+                fechaFin: null,
+                descripcion: 'Ronda Agosto',
+                orden: null,
+            },
+        ])
+        vi.mocked(apiAdmin.getRotacion).mockRejectedValue(new Error('404'))
+
+        renderPage()
+        await screen.findByRole('option', { name: 'Juan Pérez' })
+        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+
+        expect(await screen.findByText(/no se pudo cargar el plan/i)).toBeInTheDocument()
+    })
 })
