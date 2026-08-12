@@ -49,8 +49,12 @@ export const sincronizar = async (): Promise<ISincronizarResult> => {
 }
 
 /** Mueve la fila del plan a otro día (y opcionalmente otra semana de la rotación). NO la
- *  resuelve: el cliente queda pendiente en su nueva posición. Abre implícitamente la rotación
- *  si hace falta — por eso puede tirar 409 CAMBIO_DE_SEMANA igual que iniciarVisita/noVisita. */
+ *  resuelve: el cliente queda pendiente en su nueva posición.
+ *
+ *  NO abre nada, y por lo tanto NUNCA tira 409 CAMBIO_DE_SEMANA: en api-vendedores solo
+ *  iniciarVisita y noVisita pasan por `CicloService.asegurar`, que es quien lo lanza —
+ *  `VisitasService.reacomodar` ni lo llama. Sus errores propios son 403 FILA_AJENA,
+ *  404 FILA_NOT_FOUND, 422 SEMANA_FUERA_DEL_SET y 400 DIA_INVALIDO. */
 export const reacomodar = async (
     rotacionClienteId: number,
     dto: IReacomodarDTO,

@@ -366,6 +366,4 @@ export interface IRotacionResumen {
 /** El grid completo de una rotación, en un solo payload. */
 export interface IRotacionCompleta extends IRotacionResumen {
     semanas: ISemanaRotacionAdmin[]
-    /** Códigos que el template traía pero no se pudieron materializar. */
-    omitidos?: string[]
 }

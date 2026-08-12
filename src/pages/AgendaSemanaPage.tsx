@@ -267,21 +267,10 @@ export default function AgendaSemanaPage() {
             })
             // Reacomodar mueve el día y deja al cliente PENDIENTE: no lo resuelve.
             mostrar('exito', 'Cliente reagendado')
-        } catch (err) {
-            // El reintento va con su propio try/catch: `onConfirmar` del diálogo lo espera
-            // sin catch, así que una excepción acá no la agarra nadie — el reagendado
-            // desaparecía sin aviso, con el diálogo ya cerrado.
-            if (manejarCambioDeSemana(err, async () => {
-                try {
-                    await reacomodar.mutateAsync({
-                        rotacionClienteId: cliente.rotacionClienteId,
-                        dia: DIAS.indexOf(dia) + 1,
-                    })
-                    mostrar('exito', 'Cliente reagendado')
-                } catch {
-                    mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
-                }
-            })) return
+        } catch {
+            // Sin rama de CAMBIO_DE_SEMANA: `reacomodar` no abre nada. Solo iniciarVisita y
+            // noVisita pasan por `CicloService.asegurar`, que es quien tira ese 409 —
+            // verificado contra api-vendedores (VisitasService.reacomodar no lo llama).
             mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
         }
     }
@@ -297,19 +286,8 @@ export default function AgendaSemanaPage() {
                 dia: cliente.dia,
             })
             mostrar('exito', `Cliente movido a la semana ${semanaDestino}`)
-        } catch (err) {
-            if (manejarCambioDeSemana(err, async () => {
-                try {
-                    await reacomodar.mutateAsync({
-                        rotacionClienteId: cliente.rotacionClienteId,
-                        semana: semanaDestino,
-                        dia: cliente.dia,
-                    })
-                    mostrar('exito', `Cliente movido a la semana ${semanaDestino}`)
-                } catch {
-                    mostrar('error', 'No se pudo mover de semana. Volvé a intentar.')
-                }
-            })) return
+        } catch {
+            // Ídem onElegirDia: mover de semana tampoco puede tirar CAMBIO_DE_SEMANA.
             mostrar('error', 'No se pudo mover de semana. Volvé a intentar.')
         }
     }

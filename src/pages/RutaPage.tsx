@@ -230,12 +230,10 @@ export default function RutaPage() {
                     </p>
                 )}
 
-                {grid?.omitidos && grid.omitidos.length > 0 && (
-                    <p className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                        {grid.omitidos.length} cliente(s) del template quedaron afuera por
-                        no estar en el padrón: {grid.omitidos.join(', ')}.
-                    </p>
-                )}
+                {/* No hay cartel de `omitidos`: el grid de gerencia (`IRotacionAdmin` en
+                    api-vendedores) no devuelve ese campo — solo lo trae `previewSemana`,
+                    que es otro payload. El cartel que había acá no se podía mostrar nunca.
+                    Si alguna vez el backend lo agrega, va de vuelta. */}
             </main>
         </div>
     )
