@@ -161,6 +161,12 @@ export default function RutaPage() {
 
                 {grid && (
                     <GridRotacion
+                        // La `key` NO es cosmética: `GridRotacion` guarda en estado la celda
+                        // origen del intercambio armado. Sin remontar, cambiar de rotación
+                        // con la otra ya en caché deja el componente montado y ese origen
+                        // vivo: el próximo ⇄ permutaría ~20 clientes de la rotación NUEVA
+                        // contra una celda de la vieja, sin confirmación de por medio.
+                        key={grid.id}
                         semanas={grid.semanas}
                         // Una rotación cerrada se ve pero no se edita: el backend contesta
                         // 409 ROTACION_CERRADA.

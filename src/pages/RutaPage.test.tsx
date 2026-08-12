@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -143,6 +143,70 @@ describe('RutaPage', () => {
         expect(apiAdmin.getRotacion).toHaveBeenLastCalledWith('V 2', 7)
 
         confirmar.mockRestore()
+    })
+
+    it('cambiar de rotación desarma el intercambio a medio hacer', async () => {
+        const vigente = {
+            id: 7,
+            codigoParticularVendedor: 'V 2',
+            estado: 'abierta' as const,
+            fechaInicio: '2026-08-03T12:00:00.000Z',
+            fechaFin: null,
+            descripcion: 'Ronda Agosto',
+            orden: null,
+        }
+        const programada = {
+            id: 30,
+            codigoParticularVendedor: 'V 2',
+            estado: 'programada' as const,
+            fechaInicio: null,
+            fechaFin: null,
+            descripcion: 'Ronda Septiembre',
+            orden: 1,
+        }
+        vi.mocked(apiAdmin.getRotaciones).mockResolvedValue([vigente, programada])
+        const semanaVacia = { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] }
+        vi.mocked(apiAdmin.getRotacion).mockImplementation(async (_codigo, rotacionId) => ({
+            ...vigente,
+            id: rotacionId,
+            semanas: [{ semana: 1, descripcion: null, dias: semanaVacia }],
+        }))
+
+        renderPage()
+        await screen.findByRole('option', { name: 'Juan Pérez' })
+        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+
+        // Primero se visitan las DOS rotaciones para dejarlas en caché. Es lo que hace que
+        // el bug sea alcanzable: con la rotación destino ya cacheada, React Query entrega
+        // `data` en el mismo render y `GridRotacion` nunca se desmonta — sin caché hay un
+        // hueco con `grid` undefined que limpia el estado por accidente y tapa el problema.
+        await screen.findByRole('button', { name: 'Ronda Agosto' })
+        await userEvent.click(screen.getByRole('button', { name: 'Ronda Septiembre' }))
+        await screen.findByRole('button', { name: 'Intercambiar este día: semana 1, LUN' })
+        await userEvent.click(screen.getByRole('button', { name: 'Ronda Agosto' }))
+
+        // Se arma un intercambio en la rotación vigente…
+        await userEvent.click(
+            await screen.findByRole('button', { name: 'Intercambiar este día: semana 1, LUN' }),
+        )
+        expect(
+            screen.getByRole('button', { name: 'Cancelar intercambio: semana 1, LUN' }),
+        ).toBeInTheDocument()
+
+        // …y sin confirmarlo se pasa a la otra rotación, que ahora sí está cacheada.
+        await userEvent.click(screen.getByRole('button', { name: 'Ronda Septiembre' }))
+
+        // El origen viejo no puede seguir armado: tocar otra celda permutaría los clientes
+        // de la rotación nueva contra una celda de la anterior, sin confirmación.
+        await waitFor(() => {
+            expect(
+                screen.queryByRole('button', { name: /^Cancelar intercambio/ }),
+            ).not.toBeInTheDocument()
+        })
+        await userEvent.click(
+            screen.getByRole('button', { name: 'Intercambiar este día: semana 1, MAR' }),
+        )
+        expect(apiAdmin.intercambiarDias).not.toHaveBeenCalled()
     })
 
     it('avisa cuando el grid de la rotación no se pudo cargar', async () => {

@@ -257,6 +257,21 @@ it('sincroniza al montar y avisa si cerró una semana con pendientes', async () 
     expect(await screen.findByText(/semana 2/i)).toBeInTheDocument()
 })
 
+it('el cierre de semana no se pierde cuando además cambió el padrón', async () => {
+    // Los dos avisos salían con dos `mostrar` en el mismo tick y useNotificacion no tiene
+    // cola: el de la ruta borraba el del cierre, que es el que importa.
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
+    ;(api.sincronizar as any).mockResolvedValue({
+        semanaCerrada: 2, sinVisitar: ['101', '102'], rubrosAutocompletados: 0,
+        altas: ['201'], bajas: ['301'], rotacionCerrada: false,
+    })
+    ;(api.previewSemana as any).mockResolvedValue({ semana: 3, clientes: 0, omitidos: [], dias: semanaVacia })
+    renderPage()
+    await waitFor(() => expect(api.sincronizar).toHaveBeenCalled())
+    expect(await screen.findByText(/cerramos tu semana 2/i)).toBeInTheDocument()
+    expect(screen.getByText(/tu ruta cambió/i)).toBeInTheDocument()
+})
+
 it('con vuelta abierta muestra la agenda operable, sin preview', async () => {
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage()

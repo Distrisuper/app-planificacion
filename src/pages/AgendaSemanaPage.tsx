@@ -96,21 +96,26 @@ export default function AgendaSemanaPage() {
     useEffect(() => {
         function correr() {
             sincronizar.mutateAsync().then(res => {
+                // Un solo `mostrar`: `useNotificacion` no tiene cola —una notificación nueva
+                // reemplaza a la anterior— y los dos avisos salen en el mismo tick. El lunes
+                // típico dispara los dos a la vez (semana cerrada + padrón movido), y el
+                // segundo borraba el primero: el vendedor nunca se enteraba de que su semana
+                // había cerrado con clientes sin visitar.
+                const avisos: string[] = []
                 if (res.semanaCerrada !== null) {
-                    mostrar(
-                        'info',
+                    avisos.push(
                         `Cerramos tu semana ${res.semanaCerrada}` +
                             (res.sinVisitar.length > 0
-                                ? ` — ${res.sinVisitar.length} clientes quedaron sin visitar.`
-                                : '.'),
+                                ? ` — ${res.sinVisitar.length} clientes quedaron sin visitar`
+                                : ''),
                     )
                 }
                 if (res.altas.length > 0 || res.bajas.length > 0) {
-                    mostrar(
-                        'info',
-                        `Tu ruta cambió: ${res.altas.length} clientes nuevos, ${res.bajas.length} de baja.`,
+                    avisos.push(
+                        `Tu ruta cambió: ${res.altas.length} clientes nuevos, ${res.bajas.length} de baja`,
                     )
                 }
+                if (avisos.length > 0) mostrar('info', `${avisos.join('. ')}.`)
             }).catch(() => {})
         }
         correr()
@@ -168,6 +173,7 @@ export default function AgendaSemanaPage() {
         clientesPendientes: string[]
         reintentar: () => Promise<void>
     } | null>(null)
+    const [reintentando, setReintentando] = useState(false)
 
     // La instancia embebida es del cliente que se estaba mirando. Al cambiar de día — o de
     // semana, que es el mismo tipo de cambio de contexto: el cliente deja de estar en
@@ -262,12 +268,19 @@ export default function AgendaSemanaPage() {
             // Reacomodar mueve el día y deja al cliente PENDIENTE: no lo resuelve.
             mostrar('exito', 'Cliente reagendado')
         } catch (err) {
+            // El reintento va con su propio try/catch: `onConfirmar` del diálogo lo espera
+            // sin catch, así que una excepción acá no la agarra nadie — el reagendado
+            // desaparecía sin aviso, con el diálogo ya cerrado.
             if (manejarCambioDeSemana(err, async () => {
-                await reacomodar.mutateAsync({
-                    rotacionClienteId: cliente.rotacionClienteId,
-                    dia: DIAS.indexOf(dia) + 1,
-                })
-                mostrar('exito', 'Cliente reagendado')
+                try {
+                    await reacomodar.mutateAsync({
+                        rotacionClienteId: cliente.rotacionClienteId,
+                        dia: DIAS.indexOf(dia) + 1,
+                    })
+                    mostrar('exito', 'Cliente reagendado')
+                } catch {
+                    mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
+                }
             })) return
             mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
         }
@@ -286,12 +299,16 @@ export default function AgendaSemanaPage() {
             mostrar('exito', `Cliente movido a la semana ${semanaDestino}`)
         } catch (err) {
             if (manejarCambioDeSemana(err, async () => {
-                await reacomodar.mutateAsync({
-                    rotacionClienteId: cliente.rotacionClienteId,
-                    semana: semanaDestino,
-                    dia: cliente.dia,
-                })
-                mostrar('exito', `Cliente movido a la semana ${semanaDestino}`)
+                try {
+                    await reacomodar.mutateAsync({
+                        rotacionClienteId: cliente.rotacionClienteId,
+                        semana: semanaDestino,
+                        dia: cliente.dia,
+                    })
+                    mostrar('exito', `Cliente movido a la semana ${semanaDestino}`)
+                } catch {
+                    mostrar('error', 'No se pudo mover de semana. Volvé a intentar.')
+                }
             })) return
             mostrar('error', 'No se pudo mover de semana. Volvé a intentar.')
         }
@@ -429,10 +446,19 @@ export default function AgendaSemanaPage() {
                 open={cambioDeSemana !== null}
                 semanaAbierta={cambioDeSemana?.semanaAbierta ?? 0}
                 clientesPendientes={cambioDeSemana?.clientesPendientes ?? []}
+                // El reintento vuelve a pedir ubicación (hasta ~23 s): sin este spinner el
+                // vendedor no tiene señal de que algo está pasando y vuelve a tocar
+                // "Iniciar visita", que entra en VISITA_ACTIVA_EXISTENTE.
+                confirmando={reintentando}
                 onConfirmar={async () => {
                     const info = cambioDeSemana
                     setCambioDeSemana(null)
-                    await info?.reintentar()
+                    setReintentando(true)
+                    try {
+                        await info?.reintentar()
+                    } finally {
+                        setReintentando(false)
+                    }
                 }}
                 onCancelar={() => setCambioDeSemana(null)}
             />
