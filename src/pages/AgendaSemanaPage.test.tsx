@@ -109,6 +109,20 @@ beforeEach(() => {
     })
 })
 
+afterEach(() => {
+    vi.useRealTimers()
+})
+
+/** Fija el reloj en un lunes real (mismo `fecha_lunes` que CICLO_ACTUAL_ABIERTO) para que
+ *  `getDiaDeHoy()` devuelva LUN de forma determinística — sin esto, el snap-al-montar
+ *  (con ciclo activo, aterrizás siempre en HOY) haría que estos tests cambiaran de
+ *  resultado según qué día corra la suite. `shouldAdvanceTime` deja que `waitFor`/
+ *  `findBy*` (que usan un setTimeout real para su polling) sigan andando. */
+function fijarLunes() {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date(2026, 7, 10, 9, 0))
+}
+
 it('sin ciclo abierto no pide la agenda operable, usa el preview', async () => {
     // Ramificar sobre cicloActual.ciclo === null (un dato) en vez de sobre el 409 de la
     // agenda.
@@ -166,12 +180,22 @@ it('sin ?dia arranca en HOY, no en LUN', async () => {
     expect(tab.className).toMatch(/bg-dsnavy/)
 })
 
-it('?dia= respeta el día que venía en la URL al recargar', async () => {
+it('con ciclo activo, un ?dia= viejo de la URL se pisa por HOY al montar', async () => {
+    // Antes ganaba la URL. Ahora, con una zona activa, aterrizás siempre ahí con el día
+    // de hoy: la URL solo debe reflejar la navegación EN VIVO de esta sesión (las flechas,
+    // los tabs de día), nunca sobrevivir intacta a un montaje nuevo con un valor de una
+    // sesión anterior — era justo lo que dejaba al vendedor viendo una zona/día viejo
+    // después de recargar. Reloj fijo en MIÉRCOLES (no LUN, no coincide con la fixture)
+    // para que la URL (?dia=JUE) y "hoy" queden garantizado en desacuerdo — sin fijar el
+    // reloj el test podía pasar por casualidad si la suite corría un jueves.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    vi.setSystemTime(new Date(2026, 7, 12, 9, 0)) // 2026-08-12 es miércoles
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage('/?dia=JUE')
 
-    const tab = await screen.findByRole('button', { name: /^JUE/ })
+    const tab = await screen.findByRole('button', { name: /^MIE/ })
     expect(tab.className).toMatch(/bg-dsnavy/)
+    expect(screen.queryByRole('button', { name: /^JUE/ })?.className).not.toMatch(/bg-dsnavy/)
 })
 
 it('un ?dia inválido no rompe: cae a hoy', async () => {
@@ -193,17 +217,16 @@ it('elegir un día lo escribe en la URL', async () => {
     await waitFor(() => expect(urlActual()).toContain('dia=MIE'))
 })
 
-it('?semana= respeta la semana que se estaba mirando al recargar', async () => {
-    // Ciclo abierto en la 3, pero la URL dice que estaba hojeando la 4: gana la URL, y por
-    // no ser la vuelta abierta la página queda en modo preview (pide el preview de la 4).
+it('con ciclo activo, una ?semana= vieja de la URL se pisa por la zona activa al montar', async () => {
+    // Antes ganaba la URL y quedaba en preview de la 4. Ahora, con la 3 activa, aterriza
+    // ahí siempre — la misma razón que el día: la URL es navegación en vivo de esta
+    // sesión, no algo que deba sobrevivir a un montaje nuevo.
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
-    ;(api.previewSemana as any).mockResolvedValue({
-        semana: 4, clientes: 12, omitidos: [], dias: semanaVacia,
-    })
     renderPage('/?semana=4')
 
-    await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4))
-    expect(await screen.findByText(/Semana 4/)).toBeInTheDocument()
+    expect(await screen.findByText(/Semana 3/)).toBeInTheDocument()
+    await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+    expect(api.previewSemana).not.toHaveBeenCalled()
 })
 
 it('una ?semana fuera de la rotación se ignora y vale la vuelta abierta', async () => {
@@ -234,14 +257,32 @@ it('moverse de semana lo escribe en la URL', async () => {
     await waitFor(() => expect(urlActual()).toContain('semana=4'))
 })
 
-it('no escribe la URL al montar: / queda limpio', async () => {
-    // Si canonicalizara a /?dia=..., un bookmark congelaría un día viejo y abrir la app
-    // de cero dejaría de significar "hoy".
+it('sin ciclo activo, no escribe la URL al montar: / queda limpio', async () => {
+    // Sin zona activa no hay nada que forzar todavía — sigue sin escribir nada hasta que
+    // el vendedor navegue. El caso CON ciclo activo es al revés (test siguiente): ahí sí
+    // se escribe siempre, que es justo lo que hace que un bookmark nunca congele nada.
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
+    const { urlActual } = renderPage()
+    await waitFor(() => expect(api.previewSemana).toHaveBeenCalled())
+
+    expect(urlActual()).toBe('/')
+})
+
+it('con ciclo activo, escribe la zona y el día de hoy en la URL al montar', async () => {
+    // Es lo que hace que recargar — o un bookmark tomado más tarde — nunca reproduzca una
+    // navegación vieja: cada montaje con zona activa vuelve a pisar la URL con el
+    // presente. Antes esto se lograba NO escribiendo nada; ahora se logra escribiendo
+    // siempre lo mismo que ya se muestra.
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     const { urlActual } = renderPage()
     await screen.findByText(/Semana 3/)
 
-    expect(urlActual()).toBe('/')
+    const hoy = getDiaDeHoy() ?? 'LUN'
+    await waitFor(() => {
+        const url = urlActual()
+        expect(url).toContain('semana=3')
+        expect(url).toContain(`dia=${hoy}`)
+    })
 })
 
 it('las flechas hacen wrap sobre el set real de semanas, no sobre 5 fijo', async () => {
@@ -351,11 +392,10 @@ it('con vuelta abierta se puede espiar otra semana en solo lectura', async () =>
 })
 
 it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async () => {
+    fijarLunes() // el cliente está sembrado en LUN; con ciclo activo, HOY gana siempre
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
-    // Se siembra el cliente en LUN y se entra con ?dia=LUN: sin `dia` la página arranca
-    // en HOY, que cambia según el día en que corra la suite.
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
-    renderPage('/?dia=LUN')
+    renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
 
@@ -374,12 +414,13 @@ it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async
 // browsing context anidado suma una entrada al historial del top-level y en la PWA de
 // Android el gesto de "atrás" pasa a retroceder dentro del iframe.
 it('abrir otro cliente monta un iframe nuevo en vez de navegar el vivo', async () => {
+    fijarLunes()
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({
         ...semanaVacia,
         LUN: [clienteLunes, otroClienteLunes],
     })
-    renderPage('/?dia=LUN')
+    renderPage()
 
     const [pagosA, pagosB] = await screen.findAllByRole('button', { name: 'Pagos' })
     fireEvent.click(pagosA)
@@ -397,9 +438,10 @@ it('abrir otro cliente monta un iframe nuevo en vez de navegar el vivo', async (
 // La contracara: ocultar ≠ desmontar. Con el mismo cliente la key no cambia, así que el
 // nodo del iframe es el MISMO y reabrir es instantáneo (no recarga el bundle ajeno).
 it('reabrir el mismo cliente reusa el iframe vivo', async () => {
+    fijarLunes()
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
-    renderPage('/?dia=LUN')
+    renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
     const antes = screen.getByTitle('Pagos')
@@ -415,9 +457,10 @@ it('reabrir el mismo cliente reusa el iframe vivo', async () => {
 
 // El pedido original: pasar de una app a otra del mismo cliente sin cerrar el sheet.
 it('tocar otra tab dentro del sheet mantiene la primera app viva y cambia el frame visible', async () => {
+    fijarLunes()
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
-    renderPage('/?dia=LUN')
+    renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
     const framePagos = screen.getByTitle('Pagos')
@@ -431,9 +474,10 @@ it('tocar otra tab dentro del sheet mantiene la primera app viva y cambia el fra
 })
 
 it('suelta la instancia embebida al cambiar de semana', async () => {
+    fijarLunes()
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
-    renderPage('/?dia=LUN')
+    renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
     expect(screen.getByTitle('Pagos')).toBeInTheDocument()
@@ -443,9 +487,10 @@ it('suelta la instancia embebida al cambiar de semana', async () => {
 })
 
 it('suelta la instancia embebida al cambiar de día', async () => {
+    fijarLunes()
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
-    renderPage('/?dia=LUN')
+    renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
     expect(screen.getByTitle('Pagos')).toBeInTheDocument()

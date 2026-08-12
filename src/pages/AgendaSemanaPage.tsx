@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
@@ -136,14 +136,31 @@ export default function AgendaSemanaPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    // Si la semana/día de la URL ganan, o si al abrir la app siempre se aterriza en lo
+    // activo. Falso al montar SIEMPRE (es un `useRef`, no algo que la URL pueda pre-
+    // sembrar): una semana/día que sobrevivió en la URL de un montaje anterior —
+    // recargar, o la PWA resumida desde cero — no cuenta como navegación de ESTA sesión,
+    // así que no gana hasta que el vendedor toque una flecha o un tab de día EN VIVO acá.
+    //
+    // Es lo que hace que, con una zona activa, abrir la app aterrice siempre ahí con el
+    // día de hoy: antes de esto, corregir la URL con un efecto DESPUÉS del primer render
+    // dejaba un flash real — la agenda alcanzaba a pedir el preview de la zona vieja por
+    // la red antes de que el efecto la corrigiera.
+    const navegoEnSesion = useRef(false)
+
     // La semana que se está MIRANDO. null hasta que se sepa cuál: con vuelta abierta es
     // la suya; sin vuelta, la primera pendiente/conocida del backend.
     const semanaParam = Number(searchParams.get('semana'))
     const semanaVista =
-        Number.isInteger(semanaParam) && (semanas ?? []).some(z => z.semana === semanaParam)
+        navegoEnSesion.current &&
+        Number.isInteger(semanaParam) &&
+        (semanas ?? []).some(z => z.semana === semanaParam)
             ? semanaParam
             : null
-    const setSemanaVista = (semana: number | null) => actualizarPosicion({ semana })
+    const setSemanaVista = (semana: number | null) => {
+        navegoEnSesion.current = true
+        actualizarPosicion({ semana })
+    }
 
     // Con ciclo abierto, esa es la semana. Sin ciclo (standby, de pie casi todos los lunes),
     // arranca en la primera semana PENDIENTE si se conoce — es la que `asegurar` abriría de
@@ -162,14 +179,30 @@ export default function AgendaSemanaPage() {
         semanaEfectiva !== null && !(operable && ciclo != null),
     )
 
-    // Sin `?dia=`, arranca en HOY y no en LUN: un jueves, LUN obligaba a swipear cuatro
-    // columnas para llegar a lo que el vendedor está recorriendo. El fin de semana no hay
-    // "hoy" en la agenda (es lunes a viernes), así que ahí sí cae a LUN.
+    // Sin `?dia=` DE ESTA SESIÓN, arranca en HOY y no en LUN: un jueves, LUN obligaba a
+    // swipear cuatro columnas para llegar a lo que el vendedor está recorriendo. El fin
+    // de semana no hay "hoy" en la agenda (es lunes a viernes), así que ahí sí cae a LUN.
     const diaParam = searchParams.get('dia')
-    const diaActivo: Dia = DIAS.includes(diaParam as Dia)
-        ? (diaParam as Dia)
-        : (getDiaDeHoy() ?? 'LUN')
-    const setDiaActivo = (dia: Dia) => actualizarPosicion({ dia })
+    const diaActivo: Dia =
+        navegoEnSesion.current && DIAS.includes(diaParam as Dia)
+            ? (diaParam as Dia)
+            : (getDiaDeHoy() ?? 'LUN')
+    const setDiaActivo = (dia: Dia) => {
+        navegoEnSesion.current = true
+        actualizarPosicion({ dia })
+    }
+
+    // Puramente cosmético: pisa la URL visible con lo que ya se está mostrando, para que
+    // un bookmark tomado en este momento (o mirar la barra de direcciones) refleje la
+    // realidad. No hace falta para que `semanaEfectiva`/`diaActivo` estén bien — eso ya
+    // lo garantiza `navegoEnSesion` arriba, sin esperar a este efecto.
+    const urlCorregida = useRef(false)
+    useEffect(() => {
+        if (urlCorregida.current || !cicloResuelto) return
+        urlCorregida.current = true
+        if (ciclo) actualizarPosicion({ semana: semanaEfectiva ?? ciclo.semana, dia: diaActivo })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cicloResuelto, ciclo])
     const [visitaCliente, setVisitaCliente] = useState<IAgendaClient | null>(null)
     // true = se abrió el flujo tocando "Iniciar visita" en la card (no "Propuesta"): se
     // salta la propuesta y va derecho al mapa. Ver VisitaFlow.directoAMapa.
