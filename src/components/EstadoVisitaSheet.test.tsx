@@ -9,34 +9,46 @@ const PROPS_BASE = {
     estadoActual: 'pendiente' as const,
     semanaActual: 2,
     semanasDisponibles: [1, 2, 3, 4],
-    onElegirDia: vi.fn(),
-    onElegirSemana: vi.fn(),
+    onReagendar: vi.fn(),
     onElegirNoVisita: vi.fn(),
     onClose: vi.fn(),
 }
 
 describe('EstadoVisitaSheet', () => {
-    it('elegir un día habilita confirmar y llama a onElegirDia', () => {
-        const onElegirDia = vi.fn()
-        render(<EstadoVisitaSheet {...PROPS_BASE} onElegirDia={onElegirDia} />)
+    it('elegir un día de la semana actual habilita confirmar y llama a onReagendar con la semana actual', () => {
+        const onReagendar = vi.fn()
+        render(<EstadoVisitaSheet {...PROPS_BASE} onReagendar={onReagendar} />)
         fireEvent.click(screen.getByRole('button', { name: /martes/i }))
-        fireEvent.click(screen.getByRole('button', { name: /elegí una opción|confirmar/i }))
-        expect(onElegirDia).toHaveBeenCalledWith('MAR')
+        fireEvent.click(screen.getByRole('button', { name: /mover al martes/i }))
+        expect(onReagendar).toHaveBeenCalledWith(2, 'MAR')
     })
 
-    it('muestra las otras semanas de la rotación, sin la actual', () => {
+    it('muestra las semanas de la rotación, incluida la actual', () => {
         render(<EstadoVisitaSheet {...PROPS_BASE} />)
-        expect(screen.getByRole('button', { name: /semana 1/i })).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: /semana 3/i })).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: /semana 4/i })).toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: /semana 2/i })).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^semana 1$/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^semana 2$/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^semana 3$/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^semana 4$/i })).toBeInTheDocument()
     })
 
-    it('elegir otra semana llama a onElegirSemana', () => {
-        const onElegirSemana = vi.fn()
-        render(<EstadoVisitaSheet {...PROPS_BASE} onElegirSemana={onElegirSemana} />)
-        fireEvent.click(screen.getByRole('button', { name: /semana 4/i }))
-        expect(onElegirSemana).toHaveBeenCalledWith(4)
+    it('no muestra la fila de semanas si solo hay una disponible', () => {
+        render(<EstadoVisitaSheet {...PROPS_BASE} semanasDisponibles={[2]} />)
+        expect(screen.queryByRole('button', { name: /^semana 2$/i })).not.toBeInTheDocument()
+    })
+
+    it('elegir otra semana y un día llama a onReagendar con ambos', () => {
+        const onReagendar = vi.fn()
+        render(<EstadoVisitaSheet {...PROPS_BASE} onReagendar={onReagendar} />)
+        fireEvent.click(screen.getByRole('button', { name: /^semana 4$/i }))
+        fireEvent.click(screen.getByRole('button', { name: /jueves/i }))
+        fireEvent.click(screen.getByRole('button', { name: /mover a semana 4 · jueves/i }))
+        expect(onReagendar).toHaveBeenCalledWith(4, 'JUE')
+    })
+
+    it('deshabilita confirmar si se elige la posición actual (misma semana y día)', () => {
+        render(<EstadoVisitaSheet {...PROPS_BASE} />)
+        fireEvent.click(screen.getByRole('button', { name: /lunes/i }))
+        expect(screen.getByRole('button', { name: /ya está el lunes/i })).toBeDisabled()
     })
 
     it('no visité deshabilitado si ya está registrado', () => {

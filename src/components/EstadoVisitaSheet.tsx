@@ -17,8 +17,7 @@ interface EstadoVisitaSheetProps {
     estadoActual: EstadoCicloCliente | null
     semanaActual: number
     semanasDisponibles: number[]
-    onElegirDia: (dia: Dia) => void
-    onElegirSemana: (semana: number) => void
+    onReagendar: (semana: number, dia: Dia) => void
     onElegirNoVisita: () => void
     onClose: () => void
 }
@@ -30,37 +29,67 @@ export default function EstadoVisitaSheet({
     estadoActual,
     semanaActual,
     semanasDisponibles,
-    onElegirDia,
-    onElegirSemana,
+    onReagendar,
     onElegirNoVisita,
     onClose,
 }: EstadoVisitaSheetProps) {
     const weekDates = getWeekDates()
+    const [semanaElegida, setSemanaElegida] = useState(semanaActual)
     const [seleccion, setSeleccion] = useState<Seleccion | null>(null)
     const yaNoVisita = estadoActual === 'no_visita'
 
     // El sheet queda montado entre aperturas (el caller solo togglea `open`): sin esto
     // la selección de la visita anterior quedaría pegada en la próxima apertura.
     useEffect(() => {
-        if (!open) setSeleccion(null)
-    }, [open])
+        if (!open) {
+            setSeleccion(null)
+            setSemanaElegida(semanaActual)
+        }
+    }, [open, semanaActual])
 
     function confirmar() {
         if (seleccion === 'no_visita') onElegirNoVisita()
-        else if (seleccion) onElegirDia(seleccion)
+        else if (seleccion) onReagendar(semanaElegida, seleccion)
     }
 
-    const otrasSemanas = semanasDisponibles.filter(s => s !== semanaActual)
+    const esPosicionActual = (d: Dia) => semanaElegida === semanaActual && d === diaActual
+
+    let labelBoton = 'Elegí un día'
+    if (seleccion === 'no_visita') labelBoton = 'Registrar No visité'
+    else if (seleccion && esPosicionActual(seleccion)) labelBoton = `Ya está el ${DIA_NOMBRE[seleccion]}`
+    else if (seleccion && semanaElegida !== semanaActual)
+        labelBoton = `Mover a Semana ${semanaElegida} · ${DIA_NOMBRE[seleccion]}`
+    else if (seleccion) labelBoton = `Mover al ${DIA_NOMBRE[seleccion]}`
+
+    const deshabilitarBoton = !seleccion || (seleccion !== 'no_visita' && esPosicionActual(seleccion))
 
     return (
         <BottomSheet open={open} onClose={onClose} title={nombreCliente} eyebrow="Estado de la visita">
+            {semanasDisponibles.length > 1 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                    {semanasDisponibles.map(s => (
+                        <button
+                            key={s}
+                            onClick={() => setSemanaElegida(s)}
+                            className={`h-9 rounded-lg border-[1.5px] px-3 text-[13px] font-semibold ${
+                                s === semanaElegida
+                                    ? 'border-dsnavy bg-dsnavy/10 text-dsnavy'
+                                    : 'border-[#E1E6F0] text-[#182645]'
+                            }`}
+                        >
+                            Semana {s}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             <p className="mb-3 text-[13px] leading-snug text-dsmuted">
                 {diaActual && <>Actualmente el <b>{DIA_NOMBRE[diaActual]}</b>. </>}
                 Elegí el nuevo día de la visita:
             </p>
             <div className="flex flex-col gap-2">
                 {DIAS.map(d => {
-                    const isActual = d === diaActual
+                    const isActual = semanaElegida === semanaActual && d === diaActual
                     const isSel = seleccion === d
                     return (
                         <button
@@ -74,35 +103,13 @@ export default function EstadoVisitaSheet({
                                       : 'border-[#E1E6F0] text-[#182645]'
                             }`}
                         >
-                            {DIA_NOMBRE[d]} · {formatDayDate(weekDates[d])}
+                            {DIA_NOMBRE[d]}
+                            {semanaElegida === semanaActual && <> · {formatDayDate(weekDates[d])}</>}
                             {isActual && <span className="text-dsmuted"> (actual)</span>}
                         </button>
                     )
                 })}
             </div>
-
-            {otrasSemanas.length > 0 && (
-                <>
-                    <div className="my-4 flex items-center gap-2">
-                        <div className="h-px flex-1 bg-[#E7E9F0]" />
-                        <span className="text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
-                            O mover a otra semana
-                        </span>
-                        <div className="h-px flex-1 bg-[#E7E9F0]" />
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {otrasSemanas.map(s => (
-                            <button
-                                key={s}
-                                onClick={() => onElegirSemana(s)}
-                                className="h-10 rounded-lg border-[1.5px] border-[#E1E6F0] px-3.5 text-[13px] font-semibold text-[#182645]"
-                            >
-                                Semana {s}
-                            </button>
-                        ))}
-                    </div>
-                </>
-            )}
 
             <div className="my-4 flex items-center gap-2">
                 <div className="h-px flex-1 bg-[#E7E9F0]" />
@@ -123,11 +130,11 @@ export default function EstadoVisitaSheet({
             </button>
 
             <Button
-                disabled={!seleccion}
+                disabled={deshabilitarBoton}
                 onClick={confirmar}
                 className="mt-4 h-12 w-full bg-dsgreen text-[14.5px] hover:bg-dsgreen/90"
             >
-                Elegí una opción
+                {labelBoton}
             </Button>
         </BottomSheet>
     )

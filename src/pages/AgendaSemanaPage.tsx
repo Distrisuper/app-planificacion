@@ -248,23 +248,7 @@ export default function AgendaSemanaPage() {
         setSemanaVista(semanas[nextIdx].semana)
     }
 
-    async function onElegirDia(dia: Dia) {
-        const cliente = estadoVisitaCliente
-        setEstadoVisitaCliente(null)
-        if (!cliente) return
-        try {
-            await reacomodar.mutateAsync({
-                rotacionClienteId: cliente.rotacionClienteId,
-                dia: DIAS.indexOf(dia) + 1,
-            })
-            // Reacomodar mueve el día y deja al cliente PENDIENTE: no lo resuelve.
-            mostrar('exito', 'Cliente reagendado')
-        } catch {
-            mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
-        }
-    }
-
-    async function onElegirSemanaReagendar(semanaDestino: number) {
+    async function onReagendar(semanaDestino: number, dia: Dia) {
         const cliente = estadoVisitaCliente
         setEstadoVisitaCliente(null)
         if (!cliente) return
@@ -272,11 +256,17 @@ export default function AgendaSemanaPage() {
             await reacomodar.mutateAsync({
                 rotacionClienteId: cliente.rotacionClienteId,
                 semana: semanaDestino,
-                dia: cliente.dia,
+                dia: DIAS.indexOf(dia) + 1,
             })
-            mostrar('exito', `Cliente movido a la semana ${semanaDestino}`)
+            // Reacomodar mueve semana/día y deja al cliente PENDIENTE: no lo resuelve.
+            mostrar(
+                'exito',
+                semanaDestino === semanaEfectiva
+                    ? 'Cliente reagendado'
+                    : `Cliente movido a la semana ${semanaDestino}`,
+            )
         } catch {
-            mostrar('error', 'No se pudo mover de semana. Volvé a intentar.')
+            mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
         }
     }
 
@@ -429,8 +419,7 @@ export default function AgendaSemanaPage() {
                 // es parte del inventario de vocabulario de la pieza 5): no hace falta pasarle
                 // la descripción de cada zona.
                 semanasDisponibles={semanas?.map(z => z.semana) ?? []}
-                onElegirDia={onElegirDia}
-                onElegirSemana={onElegirSemanaReagendar}
+                onReagendar={onReagendar}
                 onElegirNoVisita={onElegirNoVisita}
                 onClose={() => setEstadoVisitaCliente(null)}
             />
