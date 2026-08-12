@@ -196,10 +196,15 @@ export default function AgendaSemanaPage() {
     // un bookmark tomado en este momento (o mirar la barra de direcciones) refleje la
     // realidad. No hace falta para que `semanaEfectiva`/`diaActivo` estén bien — eso ya
     // lo garantiza `navegoEnSesion` arriba, sin esperar a este efecto.
-    const urlCorregida = useRef(false)
+    // Se re-corrige por cada semana de ciclo distinta (incluyendo null→abierto): un
+    // vendedor en standby que arranca una visita abre el ciclo a mitad de sesión, y esa
+    // transición también tiene que pisar la URL — no solo la primera resolución.
+    const cicloCorregido = useRef<number | null | undefined>(undefined)
     useEffect(() => {
-        if (urlCorregida.current || !cicloResuelto) return
-        urlCorregida.current = true
+        if (!cicloResuelto) return
+        const semanaCiclo = ciclo?.semana ?? null
+        if (cicloCorregido.current === semanaCiclo) return
+        cicloCorregido.current = semanaCiclo
         if (ciclo) actualizarPosicion({ semana: semanaEfectiva ?? ciclo.semana, dia: diaActivo })
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cicloResuelto, ciclo])
