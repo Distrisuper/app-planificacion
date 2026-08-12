@@ -49,7 +49,8 @@ function mensajeDeCuenta(code: string | null): string | null {
 
 export default function AgendaSemanaPage() {
     const { user, logout } = useAuth()
-    const { data: cicloActual, error: cicloActualError } = useCicloActual()
+    const { data: cicloActual, error: cicloActualError, isSuccess: cicloResuelto } =
+        useCicloActual()
     const mensajeCuenta = mensajeDeCuenta(errorCode(cicloActualError))
     const ciclo = cicloActual?.ciclo ?? null
     const semanas = cicloActual?.semanas
@@ -335,6 +336,32 @@ export default function AgendaSemanaPage() {
         return (
             <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
                 <p className="text-[14px] font-semibold leading-snug text-[#182645]">{mensajeCuenta}</p>
+                <button
+                    type="button"
+                    onClick={logout}
+                    className="text-[13px] font-semibold text-dsmuted underline"
+                >
+                    Cerrar sesión
+                </button>
+            </div>
+        )
+    }
+
+    // Sin rotación materializada no hay NADA que mostrar: `getCicloActual` responde
+    // `{ ciclo: null }` a secas (el controller arma `{ ciclo, ...contexto }` y `contexto` es
+    // null), así que `semanas` no viaja y `semanaEfectiva` se queda en null para siempre.
+    // Sin este corte el header decía "Cargando…" eternamente, con las flechas muertas y
+    // cinco columnas de "Sin visitas este día" — indistinguible de una falla de red.
+    // El `cicloResuelto` es lo que separa este caso del "todavía está cargando" real.
+    if (cicloResuelto && semanaEfectiva === null) {
+        return (
+            <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
+                <p className="text-[14px] font-semibold leading-snug text-[#182645]">
+                    Todavía no tenés una ruta asignada.
+                </p>
+                <p className="text-[13px] leading-snug text-dsmuted">
+                    Cuando gerencia cargue tu rotación, tu agenda aparece acá.
+                </p>
                 <button
                     type="button"
                     onClick={logout}

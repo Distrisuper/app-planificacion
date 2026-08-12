@@ -38,6 +38,11 @@ const CICLO_ACTUAL_STANDBY_SIN_PENDIENTES = {
     semanasPendientes: [],
 }
 
+/** Lo que responde `GET /planificacion/ciclo/actual` cuando el vendedor no tiene ninguna
+ *  rotación materializada: el controller arma `{ ciclo, ...contexto }` con `contexto` null,
+ *  así que `semanas` y `semanasPendientes` ni viajan. */
+const CICLO_ACTUAL_SIN_ROTACION = { ciclo: null }
+
 const semanaVacia = { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] }
 
 const clienteLunes = {
@@ -255,6 +260,15 @@ it('sincroniza al montar y avisa si cerró una semana con pendientes', async () 
     renderPage()
     await waitFor(() => expect(api.sincronizar).toHaveBeenCalled())
     expect(await screen.findByText(/semana 2/i)).toBeInTheDocument()
+})
+
+it('sin rotación materializada muestra el cartel, no un "Cargando…" eterno', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_SIN_ROTACION)
+    renderPage()
+    expect(await screen.findByText(/todavía no tenés una ruta asignada/i)).toBeInTheDocument()
+    // Sin set de semanas no hay nada que previsualizar: pedirlo sería un 404 seguro.
+    expect(api.previewSemana).not.toHaveBeenCalled()
+    expect(screen.queryByText('Cargando…')).not.toBeInTheDocument()
 })
 
 it('el cierre de semana no se pierde cuando además cambió el padrón', async () => {
