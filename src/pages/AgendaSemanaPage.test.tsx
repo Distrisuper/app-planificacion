@@ -11,10 +11,37 @@ vi.mock('@/context/AuthContext', () => ({
     useAuth: () => ({ user: { name: 'Martín Rossi' }, logout: vi.fn() }),
 }))
 
-const cicloAbierto = {
-    id: 1, codigoParticularVendedor: 'V 2', semana: 3,
-    fechaApertura: '2026-07-27T10:00:00Z', fechaCierre: null, estado: 'abierta' as const,
+const CICLO_ACTUAL_ABIERTO = {
+    ciclo: {
+        id: 1,
+        rotacionId: 10,
+        codigoParticularVendedor: 'V 2',
+        semana: 3,
+        fechaLunes: '2026-08-10',
+        fechaApertura: '2026-08-10T10:00:00Z',
+        fechaCierre: null,
+        estado: 'abierta' as const,
+    },
+    semanas: [1, 2, 3, 4],
+    semanasPendientes: [3, 4],
 }
+const CICLO_ACTUAL_STANDBY = {
+    ciclo: null,
+    semanas: [1, 2, 3, 4],
+    semanasPendientes: [3, 4],
+}
+/** Sin pendientes conocidos: fuerza la caída al primer elemento de `semanas` (no de
+ *  `semanasPendientes`) — es el caso que exige el test de wrap sobre el set real. */
+const CICLO_ACTUAL_STANDBY_SIN_PENDIENTES = {
+    ciclo: null,
+    semanas: [1, 2, 3, 4],
+    semanasPendientes: [],
+}
+
+/** Lo que responde `GET /planificacion/ciclo/actual` cuando el vendedor no tiene ninguna
+ *  rotación materializada: el controller arma `{ ciclo, ...contexto }` con `contexto` null,
+ *  así que `semanas` y `semanasPendientes` ni viajan. */
+const CICLO_ACTUAL_SIN_ROTACION = { ciclo: null }
 
 const semanaVacia = { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] }
 
@@ -22,7 +49,7 @@ const clienteLunes = {
     codigoCliente: 'C1',
     codigoParticularCliente: '10034',
     nombreCliente: 'ALMACEN DON JOSE',
-    cicloClienteId: 42,
+    rotacionClienteId: 42,
     dia: 1,
     estado: 'pendiente' as const,
     visitaId: null,
@@ -36,7 +63,7 @@ const otroClienteLunes = {
     codigoCliente: 'C2',
     codigoParticularCliente: '20077',
     nombreCliente: 'KIOSCO RUBEN',
-    cicloClienteId: 43,
+    rotacionClienteId: 43,
 }
 
 /** `url` permite arrancar en una posición concreta (?dia=/?semana=), que es de donde la
@@ -64,36 +91,60 @@ beforeEach(() => {
     ;(api.getMotivos as any).mockResolvedValue([])
     ;(api.getVisitaActiva as any).mockResolvedValue(null)
     ;(api.getAgendaSemana as any).mockResolvedValue(semanaVacia)
-    ;(api.getCicloPreview as any).mockResolvedValue({
+    ;(api.sincronizar as any).mockResolvedValue({
+        semanaCerrada: null,
+        sinVisitar: [],
+        rubrosAutocompletados: 0,
+        altas: [],
+        bajas: [],
+        rotacionCerrada: false,
+    })
+    ;(api.previewSemana as any).mockResolvedValue({
         semana: 3, clientes: 39, omitidos: [], dias: semanaVacia,
     })
 })
 
-it('sin vuelta abierta NO pide la agenda y ofrece abrir', async () => {
-    // Ramificar sobre cicloActual === null (un dato) en vez de sobre el 409 de la agenda.
-    ;(api.getCicloActual as any).mockResolvedValue(null)
+it('sin ciclo abierto no pide la agenda operable, usa el preview', async () => {
+    // Ramificar sobre cicloActual.ciclo === null (un dato) en vez de sobre el 409 de la
+    // agenda.
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
     renderPage()
 
-    expect(await screen.findByRole('button', { name: /abrir semana/i })).toBeInTheDocument()
+    await waitFor(() => expect(api.previewSemana).toHaveBeenCalled())
     expect(api.getAgendaSemana).not.toHaveBeenCalled()
 })
 
-it('sin vuelta abierta muestra la semana propuesta por el backend', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(null)
+it('sin ciclo abierto arranca en la primera semana pendiente', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
+    ;(api.previewSemana as any).mockResolvedValue({
+        semana: 3, clientes: 0, omitidos: [], dias: semanaVacia,
+    })
     renderPage()
-    // El título del header y el CTA de CicloVacio ambos dicen "Semana 3" (a propósito:
-    // Task 9 fix-round — el título usa semanaBase para no quedarse en "Cargando…"), así
-    // que se apunta al botón puntualmente para no depender de cuál de los dos matchea.
-    expect(await screen.findByRole('button', { name: /abrir semana 3/i })).toBeInTheDocument()
-    expect(api.getCicloPreview).toHaveBeenCalledWith(undefined)
+    await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(3))
 })
 
-it('las flechas navegan las semanas de la rotación', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(null)
+// ── Problema de cuenta ──────────────────────────────────────────────────────────
+// resolveSellerCode() en el backend lo usan ciclo/actual, sincronizar Y las acciones —
+// no es exclusivo del viejo abrirCiclo. Sin este manejo, un usuario sin código de
+// vendedor asociado se queda viendo "Cargando…" para siempre, sin ningún aviso.
+
+it('un usuario sin código de vendedor resoluble recibe un mensaje de cuenta, no "Cargando…" infinito', async () => {
+    ;(api.getCicloActual as any).mockRejectedValue({
+        response: { data: { code: 'SELLER_CODE_UNRESOLVED' } },
+    })
     renderPage()
-    await screen.findByRole('button', { name: /abrir semana 3/i })
-    fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
-    await waitFor(() => expect(api.getCicloPreview).toHaveBeenCalledWith(4))
+
+    expect(await screen.findByText(/no tiene un código de vendedor asignado/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^Cargando…$/)).not.toBeInTheDocument()
+})
+
+it('un usuario con más de un código de vendedor también recibe su propio mensaje de cuenta', async () => {
+    ;(api.getCicloActual as any).mockRejectedValue({
+        response: { data: { code: 'SELLER_CODE_AMBIGUOUS' } },
+    })
+    renderPage()
+
+    expect(await screen.findByText(/más de un código de vendedor/i)).toBeInTheDocument()
 })
 
 // ── Posición (semana + día) en la URL ──────────────────────────────────────────
@@ -101,7 +152,7 @@ it('las flechas navegan las semanas de la rotación', async () => {
 // dónde estaba. Ahora la posición vive en la URL, así que sobrevive la recarga.
 
 it('sin ?dia arranca en HOY, no en LUN', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage()
 
     const hoy = getDiaDeHoy() ?? 'LUN'
@@ -111,7 +162,7 @@ it('sin ?dia arranca en HOY, no en LUN', async () => {
 })
 
 it('?dia= respeta el día que venía en la URL al recargar', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage('/?dia=JUE')
 
     const tab = await screen.findByRole('button', { name: /^JUE/ })
@@ -119,7 +170,7 @@ it('?dia= respeta el día que venía en la URL al recargar', async () => {
 })
 
 it('un ?dia inválido no rompe: cae a hoy', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage('/?dia=BASURA')
 
     const hoy = getDiaDeHoy() ?? 'LUN'
@@ -128,7 +179,7 @@ it('un ?dia inválido no rompe: cae a hoy', async () => {
 })
 
 it('elegir un día lo escribe en la URL', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     const { urlActual } = renderPage()
     await screen.findByRole('button', { name: /^MIE/ })
 
@@ -138,28 +189,38 @@ it('elegir un día lo escribe en la URL', async () => {
 })
 
 it('?semana= respeta la semana que se estaba mirando al recargar', async () => {
-    // Ciclo abierto en la 3, pero la URL dice que estaba hojeando la 5: gana la URL, y por
-    // no ser la vuelta abierta la página queda en modo preview (pide el preview de la 5).
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
-    ;(api.getCicloPreview as any).mockResolvedValue({
-        semana: 5, clientes: 12, omitidos: [], dias: semanaVacia,
+    // Ciclo abierto en la 3, pero la URL dice que estaba hojeando la 4: gana la URL, y por
+    // no ser la vuelta abierta la página queda en modo preview (pide el preview de la 4).
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.previewSemana as any).mockResolvedValue({
+        semana: 4, clientes: 12, omitidos: [], dias: semanaVacia,
     })
-    renderPage('/?semana=5')
+    renderPage('/?semana=4')
 
-    await waitFor(() => expect(api.getCicloPreview).toHaveBeenCalledWith(5))
-    expect(await screen.findByText(/Semana 5/)).toBeInTheDocument()
+    await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4))
+    expect(await screen.findByText(/Semana 4/)).toBeInTheDocument()
 })
 
 it('una ?semana fuera de la rotación se ignora y vale la vuelta abierta', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage('/?semana=99')
 
     expect(await screen.findByText(/Semana 3/)).toBeInTheDocument()
-    expect(api.getCicloPreview).not.toHaveBeenCalled()
+    expect(api.previewSemana).not.toHaveBeenCalled()
+})
+
+it('una ?semana fuera del set real, sin ciclo abierto, cae al valor por defecto', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY) // semanas: [1,2,3,4]
+    ;(api.previewSemana as any).mockResolvedValue({
+        semana: 3, clientes: 0, omitidos: [], dias: semanaVacia,
+    })
+    renderPage('/?semana=7')
+
+    await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(3))
 })
 
 it('moverse de semana lo escribe en la URL', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     const { urlActual } = renderPage()
     await screen.findByText(/Semana 3/)
 
@@ -171,67 +232,80 @@ it('moverse de semana lo escribe en la URL', async () => {
 it('no escribe la URL al montar: / queda limpio', async () => {
     // Si canonicalizara a /?dia=..., un bookmark congelaría un día viejo y abrir la app
     // de cero dejaría de significar "hoy".
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     const { urlActual } = renderPage()
     await screen.findByText(/Semana 3/)
 
     expect(urlActual()).toBe('/')
 })
 
-it('las flechas hacen wrap de 5 a 1', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(null)
-    ;(api.getCicloPreview as any).mockResolvedValue({
-        semana: 5, clientes: 47, omitidos: [], dias: semanaVacia,
-    })
+it('las flechas hacen wrap sobre el set real de semanas, no sobre 5 fijo', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY_SIN_PENDIENTES) // semanas: [1,2,3,4]
+    ;(api.previewSemana as any).mockImplementation((s: number) =>
+        Promise.resolve({ semana: s, clientes: 0, omitidos: [], dias: semanaVacia }),
+    )
     renderPage()
-    await screen.findByRole('button', { name: /abrir semana 5/i })
-    fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
-    await waitFor(() => expect(api.getCicloPreview).toHaveBeenCalledWith(1))
+    await screen.findByText(/semana 1/i) // arranca en la primera semana conocida
+    fireEvent.click(screen.getByRole('button', { name: /semana anterior/i }))
+    await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4)) // wrap 1 -> 4, no -> 0
 })
 
-it('abrir la semana usa la que se está viendo', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(null)
-    ;(api.abrirCiclo as any).mockResolvedValue({
-        cicloId: 1, semana: 3, clientes: 39, omitidos: [],
+it('sincroniza al montar y avisa si cerró una semana con pendientes', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
+    ;(api.sincronizar as any).mockResolvedValue({
+        semanaCerrada: 2, sinVisitar: ['101', '102'], rubrosAutocompletados: 0,
+        altas: [], bajas: [], rotacionCerrada: false,
     })
+    ;(api.previewSemana as any).mockResolvedValue({ semana: 3, clientes: 0, omitidos: [], dias: semanaVacia })
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /abrir semana/i }))
-    await waitFor(() => expect(api.abrirCiclo).toHaveBeenCalledWith(3))
+    await waitFor(() => expect(api.sincronizar).toHaveBeenCalled())
+    expect(await screen.findByText(/semana 2/i)).toBeInTheDocument()
+})
+
+it('sin rotación materializada muestra el cartel, no un "Cargando…" eterno', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_SIN_ROTACION)
+    renderPage()
+    expect(await screen.findByText(/todavía no tenés una ruta asignada/i)).toBeInTheDocument()
+    // Sin set de semanas no hay nada que previsualizar: pedirlo sería un 404 seguro.
+    expect(api.previewSemana).not.toHaveBeenCalled()
+    expect(screen.queryByText('Cargando…')).not.toBeInTheDocument()
+})
+
+it('el cierre de semana no se pierde cuando además cambió el padrón', async () => {
+    // Los dos avisos salían con dos `mostrar` en el mismo tick y useNotificacion no tiene
+    // cola: el de la ruta borraba el del cierre, que es el que importa.
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
+    ;(api.sincronizar as any).mockResolvedValue({
+        semanaCerrada: 2, sinVisitar: ['101', '102'], rubrosAutocompletados: 0,
+        altas: ['201'], bajas: ['301'], rotacionCerrada: false,
+    })
+    ;(api.previewSemana as any).mockResolvedValue({ semana: 3, clientes: 0, omitidos: [], dias: semanaVacia })
+    renderPage()
+    await waitFor(() => expect(api.sincronizar).toHaveBeenCalled())
+    expect(await screen.findByText(/cerramos tu semana 2/i)).toBeInTheDocument()
+    expect(screen.getByText(/tu ruta cambió/i)).toBeInTheDocument()
 })
 
 it('con vuelta abierta muestra la agenda operable, sin preview', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage()
     await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
-    expect(api.getCicloPreview).not.toHaveBeenCalled()
-    expect(screen.queryByRole('button', { name: /abrir semana/i })).not.toBeInTheDocument()
+    expect(api.previewSemana).not.toHaveBeenCalled()
 })
 
 it('con vuelta abierta se puede espiar otra semana en solo lectura', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage()
     await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
 
     fireEvent.click(screen.getByRole('button', { name: /semana siguiente/i }))
 
-    await waitFor(() => expect(api.getCicloPreview).toHaveBeenCalledWith(4))
+    await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4))
     expect(await screen.findByText(/vista previa/i)).toBeInTheDocument()
 })
 
-it('un usuario sin código de vendedor recibe un mensaje de cuenta, no "reintentá"', async () => {
-    // No es reintentable: es configuración del usuario. Un "volvé a intentar" lo dejaría
-    // tocando el botón contra algo que nunca va a andar.
-    ;(api.getCicloActual as any).mockResolvedValue(null)
-    ;(api.abrirCiclo as any).mockRejectedValue({
-        response: { status: 400, data: { ok: 0, code: 'SELLER_CODE_UNRESOLVED' } },
-    })
-    renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /abrir semana/i }))
-    expect(await screen.findByText(/avisá a sistemas/i)).toBeInTheDocument()
-})
-
 it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     // Se siembra el cliente en LUN y se entra con ?dia=LUN: sin `dia` la página arranca
     // en HOY, que cambia según el día en que corra la suite.
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
@@ -254,7 +328,7 @@ it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async
 // browsing context anidado suma una entrada al historial del top-level y en la PWA de
 // Android el gesto de "atrás" pasa a retroceder dentro del iframe.
 it('abrir otro cliente monta un iframe nuevo en vez de navegar el vivo', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({
         ...semanaVacia,
         LUN: [clienteLunes, otroClienteLunes],
@@ -277,7 +351,7 @@ it('abrir otro cliente monta un iframe nuevo en vez de navegar el vivo', async (
 // La contracara: ocultar ≠ desmontar. Con el mismo cliente la key no cambia, así que el
 // nodo del iframe es el MISMO y reabrir es instantáneo (no recarga el bundle ajeno).
 it('reabrir el mismo cliente reusa el iframe vivo', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
     renderPage('/?dia=LUN')
 
@@ -295,7 +369,7 @@ it('reabrir el mismo cliente reusa el iframe vivo', async () => {
 
 // El pedido original: pasar de una app a otra del mismo cliente sin cerrar el sheet.
 it('tocar otra tab dentro del sheet mantiene la primera app viva y cambia el frame visible', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
     renderPage('/?dia=LUN')
 
@@ -311,7 +385,7 @@ it('tocar otra tab dentro del sheet mantiene la primera app viva y cambia el fra
 })
 
 it('suelta la instancia embebida al cambiar de semana', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
     renderPage('/?dia=LUN')
 
@@ -323,7 +397,7 @@ it('suelta la instancia embebida al cambiar de semana', async () => {
 })
 
 it('suelta la instancia embebida al cambiar de día', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
     renderPage('/?dia=LUN')
 
@@ -335,7 +409,7 @@ it('suelta la instancia embebida al cambiar de día', async () => {
 })
 
 it('volver a la semana abierta devuelve el modo operable', async () => {
-    ;(api.getCicloActual as any).mockResolvedValue(cicloAbierto)
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage()
     await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
 

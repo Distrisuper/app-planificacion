@@ -5,12 +5,12 @@ export type NivelMotivo = 'visita' | 'rubro'
 /** Qué significa comercialmente el motivo. Solo los de nivel 'rubro' lo tienen. */
 export type ResultadoMotivo = 'ganado' | 'diferido' | 'perdido' | 'no_ofrecido'
 
-export type TipoResolucion = 'visita' | 'no_visita' | 'reagendada'
+export type TipoResolucion = 'visita' | 'no_visita'
 
 export type EstadoCiclo = 'abierta' | 'cerrada'
 
 /** DERIVADO en el backend de la resolución del cliente — no existe como columna. */
-export type EstadoCicloCliente = 'pendiente' | 'en_curso' | 'visitada' | 'no_visita' | 'reagendada'
+export type EstadoCicloCliente = 'pendiente' | 'en_curso' | 'visitada' | 'no_visita'
 
 /** Entrada de catálogo para poblar selects. Rubros y marcas comparten forma. */
 export interface ICatalogoItem {
@@ -60,10 +60,12 @@ export interface IVisitClientCard {
     paymentPlan?: number | null
 }
 
-/** Card de la VUELTA ABIERTA. Los cinco campos del ciclo son requeridos a propósito:
- *  con cicloClienteId opcional, iniciarVisita({ cicloClienteId: undefined }) compilaría. */
+/** Card de la vuelta abierta O de una semana previsualizada — ver decisión de diseño en el
+ *  plan de este dominio: ambas fuentes ya traen un rotacionClienteId real. Los cinco campos
+ *  son requeridos a propósito: con rotacionClienteId opcional, iniciarVisita({
+ *  rotacionClienteId: undefined }) compilaría. */
 export interface IAgendaClient extends IVisitClientCard {
-    cicloClienteId: number
+    rotacionClienteId: number
     dia: number
     estado: EstadoCicloCliente
     /** Id de la resolución si es una visita (para retomar la carga de rubros). */
@@ -72,53 +74,66 @@ export interface IAgendaClient extends IVisitClientCard {
     rubrosPendientes: number
 }
 
-/** Card de una semana NO abierta. Deliberadamente NO extiende IAgendaClient: sin ciclo
- *  no hay cicloClienteId ni estado, y que sea otro tipo es lo que impide que una card
- *  de preview llegue a una mutación. */
-export interface IPreviewClient extends IVisitClientCard {
-    dia: number
-}
-
+/** El plan de una semana que no es necesariamente la abierta, con el estado REAL de
+ *  cada cliente (visitada/no_visita/pendiente/en_curso) — incluso si esa semana ya
+ *  está cerrada. `IAgendaClient`, no un tipo aparte: se puede actuar sobre estas cards
+ *  igual que sobre las de la agenda (mismo rotacionClienteId real). */
 export interface IPreviewCiclo {
-    /** La semana previsualizada. Si el request la omitió, es la que propuso el backend. */
+    /** La semana previsualizada. */
     semana: number
     clientes: number
     omitidos: string[]
-    dias: Record<Dia, IPreviewClient[]>
+    dias: Record<Dia, IAgendaClient[]>
 }
 
 export interface ICicloSemana {
     id: number
+    rotacionId: number
     codigoParticularVendedor: string
     semana: number
+    fechaLunes: string
     fechaApertura: string
     fechaCierre: string | null
     estado: EstadoCiclo
 }
 
-export interface IAbrirCicloResult {
-    cicloId: number
-    semana: number
-    clientes: number
-    omitidos: string[]
+/** `semanas`/`semanasPendientes` viajan siempre que el vendedor tiene una ROTACIÓN abierta,
+ *  con o sin ciclo/semana abierto encima — así el front nunca tiene que asumir un tamaño fijo
+ *  de rotación (hay vendedores con 4 semanas, o con un set no contiguo). Ausentes solo si el
+ *  vendedor no tiene ninguna rotación materializada todavía. */
+export interface ICicloActualResult {
+    ciclo: ICicloSemana | null
+    semanas?: number[]
+    semanasPendientes?: number[]
 }
 
-export interface IVisitaConRubrosPendientes {
-    visitaId: number
-    codigoParticularCliente: string
-    rubros: number
+export interface ISincronizarResult {
+    semanaCerrada: number | null
+    sinVisitar: string[]
+    rubrosAutocompletados: number
+    altas: string[]
+    bajas: string[]
+    rotacionCerrada: boolean
 }
 
-export interface ICerrarCicloResult {
-    cerrado: boolean
-    clientesPendientes: string[]
-    visitasConRubrosPendientes: IVisitaConRubrosPendientes[]
+/** `semana` ausente = mover de día dentro de la semana actual de la fila. */
+export interface IReacomodarDTO {
+    semana?: number
+    dia: number
+}
+
+/** Permutar todos los clientes de una celda (semana, día) por los de otra. */
+export interface IIntercambiarDiasDTO {
+    semanaA: number
+    diaA: number
+    semanaB: number
+    diaB: number
 }
 
 /** La visita activa: el backend devuelve la resolución cruda. */
 export interface IResolucion {
     id: number
-    cicloClienteId: number
+    rotacionClienteId: number
     tipo: TipoResolucion
     fechaInicio: string
     fechaFin: string | null
@@ -247,11 +262,14 @@ export interface IRubroClientsPageResponse {
 }
 
 export interface IIniciarVisitaDTO {
-    cicloClienteId: number
+    rotacionClienteId: number
     /** Obligatoria: el backend rechaza null con COORD_REQUERIDA. */
     coordInicio: string
     /** La propuesta tal como se le mostró al vendedor. Si no viene, el backend la recalcula. */
     propuesta?: IPropuestaRubroDTO[]
+    /** true = "sí, cerrá la otra semana y abrí esta" — se manda solo al reintentar después
+     *  de un 409 CAMBIO_DE_SEMANA. */
+    confirmarCambioDeSemana?: boolean
 }
 
 /** Sin motivoIds: al cerrar una visita el resultado comercial vive en los rubros. */
@@ -267,12 +285,13 @@ export interface ICerrarVisitaResult {
 
 /** Único lugar donde se piden motivos a nivel visita. */
 export interface INoVisitaDTO {
-    cicloClienteId: number
+    rotacionClienteId: number
     motivoIds: number[]
+    confirmarCambioDeSemana?: boolean
 }
 
 export interface INoVisitaResult {
-    cicloClienteId: number
+    rotacionClienteId: number
 }
 
 export interface IResolverRubroDTO {
@@ -290,4 +309,61 @@ export interface IAgregarRubroDTO {
 
 export interface IAgregarRubroResult {
     visitaRubroId: number
+}
+
+// ── Gerencia: la rotación de OTRO vendedor ─────────────────────────────────────
+
+export type EstadoRotacion = 'programada' | 'abierta' | 'cerrada' | 'cancelada'
+
+/** Quién movió una fila del plan por última vez. `usuario` es un email (o el id como
+ *  string): los usuarios viven en el servicio de auth externo, así que la bitácora del
+ *  backend guarda texto, no una FK. */
+export interface IReacomodacionInfo {
+    origen: 'vendedor' | 'gerencia'
+    usuario: string
+    /** Instante ISO en UTC. Se muestra con fechaHoraNegocio(), nunca crudo. */
+    fecha: string
+}
+
+/**
+ * Una card del grid de gerencia: SOLO lo que esa vista dibuja, más la autoría.
+ *
+ * NO extiende `IAgendaClient` a propósito. La card del vendedor trae 28 campos porque los
+ * necesita para operar la visita (dirección, teléfono, coords, descuentos, condiciones de
+ * pago); el grid dibuja nombre, código y estado. Mandar el resto costaba 7833 bytes por
+ * card contra 152 útiles: 1.46 MB por rotación de 200 clientes donde alcanzan ~30 KB.
+ * El backend proyecta estos campos explícitamente (GerenciaRotacionService.getRotacion).
+ */
+export interface IAgendaClientAdmin {
+    rotacionClienteId: number
+    codigoParticularCliente: string
+    nombreCliente: string
+    dia: number
+    estado: EstadoCicloCliente
+    ultimoMovimiento: IReacomodacionInfo | null
+}
+
+export interface ISemanaRotacionAdmin {
+    semana: number
+    /** El nombre de la zona, ej. "Buenos Aires". null = sin nombre todavía. */
+    descripcion: string | null
+    dias: Record<Dia, IAgendaClientAdmin[]>
+}
+
+/** Una rotación de la cola del vendedor, sin su grid. */
+export interface IRotacionResumen {
+    id: number
+    codigoParticularVendedor: string
+    estado: EstadoRotacion
+    /** null mientras está 'programada': todavía no se sabe cuándo arranca. */
+    fechaInicio: string | null
+    fechaFin: string | null
+    descripcion: string | null
+    /** Posición en la cola. null en cualquier estado que no sea 'programada'. */
+    orden: number | null
+}
+
+/** El grid completo de una rotación, en un solo payload. */
+export interface IRotacionCompleta extends IRotacionResumen {
+    semanas: ISemanaRotacionAdmin[]
 }

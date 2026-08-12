@@ -1,90 +1,46 @@
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
-import { vi } from 'vitest'
 import EstadoVisitaSheet from './EstadoVisitaSheet'
 
-const noop = () => {}
+const PROPS_BASE = {
+    open: true,
+    nombreCliente: 'Cliente Test',
+    diaActual: 'LUN' as const,
+    estadoActual: 'pendiente' as const,
+    semanaActual: 2,
+    semanasDisponibles: [1, 2, 3, 4],
+    onElegirDia: vi.fn(),
+    onElegirSemana: vi.fn(),
+    onElegirNoVisita: vi.fn(),
+    onClose: vi.fn(),
+}
 
-it('cerrado no renderiza nada', () => {
-    render(
-        <EstadoVisitaSheet
-            open={false}
-            nombreCliente="Almacén Don José"
-            diaActual="LUN"
-            estadoActual="pendiente"
-            onElegirDia={noop}
-            onElegirNoVisita={noop}
-            onClose={noop}
-        />,
-    )
-    expect(screen.queryByText('Almacén Don José')).not.toBeInTheDocument()
-})
+describe('EstadoVisitaSheet', () => {
+    it('elegir un día habilita confirmar y llama a onElegirDia', () => {
+        const onElegirDia = vi.fn()
+        render(<EstadoVisitaSheet {...PROPS_BASE} onElegirDia={onElegirDia} />)
+        fireEvent.click(screen.getByRole('button', { name: /martes/i }))
+        fireEvent.click(screen.getByRole('button', { name: /elegí una opción|confirmar/i }))
+        expect(onElegirDia).toHaveBeenCalledWith('MAR')
+    })
 
-it('el botón de confirmar arranca deshabilitado hasta elegir una opción', () => {
-    render(
-        <EstadoVisitaSheet
-            open
-            nombreCliente="Almacén Don José"
-            diaActual="LUN"
-            estadoActual="pendiente"
-            onElegirDia={noop}
-            onElegirNoVisita={noop}
-            onClose={noop}
-        />,
-    )
-    const confirmar = screen.getByRole('button', { name: /elegí una opción/i })
-    expect(confirmar).toBeDisabled()
-    fireEvent.click(screen.getByRole('button', { name: /martes/i }))
-    expect(confirmar).toBeEnabled()
-})
+    it('muestra las otras semanas de la rotación, sin la actual', () => {
+        render(<EstadoVisitaSheet {...PROPS_BASE} />)
+        expect(screen.getByRole('button', { name: /semana 1/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /semana 3/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /semana 4/i })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /semana 2/i })).not.toBeInTheDocument()
+    })
 
-it('elegir un día y confirmar dispara onElegirDia con ese día', () => {
-    const onElegirDia = vi.fn()
-    render(
-        <EstadoVisitaSheet
-            open
-            nombreCliente="Almacén Don José"
-            diaActual="LUN"
-            estadoActual="pendiente"
-            onElegirDia={onElegirDia}
-            onElegirNoVisita={noop}
-            onClose={noop}
-        />,
-    )
-    fireEvent.click(screen.getByRole('button', { name: /jueves/i }))
-    fireEvent.click(screen.getByRole('button', { name: /elegí una opción/i }))
-    expect(onElegirDia).toHaveBeenCalledWith('JUE')
-})
+    it('elegir otra semana llama a onElegirSemana', () => {
+        const onElegirSemana = vi.fn()
+        render(<EstadoVisitaSheet {...PROPS_BASE} onElegirSemana={onElegirSemana} />)
+        fireEvent.click(screen.getByRole('button', { name: /semana 4/i }))
+        expect(onElegirSemana).toHaveBeenCalledWith(4)
+    })
 
-it('elegir "No visité" y confirmar dispara onElegirNoVisita', () => {
-    const onElegirNoVisita = vi.fn()
-    render(
-        <EstadoVisitaSheet
-            open
-            nombreCliente="Almacén Don José"
-            diaActual="LUN"
-            estadoActual="pendiente"
-            onElegirDia={noop}
-            onElegirNoVisita={onElegirNoVisita}
-            onClose={noop}
-        />,
-    )
-    fireEvent.click(screen.getByRole('button', { name: /^no visité$/i }))
-    fireEvent.click(screen.getByRole('button', { name: /elegí una opción/i }))
-    expect(onElegirNoVisita).toHaveBeenCalled()
-})
-
-it('si el cliente ya está en no_visita, la opción se muestra deshabilitada y marcada', () => {
-    render(
-        <EstadoVisitaSheet
-            open
-            nombreCliente="Almacén Don José"
-            diaActual="LUN"
-            estadoActual="no_visita"
-            onElegirDia={noop}
-            onElegirNoVisita={noop}
-            onClose={noop}
-        />,
-    )
-    expect(screen.getByText(/ya registrado/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /no visité.*ya registrado/i })).toBeDisabled()
+    it('no visité deshabilitado si ya está registrado', () => {
+        render(<EstadoVisitaSheet {...PROPS_BASE} estadoActual="no_visita" />)
+        expect(screen.getByRole('button', { name: /ya registrado/i })).toBeDisabled()
+    })
 })

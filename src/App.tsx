@@ -3,12 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { queryClient } from '@/lib/queryClient'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import ProtectedRoute from '@/router/ProtectedRoute'
-import { esRolAnalitica, esRolVendedor } from '@/lib/roles'
+import { esRolGerencia, esRolVendedor } from '@/lib/roles'
 import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
 import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
 import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
+import RutaPage from '@/pages/RutaPage'
 import SinPermisosPage from '@/pages/SinPermisosPage'
 
 /** Cualquier ruta no reconocida manda al usuario a la pantalla de su propio rol,
@@ -27,7 +28,7 @@ export default function App() {
                         <Route element={<ProtectedRoute permitirRol={esRolVendedor} />}>
                             <Route path="/" element={<AgendaSemanaPage />} />
                         </Route>
-                        <Route element={<ProtectedRoute permitirRol={esRolAnalitica} />}>
+                        <Route element={<ProtectedRoute permitirRol={esRolGerencia} />}>
                             <Route path="/analitica" element={<AnaliticaPage />} />
                             <Route
                                 path="/analitica/actividad"
@@ -37,6 +38,7 @@ export default function App() {
                                 path="/analitica/vendedor/:codigo"
                                 element={<AnaliticaVendedorPage />}
                             />
+                            <Route path="/analitica/ruta" element={<RutaPage />} />
                         </Route>
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/sin-permisos" element={<SinPermisosPage />} />

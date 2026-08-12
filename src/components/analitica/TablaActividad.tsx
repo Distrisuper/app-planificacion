@@ -34,11 +34,9 @@ interface Estado {
     clase: string
 }
 
-/** El estado sale del `tipo` y recién después del `fechaFin`. Una fila sin fechaFin
- *  puede ser una visita abierta o una reagendada: mirar solo los nulls las confunde. */
+/** El estado sale del `tipo` y recién después del `fechaFin`. */
 function estadoDe(fila: IVisitaFila): Estado {
     if (fila.tipo === 'no_visita') return { texto: 'No visitó', clase: 'bg-slate-100 text-slate-600' }
-    if (fila.tipo === 'reagendada') return { texto: 'Reagendada', clase: 'bg-sky-100 text-sky-700' }
     if (fila.fechaFin === null) return { texto: 'En curso', clase: 'bg-amber-100 text-amber-800' }
     return { texto: 'Cerrada', clase: 'bg-emerald-100 text-emerald-700' }
 }

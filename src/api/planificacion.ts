@@ -1,26 +1,26 @@
 import { apiClient } from './apiClient'
 import type {
     Dia,
-    IAbrirCicloResult,
     IAgendaClient,
     IAgregarRubroDTO,
     IAgregarRubroResult,
     ICatalogoItem,
-    ICerrarCicloResult,
     ICerrarVisitaDTO,
     ICerrarVisitaResult,
-    ICicloSemana,
+    ICicloActualResult,
     IIniciarVisitaDTO,
     IMotivo,
     INoVisitaDTO,
     INoVisitaResult,
     IPreviewCiclo,
+    IReacomodarDTO,
     IResolucion,
     IResolverRubroDTO,
     IResolverRubroResult,
     IRubroClientsPageResponse,
     IRubroDropsResponse,
     IRubroEstado,
+    ISincronizarResult,
     IVisitaRubro,
     NivelMotivo,
     SemanaAgenda,
@@ -28,42 +28,38 @@ import type {
 
 // ── Ciclo ──────────────────────────────────────────────────────────────────────
 
-/** La vuelta abierta del vendedor, o null. Devuelve 200 con data:null cuando no hay
- *  ninguna, así que el front sabe ANTES de pedir la agenda (que tiraría 409). */
-export const getCicloActual = async (): Promise<ICicloSemana | null> => {
+/** La rotación/ciclo del vendedor. `semanas`/`semanasPendientes` viajan siempre que haya una
+ *  rotación abierta, tenga o no ciclo/semana abierto encima ahora mismo. */
+export const getCicloActual = async (): Promise<ICicloActualResult> => {
     const res = await apiClient.get('/planificacion/ciclo/actual')
     return res.data.data
 }
 
-/** El plan de una semana SIN abrirla. Sin `semana`, el backend previsualiza la que
- *  propone y devuelve cuál eligió. */
-export const getCicloPreview = async (semana?: number): Promise<IPreviewCiclo> => {
-    const res = await apiClient.get('/planificacion/ciclo/preview', {
-        params: semana === undefined ? undefined : { semana },
-    })
+/** El plan de UNA semana de la rotación, de solo lectura — no abre nada. */
+export const previewSemana = async (semana: number): Promise<IPreviewCiclo> => {
+    const res = await apiClient.get(`/planificacion/rotacion/semana/${semana}`)
     return res.data.data
 }
 
-export const abrirCiclo = async (semana?: number): Promise<IAbrirCicloResult> => {
-    const res = await apiClient.post(
-        '/planificacion/ciclo/abrir',
-        semana === undefined ? {} : { semana },
-    )
+/** Idempotente: cierra la semana vencida si la hay y sincroniza altas/bajas del padrón.
+ *  Nunca abre nada — el standby se resuelve solo con la primera acción real. */
+export const sincronizar = async (): Promise<ISincronizarResult> => {
+    const res = await apiClient.post('/planificacion/ciclo/sincronizar')
     return res.data.data
 }
 
-/** Ojo: con 409 el backend devuelve ok:0 pero CON data (las dos listas de bloqueo).
- *  El llamador lo lee de err.response.data.data — ver CerrarSemanaSheet. */
-export const cerrarCiclo = async (): Promise<ICerrarCicloResult> => {
-    const res = await apiClient.post('/planificacion/ciclo/cerrar')
-    return res.data.data
-}
-
-/** Mueve el día del cliente dentro de la vuelta. NO lo resuelve: queda pendiente. */
-export const reagendarCicloCliente = async (cicloClienteId: number, dia: number): Promise<void> => {
-    await apiClient.patch(`/planificacion/ciclo-cliente/${cicloClienteId}/reagendar`, {
-        dia,
-    })
+/** Mueve la fila del plan a otro día (y opcionalmente otra semana de la rotación). NO la
+ *  resuelve: el cliente queda pendiente en su nueva posición.
+ *
+ *  NO abre nada, y por lo tanto NUNCA tira 409 CAMBIO_DE_SEMANA: en api-vendedores solo
+ *  iniciarVisita y noVisita pasan por `CicloService.asegurar`, que es quien lo lanza —
+ *  `VisitasService.reacomodar` ni lo llama. Sus errores propios son 403 FILA_AJENA,
+ *  404 FILA_NOT_FOUND, 422 SEMANA_FUERA_DEL_SET y 400 DIA_INVALIDO. */
+export const reacomodar = async (
+    rotacionClienteId: number,
+    dto: IReacomodarDTO,
+): Promise<void> => {
+    await apiClient.patch(`/planificacion/rotacion-cliente/${rotacionClienteId}/reacomodar`, dto)
 }
 
 // ── Agenda ─────────────────────────────────────────────────────────────────────

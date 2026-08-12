@@ -1,23 +1,23 @@
-import { esRolAnalitica, esRolVendedor, rutaInicialPara } from './roles'
+import { esRolGerencia, esRolVendedor, rutaInicialPara } from './roles'
 
 it('reconoce los roles con scope unrestricted de api-vendedores', () => {
-    expect(esRolAnalitica('admin')).toBe(true)
-    expect(esRolAnalitica('versus-ger')).toBe(true)
-    expect(esRolAnalitica('supervisor')).toBe(true)
+    expect(esRolGerencia('admin')).toBe(true)
+    expect(esRolGerencia('versus-ger')).toBe(true)
+    expect(esRolGerencia('supervisor')).toBe(true)
 })
 
 it('no le da acceso analítico al vendedor', () => {
-    expect(esRolAnalitica('vendedor')).toBe(false)
+    expect(esRolGerencia('vendedor')).toBe(false)
     expect(esRolVendedor('vendedor')).toBe(true)
 })
 
 it('ignora mayúsculas y espacios, como authorize() en el backend', () => {
-    expect(esRolAnalitica(' VERSUS-GER ')).toBe(true)
+    expect(esRolGerencia(' VERSUS-GER ')).toBe(true)
     expect(esRolVendedor('Vendedor')).toBe(true)
 })
 
 it('un rol desconocido no accede a nada', () => {
-    expect(esRolAnalitica('marketing')).toBe(false)
+    expect(esRolGerencia('marketing')).toBe(false)
     expect(esRolVendedor('marketing')).toBe(false)
 })
 

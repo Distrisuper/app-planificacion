@@ -37,3 +37,24 @@ it('muestra el badge "En vivo" solo cuando enVivo es true', () => {
     )
     expect(screen.getByText('En vivo')).toBeInTheDocument()
 })
+
+it('apunta la pestaña Ruta a /analitica/ruta', () => {
+    render(
+        <MemoryRouter initialEntries={['/analitica']}>
+            <AnaliticaTabs />
+        </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'Ruta' })).toHaveAttribute(
+        'href',
+        '/analitica/ruta',
+    )
+})
+
+it('marca Ruta como activa cuando es la ruta actual', () => {
+    render(
+        <MemoryRouter initialEntries={['/analitica/ruta']}>
+            <AnaliticaTabs />
+        </MemoryRouter>,
+    )
+    expect(screen.getByRole('link', { name: 'Ruta' })).toHaveClass('border-slate-900')
+})

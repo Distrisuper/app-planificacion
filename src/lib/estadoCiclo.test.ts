@@ -10,8 +10,7 @@ it('en_curso NO cuenta como resuelto: la visita sigue abierta', () => {
     expect(estaResuelto('en_curso')).toBe(false)
 })
 
-it('visitada, no_visita y reagendada cuentan como resueltos', () => {
+it('visitada y no_visita cuentan como resueltos', () => {
     expect(estaResuelto('visitada')).toBe(true)
     expect(estaResuelto('no_visita')).toBe(true)
-    expect(estaResuelto('reagendada')).toBe(true)
 })

@@ -1,4 +1,4 @@
-import { Ban, Calendar, CalendarClock, Check, ChevronRight, Lock, MapPin, Phone, Play, Zap } from 'lucide-react'
+import { Ban, Calendar, Check, ChevronRight, Lock, MapPin, Phone, Play, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import AccionesExternas from './AccionesExternas'
 import { titleCaseNombre } from '@/lib/textFormat'
@@ -8,7 +8,9 @@ import type { IAgendaClient, IVisitClientCard } from '@/types/planificacion'
 
 interface ClienteCardProps {
     cliente: IAgendaClient
-    /** 'preview' = hojeando otra semana: se ve, no se opera. */
+    /** Ya no gatea qué se puede tocar (ver docs/superpowers/plans/2026-08-10-frontend-plan-rotacion-editable.md):
+     *  toda semana de la rotación es accionable. Se mantiene por si a futuro hace falta un
+     *  matiz visual entre "semana abierta" y "otra semana de la rotación". */
     modo?: 'operable' | 'preview'
     /** El vendedor ya tiene una visita en curso EN OTRO cliente: no puede tener dos
      *  visitas abiertas a la vez, así que acá "Iniciar visita" se muestra bloqueado
@@ -43,7 +45,6 @@ const TELEFONO_LIMPIO = /^[\d\s()+-]+$/
 
 export default function ClienteCard({
     cliente,
-    modo = 'operable',
     otraVisitaEnCurso = false,
     onAbrir,
     onEstadoVisita,
@@ -53,7 +54,6 @@ export default function ClienteCard({
     const resuelto = estaResuelto(cliente.estado)
     const enCurso = cliente.estado === 'en_curso'
     const noVisitado = cliente.estado === 'no_visita'
-    const operable = modo === 'operable'
     // Solo se puede arrancar de cero un cliente que todavía no tiene visita: una vez
     // iniciada (en_curso) o resuelta, "Iniciar visita" ya no aplica. Tampoco aplica con
     // otra visita ya abierta — el backend la rechazaría igual (VISITA_ACTIVA_EXISTENTE),
@@ -98,12 +98,6 @@ export default function ClienteCard({
                             No visitado
                         </span>
                     )}
-                    {cliente.estado === 'reagendada' && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#EEF3FB] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-dsnavy">
-                            <CalendarClock className="h-2.5 w-2.5" strokeWidth={2.6} />
-                            Reagendada
-                        </span>
-                    )}
                 </div>
                 {cliente.estado === 'visitada' && (
                     <span
@@ -118,7 +112,7 @@ export default function ClienteCard({
                     que la dirección), y además cuatro chips no entran en una sola fila —
                     envolvían a un punto de quiebre distinto por card. Van en la banda de
                     contexto, debajo de la dirección. */}
-                {operable && !resuelto && (
+                {!resuelto && (
                     <div className="-mr-0.5 -mt-0.5 flex shrink-0 gap-1">
                         {telefonoLimpio && (
                             <a
@@ -175,18 +169,16 @@ export default function ClienteCard({
                 ))}
 
             {/* Sin `!resuelto`: un cliente ya visitado también tiene pagos que mirar. */}
-            {operable && (
-                <AccionesExternas
-                    cliente={cliente}
-                    variante="contexto"
-                    onAbrir={onAbrirAppExterna}
-                />
-            )}
+            <AccionesExternas
+                cliente={cliente}
+                variante="contexto"
+                onAbrir={onAbrirAppExterna}
+            />
 
-            {/* Resuelto sin visita real (no_visita/reagendada): no hay nada que resumir ni
-                ninguna acción que tenga sentido — llamar o reagendar a alguien ya resuelto
-                no aplica. Queda solo el pill de estado de más arriba. */}
-            {operable && resuelto && cliente.visitaId === null ? null : operable && resuelto ? (
+            {/* Resuelto sin visita real (no_visita): no hay nada que resumir ni ninguna acción
+                que tenga sentido — llamar o reagendar a alguien ya resuelto no aplica. Queda
+                solo el pill de estado de más arriba. */}
+            {resuelto && cliente.visitaId === null ? null : resuelto ? (
                 <div className="mt-2.5 border-t border-[#EDEFF4] pt-2.5">
                     <Button
                         variant="outline"
@@ -197,7 +189,7 @@ export default function ClienteCard({
                         Ver resumen
                     </Button>
                 </div>
-            ) : operable ? (
+            ) : (
                 <div className="mt-2.5 flex flex-col gap-1.5 border-t border-[#EDEFF4] pt-2.5">
                     {/* Tier 1 — las dos acciones de la visita, con el MISMO peso: el vendedor
                         tanto entra derecho como prepara la propuesta antes, según el cliente.
@@ -233,7 +225,7 @@ export default function ClienteCard({
                         </div>
                     )}
                 </div>
-            ) : null}
+            )}
         </div>
     )
 }

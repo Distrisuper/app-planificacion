@@ -7,7 +7,7 @@ function cliente(over: Partial<IAgendaClient> = {}): IAgendaClient {
         codigoCliente: over.codigoParticularCliente ?? 'C',
         codigoParticularCliente: '1',
         nombreCliente: 'Cliente',
-        cicloClienteId: 1,
+        rotacionClienteId: 1,
         dia: 1,
         estado: 'pendiente',
         visitaId: null,

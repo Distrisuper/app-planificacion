@@ -9,3 +9,15 @@ export function errorCode(err: unknown): string | null {
     const code = (err as { response?: { data?: { code?: unknown } } })?.response?.data?.code
     return typeof code === 'string' ? code : null
 }
+
+/**
+ * El body completo de un error de negocio (además de `code`, trae los campos extra que
+ * CustomError.details serializa: `semanaAbierta`/`clientesPendientes` en CAMBIO_DE_SEMANA,
+ * `semanas` en SEMANA_FUERA_DEL_SET). null si no es un error de negocio con body.
+ */
+export function errorData<T extends Record<string, unknown> = Record<string, unknown>>(
+    err: unknown,
+): (T & { code?: string }) | null {
+    const data = (err as { response?: { data?: T & { code?: string } } })?.response?.data
+    return data ?? null
+}

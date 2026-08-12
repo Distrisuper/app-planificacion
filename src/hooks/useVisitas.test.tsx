@@ -13,18 +13,18 @@ function wrapper({ children }: { children: React.ReactNode }) {
     return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
 }
 
-it('useIniciarVisita calls the API with cicloClienteId/coordInicio and returns the visitaId', async () => {
+it('useIniciarVisita calls the API with rotacionClienteId/coordInicio and returns the visitaId', async () => {
     ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 42, rubros: 3 })
     const { result } = renderHook(() => useIniciarVisita(), { wrapper })
     let out: any
     await waitFor(async () => {
         out = await result.current.mutateAsync({
-            cicloClienteId: 10034,
+            rotacionClienteId: 10034,
             coordInicio: '-34.6,-58.6',
         })
     })
     expect(api.iniciarVisita).toHaveBeenCalledWith({
-        cicloClienteId: 10034,
+        rotacionClienteId: 10034,
         coordInicio: '-34.6,-58.6',
     })
     expect(out.visitaId).toBe(42)
@@ -46,19 +46,19 @@ it('useCerrarVisita calls cerrarVisita with the visitaId and coordFinal only, an
     expect(out.rubrosPendientes).toBe(0)
 })
 
-it('useNoVisita calls registrarNoVisita with cicloClienteId and motivoIds', async () => {
-    ;(api.registrarNoVisita as any).mockResolvedValue({ cicloClienteId: 42 })
+it('useNoVisita calls registrarNoVisita with rotacionClienteId and motivoIds', async () => {
+    ;(api.registrarNoVisita as any).mockResolvedValue({ rotacionClienteId: 42 })
     const { result } = renderHook(() => useNoVisita(), { wrapper })
     let out: any
     await waitFor(async () => {
         out = await result.current.mutateAsync({
-            cicloClienteId: 42,
+            rotacionClienteId: 42,
             motivoIds: [1, 4],
         })
     })
     expect(api.registrarNoVisita).toHaveBeenCalledWith({
-        cicloClienteId: 42,
+        rotacionClienteId: 42,
         motivoIds: [1, 4],
     })
-    expect(out.cicloClienteId).toBe(42)
+    expect(out.rotacionClienteId).toBe(42)
 })

@@ -9,7 +9,7 @@ function cliente(over: Partial<IAgendaClient> = {}): IAgendaClient {
         codigoParticularCliente: '10034',
         nombreCliente: 'ALMACEN DON JOSE',
         direccion: 'Av. San Martín 100',
-        cicloClienteId: 42,
+        rotacionClienteId: 42,
         dia: 1,
         estado: 'pendiente',
         visitaId: null,
@@ -57,22 +57,19 @@ it('"Ver resumen" abre el mismo flujo que Propuesta, con el cliente completo', (
         />,
     )
     fireEvent.click(screen.getByRole('button', { name: /ver resumen/i }))
-    expect(onAbrir).toHaveBeenCalledWith(expect.objectContaining({ cicloClienteId: 42 }))
+    expect(onAbrir).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
 })
 
-it('no_visita y reagendada (sin visita real) no muestran fila de acciones', () => {
+it('no_visita (sin visita real) no muestra fila de acciones', () => {
     // Se fija el conjunto EXACTO de botones y no un regex nominal: así un botón nuevo con
     // cualquier otro nombre también rompe el test. Pagos, Versus y CRM son las apps externas
     // registradas — siguen ofreciéndose en un cliente resuelto, a diferencia de las del ciclo.
     const botones = () => screen.getAllByRole('button').map(b => b.textContent)
-    const { rerender } = render(
+    render(
         <ClienteCard cliente={cliente({ estado: 'no_visita', telefono: '1140506070' })} {...handlers} />,
     )
     expect(botones()).toEqual(['Pagos', 'Versus', 'CRM'])
     expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
-
-    rerender(<ClienteCard cliente={cliente({ estado: 'reagendada' })} {...handlers} />)
-    expect(botones()).toEqual(['Pagos', 'Versus', 'CRM'])
 })
 
 it('un cliente resuelto muestra el nombre tachado', () => {
@@ -80,11 +77,9 @@ it('un cliente resuelto muestra el nombre tachado', () => {
     expect(screen.getByText('Almacen Don Jose')).toHaveStyle({ textDecoration: 'line-through' })
 })
 
-it('no_visita y reagendada se distinguen visualmente', () => {
-    const { rerender } = render(<ClienteCard cliente={cliente({ estado: 'no_visita' })} {...handlers} />)
+it('no_visita muestra el badge de estado', () => {
+    render(<ClienteCard cliente={cliente({ estado: 'no_visita' })} {...handlers} />)
     expect(screen.getByText(/no visitado/i)).toBeInTheDocument()
-    rerender(<ClienteCard cliente={cliente({ estado: 'reagendada' })} {...handlers} />)
-    expect(screen.getByText(/reagendada/i)).toBeInTheDocument()
 })
 
 it('no_visita pinta la card de naranja; visitada la pinta de verde', () => {
@@ -101,7 +96,7 @@ it('un cliente pendiente ofrece iniciar la visita directo', () => {
     const onIniciarVisita = vi.fn()
     render(<ClienteCard cliente={cliente()} {...handlers} onIniciarVisita={onIniciarVisita} />)
     fireEvent.click(screen.getByRole('button', { name: /iniciar visita/i }))
-    expect(onIniciarVisita).toHaveBeenCalledWith(expect.objectContaining({ cicloClienteId: 42 }))
+    expect(onIniciarVisita).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
 })
 
 it('en_curso ya no ofrece iniciar la visita de nuevo', () => {
@@ -126,12 +121,13 @@ it('con otra visita en curso, un pendiente muestra el bloqueo en vez de "Iniciar
     expect(screen.getByRole('button', { name: /reagendar/i })).toBeInTheDocument()
 })
 
-it('en modo preview no hay botones de acción, pero la dirección sigue enlazando al mapa', () => {
-    // La compuerta real la da el tipo (IPreviewClient no llega acá), pero la card
-    // igual tiene que renderizarse sin botones cuando se hojea otra semana. El link
-    // al mapa no es una acción que mute nada, así que no está gateado por `operable`.
+it('en modo preview también se puede iniciar visita: el backend abre la semana solo', () => {
+    render(<ClienteCard cliente={cliente({ estado: 'pendiente' })} {...handlers} modo="preview" />)
+    expect(screen.getByRole('button', { name: /iniciar visita/i })).toBeInTheDocument()
+})
+
+it('en modo preview la dirección sigue enlazando al mapa', () => {
     render(<ClienteCard cliente={cliente()} {...handlers} modo="preview" />)
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /san martín 100/i })).toBeInTheDocument()
 })
 
@@ -139,14 +135,14 @@ it('los handlers reciben el cliente completo, no el código', () => {
     const onAbrir = vi.fn()
     render(<ClienteCard cliente={cliente()} {...handlers} onAbrir={onAbrir} />)
     fireEvent.click(screen.getByRole('button', { name: /propuesta/i }))
-    expect(onAbrir).toHaveBeenCalledWith(expect.objectContaining({ cicloClienteId: 42 }))
+    expect(onAbrir).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
 })
 
 it('el botón de reagendar recibe el cliente completo', () => {
     const onEstadoVisita = vi.fn()
     render(<ClienteCard cliente={cliente()} {...handlers} onEstadoVisita={onEstadoVisita} />)
     fireEvent.click(screen.getByRole('button', { name: /reagendar/i }))
-    expect(onEstadoVisita).toHaveBeenCalledWith(expect.objectContaining({ cicloClienteId: 42 }))
+    expect(onEstadoVisita).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
 })
 
 it('la dirección enlaza a Google Maps con coordenadas cuando están disponibles', () => {
@@ -185,10 +181,11 @@ it('ofrece las apps externas en la banda de contexto de la card', () => {
     )
 })
 
-// En preview (hojeando otra semana) no se opera: nada de apps externas.
-it('no ofrece apps externas en modo preview', () => {
+// Con el backend abriendo la semana que haga falta, una card de "otra semana" tiene lo
+// mismo que una operable — apps externas incluidas (ver decisión de diseño del plan).
+it('también ofrece apps externas en modo preview', () => {
     render(<ClienteCard cliente={cliente()} {...handlers} modo="preview" />)
-    expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Pagos' })).toBeInTheDocument()
 })
 
 // Un cliente ya visitado también tiene pagos que mirar: la utilidad no depende de que

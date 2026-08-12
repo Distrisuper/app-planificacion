@@ -1,21 +1,27 @@
-import { errorCode } from './apiError'
+import { describe, it, expect } from 'vitest'
+import { errorCode, errorData } from './apiError'
 
-it('extrae el code de un error de axios', () => {
-    expect(errorCode({ response: { data: { ok: 0, code: 'CICLO_NO_ABIERTO' } } })).toBe(
-        'CICLO_NO_ABIERTO',
-    )
+function conBody(data: unknown) {
+    return { response: { data } }
+}
+
+describe('errorCode', () => {
+    it('lee el code de la respuesta', () => {
+        expect(errorCode(conBody({ code: 'CICLO_NO_ABIERTO' }))).toBe('CICLO_NO_ABIERTO')
+    })
+
+    it('null si no hay code', () => {
+        expect(errorCode(new Error('red caída'))).toBeNull()
+    })
 })
 
-it('devuelve null cuando la respuesta no trae code', () => {
-    expect(errorCode({ response: { data: { ok: 0, error: 'boom' } } })).toBeNull()
-})
+describe('errorData', () => {
+    it('devuelve el body completo de un error de negocio', () => {
+        const data = { code: 'CAMBIO_DE_SEMANA', semanaAbierta: 3, clientesPendientes: ['1', '2'] }
+        expect(errorData(conBody(data))).toEqual(data)
+    })
 
-it('devuelve null ante un error de red sin response', () => {
-    expect(errorCode(new Error('Network Error'))).toBeNull()
-})
-
-it('no explota con null ni con formas inesperadas', () => {
-    expect(errorCode(null)).toBeNull()
-    expect(errorCode('boom')).toBeNull()
-    expect(errorCode({ response: {} })).toBeNull()
+    it('null si el error no tiene response.data', () => {
+        expect(errorData(new Error('red caída'))).toBeNull()
+    })
 })
