@@ -172,6 +172,33 @@ describe('AppExternaSheet', () => {
         expect(screen.queryByTestId('app-externa-error')).not.toBeInTheDocument()
     })
 
+    // La salida de emergencia cuando el navegador bloquea cookies de terceros: en ese caso
+    // la app ajena muestra su login dentro del iframe y no hay forma de pasarlo, porque su
+    // cookie de sesión se descarta en contexto embebido. En una pestaña propia es
+    // first-party y entra. Abre la URL del handoff, no la del reintento, porque el
+    // `_reintento` es un detalle interno del cache-busting del iframe.
+    it('el botón Abrir en pestaña nueva abre la url de la app activa', async () => {
+        const open = vi.spyOn(window, 'open').mockReturnValue(null)
+        try {
+            renderSheet()
+            await userEvent.click(screen.getByLabelText('Abrir en pestaña nueva'))
+            expect(open).toHaveBeenCalledWith('https://ext.test/?client=12345', '_blank', 'noopener,noreferrer')
+        } finally {
+            open.mockRestore()
+        }
+    })
+
+    it('el botón Abrir en pestaña nueva sigue a la app activa al cambiar de tab', async () => {
+        const open = vi.spyOn(window, 'open').mockReturnValue(null)
+        try {
+            renderSheet({ montadas: { pagos: MONTADA_PAGOS, versus: MONTADA_VERSUS }, appActivaId: 'versus' })
+            await userEvent.click(screen.getByLabelText('Abrir en pestaña nueva'))
+            expect(open).toHaveBeenCalledWith('https://ext2.test/?q=12345', '_blank', 'noopener,noreferrer')
+        } finally {
+            open.mockRestore()
+        }
+    })
+
     // Oculto pero montado: es lo que hace instantánea la reapertura. El iframe tiene que
     // seguir en el DOM y no puede interceptar taps de la agenda que está debajo.
     it('cuando no es visible sigue montado, invisible y sin capturar taps', () => {
