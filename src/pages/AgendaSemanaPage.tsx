@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
@@ -8,7 +8,6 @@ import VisitaFlow, { type IVisitaEnCurso } from '@/components/VisitaFlow'
 import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
-import CambioDeSemanaDialog from '@/components/CambioDeSemanaDialog'
 import AppExternaSheet from '@/components/AppExternaSheet'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
@@ -18,7 +17,7 @@ import { useNotificacion } from '@/hooks/useNotificacion'
 import { useAppExterna } from '@/hooks/useAppExterna'
 import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
-import { errorCode, errorData } from '@/lib/apiError'
+import { errorCode } from '@/lib/apiError'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
 import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
 
@@ -102,12 +101,21 @@ export default function AgendaSemanaPage() {
                 // típico dispara los dos a la vez (semana cerrada + padrón movido), y el
                 // segundo borraba el primero: el vendedor nunca se enteraba de que su semana
                 // había cerrado con clientes sin visitar.
+                // Sin lenguaje de cierre ("cerramos"/"cerrada"): el vendedor no ve que algo se
+                // cerró (spec 2026-08-12, "El vendedor no ve ciclos ni rotaciones"). Y cuenta
+                // VISITAS, no clientes — `sinVisitar` viene sin DISTINCT, así que un quincenal
+                // con dos filas pendientes en la misma zona aparece dos veces a propósito: es
+                // el denominador real, no un bug. El nombre de zona sale de la MISMA fuente que
+                // el header (`RotacionSemanaRepository.findDescripciones`, vía
+                // `descripcionSemanaCerrada`): sin esto el aviso decía "Zona 2" mientras el
+                // header, dos taps después, ya decía "Zárate" para la misma zona.
                 const avisos: string[] = []
                 if (res.semanaCerrada !== null) {
+                    const nombre = res.descripcionSemanaCerrada ?? `Zona ${res.semanaCerrada}`
                     avisos.push(
-                        `Cerramos tu semana ${res.semanaCerrada}` +
+                        nombre +
                             (res.sinVisitar.length > 0
-                                ? ` — ${res.sinVisitar.length} clientes quedaron sin visitar`
+                                ? `: ${res.sinVisitar.length} visitas quedaron sin hacer`
                                 : ''),
                     )
                 }
@@ -128,19 +136,42 @@ export default function AgendaSemanaPage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
+    // Si la semana/día de la URL ganan, o si al abrir la app siempre se aterriza en lo
+    // activo. Falso al montar SIEMPRE (es un `useRef`, no algo que la URL pueda pre-
+    // sembrar): una semana/día que sobrevivió en la URL de un montaje anterior —
+    // recargar, o la PWA resumida desde cero — no cuenta como navegación de ESTA sesión,
+    // así que no gana hasta que el vendedor toque una flecha o un tab de día EN VIVO acá.
+    //
+    // Es lo que hace que, con una zona activa, abrir la app aterrice siempre ahí con el
+    // día de hoy: antes de esto, corregir la URL con un efecto DESPUÉS del primer render
+    // dejaba un flash real — la agenda alcanzaba a pedir el preview de la zona vieja por
+    // la red antes de que el efecto la corrigiera.
+    const navegoEnSesion = useRef(false)
+
     // La semana que se está MIRANDO. null hasta que se sepa cuál: con vuelta abierta es
     // la suya; sin vuelta, la primera pendiente/conocida del backend.
     const semanaParam = Number(searchParams.get('semana'))
     const semanaVista =
-        Number.isInteger(semanaParam) && (semanas ?? []).includes(semanaParam) ? semanaParam : null
-    const setSemanaVista = (semana: number | null) => actualizarPosicion({ semana })
+        navegoEnSesion.current &&
+        Number.isInteger(semanaParam) &&
+        (semanas ?? []).some(z => z.semana === semanaParam)
+            ? semanaParam
+            : null
+    const setSemanaVista = (semana: number | null) => {
+        navegoEnSesion.current = true
+        actualizarPosicion({ semana })
+    }
 
     // Con ciclo abierto, esa es la semana. Sin ciclo (standby, de pie casi todos los lunes),
     // arranca en la primera semana PENDIENTE si se conoce — es la que `asegurar` abriría de
     // todas formas ante la primera acción real — y si no, en la primera semana conocida.
     const semanaEfectiva =
-        semanaVista ?? ciclo?.semana ?? semanasPendientes?.[0] ?? semanas?.[0] ?? null
+        semanaVista ?? ciclo?.semana ?? semanasPendientes?.[0] ?? semanas?.[0]?.semana ?? null
     const operable = ciclo == null || semanaEfectiva === ciclo.semana
+
+    // El vendedor no ve "semana": ve la zona por su nombre ("Zárate"). `descripcion` puede
+    // ser null (zona sin nombrar todavía) — ahí, y solo ahí, cae al número.
+    const nombreZona = semanas?.find(z => z.semana === semanaEfectiva)?.descripcion || null
 
     const { data: agenda } = useAgendaSemana(operable && ciclo != null)
     const { data: preview } = usePreviewSemana(
@@ -148,14 +179,35 @@ export default function AgendaSemanaPage() {
         semanaEfectiva !== null && !(operable && ciclo != null),
     )
 
-    // Sin `?dia=`, arranca en HOY y no en LUN: un jueves, LUN obligaba a swipear cuatro
-    // columnas para llegar a lo que el vendedor está recorriendo. El fin de semana no hay
-    // "hoy" en la agenda (es lunes a viernes), así que ahí sí cae a LUN.
+    // Sin `?dia=` DE ESTA SESIÓN, arranca en HOY y no en LUN: un jueves, LUN obligaba a
+    // swipear cuatro columnas para llegar a lo que el vendedor está recorriendo. El fin
+    // de semana no hay "hoy" en la agenda (es lunes a viernes), así que ahí sí cae a LUN.
     const diaParam = searchParams.get('dia')
-    const diaActivo: Dia = DIAS.includes(diaParam as Dia)
-        ? (diaParam as Dia)
-        : (getDiaDeHoy() ?? 'LUN')
-    const setDiaActivo = (dia: Dia) => actualizarPosicion({ dia })
+    const diaActivo: Dia =
+        navegoEnSesion.current && DIAS.includes(diaParam as Dia)
+            ? (diaParam as Dia)
+            : (getDiaDeHoy() ?? 'LUN')
+    const setDiaActivo = (dia: Dia) => {
+        navegoEnSesion.current = true
+        actualizarPosicion({ dia })
+    }
+
+    // Puramente cosmético: pisa la URL visible con lo que ya se está mostrando, para que
+    // un bookmark tomado en este momento (o mirar la barra de direcciones) refleje la
+    // realidad. No hace falta para que `semanaEfectiva`/`diaActivo` estén bien — eso ya
+    // lo garantiza `navegoEnSesion` arriba, sin esperar a este efecto.
+    // Se re-corrige por cada semana de ciclo distinta (incluyendo null→abierto): un
+    // vendedor en standby que arranca una visita abre el ciclo a mitad de sesión, y esa
+    // transición también tiene que pisar la URL — no solo la primera resolución.
+    const cicloCorregido = useRef<number | null | undefined>(undefined)
+    useEffect(() => {
+        if (!cicloResuelto) return
+        const semanaCiclo = ciclo?.semana ?? null
+        if (cicloCorregido.current === semanaCiclo) return
+        cicloCorregido.current = semanaCiclo
+        if (ciclo) actualizarPosicion({ semana: semanaEfectiva ?? ciclo.semana, dia: diaActivo })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cicloResuelto, ciclo])
     const [visitaCliente, setVisitaCliente] = useState<IAgendaClient | null>(null)
     // true = se abrió el flujo tocando "Iniciar visita" en la card (no "Propuesta"): se
     // salta la propuesta y va derecho al mapa. Ver VisitaFlow.directoAMapa.
@@ -166,15 +218,6 @@ export default function AgendaSemanaPage() {
     // (`visitaCliente`). Antes vivía adentro de VisitaFlow atada al cliente abierto: tocar
     // la propuesta de OTRO cliente y cerrarla la perdía, y la barra flotante desaparecía.
     const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(null)
-    // El cartel de confirmación del 409 CAMBIO_DE_SEMANA: el vendedor tocó una acción sobre
-    // una semana distinta a la que tenía abierta. `reintentar` repite la MISMA acción con
-    // confirmarCambioDeSemana: true.
-    const [cambioDeSemana, setCambioDeSemana] = useState<{
-        semanaAbierta: number
-        clientesPendientes: string[]
-        reintentar: () => Promise<void>
-    } | null>(null)
-    const [reintentando, setReintentando] = useState(false)
 
     // La instancia embebida es del cliente que se estaba mirando. Al cambiar de día — o de
     // semana, que es el mismo tipo de cambio de contexto: el cliente deja de estar en
@@ -237,46 +280,13 @@ export default function AgendaSemanaPage() {
 
     function moverSemana(delta: number) {
         if (!semanas || semanas.length === 0) return
-        const base = semanaEfectiva ?? semanas[0]
-        const idx = semanas.indexOf(base)
+        const base = semanaEfectiva ?? semanas[0].semana
+        const idx = semanas.findIndex(z => z.semana === base)
         const nextIdx = ((idx === -1 ? 0 : idx) + delta + semanas.length) % semanas.length
-        setSemanaVista(semanas[nextIdx])
+        setSemanaVista(semanas[nextIdx].semana)
     }
 
-    function manejarCambioDeSemana(
-        data: unknown,
-        reintentar: () => Promise<void>,
-    ): boolean {
-        const info = errorData<{ semanaAbierta: number; clientesPendientes: string[] }>(data)
-        if (errorCode(data) !== 'CAMBIO_DE_SEMANA' || !info) return false
-        setCambioDeSemana({
-            semanaAbierta: info.semanaAbierta,
-            clientesPendientes: info.clientesPendientes,
-            reintentar,
-        })
-        return true
-    }
-
-    async function onElegirDia(dia: Dia) {
-        const cliente = estadoVisitaCliente
-        setEstadoVisitaCliente(null)
-        if (!cliente) return
-        try {
-            await reacomodar.mutateAsync({
-                rotacionClienteId: cliente.rotacionClienteId,
-                dia: DIAS.indexOf(dia) + 1,
-            })
-            // Reacomodar mueve el día y deja al cliente PENDIENTE: no lo resuelve.
-            mostrar('exito', 'Cliente reagendado')
-        } catch {
-            // Sin rama de CAMBIO_DE_SEMANA: `reacomodar` no abre nada. Solo iniciarVisita y
-            // noVisita pasan por `CicloService.asegurar`, que es quien tira ese 409 —
-            // verificado contra api-vendedores (VisitasService.reacomodar no lo llama).
-            mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
-        }
-    }
-
-    async function onElegirSemanaReagendar(semanaDestino: number) {
+    async function onReagendar(semanaDestino: number, dia: Dia) {
         const cliente = estadoVisitaCliente
         setEstadoVisitaCliente(null)
         if (!cliente) return
@@ -284,12 +294,17 @@ export default function AgendaSemanaPage() {
             await reacomodar.mutateAsync({
                 rotacionClienteId: cliente.rotacionClienteId,
                 semana: semanaDestino,
-                dia: cliente.dia,
+                dia: DIAS.indexOf(dia) + 1,
             })
-            mostrar('exito', `Cliente movido a la semana ${semanaDestino}`)
+            // Reacomodar mueve semana/día y deja al cliente PENDIENTE: no lo resuelve.
+            mostrar(
+                'exito',
+                semanaDestino === semanaEfectiva
+                    ? 'Cliente reagendado'
+                    : `Cliente movido a la semana ${semanaDestino}`,
+            )
         } catch {
-            // Ídem onElegirDia: mover de semana tampoco puede tirar CAMBIO_DE_SEMANA.
-            mostrar('error', 'No se pudo mover de semana. Volvé a intentar.')
+            mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
         }
     }
 
@@ -309,7 +324,7 @@ export default function AgendaSemanaPage() {
         setNoVisitaCliente(cliente)
     }
 
-    async function onConfirmNoVisita(motivoIds: number[], confirmar = false) {
+    async function onConfirmNoVisita(motivoIds: number[]) {
         const cliente = noVisitaCliente
         setNoVisitaCliente(null)
         if (!cliente) return
@@ -317,11 +332,9 @@ export default function AgendaSemanaPage() {
             await noVisita.mutateAsync({
                 rotacionClienteId: cliente.rotacionClienteId,
                 motivoIds,
-                confirmarCambioDeSemana: confirmar || undefined,
             })
             mostrar('exito', 'Registrado')
         } catch (err) {
-            if (manejarCambioDeSemana(err, () => onConfirmNoVisita(motivoIds, true))) return
             const yaResuelto = errorCode(err) === 'CICLO_CLIENTE_YA_RESUELTO'
             mostrar(
                 yaResuelto ? 'info' : 'error',
@@ -381,7 +394,7 @@ export default function AgendaSemanaPage() {
                 total={totalClientes}
                 tituloSemana={
                     semanaEfectiva
-                        ? `Semana ${semanaEfectiva}${operable && ciclo != null ? ` · ${getWeekRangeLabel()}` : ''}`
+                        ? `${nombreZona ?? `Semana ${semanaEfectiva}`}${operable && ciclo != null ? ` · ${getWeekRangeLabel()}` : ''}`
                         : 'Cargando…'
                 }
                 modo={operable && ciclo != null ? 'operable' : 'preview'}
@@ -415,7 +428,6 @@ export default function AgendaSemanaPage() {
                 onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
                 onAviso={mostrar}
                 onAbrirAppExterna={appExterna.abrir}
-                onCambioDeSemana={info => setCambioDeSemana(info)}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar
@@ -442,30 +454,9 @@ export default function AgendaSemanaPage() {
                 estadoActual={estadoVisitaCliente?.estado ?? null}
                 semanaActual={semanaEfectiva ?? 1}
                 semanasDisponibles={semanas ?? []}
-                onElegirDia={onElegirDia}
-                onElegirSemana={onElegirSemanaReagendar}
+                onReagendar={onReagendar}
                 onElegirNoVisita={onElegirNoVisita}
                 onClose={() => setEstadoVisitaCliente(null)}
-            />
-            <CambioDeSemanaDialog
-                open={cambioDeSemana !== null}
-                semanaAbierta={cambioDeSemana?.semanaAbierta ?? 0}
-                clientesPendientes={cambioDeSemana?.clientesPendientes ?? []}
-                // El reintento vuelve a pedir ubicación (hasta ~23 s): sin este spinner el
-                // vendedor no tiene señal de que algo está pasando y vuelve a tocar
-                // "Iniciar visita", que entra en VISITA_ACTIVA_EXISTENTE.
-                confirmando={reintentando}
-                onConfirmar={async () => {
-                    const info = cambioDeSemana
-                    setCambioDeSemana(null)
-                    setReintentando(true)
-                    try {
-                        await info?.reintentar()
-                    } finally {
-                        setReintentando(false)
-                    }
-                }}
-                onCancelar={() => setCambioDeSemana(null)}
             />
             {/* `ocultar` y no `desmontar`: cerrar deja las instancias vivas para que reabrir
                 el mismo cliente sea instantáneo. */}

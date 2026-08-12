@@ -97,18 +97,33 @@ export interface ICicloSemana {
     estado: EstadoCiclo
 }
 
+/** Una zona de la rotación con su nombre (`pl_rotacion_semana.descripcion`, heredado de la
+ *  vuelta anterior — "Buenos Aires", "Zárate"). El vendedor no ve la palabra "semana": el
+ *  header y la navegación de zonas usan `descripcion` y caen al número solo si es null. */
+export interface IZonaCiclo {
+    semana: number
+    descripcion: string | null
+}
+
 /** `semanas`/`semanasPendientes` viajan siempre que el vendedor tiene una ROTACIÓN abierta,
  *  con o sin ciclo/semana abierto encima — así el front nunca tiene que asumir un tamaño fijo
  *  de rotación (hay vendedores con 4 semanas, o con un set no contiguo). Ausentes solo si el
- *  vendedor no tiene ninguna rotación materializada todavía. */
+ *  vendedor no tiene ninguna rotación materializada todavía.
+ *
+ *  `semanasPendientes` se queda en `number[]`, a diferencia de `semanas`: es una lista de
+ *  "las que faltan" que solo se usa para elegir la próxima a proponer (el primer elemento),
+ *  nunca para mostrarle un nombre al vendedor — no necesita cargar `descripcion`. */
 export interface ICicloActualResult {
     ciclo: ICicloSemana | null
-    semanas?: number[]
+    semanas?: IZonaCiclo[]
     semanasPendientes?: number[]
 }
 
 export interface ISincronizarResult {
     semanaCerrada: number | null
+    /** Nombre de la zona cerrada, o null si esa zona nunca se nombró. El vendedor no ve
+     *  "semana N" — ver "El vocabulario: zona, no semana" en el spec del 2026-08-12. */
+    descripcionSemanaCerrada: string | null
     sinVisitar: string[]
     rubrosAutocompletados: number
     altas: string[]
@@ -267,9 +282,6 @@ export interface IIniciarVisitaDTO {
     coordInicio: string
     /** La propuesta tal como se le mostró al vendedor. Si no viene, el backend la recalcula. */
     propuesta?: IPropuestaRubroDTO[]
-    /** true = "sí, cerrá la otra semana y abrí esta" — se manda solo al reintentar después
-     *  de un 409 CAMBIO_DE_SEMANA. */
-    confirmarCambioDeSemana?: boolean
 }
 
 /** Sin motivoIds: al cerrar una visita el resultado comercial vive en los rubros. */
@@ -287,7 +299,6 @@ export interface ICerrarVisitaResult {
 export interface INoVisitaDTO {
     rotacionClienteId: number
     motivoIds: number[]
-    confirmarCambioDeSemana?: boolean
 }
 
 export interface INoVisitaResult {

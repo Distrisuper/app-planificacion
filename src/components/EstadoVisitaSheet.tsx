@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import { getWeekDates, formatDayDate } from '@/lib/weekDates'
-import type { Dia, EstadoCicloCliente } from '@/types/planificacion'
+import type { Dia, EstadoCicloCliente, IZonaCiclo } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 const DIA_NOMBRE: Record<Dia, string> = { LUN: 'Lunes', MAR: 'Martes', MIE: 'Miércoles', JUE: 'Jueves', VIE: 'Viernes' }
@@ -16,9 +16,12 @@ interface EstadoVisitaSheetProps {
     diaActual: Dia | null
     estadoActual: EstadoCicloCliente | null
     semanaActual: number
-    semanasDisponibles: number[]
-    onElegirDia: (dia: Dia) => void
-    onElegirSemana: (semana: number) => void
+    /** El vendedor no ve "semana" como vocabulario propio (spec 2026-08-12): cada
+     *  chip muestra la descripción de la zona, con "Semana N" como fallback chico y
+     *  gris SOLO cuando la zona sí tiene nombre — si no lo tiene, "Semana N" pasa a
+     *  ser el texto principal y no se duplica abajo. */
+    semanasDisponibles: IZonaCiclo[]
+    onReagendar: (semana: number, dia: Dia) => void
     onElegirNoVisita: () => void
     onClose: () => void
 }
@@ -30,37 +33,80 @@ export default function EstadoVisitaSheet({
     estadoActual,
     semanaActual,
     semanasDisponibles,
-    onElegirDia,
-    onElegirSemana,
+    onReagendar,
     onElegirNoVisita,
     onClose,
 }: EstadoVisitaSheetProps) {
     const weekDates = getWeekDates()
+    const [semanaElegida, setSemanaElegida] = useState(semanaActual)
     const [seleccion, setSeleccion] = useState<Seleccion | null>(null)
     const yaNoVisita = estadoActual === 'no_visita'
 
     // El sheet queda montado entre aperturas (el caller solo togglea `open`): sin esto
     // la selección de la visita anterior quedaría pegada en la próxima apertura.
     useEffect(() => {
-        if (!open) setSeleccion(null)
-    }, [open])
+        if (!open) {
+            setSeleccion(null)
+            setSemanaElegida(semanaActual)
+        }
+    }, [open, semanaActual])
 
     function confirmar() {
         if (seleccion === 'no_visita') onElegirNoVisita()
-        else if (seleccion) onElegirDia(seleccion)
+        else if (seleccion) onReagendar(semanaElegida, seleccion)
     }
 
-    const otrasSemanas = semanasDisponibles.filter(s => s !== semanaActual)
+    const esPosicionActual = (d: Dia) => semanaElegida === semanaActual && d === diaActual
+
+    // Nombre de la zona elegida, con el mismo fallback que el header: si nunca se
+    // nombró, el número es lo único que hay para mostrar.
+    const nombreZonaElegida =
+        semanasDisponibles.find(z => z.semana === semanaElegida)?.descripcion ??
+        `Semana ${semanaElegida}`
+
+    let labelBoton = 'Elegí un día'
+    if (seleccion === 'no_visita') labelBoton = 'Registrar No visité'
+    else if (seleccion && esPosicionActual(seleccion)) labelBoton = `Ya está el ${DIA_NOMBRE[seleccion]}`
+    else if (seleccion && semanaElegida !== semanaActual)
+        labelBoton = `Mover a ${nombreZonaElegida} · ${DIA_NOMBRE[seleccion]}`
+    else if (seleccion) labelBoton = `Mover al ${DIA_NOMBRE[seleccion]}`
+
+    const deshabilitarBoton = !seleccion || (seleccion !== 'no_visita' && esPosicionActual(seleccion))
 
     return (
         <BottomSheet open={open} onClose={onClose} title={nombreCliente} eyebrow="Estado de la visita">
+            {semanasDisponibles.length > 1 && (
+                <div className="mb-3 flex flex-wrap gap-2">
+                    {semanasDisponibles.map(z => (
+                        <button
+                            key={z.semana}
+                            onClick={() => setSemanaElegida(z.semana)}
+                            className={`flex h-11 flex-col items-center justify-center rounded-lg border-[1.5px] px-3 leading-tight ${
+                                z.semana === semanaElegida
+                                    ? 'border-dsnavy bg-dsnavy/10 text-dsnavy'
+                                    : 'border-[#E1E6F0] text-[#182645]'
+                            }`}
+                        >
+                            <span className="text-[13px] font-semibold">
+                                {z.descripcion ?? `Semana ${z.semana}`}
+                            </span>
+                            {/* Solo si tiene nombre: si no, "Semana N" ya es el texto de
+                                arriba y repetirlo achicado abajo sería ruido. */}
+                            {z.descripcion && (
+                                <span className="text-[10px] text-dsmuted">Semana {z.semana}</span>
+                            )}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             <p className="mb-3 text-[13px] leading-snug text-dsmuted">
                 {diaActual && <>Actualmente el <b>{DIA_NOMBRE[diaActual]}</b>. </>}
                 Elegí el nuevo día de la visita:
             </p>
             <div className="flex flex-col gap-2">
                 {DIAS.map(d => {
-                    const isActual = d === diaActual
+                    const isActual = semanaElegida === semanaActual && d === diaActual
                     const isSel = seleccion === d
                     return (
                         <button
@@ -74,35 +120,13 @@ export default function EstadoVisitaSheet({
                                       : 'border-[#E1E6F0] text-[#182645]'
                             }`}
                         >
-                            {DIA_NOMBRE[d]} · {formatDayDate(weekDates[d])}
+                            {DIA_NOMBRE[d]}
+                            {semanaElegida === semanaActual && <> · {formatDayDate(weekDates[d])}</>}
                             {isActual && <span className="text-dsmuted"> (actual)</span>}
                         </button>
                     )
                 })}
             </div>
-
-            {otrasSemanas.length > 0 && (
-                <>
-                    <div className="my-4 flex items-center gap-2">
-                        <div className="h-px flex-1 bg-[#E7E9F0]" />
-                        <span className="text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
-                            O mover a otra semana
-                        </span>
-                        <div className="h-px flex-1 bg-[#E7E9F0]" />
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        {otrasSemanas.map(s => (
-                            <button
-                                key={s}
-                                onClick={() => onElegirSemana(s)}
-                                className="h-10 rounded-lg border-[1.5px] border-[#E1E6F0] px-3.5 text-[13px] font-semibold text-[#182645]"
-                            >
-                                Semana {s}
-                            </button>
-                        ))}
-                    </div>
-                </>
-            )}
 
             <div className="my-4 flex items-center gap-2">
                 <div className="h-px flex-1 bg-[#E7E9F0]" />
@@ -123,11 +147,11 @@ export default function EstadoVisitaSheet({
             </button>
 
             <Button
-                disabled={!seleccion}
+                disabled={deshabilitarBoton}
                 onClick={confirmar}
                 className="mt-4 h-12 w-full bg-dsgreen text-[14.5px] hover:bg-dsgreen/90"
             >
-                Elegí una opción
+                {labelBoton}
             </Button>
         </BottomSheet>
     )

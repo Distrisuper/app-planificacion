@@ -46,11 +46,6 @@ interface HarnessProps {
     onClose: () => void
     onVisitaIniciada: (cliente: IAgendaClient, visitaId: number) => void
     onVisitaCerrada: () => void
-    onCambioDeSemana?: (info: {
-        semanaAbierta: number
-        clientesPendientes: string[]
-        reintentar: () => Promise<void>
-    }) => void
 }
 
 /**
@@ -69,7 +64,6 @@ function Harness({
     onClose,
     onVisitaIniciada,
     onVisitaCerrada,
-    onCambioDeSemana,
 }: HarnessProps) {
     const [cliente, setCliente] = useState<IAgendaClient | null>(clienteInicial)
     const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(
@@ -103,7 +97,6 @@ function Harness({
                 }}
                 onGeoBloqueada={onGeoBloqueada}
                 onAviso={onAviso}
-                onCambioDeSemana={onCambioDeSemana}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar
@@ -121,7 +114,6 @@ function renderFlow(
         cliente?: IAgendaClient
         otroCliente?: IAgendaClient
         directoAMapa?: boolean
-        onCambioDeSemana?: HarnessProps['onCambioDeSemana']
     } = {},
 ) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -141,7 +133,6 @@ function renderFlow(
                 onClose={onClose}
                 onVisitaIniciada={onVisitaIniciada}
                 onVisitaCerrada={onVisitaCerrada}
-                onCambioDeSemana={over.onCambioDeSemana}
             />
         </QueryClientProvider>,
     )
@@ -289,31 +280,6 @@ it('si iniciar falla porque el ciclo cliente ya estaba resuelto, avisa y cierra 
         ),
     )
     expect(onClose).toHaveBeenCalled()
-})
-
-it('si iniciar falla por CAMBIO_DE_SEMANA, avisa al padre con los datos y una función de reintento', async () => {
-    const onCambioDeSemana = vi.fn()
-    ;(api.iniciarVisita as any).mockRejectedValueOnce({
-        response: {
-            status: 409,
-            data: { code: 'CAMBIO_DE_SEMANA', semanaAbierta: 3, clientesPendientes: ['1'] },
-        },
-    })
-    renderFlow({ onCambioDeSemana })
-    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
-    await waitFor(() =>
-        expect(onCambioDeSemana).toHaveBeenCalledWith(
-            expect.objectContaining({ semanaAbierta: 3, clientesPendientes: ['1'] }),
-        ),
-    )
-
-    // Reintentar manda confirmarCambioDeSemana: true con el mismo payload
-    ;(api.iniciarVisita as any).mockResolvedValueOnce({ visitaId: 99, rubros: 0 })
-    const { reintentar } = onCambioDeSemana.mock.calls[0][0]
-    await reintentar()
-    expect(api.iniciarVisita).toHaveBeenLastCalledWith(
-        expect.objectContaining({ confirmarCambioDeSemana: true }),
-    )
 })
 
 it('si iniciar falla por un error genérico, muestra el error inline y NO cierra el flujo', async () => {
