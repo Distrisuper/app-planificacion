@@ -415,10 +415,7 @@ export default function AgendaSemanaPage() {
                 diaActual={estadoVisitaCliente ? DIAS[estadoVisitaCliente.dia - 1] : null}
                 estadoActual={estadoVisitaCliente?.estado ?? null}
                 semanaActual={semanaEfectiva ?? 1}
-                // EstadoVisitaSheet solo necesita los números (arma "Semana N" ella misma, no
-                // es parte del inventario de vocabulario de la pieza 5): no hace falta pasarle
-                // la descripción de cada zona.
-                semanasDisponibles={semanas?.map(z => z.semana) ?? []}
+                semanasDisponibles={semanas ?? []}
                 onReagendar={onReagendar}
                 onElegirNoVisita={onElegirNoVisita}
                 onClose={() => setEstadoVisitaCliente(null)}

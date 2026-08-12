@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import { getWeekDates, formatDayDate } from '@/lib/weekDates'
-import type { Dia, EstadoCicloCliente } from '@/types/planificacion'
+import type { Dia, EstadoCicloCliente, IZonaCiclo } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 const DIA_NOMBRE: Record<Dia, string> = { LUN: 'Lunes', MAR: 'Martes', MIE: 'Miércoles', JUE: 'Jueves', VIE: 'Viernes' }
@@ -16,7 +16,11 @@ interface EstadoVisitaSheetProps {
     diaActual: Dia | null
     estadoActual: EstadoCicloCliente | null
     semanaActual: number
-    semanasDisponibles: number[]
+    /** El vendedor no ve "semana" como vocabulario propio (spec 2026-08-12): cada
+     *  chip muestra la descripción de la zona, con "Semana N" como fallback chico y
+     *  gris SOLO cuando la zona sí tiene nombre — si no lo tiene, "Semana N" pasa a
+     *  ser el texto principal y no se duplica abajo. */
+    semanasDisponibles: IZonaCiclo[]
     onReagendar: (semana: number, dia: Dia) => void
     onElegirNoVisita: () => void
     onClose: () => void
@@ -54,11 +58,17 @@ export default function EstadoVisitaSheet({
 
     const esPosicionActual = (d: Dia) => semanaElegida === semanaActual && d === diaActual
 
+    // Nombre de la zona elegida, con el mismo fallback que el header: si nunca se
+    // nombró, el número es lo único que hay para mostrar.
+    const nombreZonaElegida =
+        semanasDisponibles.find(z => z.semana === semanaElegida)?.descripcion ??
+        `Semana ${semanaElegida}`
+
     let labelBoton = 'Elegí un día'
     if (seleccion === 'no_visita') labelBoton = 'Registrar No visité'
     else if (seleccion && esPosicionActual(seleccion)) labelBoton = `Ya está el ${DIA_NOMBRE[seleccion]}`
     else if (seleccion && semanaElegida !== semanaActual)
-        labelBoton = `Mover a Semana ${semanaElegida} · ${DIA_NOMBRE[seleccion]}`
+        labelBoton = `Mover a ${nombreZonaElegida} · ${DIA_NOMBRE[seleccion]}`
     else if (seleccion) labelBoton = `Mover al ${DIA_NOMBRE[seleccion]}`
 
     const deshabilitarBoton = !seleccion || (seleccion !== 'no_visita' && esPosicionActual(seleccion))
@@ -67,17 +77,24 @@ export default function EstadoVisitaSheet({
         <BottomSheet open={open} onClose={onClose} title={nombreCliente} eyebrow="Estado de la visita">
             {semanasDisponibles.length > 1 && (
                 <div className="mb-3 flex flex-wrap gap-2">
-                    {semanasDisponibles.map(s => (
+                    {semanasDisponibles.map(z => (
                         <button
-                            key={s}
-                            onClick={() => setSemanaElegida(s)}
-                            className={`h-9 rounded-lg border-[1.5px] px-3 text-[13px] font-semibold ${
-                                s === semanaElegida
+                            key={z.semana}
+                            onClick={() => setSemanaElegida(z.semana)}
+                            className={`flex h-11 flex-col items-center justify-center rounded-lg border-[1.5px] px-3 leading-tight ${
+                                z.semana === semanaElegida
                                     ? 'border-dsnavy bg-dsnavy/10 text-dsnavy'
                                     : 'border-[#E1E6F0] text-[#182645]'
                             }`}
                         >
-                            Semana {s}
+                            <span className="text-[13px] font-semibold">
+                                {z.descripcion ?? `Semana ${z.semana}`}
+                            </span>
+                            {/* Solo si tiene nombre: si no, "Semana N" ya es el texto de
+                                arriba y repetirlo achicado abajo sería ruido. */}
+                            {z.descripcion && (
+                                <span className="text-[10px] text-dsmuted">Semana {z.semana}</span>
+                            )}
                         </button>
                     ))}
                 </div>
