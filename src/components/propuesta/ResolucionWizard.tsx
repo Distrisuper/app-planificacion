@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import ResolucionRubro from './ResolucionRubro'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { useEliminarRubro } from '@/hooks/useRubros'
+import { tieneDetalleIncompleto } from '@/lib/resolucionRubro'
 import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
 
 interface ResolucionWizardProps {
@@ -33,6 +34,15 @@ export default function ResolucionWizard({
 }: ResolucionWizardProps) {
     const rubro = rubros[index]
 
+    // Sentido del último movimiento, para que la entrada acompañe a la navegación. Se lee
+    // en el render (no en el efecto) porque la clase tiene que salir en el MISMO render en
+    // que cambia el índice; el efecto solo deja el ref listo para la próxima.
+    const indexAnterior = useRef(index)
+    const haciaAdelante = index >= indexAnterior.current
+    useEffect(() => {
+        indexAnterior.current = index
+    }, [index])
+
     // El catálogo de marcas se pide desde acá y no desde ResolucionRubro: el wizard es
     // el ancestro más cercano que ve a la vez el catálogo de motivos y el borrador, así
     // que puede pedirlo SOLO cuando hace falta — y deja a ResolucionRubro presentacional
@@ -41,6 +51,11 @@ export default function ResolucionWizard({
         m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
     )
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
+
+    const completos = rubros.filter(r => {
+        const cargados = borradores[r.id] ?? []
+        return cargados.length > 0 && !tieneDetalleIncompleto(motivos, cargados)
+    }).length
 
     const eliminar = useEliminarRubro(visitaId)
     const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
@@ -66,7 +81,8 @@ export default function ResolucionWizard({
              *  vendedor pierde de vista cuál está resolviendo a mitad de la lista. El
              *  -mx/px negativo hace que el fondo llegue a los bordes del sheet en vez de
              *  dejar ver el contenido de abajo por el padding lateral del scroll. */}
-            <div className="sticky top-0 z-10 -mx-[18px] mb-3 flex items-center gap-2 border-b border-[#EEF0F5] bg-white px-[18px] pb-2.5">
+            <div className="sticky top-0 z-10 -mx-[18px] mb-3 border-b border-[#EEF0F5] bg-white px-[18px] pb-2.5">
+                <div className="flex items-center gap-2">
                 <Button
                     variant="outline"
                     size="icon"
@@ -97,6 +113,40 @@ export default function ResolucionWizard({
                         )}
                     </button>
                 )}
+                </div>
+
+                {/* Un segmento por rubro: verde el que ya tiene su resolución completa,
+                 *  navy y más alto el que se está cargando, gris el que falta. "2 de 6" es
+                 *  texto y solo dice dónde estás; esto dice además qué hiciste y cuánto
+                 *  queda, que es lo que el vendedor no podía saber sin salir a la lista. */}
+                <div
+                    className="mt-2 flex h-1.5 items-center gap-1"
+                    role="progressbar"
+                    aria-valuemin={1}
+                    aria-valuemax={rubros.length}
+                    aria-valuenow={index + 1}
+                    aria-label={`Rubro ${index + 1} de ${rubros.length}, ${completos} resueltos`}
+                >
+                    {rubros.map((r, i) => {
+                        const cargados = borradores[r.id] ?? []
+                        const completo =
+                            cargados.length > 0 && !tieneDetalleIncompleto(motivos, cargados)
+                        return (
+                            <div
+                                key={r.id}
+                                className={`flex-1 rounded-full transition-all ${
+                                    i === index ? 'h-1.5' : 'h-[3px]'
+                                } ${
+                                    completo
+                                        ? 'bg-dsgreen'
+                                        : i === index
+                                          ? 'bg-dsnavy'
+                                          : 'bg-[#E4E8F0]'
+                                }`}
+                            />
+                        )
+                    })}
+                </div>
             </div>
 
             {errorEliminar && (
@@ -105,13 +155,21 @@ export default function ResolucionWizard({
                 </p>
             )}
 
-            <ResolucionRubro
-                motivos={motivos}
-                marcas={marcas}
-                marcasLoading={marcasLoading}
-                value={borradores[rubro.id] ?? []}
-                onChange={m => onCambiarBorrador(rubro.id, m)}
-            />
+            {/* `key` por rubro: sin él React reusa el mismo árbol al cambiar de índice y
+             *  la animación no se vuelve a disparar (además de arrastrar el estado
+             *  interno del rubro anterior). */}
+            <div
+                key={rubro.id}
+                className={haciaAdelante ? 'animate-rubro-adelante' : 'animate-rubro-atras'}
+            >
+                <ResolucionRubro
+                    motivos={motivos}
+                    marcas={marcas}
+                    marcasLoading={marcasLoading}
+                    value={borradores[rubro.id] ?? []}
+                    onChange={m => onCambiarBorrador(rubro.id, m)}
+                />
+            </div>
         </div>
     )
 }

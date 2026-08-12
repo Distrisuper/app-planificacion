@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Maximize2, Minimize2 } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -68,7 +67,6 @@ export default function VisitaSheet({
     const [borradorListo, setBorradorListo] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
-    const [expandido, setExpandido] = useState(false)
     // Los ids que se agregaron dinámicamente esta sesión, más reciente primero — se
     // usan para insertarlos arriba de todo en la lista al agregarlos (ver
     // `conNuevosArriba`). Es una decisión deliberada que NO se generaliza a "reordenar
@@ -83,6 +81,10 @@ export default function VisitaSheet({
     // estado de "en vuelo" se lleva acá, por rubroCode/id, independiente de la mutación.
     const [agregandoCodes, setAgregandoCodes] = useState<Set<string>>(new Set())
     const [eliminandoIds, setEliminandoIds] = useState<Set<number>>(new Set())
+    // Id del rubro recién agregado desde el catálogo, a la espera de que el refetch de
+    // `rubros` lo traiga para abrirle el wizard. No se puede abrir en el `await` del
+    // agregar: ahí el rubro todavía no existe en la lista que el wizard recorre.
+    const [abrirAlLlegar, setAbrirAlLlegar] = useState<number | null>(null)
 
     // Se pide al abrir el sheet, no al entrar a una sub-vista: la tabla es la fuente de
     // los números en las dos pantallas y en los dos estados (colapsada/expandida).
@@ -94,10 +96,10 @@ export default function VisitaSheet({
             setBorradores({})
             setBorradorListo(false)
             setErrorGuardado(null)
-            setExpandido(false)
             setAgregadosIds([])
             setAgregandoCodes(new Set())
             setEliminandoIds(new Set())
+            setAbrirAlLlegar(null)
         }
     }, [open])
 
@@ -122,6 +124,20 @@ export default function VisitaSheet({
         if (!open || !borradorListo) return
         guardarBorrador(visitaId, borradores)
     }, [open, borradorListo, visitaId, borradores])
+
+    // Abre el wizard del rubro recién agregado, en cuanto el refetch de `rubros` lo
+    // trae. Se resuelve acá y no en `agregarDesdeTabla` porque entre el POST y la lista
+    // actualizada hay un refetch de por medio.
+    useEffect(() => {
+        if (abrirAlLlegar == null) return
+        const nuevo = rubros.find(r => r.id === abrirAlLlegar)
+        if (!nuevo) return
+        setAbrirAlLlegar(null)
+        // Mismo subset que abrirWizard (`esEditable`): en una visita cerrada no hay nada
+        // que resolver, pero tampoco se puede agregar, así que no se llega hasta acá.
+        const subset = visitaCerrada ? [] : rubros
+        setWizard({ rubros: subset, index: subset.findIndex(r => r.id === nuevo.id) })
+    }, [abrirAlLlegar, rubros, visitaCerrada])
 
     // Una visita cerrada no se reedita (se genera una visita de ajuste aparte). Ya no
     // puede cerrarse con rubros sin cargar (ver cerrarConBorrador), así que no hace
@@ -154,6 +170,11 @@ export default function VisitaSheet({
         try {
             const result = await agregar.mutateAsync({ rubroCode: item.rubroCode, rubroDescripcion: item.nombre })
             setAgregadosIds(prev => [result.visitaRubroId, ...prev])
+            // El rubro agregado sube al principio de la lista (ver conNuevosArriba), que
+            // con el catálogo abierto queda a decenas de filas de scroll de donde el
+            // vendedor está parado. Abrirle el wizard directo evita ese viaje: si tocó un
+            // rubro del catálogo es porque lo ofreció y tiene un resultado que cargar.
+            setAbrirAlLlegar(result.visitaRubroId)
         } catch {
             // Silencioso a propósito: la fila vuelve a su estado agregable y el
             // vendedor puede volver a tocarla (mismo comportamiento que antes).
@@ -215,13 +236,14 @@ export default function VisitaSheet({
             completo: rubroCompleto(r),
         }
     }
-    const codesVisita = new Set(rubros.map(r => r.rubroCode))
-    const hayOtrosRubros = rubroStatus.some(s => !codesVisita.has(s.rubroCode))
+    // Siempre expandida: los "otros rubros del cliente" ya vienen cargados con el sheet,
+    // y el botón "Ver más" que los escondía costaba 56px del pie fijo — más que una fila
+    // de la tabla que iba a mostrar.
     const filas = construirFilasVisita(
         conNuevosArriba(rubros),
         rubroStatus,
         estadosResolucion,
-        expandido,
+        true,
         !visitaCerrada,
     )
 
@@ -268,34 +290,10 @@ export default function VisitaSheet({
         />
     ) : (
         <>
-            {pendientes > 0 && (
-                <p className="mb-2 text-center text-[12px] font-semibold text-[#B45309]">
-                    Faltan completar {pendientes} {pendientes === 1 ? 'rubro' : 'rubros'} para
-                    poder cerrar la visita.
-                </p>
-            )}
             {errorGuardado && (
                 <p className="mb-2 text-center text-[12.5px] font-semibold text-dsred">
                     {errorGuardado}
                 </p>
-            )}
-            {/* Fijo junto al botón principal, no adentro del scroll: al expandir la
-             *  tabla con "Ver más" la lista puede crecer bastante, y si este botón
-             *  quedara al final del contenido scrolleable, minimizarla exigiría
-             *  scrollear hasta abajo de todo para volver a encontrarlo. */}
-            {hayOtrosRubros && (
-                <Button
-                    variant="outline"
-                    onClick={() => setExpandido(e => !e)}
-                    className="mb-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
-                >
-                    {expandido ? (
-                        <Minimize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                    ) : (
-                        <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                    )}
-                    {expandido ? 'Ver menos' : 'Ver más'}
-                </Button>
             )}
             {/* Pegado arriba de "Cerrar visita", en el pie fijo: es la última acción a
              *  mano antes de cerrar, para un vistazo de último momento a pagos/cuenta sin
@@ -313,7 +311,17 @@ export default function VisitaSheet({
                     loading={cerrando || guardandoBorrador}
                     className="h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90"
                 >
-                    {guardandoBorrador ? 'Guardando…' : cerrando ? 'Cerrando…' : 'Cerrar visita'}
+                    {/* El faltante va DENTRO del botón deshabilitado, no en una línea
+                     *  aparte arriba: dice lo mismo, en el único lugar donde el vendedor
+                     *  ya está mirando (el botón que no lo deja avanzar), y no gasta una
+                     *  línea del pie fijo en cada render. */}
+                    {guardandoBorrador
+                        ? 'Guardando…'
+                        : cerrando
+                          ? 'Cerrando…'
+                          : pendientes > 0
+                            ? `Faltan ${pendientes} ${pendientes === 1 ? 'rubro' : 'rubros'}`
+                            : 'Cerrar visita'}
                 </Button>
             )}
         </>
@@ -327,6 +335,7 @@ export default function VisitaSheet({
             title={nombreCliente}
             eyebrow={enCurso ? `● En curso · ${formatearDuracion(segundos)}` : 'Propuesta comercial'}
             eyebrowClassName={enCurso ? 'text-[#B45309]' : undefined}
+            altura="completa"
             footer={footer}
         >
             {wizard ? (
@@ -341,11 +350,6 @@ export default function VisitaSheet({
                 />
             ) : (
                 <div>
-                    <p className="mb-3 text-[13px] leading-snug text-dsmuted">
-                        Cargá el resultado de cada rubro que ofreciste. Los que no ofreciste se
-                        resuelven con <b className="font-bold text-[#182645]">"No lo ofrecí"</b>.
-                    </p>
-
                     {filas.length === 0 ? (
                         <div className="text-sm text-dsmuted">Esta visita no tiene rubros propuestos.</div>
                     ) : (

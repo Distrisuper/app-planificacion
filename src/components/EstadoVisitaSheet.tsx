@@ -74,7 +74,33 @@ export default function EstadoVisitaSheet({
     const deshabilitarBoton = !seleccion || (seleccion !== 'no_visita' && esPosicionActual(seleccion))
 
     return (
-        <BottomSheet open={open} onClose={onClose} title={nombreCliente} eyebrow="Estado de la visita">
+        <BottomSheet
+            open={open}
+            onClose={onClose}
+            title={nombreCliente}
+            eyebrow="Estado de la visita"
+            // Hasta el alto completo, no fijo: con las cinco zonas en dos filas, los
+            // cinco días y "No visité", el contenido no entra en el 85vh del sheet auto
+            // y "No visité" quedaba abajo del corte — invisible, porque nada indica que
+            // la lista sigue; los ~50px que agrega el 90dvh alcanzan para que entre
+            // entero. Pero un vendedor de una sola zona no ve los chips
+            // (`semanasDisponibles.length > 1`) y su contenido baja a ~390px: con altura
+            // fija ahí quedaba un hueco blanco de ~200px sobre el pie.
+            altura="hasta-completa"
+            // En el pie FIJO, no al final del contenido: con cinco zonas, cinco días y
+            // "No visité", la lista pasa el alto del sheet y el botón quedaba abajo de
+            // todo, fuera de la pantalla — el vendedor elegía un día y no veía con qué
+            // confirmarlo.
+            footer={
+                <Button
+                    disabled={deshabilitarBoton}
+                    onClick={confirmar}
+                    className="h-12 w-full bg-dsgreen text-[14.5px] hover:bg-dsgreen/90"
+                >
+                    {labelBoton}
+                </Button>
+            }
+        >
             {semanasDisponibles.length > 1 && (
                 <div className="mb-3 flex flex-wrap gap-2">
                     {semanasDisponibles.map(z => (
@@ -128,7 +154,7 @@ export default function EstadoVisitaSheet({
                 })}
             </div>
 
-            <div className="my-4 flex items-center gap-2">
+            <div className="my-3 flex items-center gap-2">
                 <div className="h-px flex-1 bg-[#E7E9F0]" />
                 <span className="text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">O registrar</span>
                 <div className="h-px flex-1 bg-[#E7E9F0]" />
@@ -145,14 +171,6 @@ export default function EstadoVisitaSheet({
                 No visité
                 {yaNoVisita && <span className="text-dsmuted"> (ya registrado)</span>}
             </button>
-
-            <Button
-                disabled={deshabilitarBoton}
-                onClick={confirmar}
-                className="mt-4 h-12 w-full bg-dsgreen text-[14.5px] hover:bg-dsgreen/90"
-            >
-                {labelBoton}
-            </Button>
         </BottomSheet>
     )
 }

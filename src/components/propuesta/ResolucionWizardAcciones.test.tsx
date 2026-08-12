@@ -53,6 +53,28 @@ it('Siguiente avanza el índice', () => {
     expect(onIndexChange).toHaveBeenCalledWith(1)
 })
 
+it('"Ver lista" sale del wizard sin tocar el índice', () => {
+    const { onFinalizar, onIndexChange } = setup()
+    fireEvent.click(screen.getByRole('button', { name: /ver lista/i }))
+    expect(onFinalizar).toHaveBeenCalled()
+    expect(onIndexChange).not.toHaveBeenCalled()
+})
+
+it('en el último rubro no hay "Ver lista": Finalizar ya es la salida', () => {
+    setup({ index: 1 })
+    expect(screen.getByRole('button', { name: /finalizar/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ver lista/i })).not.toBeInTheDocument()
+})
+
+it('"Ver lista" sigue habilitado con un detalle a medias, aunque Finalizar se bloquee', () => {
+    // Precio (requiereDetalle) tildado sin detalle: es lo que bloquea Finalizar.
+    const { onFinalizar } = setup({
+        borradores: { 7: [{ motivoId: 13, detalle: null }], 8: [] },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /ver lista/i }))
+    expect(onFinalizar).toHaveBeenCalled()
+})
+
 it('Atrás retrocede el índice', () => {
     const { onIndexChange } = setup({ index: 1 })
     fireEvent.click(screen.getByRole('button', { name: /atrás/i }))

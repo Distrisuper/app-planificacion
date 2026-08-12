@@ -18,14 +18,23 @@ body { margin: 0; background: #eef1f6; -webkit-tap-highlight-color: transparent;
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes notif-in { from { opacity: 0; transform: translate(-50%, -10px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes panel-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+/* Cambio de rubro en el wizard de resolución. La checklist es idéntica rubro a rubro
+   (mismas opciones, mismo orden), así que sin este desplazamiento el toque de
+   Siguiente no se distingue de "no pasó nada". El sentido acompaña la navegación:
+   entra desde la derecha al avanzar, desde la izquierda al volver. */
+@keyframes rubro-adelante { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes rubro-atras { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: translateX(0); } }
 
 .animate-sheet-up { animation: sheet-up .28s cubic-bezier(.22,1,.36,1); }
 .animate-fade-in { animation: fade-in .18s ease; }
 .animate-notif-in { animation: notif-in .2s ease; }
 .animate-panel-in { animation: panel-in .16s ease-out; }
+.animate-rubro-adelante { animation: rubro-adelante .16s ease-out; }
+.animate-rubro-atras { animation: rubro-atras .16s ease-out; }
 
 @media (prefers-reduced-motion: reduce) {
-    .animate-sheet-up, .animate-fade-in, .animate-notif-in, .animate-panel-in {
+    .animate-sheet-up, .animate-fade-in, .animate-notif-in, .animate-panel-in,
+    .animate-rubro-adelante, .animate-rubro-atras {
         animation: none !important;
     }
 }

@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, List } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { motivoIncompleto } from '@/lib/resolucionRubro'
 import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
@@ -18,7 +18,7 @@ interface ResolucionWizardAccionesProps {
     onFinalizar: () => void
 }
 
-/** Atrás / Siguiente-o-Finalizar. Se renderiza en el pie FIJO del sheet (fuera del área
+/** Atrás / Ver lista / Siguiente-o-Finalizar. Se renderiza en el pie FIJO del sheet (fuera del área
  *  de scroll) para que siga a la vista aunque el detalle de un motivo (ej. Precio) empuje
  *  el contenido hacia abajo — si viviera en el scroll, expandir el detalle lo tapa. */
 export default function ResolucionWizardAcciones({
@@ -55,6 +55,26 @@ export default function ResolucionWizardAcciones({
                     <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
                     Atrás
                 </Button>
+                {/* Salida al alcance del pulgar. La misma salida que el ‹ del header, que
+                 *  queda arriba a la izquierda y se confunde con "Atrás" (mismo ícono,
+                 *  distinto significado: uno sale a la lista, el otro va al rubro
+                 *  anterior). En el último rubro no va: ahí "Finalizar" ya es esto mismo.
+                 *
+                 *  NO se deshabilita con `bloqueado`, a diferencia de Finalizar: es la
+                 *  vía de escape de quien entró por error, y un escape deshabilitado deja
+                 *  al vendedor encerrado en un rubro que no quería abrir. Salir con un
+                 *  detalle a medias no rompe nada — el rubro queda con el chip en ámbar y
+                 *  "Cerrar visita" sigue bloqueado hasta completarlo. */}
+                {!esUltimo && (
+                    <Button
+                        variant="ghost"
+                        onClick={onFinalizar}
+                        className="h-12 shrink-0 px-3 text-[13.5px] font-bold text-dsmuted"
+                    >
+                        <List className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                        Ver lista
+                    </Button>
+                )}
                 {esUltimo ? (
                     <Button
                         onClick={onFinalizar}
