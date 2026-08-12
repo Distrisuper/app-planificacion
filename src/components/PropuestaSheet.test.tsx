@@ -141,7 +141,7 @@ it('un rubro de relleno con dropPct positivo (creció, no cayó) se manda como 0
     ])
 })
 
-it('"Ver más" trae un rubro que no está en la propuesta', async () => {
+it('muestra de una los rubros que no están en la propuesta, sin "Ver más"', async () => {
     mockPropuesta()
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'R1', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
@@ -159,10 +159,8 @@ it('"Ver más" trae un rubro que no está en la propuesta', async () => {
         ),
     )
     await screen.findByText('Amortiguadores')
-    expect(screen.queryByText('Baterías')).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     expect(await screen.findByText('Baterías')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ver más/i })).not.toBeInTheDocument()
 })
 
 it('con getRubroStatus caído se ve la tabla con los números de la propuesta y se puede iniciar visita', async () => {
@@ -215,7 +213,7 @@ it('propuesta vacía sin otros rubros: solo el mensaje, sin botón Ver más', as
     expect(screen.queryByRole('button', { name: /ver más/i })).not.toBeInTheDocument()
 })
 
-it('propuesta vacía con otros rubros del cliente: "Ver más" trae la tabla', async () => {
+it('propuesta vacía con otros rubros del cliente: la tabla se ve de una', async () => {
     ;(api.getPropuesta as any).mockResolvedValue({
         particularCode: '10034',
         clientName: 'Don José',
@@ -241,9 +239,6 @@ it('propuesta vacía con otros rubros del cliente: "Ver más" trae la tabla', as
             />,
         ),
     )
-    expect(await screen.findByText('Sin oportunidades destacadas.')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     expect(await screen.findByText('Baterías')).toBeInTheDocument()
     expect(screen.queryByText('Sin oportunidades destacadas.')).not.toBeInTheDocument()
 })

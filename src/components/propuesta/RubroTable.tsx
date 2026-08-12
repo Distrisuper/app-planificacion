@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Loader2, Search, Trash2 } from 'lucide-react'
+import { Check, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { fmtAmount } from '@/lib/fmtAmount'
-import type { IRubroFila } from './filas'
+import type { IRubroFila, IRubroFilaResolucion } from './filas'
 
 interface RubroTableProps {
     filas: IRubroFila[]
@@ -41,6 +41,16 @@ function cae(valor: number | null, promedio6m: number | null): boolean {
 // la misma columna aunque el `div` que los contiene mida lo mismo.
 const ANCHO_NUMERICA = 'w-[54px] shrink-0'
 
+// Slot del chip de estado, al principio de la fila. Se reserva en TODAS las filas de
+// la tabla (y en el header) cuando la tabla es la de una visita: si solo lo llevaran
+// las filas con `resolucion`, los nombres del bloque "otros rubros" arrancarían 26px
+// más a la izquierda que los de arriba.
+const ANCHO_CHIP = 'w-[26px] shrink-0'
+// Ídem para el ✕ de "quitar rubro". A diferencia del chip, este solo se reserva si
+// hay al menos un rubro agregado a mano — es el caso raro, y reservarlo siempre le
+// come 30px al nombre en todas las visitas para nada.
+const ANCHO_QUITAR = 'w-[30px] shrink-0'
+
 function Celda({
     valor,
     promedio6m,
@@ -74,6 +84,40 @@ function Celda({
  *  Ninguna variante agrega una columna extra al final — por eso el ancho de
  *  ACTUAL/M.ANT/P.6M es siempre el mismo, sea esta fila una tarjeta con
  *  Resolución arriba, una fila de solo lectura, o una fila agregable. */
+/** Estado de la resolución del rubro, en 26px: ＋ (sin cargar), el número de motivos
+ *  en ámbar (empezado pero incompleto) o ✓ verde (completo). Reemplaza al
+ *  botón "Resolución" de ancho completo que ocupaba una segunda línea por rubro: con
+ *  5 rubros esa línea costaba ~250px de una pantalla que tiene ~500 útiles. */
+function ChipEstado({ resolucion }: { resolucion: IRubroFilaResolucion }) {
+    const { completo, motivosCargados } = resolucion
+    return (
+        <div className={`${ANCHO_CHIP} flex justify-start`}>
+            <span
+                aria-hidden
+                className={`grid h-[22px] w-[22px] place-items-center rounded-full border text-[11px] font-extrabold ${
+                    completo
+                        ? 'border-[#BFE6CE] bg-[#EAF7EF] text-dsgreen'
+                        : motivosCargados > 0
+                          ? 'border-[#F0D3A0] bg-[#FDF6EA] text-[#B45309]'
+                          : // Sin cargar lleva ＋: un círculo vacío se lee como "acá no
+                            // hay nada" y no invita a tocarlo. Con el ＋ (y el relleno,
+                            // en vez del borde punteado) la fila se lee como el botón
+                            // que efectivamente es.
+                            'border-[#C9D2E3] bg-[#F1F4F9] text-dsnavy'
+                }`}
+            >
+                {completo ? (
+                    <Check className="h-3.5 w-3.5" strokeWidth={3} />
+                ) : motivosCargados > 0 ? (
+                    motivosCargados
+                ) : (
+                    <Plus className="h-3.5 w-3.5" strokeWidth={3} />
+                )}
+            </span>
+        </div>
+    )
+}
+
 function ContenidoFila({ fila }: { fila: IRubroFila }) {
     return (
         <>
@@ -85,46 +129,14 @@ function ContenidoFila({ fila }: { fila: IRubroFila }) {
     )
 }
 
-function FilaDatos({
-    fila,
-    onAgregar,
-    agregandoCodes,
-    conBorde,
-}: {
-    fila: IRubroFila
-    onAgregar?: (rubroCode: string) => void
-    agregandoCodes?: Set<string>
-    conBorde: boolean
-}) {
-    const clasesFila = `flex w-full items-center gap-1 px-2.5 py-2.5 text-left ${conBorde ? 'border-b border-dsline' : ''}`
-
-    if (fila.agregable) {
-        const agregando = agregandoCodes?.has(fila.rubroCode) ?? false
-        return (
-            <button
-                type="button"
-                aria-label={`Agregar ${fila.nombre}`}
-                disabled={agregando}
-                onClick={() => onAgregar?.(fila.rubroCode)}
-                className={`${clasesFila} active:bg-[#F7F8FB] disabled:opacity-50`}
-            >
-                <ContenidoFila fila={fila} />
-            </button>
-        )
-    }
-
-    return (
-        <div className={clasesFila}>
-            <ContenidoFila fila={fila} />
-        </div>
-    )
-}
-
-/** Una fila completa: la tarjeta con Resolución/Quitar rubro si `fila.resolucion`
- *  está presente, o la fila lisa (read-only o agregable) si no. */
+/** Una fila completa, siempre de UNA sola línea. Las tres variantes (read-only,
+ *  resoluble, agregable) comparten la misma altura y las mismas columnas — lo único
+ *  que cambia es qué pasa al tocarla y qué muestra el chip del principio. */
 function FilaRubro({
     fila,
     conBorde,
+    conChip,
+    conColumnaQuitar,
     onResolucion,
     onAgregar,
     onEliminar,
@@ -133,56 +145,72 @@ function FilaRubro({
 }: {
     fila: IRubroFila
     conBorde: boolean
+    conChip: boolean
+    conColumnaQuitar: boolean
     onResolucion?: (visitaRubroId: number) => void
     onAgregar?: (rubroCode: string) => void
     onEliminar?: (visitaRubroId: number) => void
     agregandoCodes?: Set<string>
     eliminandoIds?: Set<number>
 }) {
-    if (!fila.resolucion) {
-        return <FilaDatos fila={fila} onAgregar={onAgregar} agregandoCodes={agregandoCodes} conBorde={conBorde} />
-    }
+    const resolucion = fila.resolucion
+    const agregando = fila.agregable ? (agregandoCodes?.has(fila.rubroCode) ?? false) : false
+    const eliminando = resolucion ? (eliminandoIds?.has(resolucion.visitaRubroId) ?? false) : false
+    const clasesFila = 'flex min-w-0 flex-1 items-center gap-1 px-2.5 py-2 text-left'
+
+    const interior = (
+        <>
+            {conChip &&
+                (resolucion ? <ChipEstado resolucion={resolucion} /> : <div className={ANCHO_CHIP} />)}
+            <ContenidoFila fila={fila} />
+        </>
+    )
 
     return (
-        <div className="px-2 py-1.5">
-            <div className="rounded-xl border border-dsline">
-                <FilaDatos fila={fila} conBorde={false} />
-                <div className="flex items-center gap-2 px-2.5 pb-2.5">
-                    <button
-                        type="button"
-                        aria-label={`Resolución de ${fila.nombre}`}
-                        onClick={() => onResolucion?.(fila.resolucion!.visitaRubroId)}
-                        className={`h-9 flex-1 rounded-lg border text-[12px] font-bold ${
-                            fila.resolucion.completo
-                                ? 'border-[#BFE6CE] bg-[#F3FAF5] text-dsgreen'
-                                : 'border-[#D8DEEA] text-dsnavy'
-                        }`}
-                    >
-                        {fila.resolucion.completo
-                            ? `✓ ${fila.resolucion.motivosCargados} ${fila.resolucion.motivosCargados === 1 ? 'motivo' : 'motivos'} cargado${fila.resolucion.motivosCargados === 1 ? '' : 's'}`
-                            : 'Resolución'}
-                    </button>
-                    {/* Solo para rubros agregados dinámicamente — los de la propuesta
-                     *  congelada no se pueden borrar (el backend responde
-                     *  RUBRO_DE_PROPUESTA); si el vendedor no lo ofreció, se resuelve
-                     *  con "No lo ofrecí" en vez de borrarlo. */}
-                    {!fila.resolucion.esPropuesto && (
+        <div className={`flex items-center ${conBorde ? 'border-b border-dsline' : ''}`}>
+            {resolucion || fila.agregable ? (
+                <button
+                    type="button"
+                    aria-label={
+                        resolucion ? `Resolución de ${fila.nombre}` : `Agregar ${fila.nombre}`
+                    }
+                    disabled={agregando}
+                    onClick={() =>
+                        resolucion
+                            ? onResolucion?.(resolucion.visitaRubroId)
+                            : onAgregar?.(fila.rubroCode)
+                    }
+                    className={`${clasesFila} active:bg-[#F7F8FB] disabled:opacity-50`}
+                >
+                    {interior}
+                </button>
+            ) : (
+                <div className={clasesFila}>{interior}</div>
+            )}
+            {/* Solo para rubros agregados dinámicamente — los de la propuesta congelada
+             *  no se pueden borrar (el backend responde RUBRO_DE_PROPUESTA); si el
+             *  vendedor no lo ofreció, se resuelve con "No lo ofrecí" en vez de
+             *  borrarlo. La columna se reserva en toda la tabla (ver ANCHO_QUITAR) para
+             *  que las filas sin ✕ no corran sus números. */}
+            {conColumnaQuitar && (
+                <div className={`${ANCHO_QUITAR} flex justify-center`}>
+                    {resolucion && !resolucion.esPropuesto && (
                         <button
                             type="button"
                             aria-label={`Quitar ${fila.nombre}`}
-                            onClick={() => onEliminar?.(fila.resolucion!.visitaRubroId)}
-                            disabled={eliminandoIds?.has(fila.resolucion.visitaRubroId) ?? false}
-                            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-[#EAD3D3] text-dsred disabled:opacity-50"
+                            onClick={() => onEliminar?.(resolucion.visitaRubroId)}
+                            disabled={eliminando}
+                            className="grid h-7 w-7 place-items-center rounded-md text-dsred disabled:opacity-50"
                         >
-                            {eliminandoIds?.has(fila.resolucion.visitaRubroId) ? (
-                                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.4} />
+                            {eliminando ? (
+                                <Loader2 className="h-[15px] w-[15px] animate-spin" strokeWidth={2.4} />
                             ) : (
-                                <Trash2 className="h-4 w-4" strokeWidth={2} />
+                                <Trash2 className="h-[15px] w-[15px]" strokeWidth={2} />
                             )}
                         </button>
                     )}
                 </div>
-            </div>
+            )}
         </div>
     )
 }
@@ -193,15 +221,12 @@ function FilaRubro({
  *  filtro puramente visual sobre lo que ya llegó por props, no dispara ningún
  *  fetch ni mutación.
  *
- *  Una fila con `resolucion` se agrupa con su botón en una tarjeta propia
- *  (nombre+valores arriba, acción abajo, con su propio borde): es la unidad
- *  que el vendedor toca para resolver ese rubro. Una fila `agregable` no
- *  tiene ningún ícono al costado — toda la fila es el botón — porque con
- *  varios rubros candidatos (ver "otros rubros del cliente") convertir cada
- *  uno en su propia tarjeta duplicaría la altura de una lista que ya puede
- *  ser larga, y un ícono aparte reservaba una columna que desalineaba el
- *  resto de la tabla. Sin `resolucion` ni `agregable` (la propuesta de solo
- *  lectura) se ve como una fila de tabla común.
+ *  Todas las filas miden una sola línea, sean resolubles, agregables o de solo
+ *  lectura: toda la fila es el target táctil y el estado se lee del chip del
+ *  principio (`ChipEstado`). Antes una fila con `resolucion` era una tarjeta de
+ *  dos pisos con un botón "Resolución" de ancho completo abajo — ~98px por
+ *  rubro, contra ~40px ahora: en un celular eso dejaba ver menos de dos rubros
+ *  de los cinco que hay que resolver antes de poder cerrar la visita.
  *
  *  El buscador solo filtra "otros rubros del cliente": esa es la lista que
  *  puede crecer a docenas de filas (todo el historial de compra del
@@ -227,13 +252,25 @@ export default function RubroTable({
     const bloqueAbajo = filas.filter(f => !f.destacada)
     const hayBloqueExtra = bloqueAbajo.length > 0
     const bloqueExtraEsAgregable = bloqueAbajo.some(f => f.agregable)
+    // Tabla de una visita ⇒ hay chip de estado, y se reserva su ancho en todas las
+    // filas y en el header. En la propuesta (ninguna fila resoluble) no se reserva
+    // nada: ahí ese espacio es ancho de nombre.
+    const conChip = filas.some(f => f.resolucion)
+    const conColumnaQuitar = filas.some(f => f.resolucion && !f.resolucion.esPropuesto)
 
     const q = normalizar(busqueda.trim())
     const bloqueAbajoFiltrado = q === '' ? bloqueAbajo : bloqueAbajo.filter(f => normalizar(f.nombre).includes(q))
 
     return (
-        <div className="w-full overflow-hidden rounded-xl border border-dsline">
-            <div className="flex items-center gap-1 border-b border-dsline bg-[#F7F8FB] px-2.5 py-2 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
+        // Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
+        // overflow oculto anula el `position: sticky` de adentro contra el scroll del
+        // sheet. Las esquinas de arriba las redondea el propio header.
+        <div className="w-full rounded-xl border border-dsline">
+            {/* Sticky: con el catálogo abierto la lista pasa de 25 filas y, sin el rótulo
+                a la vista, las tres columnas de números quedan sin identificar apenas se
+                scrollea (ACTUAL vs. M.ANT vs. P.6M no se adivinan por el valor). */}
+            <div className="sticky top-0 z-20 flex h-8 items-center gap-1 rounded-t-[11px] border-b border-dsline bg-[#F7F8FB] px-2.5 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
+                {conChip && <div className={ANCHO_CHIP} />}
                 <div role="columnheader" className="min-w-0 flex-1">
                     Rubro
                 </div>
@@ -251,6 +288,7 @@ export default function RubroTable({
                 <div role="columnheader" className={`${ANCHO_NUMERICA} pr-1.5 text-right`}>
                     P.6M
                 </div>
+                {conColumnaQuitar && <div className={ANCHO_QUITAR} />}
             </div>
 
             <div>
@@ -258,7 +296,12 @@ export default function RubroTable({
                     <FilaRubro
                         key={fila.rubroCode}
                         fila={fila}
-                        conBorde={i < bloqueArriba.length - 1 || hayBloqueExtra}
+                        // La última no lleva borde propio cuando sigue la banda: la banda
+                        // ya trae el suyo arriba (border-y, que necesita para no dejar
+                        // pasar filas por abajo mientras está sticky).
+                        conBorde={i < bloqueArriba.length - 1}
+                        conChip={conChip}
+                        conColumnaQuitar={conColumnaQuitar}
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}
                         onEliminar={onEliminar}
@@ -268,7 +311,11 @@ export default function RubroTable({
                 ))}
 
                 {hayBloqueExtra && (
-                    <div className="border-t border-dsline bg-[#FAFBFD] px-2.5 py-2">
+                    // Sticky debajo del header de columnas (top-8 = su alto): el buscador
+                    // es lo único que hace manejable una lista de decenas de rubros, y si
+                    // scrollea con ella hay que volver hasta arriba para usarlo — que es
+                    // justo lo que uno quiere evitar cuando ya scrolleó mucho.
+                    <div className="sticky top-8 z-10 border-y border-dsline bg-[#FAFBFD] px-2.5 py-2">
                         <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
                             Otros rubros del cliente
                             {bloqueExtraEsAgregable && ' · tocá uno para agregarlo'}
@@ -294,6 +341,8 @@ export default function RubroTable({
                         key={fila.rubroCode}
                         fila={fila}
                         conBorde={i < bloqueAbajoFiltrado.length - 1}
+                        conChip={conChip}
+                        conColumnaQuitar={conColumnaQuitar}
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}
                         onEliminar={onEliminar}

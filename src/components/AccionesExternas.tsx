@@ -14,7 +14,7 @@ const CHIP_CONTEXTO =
 // al fondo", no como un control nuevo y distinto. Horizontal, no apilado: el apilado
 // costaba ~70px de alto y dejaba muy poco lugar para la tabla de rubros arriba.
 const BOTON_FILA =
-    'flex h-11 flex-1 items-center justify-center gap-1.5 rounded-lg text-dsnavy hover:bg-dsnavy/5'
+    'flex h-9 flex-1 items-center justify-center gap-1.5 rounded-lg text-dsnavy hover:bg-dsnavy/5'
 
 interface AccionesExternasProps {
     cliente: IVisitClientCard

@@ -21,6 +21,11 @@ it('toggles motivos and submits the selected ids', async () => {
     expect(onConfirm).toHaveBeenCalledWith([4])
 })
 
+it('el botón de confirmar vive fuera del scroll, para no perderse con muchos motivos', () => {
+    render(<ResolucionSheet open motivos={motivos} confirmLabel="Cerrar visita" onConfirm={vi.fn()} onClose={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /cerrar visita/i }).closest('.overflow-y-auto')).toBeNull()
+})
+
 it('disables confirm when nothing is selected', () => {
     render(<ResolucionSheet open motivos={motivos} confirmLabel="Cerrar visita" onConfirm={vi.fn()} onClose={vi.fn()} />)
     expect(screen.getByRole('button', { name: /cerrar visita/i })).toBeDisabled()

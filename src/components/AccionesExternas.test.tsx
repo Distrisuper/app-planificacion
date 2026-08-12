@@ -50,8 +50,8 @@ describe('AccionesExternas', () => {
         expect(enFila.querySelectorAll('svg')).toHaveLength(1)
     })
 
-    it('la variante fila usa el alto de acción táctil', () => {
+    it('la variante fila usa el alto compacto del pie del sheet', () => {
         render(<AccionesExternas cliente={CLIENTE} variante="fila" onAbrir={vi.fn()} />)
-        expect(screen.getByRole('button', { name: 'Pagos' }).className).toContain('h-11')
+        expect(screen.getByRole('button', { name: 'Pagos' }).className).toContain('h-9')
     })
 })
