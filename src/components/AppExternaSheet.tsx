@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Loader2, RotateCw, X } from 'lucide-react'
+import { ExternalLink, Loader2, RotateCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { APPS_EXTERNAS, type AppExterna } from '@/lib/appsExternas'
@@ -167,6 +167,31 @@ export default function AppExternaSheet({
         setRecargas(previas => ({ ...previas, [appActivaId]: (previas[appActivaId] ?? 0) + 1 }))
     }, [appActivaId])
 
+    // La URL del handoff, no la del `src` con `_reintento`: ese sufijo es cache-busting
+    // interno del iframe y no tiene por qué viajar a la pestaña del vendedor.
+    const urlAppActiva = appActivaId ? (montadas[appActivaId]?.handoff.url ?? null) : null
+
+    /**
+     * Salida de emergencia cuando el navegador bloquea cookies de terceros.
+     *
+     * Con ese bloqueo activo (por defecto en incógnito, y en el navegador in-app de
+     * Android siempre), la cookie de sesión de la app ajena se descarta dentro del iframe:
+     * el vendedor ve el login, lo completa, y vuelve al login — sin ningún error visible,
+     * porque el `Set-Cookie` se descarta en silencio y el `POST` devuelve 200. Verificado
+     * contra el CRM (Aoki) el 12/08/2026: falla en incógnito, anda en pestaña normal.
+     *
+     * En una pestaña propia la app ajena es first-party, así que su sesión funciona sin
+     * importar la política de terceros. Y como la cookie queda en el navegador, al volver
+     * al iframe el vendedor ya está logueado — el botón desbloquea el embebido, no lo
+     * reemplaza. Por eso está siempre disponible y no escondido tras un estado de error:
+     * este modo de falla no lo podemos detectar desde acá (el iframe es cross-origin y
+     * carga "bien"; su `onLoad` dispara normal contra la pantalla de login ajena).
+     */
+    const abrirEnPestanaNueva = useCallback(() => {
+        if (!urlAppActiva) return
+        window.open(urlAppActiva, '_blank', 'noopener,noreferrer')
+    }, [urlAppActiva])
+
     const nombre = titleCaseNombre(cliente.nombreFantasia || cliente.nombreCliente)
 
     return (
@@ -184,6 +209,16 @@ export default function AppExternaSheet({
                     {nombre}
                 </h2>
                 <div className="flex shrink-0 items-center gap-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Abrir en pestaña nueva"
+                        onClick={abrirEnPestanaNueva}
+                        disabled={!urlAppActiva}
+                        className="h-[30px] w-[30px] shrink-0 bg-[#F0F2F7] text-dsmuted hover:bg-[#e3e6ee]"
+                    >
+                        <ExternalLink className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                    </Button>
                     <Button
                         variant="ghost"
                         size="icon"
