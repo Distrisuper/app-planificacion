@@ -164,15 +164,18 @@ export function construirFilasVisita(
     return [...bloqueArriba, ...bloqueAbajo]
 }
 
-/** Separa las filas de acción (Plan cupo, etc.) del resto: una acción no tiene venta
- *  histórica por rubro y se muestra en su propia sección, arriba de la tabla
+/** Separa las filas de acción (Plan cupo, etc.) y de marca del resto: ninguna de las
+ *  dos tiene venta histórica por rubro (`rubroStatus` está indexado por código de
+ *  rubro), así que se muestran en su propia sección, arriba de la tabla
  *  RUBRO·ACTUAL·M.ANT·P.6M (ver OfrecimientoTable). Puro: no reordena ninguna lista. */
-export function separarAcciones(filas: IOfrecimientoFila[]): {
+export function separarSegmentos(filas: IOfrecimientoFila[]): {
     acciones: IOfrecimientoFila[]
+    marcas: IOfrecimientoFila[]
     resto: IOfrecimientoFila[]
 } {
     return {
         acciones: filas.filter(f => f.tipo === 'accion'),
-        resto: filas.filter(f => f.tipo !== 'accion'),
+        marcas: filas.filter(f => f.tipo === 'marca'),
+        resto: filas.filter(f => f.tipo !== 'accion' && f.tipo !== 'marca'),
     }
 }

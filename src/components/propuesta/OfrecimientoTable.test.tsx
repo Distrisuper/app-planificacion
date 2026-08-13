@@ -413,3 +413,75 @@ it('una acción del bloque de arriba dispara onResolucion con su ofrecimientoId'
     fireEvent.click(screen.getByRole('button', { name: /resolución de plan cupo/i }))
     expect(onResolucion).toHaveBeenCalledWith(9)
 })
+
+it('una fila de marca no muestra las columnas ACTUAL/M.ANT/P.6M', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    codigo: 'AG',
+                    nombre: 'AG',
+                    tipo: 'marca',
+                    actual: 600_000,
+                    mesAnterior: 800_000,
+                    promedio6m: 1_000_000,
+                }),
+            ]}
+        />,
+    )
+    expect(screen.getByText('AG')).toBeInTheDocument()
+    expect(screen.queryByText('600')).not.toBeInTheDocument()
+    expect(screen.queryByText('800')).not.toBeInTheDocument()
+    expect(screen.queryByText('1.000')).not.toBeInTheDocument()
+})
+
+it('con una marca, aparece la sección "Marcas" arriba de la tabla de rubros', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({ codigo: 'AG', nombre: 'AG', tipo: 'marca' }),
+                fila({ codigo: 'R1', nombre: 'Amortiguadores', tipo: 'rubro' }),
+            ]}
+        />,
+    )
+    expect(screen.getByText('Marcas')).toBeInTheDocument()
+    expect(screen.getByText('AG')).toBeInTheDocument()
+})
+
+it('sin ninguna marca, no aparece la etiqueta "Marcas"', () => {
+    render(<OfrecimientoTable filas={[fila({ codigo: 'R1', tipo: 'rubro' })]} />)
+    expect(screen.queryByText('Marcas')).not.toBeInTheDocument()
+})
+
+it('una marca del bloque de arriba dispara onResolucion con su ofrecimientoId', () => {
+    const onResolucion = vi.fn()
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    codigo: 'AG',
+                    nombre: 'AG',
+                    tipo: 'marca',
+                    resolucion: { ofrecimientoId: 11, motivosCargados: 0, completo: false, esPropuesto: true },
+                }),
+            ]}
+            onResolucion={onResolucion}
+        />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /resolución de ag/i }))
+    expect(onResolucion).toHaveBeenCalledWith(11)
+})
+
+it('con acción y marca a la vez, cada una aparece en su propia sección', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({ codigo: 'CUPO', nombre: 'Plan cupo', tipo: 'accion' }),
+                fila({ codigo: 'AG', nombre: 'AG', tipo: 'marca' }),
+                fila({ codigo: 'R1', nombre: 'Amortiguadores', tipo: 'rubro' }),
+            ]}
+        />,
+    )
+    expect(screen.getByText('Acciones')).toBeInTheDocument()
+    expect(screen.getByText('Marcas')).toBeInTheDocument()
+})

@@ -1,4 +1,4 @@
-import { construirFilasPropuesta, construirFilasVisita, separarAcciones, totalesDe } from './filas'
+import { construirFilasPropuesta, construirFilasVisita, separarSegmentos, totalesDe } from './filas'
 import type { IOfrecimiento, IRubroEstado, IRubroPropuesta } from '@/types/planificacion'
 
 function propuesta(over: Partial<IRubroPropuesta> = {}): IRubroPropuesta {
@@ -227,7 +227,7 @@ describe('construirFilasVisita', () => {
     })
 })
 
-describe('separarAcciones', () => {
+describe('separarSegmentos', () => {
     function filaDe(over: Partial<import('./filas').IOfrecimientoFila> = {}) {
         return {
             codigo: 'R1',
@@ -242,28 +242,49 @@ describe('separarAcciones', () => {
         }
     }
 
-    it('sin acciones, todo queda en resto y acciones queda vacío', () => {
-        const filas = [filaDe({ codigo: 'R1' }), filaDe({ codigo: 'R2', tipo: 'marca' })]
-        const { acciones, resto } = separarAcciones(filas)
+    it('sin acciones ni marcas, todo queda en resto', () => {
+        const filas = [filaDe({ codigo: 'R1' }), filaDe({ codigo: 'R2', tipo: 'rubro' })]
+        const { acciones, marcas, resto } = separarSegmentos(filas)
         expect(acciones).toEqual([])
+        expect(marcas).toEqual([])
         expect(resto).toEqual(filas)
     })
 
     it('separa una acción del resto', () => {
         const rubro = filaDe({ codigo: 'R1' })
         const accion = filaDe({ codigo: 'CUPO', nombre: 'Plan cupo', tipo: 'accion' })
-        const { acciones, resto } = separarAcciones([rubro, accion])
+        const { acciones, marcas, resto } = separarSegmentos([rubro, accion])
         expect(acciones).toEqual([accion])
+        expect(marcas).toEqual([])
         expect(resto).toEqual([rubro])
     })
 
-    it('separa varias acciones, preservando el orden de cada lista', () => {
+    it('separa una marca del resto', () => {
+        const rubro = filaDe({ codigo: 'R1' })
+        const marca = filaDe({ codigo: 'AG', nombre: 'AG', tipo: 'marca' })
+        const { acciones, marcas, resto } = separarSegmentos([rubro, marca])
+        expect(acciones).toEqual([])
+        expect(marcas).toEqual([marca])
+        expect(resto).toEqual([rubro])
+    })
+
+    it('separa acciones y marcas a la vez, cada una en su lista, preservando el orden', () => {
         const rubro1 = filaDe({ codigo: 'R1' })
         const cupo = filaDe({ codigo: 'CUPO', tipo: 'accion' })
+        const ag = filaDe({ codigo: 'AG', tipo: 'marca' })
         const rubro2 = filaDe({ codigo: 'R2' })
         const descuento = filaDe({ codigo: 'DESCUENTO', tipo: 'accion' })
-        const { acciones, resto } = separarAcciones([rubro1, cupo, rubro2, descuento])
+        const skf = filaDe({ codigo: 'SKF', tipo: 'marca' })
+        const { acciones, marcas, resto } = separarSegmentos([
+            rubro1,
+            cupo,
+            ag,
+            rubro2,
+            descuento,
+            skf,
+        ])
         expect(acciones).toEqual([cupo, descuento])
+        expect(marcas).toEqual([ag, skf])
         expect(resto).toEqual([rubro1, rubro2])
     })
 })

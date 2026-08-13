@@ -3,7 +3,7 @@ import { Check, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { fmtAmount } from '@/lib/fmtAmount'
 import { resumenAlcance } from '@/lib/alcance'
 import { registroDetalleAccion } from './accionDetalle/registro'
-import { separarAcciones } from './filas'
+import { separarSegmentos } from './filas'
 import type { TipoOfrecimiento } from '@/types/planificacion'
 import type { IOfrecimientoFila, IOfrecimientoFilaResolucion } from './filas'
 
@@ -153,10 +153,11 @@ function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
                     </div>
                 )}
             </div>
-            {/* Una acción (Plan cupo, Descuento) no tiene venta histórica por rubro —
+            {/* `rubroStatus` (de donde salen estos tres números) está indexado por
+             *  código de RUBRO — una acción o una marca nunca matchean ahí, así que
              *  mostrar las tres celdas en guiones se lee como "falta cargar" cuando en
-             *  realidad ese dato no existe para este tipo de ofrecimiento. */}
-            {fila.tipo !== 'accion' && (
+             *  realidad ese dato no existe para estos tipos de ofrecimiento. */}
+            {fila.tipo === 'rubro' && (
                 <>
                     <Celda valor={fila.actual} promedio6m={fila.promedio6m} />
                     <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} />
@@ -253,6 +254,58 @@ function FilaOfrecimiento({
     )
 }
 
+/** Un segmento propio (Acciones, Marcas) arriba de la tabla de rubros: mismo
+ *  componente de fila de una línea, pero con su propia grilla de chip/columna-quitar
+ *  y su propia etiqueta — no comparte contenedor con la tabla RUBRO·ACTUAL·M.ANT·P.6M
+ *  porque ninguna fila de un segmento tiene esos tres números. Sin filas, no
+ *  renderiza nada (ni etiqueta vacía). */
+function SegmentoOfrecimientos({
+    titulo,
+    filas,
+    onResolucion,
+    onAgregar,
+    onEliminar,
+    agregandoCodes,
+    eliminandoIds,
+}: {
+    titulo: string
+    filas: IOfrecimientoFila[]
+    onResolucion?: (ofrecimientoId: number) => void
+    onAgregar?: (codigo: string) => void
+    onEliminar?: (ofrecimientoId: number) => void
+    agregandoCodes?: Set<string>
+    eliminandoIds?: Set<number>
+}) {
+    if (filas.length === 0) return null
+
+    const conChip = filas.some(f => f.resolucion)
+    const conColumnaQuitar = filas.some(f => f.resolucion && !f.resolucion.esPropuesto)
+
+    return (
+        <div className="mb-2">
+            <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
+                {titulo}
+            </p>
+            <div className="w-full rounded-xl border border-dsline">
+                {filas.map((fila, i) => (
+                    <FilaOfrecimiento
+                        key={`${fila.tipo}:${fila.codigo}`}
+                        fila={fila}
+                        conBorde={i < filas.length - 1}
+                        conChip={conChip}
+                        conColumnaQuitar={conColumnaQuitar}
+                        onResolucion={onResolucion}
+                        onAgregar={onAgregar}
+                        onEliminar={onEliminar}
+                        agregandoCodes={agregandoCodes}
+                        eliminandoIds={eliminandoIds}
+                    />
+                ))}
+            </div>
+        </div>
+    )
+}
+
 /** Lista RUBRO · ACTUAL · M.ANT · P.6M compartida por la propuesta y la visita.
  *  Presentacional pura: no conoce visitas ni mutaciones, solo `filas` (ver
  *  `filas.ts`) y callbacks. El buscador es la única excepción a "pura": es un
@@ -282,10 +335,10 @@ export default function OfrecimientoTable({
 }: OfrecimientoTableProps) {
     const [busqueda, setBusqueda] = useState('')
 
-    // Una acción no tiene venta histórica por rubro: vive en su propia sección,
-    // arriba de todo, afuera de la tabla RUBRO·ACTUAL·M.ANT·P.6M — el resto de esta
-    // función sigue operando igual que siempre, pero solo sobre `resto`.
-    const { acciones, resto } = separarAcciones(filas)
+    // Ninguna acción ni marca tiene venta histórica por rubro: cada una vive en su
+    // propia sección, arriba de todo, afuera de la tabla RUBRO·ACTUAL·M.ANT·P.6M — el
+    // resto de esta función sigue operando igual que siempre, pero solo sobre `resto`.
+    const { acciones, marcas, resto } = separarSegmentos(filas)
 
     // Se filtra por `destacada` en vez de asumir que `resto` viene ordenado
     // destacadas-primero: `construirFilas*` hoy respeta ese orden, pero
@@ -300,39 +353,30 @@ export default function OfrecimientoTable({
     // nada: ahí ese espacio es ancho de nombre.
     const conChip = resto.some(f => f.resolucion)
     const conColumnaQuitar = resto.some(f => f.resolucion && !f.resolucion.esPropuesto)
-    // Grilla independiente de la de arriba: el bloque de acciones reserva su propio
-    // ancho de chip/quitar según lo que traigan sus propias filas, no las de `resto`.
-    const conChipAcciones = acciones.some(f => f.resolucion)
-    const conColumnaQuitarAcciones = acciones.some(f => f.resolucion && !f.resolucion.esPropuesto)
 
     const q = normalizar(busqueda.trim())
     const bloqueAbajoFiltrado = q === '' ? bloqueAbajo : bloqueAbajo.filter(f => normalizar(f.nombre).includes(q))
 
     return (
         <>
-        {acciones.length > 0 && (
-            <div className="mb-2">
-                <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
-                    Acciones
-                </p>
-                <div className="w-full rounded-xl border border-dsline">
-                    {acciones.map((fila, i) => (
-                        <FilaOfrecimiento
-                            key={`${fila.tipo}:${fila.codigo}`}
-                            fila={fila}
-                            conBorde={i < acciones.length - 1}
-                            conChip={conChipAcciones}
-                            conColumnaQuitar={conColumnaQuitarAcciones}
-                            onResolucion={onResolucion}
-                            onAgregar={onAgregar}
-                            onEliminar={onEliminar}
-                            agregandoCodes={agregandoCodes}
-                            eliminandoIds={eliminandoIds}
-                        />
-                    ))}
-                </div>
-            </div>
-        )}
+        <SegmentoOfrecimientos
+            titulo="Acciones"
+            filas={acciones}
+            onResolucion={onResolucion}
+            onAgregar={onAgregar}
+            onEliminar={onEliminar}
+            agregandoCodes={agregandoCodes}
+            eliminandoIds={eliminandoIds}
+        />
+        <SegmentoOfrecimientos
+            titulo="Marcas"
+            filas={marcas}
+            onResolucion={onResolucion}
+            onAgregar={onAgregar}
+            onEliminar={onEliminar}
+            agregandoCodes={agregandoCodes}
+            eliminandoIds={eliminandoIds}
+        />
         {/* Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
             overflow oculto anula el `position: sticky` de adentro contra el scroll del
             sheet. Las esquinas de arriba las redondea el propio header. */}
