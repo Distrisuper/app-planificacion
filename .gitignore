@@ -27,6 +27,12 @@ coverage
 # Snapshots y logs que deja el navegador de Playwright MCP al depurar
 .playwright-mcp/
 
+# Playwright (tests e2e en e2e/)
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
+
 # Resultados que dejan los scripts de scripts/ (ej. cromo-seguimientos.mjs):
 # datos de vendedores/clientes reales, no van al repo. El **/ cubre también
 # scripts/scripts/out/, que quedó de correr el script parado adentro de scripts/.
