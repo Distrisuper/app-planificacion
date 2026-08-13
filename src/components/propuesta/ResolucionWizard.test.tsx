@@ -44,6 +44,27 @@ function setup(over: Record<string, unknown> = {}) {
     return { onCambiarBorrador, onVolver }
 }
 
+/** Igual que `setup`, pero deja mover el índice como lo hace el pie del wizard: la
+ *  dirección de la animación solo existe entre dos renders del mismo árbol. */
+function setupNavegable() {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const Wizard = ({ index }: { index: number }) => (
+        <QueryClientProvider client={qc}>
+            <ResolucionWizard
+                visitaId={42}
+                ofrecimientos={ofrecimientos}
+                index={index}
+                motivos={motivos}
+                borradores={{ 7: [], 8: [] }}
+                onCambiarBorrador={vi.fn()}
+                onVolver={vi.fn()}
+            />
+        </QueryClientProvider>
+    )
+    const { rerender } = render(<Wizard index={0} />)
+    return (index: number) => rerender(<Wizard index={index} />)
+}
+
 beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
@@ -54,6 +75,43 @@ it('muestra la posición y el ofrecimiento actual', () => {
     setup()
     expect(screen.getByText('1 de 2')).toBeInTheDocument()
     expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
+})
+
+it('la barra tiene un segmento por ofrecimiento y marca en cuál se está', () => {
+    setup()
+    const barra = screen.getByRole('progressbar')
+    expect(barra).toHaveAttribute('aria-valuenow', '1')
+    expect(barra).toHaveAttribute('aria-valuemax', '2')
+    expect(barra.children).toHaveLength(2)
+})
+
+it('el segmento de un ofrecimiento ya resuelto va en verde; el que tiene el detalle a medias, no', () => {
+    // Ofrecimiento 7: motivo simple tildado ⇒ completo. Ofrecimiento 8: Precio
+    // (requiereDetalle) sin detalle ⇒ sigue contando como pendiente, igual que en el
+    // chip de la tabla.
+    setup({
+        index: 1,
+        borradores: {
+            7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+            8: [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }],
+        },
+    })
+    const barra = screen.getByRole('progressbar')
+    expect(barra).toHaveAttribute('aria-label', 'Rubro 2 de 2, 1 resueltos')
+    expect(barra.children[0].className).toContain('bg-dsgreen')
+    expect(barra.children[1].className).toContain('bg-dsnavy')
+})
+
+it('avanzar de ofrecimiento entra desde la derecha, y volver desde la izquierda', () => {
+    const irA = setupNavegable()
+    const cuerpo = () => screen.getByText('Saqué pedido').closest('[class*="animate-rubro"]')
+    expect(cuerpo()?.className).toContain('animate-rubro-adelante')
+
+    irA(1)
+    expect(cuerpo()?.className).toContain('animate-rubro-adelante')
+
+    irA(0)
+    expect(cuerpo()?.className).toContain('animate-rubro-atras')
 })
 
 it('tildar un motivo avisa con el ofrecimiento actual', () => {

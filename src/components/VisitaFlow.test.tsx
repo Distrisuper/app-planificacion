@@ -405,7 +405,7 @@ it('directoAMapa con coordenadas salta la propuesta y va derecho al mapa', async
         directoAMapa: true,
     })
     expect(await screen.findByTestId('mapa-iniciar-visita')).toBeInTheDocument()
-    expect(screen.queryByText(/cayeron los/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/días del mes/i)).not.toBeInTheDocument()
     // Igual pide la propuesta: el backend la exige para congelarla al confirmar en el mapa.
     await waitFor(() => expect(api.getPropuesta).toHaveBeenCalledWith('10034'))
     expect(api.iniciarVisita).not.toHaveBeenCalled()
@@ -422,7 +422,7 @@ it('directoAMapa con coordenadas salta la propuesta y va derecho al mapa', async
 
 it('directoAMapa sin coordenadas cae al flujo normal de la propuesta', async () => {
     renderFlow({ directoAMapa: true })
-    expect(await screen.findByText(/cayeron los/i)).toBeInTheDocument()
+    expect(await screen.findByText(/días del mes/i)).toBeInTheDocument()
     expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
 })
 

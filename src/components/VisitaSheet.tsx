@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { Maximize2, Minimize2 } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -76,7 +75,6 @@ export default function VisitaSheet({
     const [borradorListo, setBorradorListo] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
-    const [expandido, setExpandido] = useState(false)
     const [altaAbierta, setAltaAbierta] = useState(false)
     // Los ids que se agregaron dinámicamente esta sesión, más reciente primero — se
     // usan para insertarlos arriba de todo en la lista al agregarlos (ver
@@ -93,6 +91,11 @@ export default function VisitaSheet({
     // distintos pueden compartir código), independiente de la mutación.
     const [agregandoCodes, setAgregandoCodes] = useState<Set<string>>(new Set())
     const [eliminandoIds, setEliminandoIds] = useState<Set<number>>(new Set())
+    // Id del ofrecimiento recién agregado (desde el catálogo o desde "Agregar otra
+    // cosa"), a la espera de que el refetch de `ofrecimientos` lo traiga para abrirle
+    // el wizard. No se puede abrir en el `await` del agregar: ahí el ofrecimiento
+    // todavía no existe en la lista que el wizard recorre.
+    const [abrirAlLlegar, setAbrirAlLlegar] = useState<number | null>(null)
 
     // Se pide al abrir el sheet, no al entrar a una sub-vista: la tabla es la fuente de
     // los números en las dos pantallas y en los dos estados (colapsada/expandida).
@@ -106,11 +109,11 @@ export default function VisitaSheet({
             setBorradores({})
             setBorradorListo(false)
             setErrorGuardado(null)
-            setExpandido(false)
             setAltaAbierta(false)
             setAgregadosIds([])
             setAgregandoCodes(new Set())
             setEliminandoIds(new Set())
+            setAbrirAlLlegar(null)
         }
     }, [open])
 
@@ -135,6 +138,23 @@ export default function VisitaSheet({
         if (!open || !borradorListo) return
         guardarBorrador(visitaId, borradores)
     }, [open, borradorListo, visitaId, borradores])
+
+    // Abre el wizard del ofrecimiento recién agregado, en cuanto el refetch de
+    // `ofrecimientos` lo trae. Se resuelve acá y no en `agregarDesdeTabla`/
+    // `agregarDesdeSheet` porque entre el POST y la lista actualizada hay un refetch
+    // de por medio. El ofrecimiento agregado sube al principio de la lista (ver
+    // conNuevosArriba), que con el catálogo abierto queda a decenas de filas de scroll
+    // de donde el vendedor está parado — abrirle el wizard directo evita ese viaje.
+    useEffect(() => {
+        if (abrirAlLlegar == null) return
+        const nuevo = ofrecimientos.find(r => r.id === abrirAlLlegar)
+        if (!nuevo) return
+        setAbrirAlLlegar(null)
+        // Mismo subset que abrirWizard (`esEditable`): en una visita cerrada no hay nada
+        // que resolver, pero tampoco se puede agregar, así que no se llega hasta acá.
+        const subset = visitaCerrada ? [] : ofrecimientos
+        setWizard({ ofrecimientos: subset, index: subset.findIndex(r => r.id === nuevo.id) })
+    }, [abrirAlLlegar, ofrecimientos, visitaCerrada])
 
     // Una visita cerrada no se reedita (se genera una visita de ajuste aparte). Ya no
     // puede cerrarse con ofrecimientos sin cargar (ver cerrarConBorrador), así que no
@@ -172,6 +192,7 @@ export default function VisitaSheet({
                 descripcion: item.nombre,
             })
             setAgregadosIds(prev => [result.ofrecimientoId, ...prev])
+            setAbrirAlLlegar(result.ofrecimientoId)
         } catch {
             // Silencioso a propósito: la fila vuelve a su estado agregable y el
             // vendedor puede volver a tocarla (mismo comportamiento que antes).
@@ -190,6 +211,7 @@ export default function VisitaSheet({
         try {
             const result = await agregar.mutateAsync(dto)
             setAgregadosIds(prev => [result.ofrecimientoId, ...prev])
+            setAbrirAlLlegar(result.ofrecimientoId)
         } catch {
             // Silencioso a propósito: mismo criterio que agregarDesdeTabla.
         } finally {
@@ -250,13 +272,14 @@ export default function VisitaSheet({
             completo: ofrecimientoCompleto(r),
         }
     }
-    const codesVisita = new Set(ofrecimientos.map(r => r.codigo))
-    const hayOtrosRubros = rubroStatus.some(s => !codesVisita.has(s.rubroCode))
+    // Siempre expandida: los "otros rubros del cliente" ya vienen cargados con el sheet,
+    // y el botón "Ver más" que los escondía costaba 56px del pie fijo — más que una fila
+    // de la tabla que iba a mostrar.
     const filas = construirFilasVisita(
         conNuevosArriba(ofrecimientos),
         rubroStatus,
         estadosResolucion,
-        expandido,
+        true,
         !visitaCerrada,
     )
     const rubrosCatalogo = rubroStatus.map(s => ({ code: s.rubroCode, description: s.nombre }))
@@ -305,34 +328,10 @@ export default function VisitaSheet({
         />
     ) : (
         <>
-            {pendientes > 0 && (
-                <p className="mb-2 text-center text-[12px] font-semibold text-[#B45309]">
-                    Faltan completar {pendientes} {pendientes === 1 ? 'rubro' : 'rubros'} para
-                    poder cerrar la visita.
-                </p>
-            )}
             {errorGuardado && (
                 <p className="mb-2 text-center text-[12.5px] font-semibold text-dsred">
                     {errorGuardado}
                 </p>
-            )}
-            {/* Fijo junto al botón principal, no adentro del scroll: al expandir la
-             *  tabla con "Ver más" la lista puede crecer bastante, y si este botón
-             *  quedara al final del contenido scrolleable, minimizarla exigiría
-             *  scrollear hasta abajo de todo para volver a encontrarlo. */}
-            {hayOtrosRubros && (
-                <Button
-                    variant="outline"
-                    onClick={() => setExpandido(e => !e)}
-                    className="mb-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
-                >
-                    {expandido ? (
-                        <Minimize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                    ) : (
-                        <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                    )}
-                    {expandido ? 'Ver menos' : 'Ver más'}
-                </Button>
             )}
             {/* Pegado arriba de "Cerrar visita", en el pie fijo: es la última acción a
              *  mano antes de cerrar, para un vistazo de último momento a pagos/cuenta sin
@@ -350,7 +349,17 @@ export default function VisitaSheet({
                     loading={cerrando || guardandoBorrador}
                     className="h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90"
                 >
-                    {guardandoBorrador ? 'Guardando…' : cerrando ? 'Cerrando…' : 'Cerrar visita'}
+                    {/* El faltante va DENTRO del botón deshabilitado, no en una línea
+                     *  aparte arriba: dice lo mismo, en el único lugar donde el vendedor
+                     *  ya está mirando (el botón que no lo deja avanzar), y no gasta una
+                     *  línea del pie fijo en cada render. */}
+                    {guardandoBorrador
+                        ? 'Guardando…'
+                        : cerrando
+                          ? 'Cerrando…'
+                          : pendientes > 0
+                            ? `Faltan ${pendientes} ${pendientes === 1 ? 'rubro' : 'rubros'}`
+                            : 'Cerrar visita'}
                 </Button>
             )}
         </>
@@ -365,6 +374,7 @@ export default function VisitaSheet({
                 title={nombreCliente}
                 eyebrow={enCurso ? `● En curso · ${formatearDuracion(segundos)}` : 'Propuesta comercial'}
                 eyebrowClassName={enCurso ? 'text-[#B45309]' : undefined}
+                altura="completa"
                 footer={footer}
             >
                 {wizard ? (

@@ -11,6 +11,21 @@ interface BottomSheetProps {
     /** Si se pasa, aparece un botón de minimizar al lado de la X. */
     onMinimize?: () => void
     /**
+     * Cuánto alto toma el sheet. Los tres modos dejan siempre una franja arriba
+     * para que se siga leyendo como modal; lo que cambia es qué manda, si el
+     * contenido o la pantalla:
+     *
+     * - 'auto' (default): mide lo que mida el contenido, hasta 85vh.
+     * - 'hasta-completa': ídem, pero llega hasta 90dvh antes de scrollear. Para
+     *   contenido de alto variable que a veces entra justo y a veces no (ej. el
+     *   sheet de estado: cinco zonas o una sola, según el vendedor). Con altura
+     *   fija, el caso corto deja un hueco blanco de ~200px sobre el pie.
+     * - 'completa': altura fija de 90dvh. Para listas largas de alto imprevisible
+     *   (la propuesta), donde un sheet que crece y se achica según cuántos rubros
+     *   trajo el cliente hace saltar el pie de botones entre un cliente y otro.
+     */
+    altura?: 'auto' | 'hasta-completa' | 'completa'
+    /**
      * Contenido fijo al pie, fuera del área de scroll (ej. el botón "Iniciar
      * visita"). Sin esto el sheet se comporta como antes: todo el contenido,
      * incluido lo que iría acá, scrollea junto con `children`.
@@ -26,6 +41,7 @@ export default function BottomSheet({
     eyebrow,
     eyebrowClassName,
     onMinimize,
+    altura = 'auto',
     footer,
     children,
 }: BottomSheetProps) {
@@ -33,7 +49,19 @@ export default function BottomSheet({
     return (
         <div className="animate-fade-in fixed inset-0 z-50 flex items-end bg-black/45" onClick={onClose}>
             <div
-                className="animate-sheet-up flex max-h-[85vh] w-full flex-col rounded-t-[24px] bg-white shadow-[0_-10px_34px_rgba(10,15,30,.22)]"
+                className={`animate-sheet-up flex w-full flex-col rounded-t-[24px] bg-white shadow-[0_-10px_34px_rgba(10,15,30,.22)] ${
+                    // En 'completa', el max-h no llega a aplicar nunca con dvh soportado
+                    // (90dvh <= 90vh): está para que, si no lo estuviera, el sheet quede
+                    // acotado a la pantalla en vez de crecer con el contenido y empujar
+                    // el pie fijo fuera de la vista — justo lo que este modo vino a
+                    // evitar. En 'hasta-completa' el max-h es el mecanismo, no el
+                    // respaldo, y por eso no lleva `h` fija.
+                    altura === 'completa'
+                        ? 'h-[90dvh] max-h-[90vh]'
+                        : altura === 'hasta-completa'
+                          ? 'max-h-[90dvh]'
+                          : 'max-h-[85vh]'
+                }`}
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header — fijo, no scrollea con el contenido. */}

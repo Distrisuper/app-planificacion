@@ -39,7 +39,24 @@ export default function ResolucionSheet({
     }
 
     return (
-        <BottomSheet open={open} onClose={onClose} title={title} eyebrow={eyebrow}>
+        <BottomSheet
+            open={open}
+            onClose={onClose}
+            title={title}
+            eyebrow={eyebrow}
+            // Mismo criterio que EstadoVisitaSheet: el motivo de cierre puede tener
+            // muchas opciones y la acción no puede depender de scrollear hasta el final.
+            footer={
+                <Button
+                    disabled={selected.length === 0}
+                    loading={submitting}
+                    onClick={() => onConfirm(selected)}
+                    className="h-12 w-full bg-dsgreen text-[14.5px] hover:bg-dsgreen/90"
+                >
+                    {submitting ? 'Guardando…' : confirmLabel}
+                </Button>
+            }
+        >
             <div className="flex flex-col gap-2">
                 {motivos.map(m => {
                     const on = selected.includes(m.motivoId)
@@ -66,14 +83,6 @@ export default function ResolucionSheet({
                     )
                 })}
             </div>
-            <Button
-                disabled={selected.length === 0}
-                loading={submitting}
-                onClick={() => onConfirm(selected)}
-                className="mt-4 h-12 w-full bg-dsgreen text-[14.5px] hover:bg-dsgreen/90"
-            >
-                {submitting ? 'Guardando…' : confirmLabel}
-            </Button>
         </BottomSheet>
     )
 }

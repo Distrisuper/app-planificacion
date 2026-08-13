@@ -30,6 +30,12 @@ describe('EstadoVisitaSheet', () => {
         expect(onReagendar).toHaveBeenCalledWith(2, 'MAR')
     })
 
+    it('el botón de confirmar vive fuera del scroll: no se pierde con la lista larga de días', () => {
+        render(<EstadoVisitaSheet {...PROPS_BASE} />)
+        const boton = screen.getByRole('button', { name: /elegí un día/i })
+        expect(boton.closest('.overflow-y-auto')).toBeNull()
+    })
+
     it('las zonas sin nombrar muestran "Semana N"; las nombradas, la descripción arriba y "Semana N" chico abajo', () => {
         render(<EstadoVisitaSheet {...PROPS_BASE} />)
         // Sin descripción: "Semana N" es el único texto — no se duplica.

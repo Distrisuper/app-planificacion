@@ -91,9 +91,11 @@ it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borr
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^finalizar$/i }))
 
-    expect(await screen.findByText('Cargá el resultado de cada rubro que ofreciste.', { exact: false })).toBeInTheDocument()
+    // Volvió a la lista (el wizard ya no está) y el rubro quedó marcado como completo.
+    expect(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' })).toBeInTheDocument()
+    expect(screen.queryByText('2 de 2')).not.toBeInTheDocument()
     expect(api.resolverOfrecimiento).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Resolución de Amortiguadores' })).toHaveTextContent('✓ 1 motivo cargado')
+    expect(screen.getByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
 })
 
 it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async () => {
@@ -152,8 +154,9 @@ it('con la visita cerrada, un rubro ya resuelto no ofrece borrarlo (no hay wizar
 it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos faltan', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
-    expect(screen.getByText(/faltan completar 1 rubro para poder cerrar la visita/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /cerrar visita/i })).toBeDisabled()
+    // El faltante lo dice el propio botón deshabilitado, no una línea aparte en el pie.
+    expect(screen.getByRole('button', { name: /faltan 1 rubro/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
 })
 
 it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo batch y dispara el cierre', async () => {
@@ -207,10 +210,10 @@ it('sin enCurso no ofrece minimizar', async () => {
     expect(screen.queryByLabelText('Minimizar')).not.toBeInTheDocument()
 })
 
-it('sin codigoParticularCliente no ofrece Ver más', async () => {
+it('sin codigoParticularCliente no hay bloque de otros rubros del cliente', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
-    expect(screen.queryByRole('button', { name: /ver más/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/otros rubros del cliente/i)).not.toBeInTheDocument()
 })
 
 it('con codigoParticularCliente, los números de rubroStatus aparecen en la tabla sin navegar', async () => {
@@ -223,16 +226,13 @@ it('con codigoParticularCliente, los números de rubroStatus aparecen en la tabl
     expect(screen.getAllByText('3.100').length).toBeGreaterThan(0)
 })
 
-it('visita sin rubros pero con otros rubros del cliente: "Ver más" trae la tabla', async () => {
+it('visita sin rubros pero con otros rubros del cliente: la tabla se ve de una', async () => {
     ;(api.getOfrecimientos as any).mockResolvedValue([])
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
     ])
     renderSheet({ codigoParticularCliente: '10034' })
 
-    expect(await screen.findByText('Esta visita no tiene rubros propuestos.')).toBeInTheDocument()
-
-    fireEvent.click(await screen.findByRole('button', { name: /ver más/i }))
     expect(await screen.findByText('Baterías')).toBeInTheDocument()
     expect(screen.queryByText('Esta visita no tiene rubros propuestos.')).not.toBeInTheDocument()
 })
@@ -244,8 +244,6 @@ it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de 
     ])
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
-
-    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
 
     await waitFor(() =>
@@ -271,8 +269,6 @@ it('agregar dos rubros distintos en simultáneo deshabilita cada fila por separa
     )
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
-
-    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
     fireEvent.click(await screen.findByRole('button', { name: /agregar focos/i }))
     await waitFor(() => expect(api.agregarOfrecimiento).toHaveBeenCalledTimes(2))
@@ -308,7 +304,6 @@ it('dos ofrecimientos del mismo código y distinto tipo no comparten el spinner'
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
 
-    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     fireEvent.click(await screen.findByRole('button', { name: /agregar cupo/i }))
     expect(screen.getByRole('button', { name: /agregar cupo/i })).toBeDisabled()
 
@@ -340,9 +335,9 @@ it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaba
     ])
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
-
-    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
+    // Agregar abre el wizard del rubro nuevo; se vuelve a la lista para ver el orden.
+    fireEvent.click(await screen.findByRole('button', { name: 'Volver' }))
     await screen.findByRole('button', { name: 'Resolución de Baterías' })
 
     const botones = screen.getAllByRole('button', { name: /^resolución de /i })
@@ -351,6 +346,28 @@ it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaba
         'Resolución de Amortiguadores',
         'Resolución de Filtros',
     ])
+})
+
+it('agregar un rubro del catálogo abre su resolución de una, sin volver a la lista', async () => {
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+    ])
+    ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
+        ...ofrecimientos,
+        {
+            id: 99, resolucionId: 42, tipo: 'rubro', codigo: 'BAT', descripcion: 'Baterías',
+            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [], alcance: [],
+        },
+    ])
+    renderSheet({ codigoParticularCliente: '10034' })
+    await screen.findByText('Amortiguadores')
+    fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
+
+    // El wizard quedó parado en el rubro recién agregado, no en el primero de la lista.
+    expect(await screen.findByRole('button', { name: 'Volver' })).toBeInTheDocument()
+    expect(screen.getByText('Baterías')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^resolución de /i })).not.toBeInTheDocument()
 })
 
 it('un rubro agregado se mantiene arriba aunque se resuelva (no se reordena por estado)', async () => {
@@ -367,18 +384,17 @@ it('un rubro agregado se mantiene arriba aunque se resuelva (no se reordena por 
     ])
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
-
-    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
-    await screen.findByRole('button', { name: 'Resolución de Baterías' })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Baterías' }))
+    // Agregar abre el wizard del rubro nuevo directamente: se resuelve ahí mismo, sin
+    // volver a la lista a buscarlo.
     fireEvent.click(await screen.findByText('Saqué pedido'))
     fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
 
     const botones = await screen.findAllByRole('button', { name: /^resolución de /i })
     expect(botones[0]).toHaveAttribute('aria-label', 'Resolución de Baterías')
-    expect(botones[0]).toHaveTextContent('✓ 1 motivo cargado')
+    // Resuelto: el chip pasó a ✓ (no muestra la cantidad) sin que la fila se moviera.
+    expect(botones[0]).toHaveTextContent('Baterías')
+    expect(botones[0].querySelector('.bg-\\[\\#EAF7EF\\]')).toBeTruthy()
 })
 
 it('el botón Quitar rubro en la tabla llama al backend para un rubro que no es de la propuesta', async () => {
@@ -398,7 +414,7 @@ it('si getRubroStatus falla, la tabla igual lista los ofrecimientos de la visita
     ;(api.getRubroStatus as any).mockRejectedValue(new Error('offline'))
     renderSheet({ codigoParticularCliente: '10034' })
     expect(await screen.findByText('Amortiguadores')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /ver más/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/otros rubros del cliente/i)).not.toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
     expect(await screen.findByText('1 de 2')).toBeInTheDocument()
@@ -411,7 +427,6 @@ it('con la visita cerrada, "otros rubros del cliente" no son tocables para agreg
     ])
     renderSheet({ visitaCerrada: true, codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
-    fireEvent.click(screen.getByRole('button', { name: /ver más/i }))
     expect(await screen.findByText('Baterías')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /agregar baterías/i })).not.toBeInTheDocument()
 })

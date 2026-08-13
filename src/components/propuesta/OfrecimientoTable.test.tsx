@@ -139,7 +139,7 @@ it('no hay ninguna fila de totales', () => {
     expect(screen.queryByText(/totales/i)).not.toBeInTheDocument()
 })
 
-it('una fila con resolución se agrupa con su botón en una tarjeta propia', () => {
+it('la fila resoluble es una sola línea: toda la fila (nombre incluido) es el botón', () => {
     render(
         <OfrecimientoTable
             filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
@@ -147,28 +147,40 @@ it('una fila con resolución se agrupa con su botón en una tarjeta propia', () 
         />,
     )
     const boton = screen.getByRole('button', { name: /resolución de amortiguadores/i })
-    const tarjeta = boton.closest('.rounded-xl')
-    expect(tarjeta).toContainElement(screen.getByText('Amortiguadores'))
+    expect(boton).toContainElement(screen.getByText('Amortiguadores'))
 })
 
-it('segunda línea: "Resolución" cuando no está completo', () => {
+it('sin ningún motivo cargado el chip muestra ＋ (invita a tocar), no un círculo vacío', () => {
     render(
         <OfrecimientoTable
             filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
             onResolucion={vi.fn()}
         />,
     )
-    expect(screen.getByRole('button', { name: /resolución de amortiguadores/i })).toHaveTextContent('Resolución')
+    const boton = screen.getByRole('button', { name: /resolución de amortiguadores/i })
+    expect(boton.querySelector('.lucide-plus')).toBeTruthy()
+    expect(screen.queryByText('0')).not.toBeInTheDocument()
 })
 
-it('segunda línea: "✓ N motivos cargados" cuando está completo', () => {
+it('el chip muestra la cantidad de motivos mientras el rubro está incompleto', () => {
     render(
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 2, completo: false, esPropuesto: true } })]}
+            onResolucion={vi.fn()}
+        />,
+    )
+    expect(screen.getByText('2')).toBeInTheDocument()
+})
+
+it('el chip de un rubro completo no muestra la cantidad (va el ✓)', () => {
+    const { container } = render(
         <OfrecimientoTable
             filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 2, completo: true, esPropuesto: true } })]}
             onResolucion={vi.fn()}
         />,
     )
-    expect(screen.getByRole('button', { name: /resolución de amortiguadores/i })).toHaveTextContent('✓ 2 motivos cargados')
+    expect(screen.queryByText('2')).not.toBeInTheDocument()
+    expect(container.querySelector('.bg-\\[\\#EAF7EF\\]')).toBeTruthy()
 })
 
 it('el botón de resolución dispara onResolucion con el ofrecimientoId', () => {

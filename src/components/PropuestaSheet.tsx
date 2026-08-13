@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { Loader2, Maximize2, Minimize2, Play } from 'lucide-react'
+import { Loader2, Play } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import OfrecimientoTable from './propuesta/OfrecimientoTable'
@@ -59,53 +58,28 @@ export default function PropuestaSheet({
     const { data, isLoading } = usePropuesta(open ? codigoCliente : null)
     const rubros: IRubroPropuesta[] = data?.rubros ?? []
 
-    const [expandido, setExpandido] = useState(false)
-
     // Antes solo se pedía al entrar a "Ver versus"; ahora la tabla ES el contenido de
     // esta pantalla, así que se pide junto con la propuesta, al abrir el sheet.
     const { data: rubroStatus = [], isLoading: rubroStatusLoading } = useRubroStatus(
         open ? codigoCliente : null,
     )
 
-    useEffect(() => {
-        if (!open) {
-            setExpandido(false)
-        }
-    }, [open])
-
     const cargando = isLoading || rubroStatusLoading
-    const codesPropuesta = new Set(rubros.map(r => r.rubroCode))
-    const hayOtrosRubros = rubroStatus.some(s => !codesPropuesta.has(s.rubroCode))
-    const filas = construirFilasPropuesta(rubros, rubroStatus, expandido)
+    // Siempre expandida: el sheet ocupa casi toda la pantalla, así que los "otros
+    // rubros del cliente" entran sin esconderlos detrás de un "Ver más" que obligaba
+    // a un toque extra (y a esperar) para ver algo que ya estaba cargado.
+    const filas = construirFilasPropuesta(rubros, rubroStatus, true)
 
     return (
         <BottomSheet
             open={open}
             onClose={onClose}
             title={nombreCliente}
-            eyebrow="Propuesta comercial"
+            altura="completa"
             footer={
                 <>
                     {error && (
                         <p className="mb-2.5 text-[12.5px] font-semibold text-dsred">{error}</p>
-                    )}
-                    {/* Fijo junto al botón principal, no adentro del scroll: al expandir la
-                     *  tabla con "Ver más" la lista puede crecer bastante, y si este botón
-                     *  quedara al final del contenido scrolleable, minimizarla exigiría
-                     *  scrollear hasta abajo de todo para volver a encontrarlo. */}
-                    {!cargando && hayOtrosRubros && (
-                        <Button
-                            variant="outline"
-                            onClick={() => setExpandido(e => !e)}
-                            className="mb-2.5 h-[46px] w-full border-[#C9D2E3] text-[14px] font-bold text-dsnavy"
-                        >
-                            {expandido ? (
-                                <Minimize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                            ) : (
-                                <Maximize2 className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                            )}
-                            {expandido ? 'Ver menos' : 'Ver más'}
-                        </Button>
                     )}
                     {/* Pegado arriba de "Iniciar visita", en el pie fijo: mismo lugar que
                      *  ocupa en VisitaSheet arriba de "Cerrar visita", para que el formato
@@ -132,11 +106,6 @@ export default function PropuestaSheet({
             }
         >
             <div>
-                <p className="mb-3 text-[13px] leading-snug text-dsmuted">
-                    Cayeron los <b className="font-bold text-dsred">últimos 2 meses</b> vs. el
-                    promedio de 6 meses del cliente:
-                </p>
-
                 {data && (
                     <p className="mb-2.5 text-[11px] font-semibold text-dsmuted">
                         Actual: {data.daysElapsed} de {data.totalDays} días del mes
