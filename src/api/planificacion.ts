@@ -1,9 +1,10 @@
 import { apiClient } from './apiClient'
 import type {
     Dia,
+    IAccion,
     IAgendaClient,
-    IAgregarRubroDTO,
-    IAgregarRubroResult,
+    IAgregarOfrecimientoDTO,
+    IAgregarOfrecimientoResult,
     ICatalogoItem,
     ICerrarVisitaDTO,
     ICerrarVisitaResult,
@@ -12,16 +13,16 @@ import type {
     IMotivo,
     INoVisitaDTO,
     INoVisitaResult,
+    IOfrecimiento,
     IPreviewCiclo,
     IReacomodarDTO,
     IResolucion,
-    IResolverRubroDTO,
-    IResolverRubroResult,
+    IResolverOfrecimientoDTO,
+    IResolverOfrecimientoResult,
     IRubroClientsPageResponse,
     IRubroDropsResponse,
     IRubroEstado,
     ISincronizarResult,
-    IVisitaRubro,
     NivelMotivo,
     SemanaAgenda,
 } from '@/types/planificacion'
@@ -115,35 +116,41 @@ export const registrarNoVisita = async (dto: INoVisitaDTO): Promise<INoVisitaRes
     return res.data.data
 }
 
-// ── Rubros de la visita ────────────────────────────────────────────────────────
+// ── Ofrecimientos de la visita ───────────────────────────────────────────────────
 
 /** La propuesta CONGELADA al iniciar la visita (más los agregados a mano). */
-export const getRubros = async (visitaId: number): Promise<IVisitaRubro[]> => {
-    const res = await apiClient.get(`/planificacion/visitas/${visitaId}/rubros`)
+export const getOfrecimientos = async (visitaId: number): Promise<IOfrecimiento[]> => {
+    const res = await apiClient.get(`/planificacion/visitas/${visitaId}/ofrecimientos`)
     return res.data.data
 }
 
-export const agregarRubro = async (
+export const agregarOfrecimiento = async (
     visitaId: number,
-    dto: IAgregarRubroDTO,
-): Promise<IAgregarRubroResult> => {
-    const res = await apiClient.post(`/planificacion/visitas/${visitaId}/rubros`, dto)
+    dto: IAgregarOfrecimientoDTO,
+): Promise<IAgregarOfrecimientoResult> => {
+    const res = await apiClient.post(`/planificacion/visitas/${visitaId}/ofrecimientos`, dto)
     return res.data.data
 }
 
-/** Reemplaza los motivos del rubro, no acumula. No exige la visita abierta. */
-export const resolverRubro = async (
+/** Reemplaza los motivos del ofrecimiento, no acumula. No exige la visita abierta. */
+export const resolverOfrecimiento = async (
     visitaId: number,
-    rubroId: number,
-    dto: IResolverRubroDTO,
-): Promise<IResolverRubroResult> => {
-    const res = await apiClient.put(`/planificacion/visitas/${visitaId}/rubros/${rubroId}`, dto)
+    ofrecimientoId: number,
+    dto: IResolverOfrecimientoDTO,
+): Promise<IResolverOfrecimientoResult> => {
+    const res = await apiClient.put(
+        `/planificacion/visitas/${visitaId}/ofrecimientos/${ofrecimientoId}`,
+        dto,
+    )
     return res.data.data
 }
 
-/** Solo rubros agregados a mano: los de la propuesta fallan con RUBRO_DE_PROPUESTA. */
-export const eliminarRubro = async (visitaId: number, rubroId: number): Promise<void> => {
-    await apiClient.delete(`/planificacion/visitas/${visitaId}/rubros/${rubroId}`)
+/** Solo ofrecimientos agregados a mano: los de la propuesta fallan con OFRECIMIENTO_DE_PROPUESTA. */
+export const eliminarOfrecimiento = async (
+    visitaId: number,
+    ofrecimientoId: number,
+): Promise<void> => {
+    await apiClient.delete(`/planificacion/visitas/${visitaId}/ofrecimientos/${ofrecimientoId}`)
 }
 
 // ── Propuesta comercial (endpoint reusado, fuera del dominio de planificación) ──
@@ -193,5 +200,11 @@ export const getRubroStatus = async (
  *  del server. */
 export const getBrandCatalog = async (): Promise<ICatalogoItem[]> => {
     const res = await apiClient.get('/sale/brand/catalog')
+    return res.data.data
+}
+
+/** Acciones comerciales del catálogo propio (pl_accion): plan cupo, descuento, promo. */
+export const getAcciones = async (): Promise<IAccion[]> => {
+    const res = await apiClient.get('/planificacion/acciones')
     return res.data.data
 }

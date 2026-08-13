@@ -12,12 +12,13 @@ import {
     iniciarVisita,
     cerrarVisita,
     registrarNoVisita,
-    getRubros,
-    agregarRubro,
-    resolverRubro,
-    eliminarRubro,
+    getOfrecimientos,
+    agregarOfrecimiento,
+    resolverOfrecimiento,
+    eliminarOfrecimiento,
     getPropuesta,
     getBrandCatalog,
+    getAcciones,
 } from './planificacion'
 
 vi.mock('./apiClient', () => ({
@@ -177,38 +178,71 @@ describe('visitas', () => {
     })
 })
 
-describe('rubros', () => {
-    it('getRubros lee los de la visita', async () => {
+describe('ofrecimientos de la visita', () => {
+    it('getOfrecimientos lee los de la visita', async () => {
         ;(apiClient.get as any).mockResolvedValue(ok([{ id: 1 }]))
-        await getRubros(42)
-        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/visitas/42/rubros')
+        await getOfrecimientos(42)
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/visitas/42/ofrecimientos')
     })
 
-    it('agregarRubro postea code y descripción', async () => {
-        ;(apiClient.post as any).mockResolvedValue(ok({ visitaRubroId: 7 }))
-        await agregarRubro(42, { rubroCode: 'FILTROS', rubroDescripcion: 'Filtros' })
-        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas/42/rubros', {
-            rubroCode: 'FILTROS',
-            rubroDescripcion: 'Filtros',
+    it('agregarOfrecimiento manda tipo, codigo, descripcion y alcance', async () => {
+        ;(apiClient.post as any).mockResolvedValue(ok({ ofrecimientoId: 7 }))
+        await agregarOfrecimiento(42, {
+            tipo: 'accion',
+            codigo: 'DESCUENTO',
+            descripcion: 'Descuento',
+            alcance: [{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }],
+        })
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas/42/ofrecimientos', {
+            tipo: 'accion',
+            codigo: 'DESCUENTO',
+            descripcion: 'Descuento',
+            alcance: [{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }],
         })
     })
 
-    it('resolverRubro manda los motivos y devuelve los pendientes', async () => {
-        ;(apiClient.put as any).mockResolvedValue(ok({ rubrosPendientes: 1 }))
+    it('resolverOfrecimiento manda los motivos y devuelve los pendientes', async () => {
+        ;(apiClient.put as any).mockResolvedValue(ok({ ofrecimientosPendientes: 1 }))
         const motivos = [
             { motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 },
         ]
-        const res = await resolverRubro(42, 7, { motivos })
-        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/visitas/42/rubros/7', {
+        const res = await resolverOfrecimiento(42, 7, { motivos })
+        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/visitas/42/ofrecimientos/7', {
             motivos,
         })
-        expect(res.rubrosPendientes).toBe(1)
+        expect(res.ofrecimientosPendientes).toBe(1)
     })
 
-    it('eliminarRubro borra por id', async () => {
+    it('eliminarOfrecimiento borra por id', async () => {
         ;(apiClient.delete as any).mockResolvedValue({ data: { ok: 1 } })
-        await eliminarRubro(42, 7)
-        expect(apiClient.delete).toHaveBeenCalledWith('/planificacion/visitas/42/rubros/7')
+        await eliminarOfrecimiento(42, 7)
+        expect(apiClient.delete).toHaveBeenCalledWith('/planificacion/visitas/42/ofrecimientos/7')
+    })
+
+    it('getOfrecimientos devuelve el tipo y el alcance', async () => {
+        ;(apiClient.get as any).mockResolvedValue(
+            ok([
+                {
+                    id: 1,
+                    resolucionId: 10,
+                    tipo: 'accion',
+                    codigo: 'CUPO',
+                    descripcion: 'Plan cupo',
+                    gapUnits: null,
+                    esPropuesto: false,
+                    resuelto: false,
+                    motivos: [],
+                    alcance: [{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }],
+                },
+            ]),
+        )
+
+        const ofrecimientos = await getOfrecimientos(10)
+
+        expect(ofrecimientos[0].tipo).toBe('accion')
+        expect(ofrecimientos[0].alcance).toEqual([
+            { tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' },
+        ])
     })
 })
 
@@ -227,5 +261,13 @@ describe('catálogos', () => {
         ;(apiClient.get as any).mockResolvedValue(ok([{ code: 'FR', description: 'Fric-Rot' }]))
         await expect(getBrandCatalog()).resolves.toEqual([{ code: 'FR', description: 'Fric-Rot' }])
         expect(apiClient.get).toHaveBeenCalledWith('/sale/brand/catalog')
+    })
+
+    it('getAcciones pega al catálogo', async () => {
+        ;(apiClient.get as any).mockResolvedValue(
+            ok([{ codigo: 'CUPO', descripcion: 'Plan cupo' }]),
+        )
+        await expect(getAcciones()).resolves.toEqual([{ codigo: 'CUPO', descripcion: 'Plan cupo' }])
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/acciones')
     })
 })
