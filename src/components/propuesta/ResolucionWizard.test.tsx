@@ -36,6 +36,8 @@ function setup(over: Record<string, unknown> = {}) {
                 motivos={motivos}
                 borradores={{ 7: [], 8: [] }}
                 onCambiarBorrador={onCambiarBorrador}
+                detalles={{}}
+                onCambiarAccion={vi.fn()}
                 onVolver={onVolver}
                 {...over}
             />
@@ -57,6 +59,8 @@ function setupNavegable() {
                 motivos={motivos}
                 borradores={{ 7: [], 8: [] }}
                 onCambiarBorrador={vi.fn()}
+                detalles={{}}
+                onCambiarAccion={vi.fn()}
                 onVolver={vi.fn()}
             />
         </QueryClientProvider>
@@ -69,6 +73,7 @@ beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
     ;(api.eliminarOfrecimiento as any).mockResolvedValue(undefined)
+    ;(api.getAcciones as any).mockResolvedValue([])
 })
 
 it('muestra la posición y el ofrecimiento actual', () => {

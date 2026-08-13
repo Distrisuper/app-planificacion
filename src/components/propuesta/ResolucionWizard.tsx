@@ -3,9 +3,10 @@ import { ChevronLeft, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import ResolucionOfrecimiento from './ResolucionOfrecimiento'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
+import { useAcciones } from '@/hooks/useAcciones'
 import { useEliminarOfrecimiento } from '@/hooks/useOfrecimientos'
 import { tieneDetalleIncompleto } from '@/lib/resolucionOfrecimiento'
-import type { IMotivo, IOfrecimiento, IOfrecimientoMotivo } from '@/types/planificacion'
+import type { IAccionComercial, IMotivo, IOfrecimiento, IOfrecimientoMotivo } from '@/types/planificacion'
 
 interface ResolucionWizardProps {
     visitaId: number
@@ -17,6 +18,9 @@ interface ResolucionWizardProps {
     /** Borrador en memoria por ofrecimientoId — lo que el vendedor tildó, guardado o no. */
     borradores: Record<number, IOfrecimientoMotivo[]>
     onCambiarBorrador: (ofrecimientoId: number, motivos: IOfrecimientoMotivo[]) => void
+    /** Acción comercial por ofrecimientoId — borrador paralelo al de motivos. */
+    detalles: Record<number, IAccionComercial | null>
+    onCambiarAccion: (ofrecimientoId: number, accion: IAccionComercial | null) => void
     onVolver: () => void
 }
 
@@ -30,9 +34,13 @@ export default function ResolucionWizard({
     motivos,
     borradores,
     onCambiarBorrador,
+    detalles,
+    onCambiarAccion,
     onVolver,
 }: ResolucionWizardProps) {
     const ofrecimiento = ofrecimientos[index]
+    const { data: acciones = [] } = useAcciones()
+    const accion = detalles[ofrecimiento.id] ?? null
 
     // Sentido del último movimiento, para que la entrada acompañe a la navegación. Se lee
     // en el render (no en el efecto) porque la clase tiene que salir en el MISMO render en
@@ -47,9 +55,11 @@ export default function ResolucionWizard({
     // es el ancestro más cercano que ve a la vez el catálogo de motivos y el borrador, así
     // que puede pedirlo SOLO cuando hace falta — y deja a ResolucionOfrecimiento
     // presentacional puro, sin React Query en su test.
-    const necesitaMarcas = (borradores[ofrecimiento.id] ?? []).some(
-        m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
-    )
+    const necesitaMarcas =
+        accion !== null ||
+        (borradores[ofrecimiento.id] ?? []).some(
+            m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
+        )
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
 
     const completos = ofrecimientos.filter(r => {
@@ -167,6 +177,9 @@ export default function ResolucionWizard({
                     motivos={motivos}
                     marcas={marcas}
                     marcasLoading={marcasLoading}
+                    acciones={acciones.map(a => ({ code: a.codigo, description: a.descripcion }))}
+                    accion={accion}
+                    onChangeAccion={a => onCambiarAccion(ofrecimiento.id, a)}
                     value={borradores[ofrecimiento.id] ?? []}
                     onChange={m => onCambiarBorrador(ofrecimiento.id, m)}
                 />

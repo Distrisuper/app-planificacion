@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import CatalogoPicker from './CatalogoPicker'
-import type { ICatalogoItem, IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
+import AccionComercialPicker from './AccionComercialPicker'
+import type { IAccionComercial, ICatalogoItem, IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
 
 interface ResolucionOfrecimientoProps {
     /** Catálogo de nivel `ofrecimiento`. Nunca se hardcodea: agregar un motivo es un INSERT. */
@@ -10,6 +11,11 @@ interface ResolucionOfrecimientoProps {
      *  columna `marca`: con texto libre conviven "Fric Rot", "fricrot" y "FRIC-ROT". */
     marcas: ICatalogoItem[]
     marcasLoading?: boolean
+    /** Catálogo de acciones comerciales (pl_accion). */
+    acciones: ICatalogoItem[]
+    /** La acción con la que se resolvió este ofrecimiento, si hubo. */
+    accion: IAccionComercial | null
+    onChangeAccion: (accion: IAccionComercial | null) => void
     value: IOfrecimientoMotivo[]
     onChange: (motivos: IOfrecimientoMotivo[]) => void
 }
@@ -19,7 +25,16 @@ const VACIO = { marca: null, competidor: null, pctDiferencia: null }
 /** Checklist + detalle de un ofrecimiento. Sin header, nombre ni botón de guardar
  *  propios: eso lo aporta ResolucionWizard, que envuelve a este componente en su header
  *  fijo y es el único con estado de posición/guardado. */
-export default function ResolucionOfrecimiento({ motivos, marcas, marcasLoading, value, onChange }: ResolucionOfrecimientoProps) {
+export default function ResolucionOfrecimiento({
+    motivos,
+    marcas,
+    marcasLoading,
+    acciones,
+    accion,
+    onChangeAccion,
+    value,
+    onChange,
+}: ResolucionOfrecimientoProps) {
     const porId = new Map(value.map(m => [m.motivoId, m]))
 
     // Qué motivo tiene abierto su selector de marca (null = ninguno).
@@ -67,6 +82,14 @@ export default function ResolucionOfrecimiento({ motivos, marcas, marcasLoading,
 
     return (
         <div>
+            <AccionComercialPicker
+                acciones={acciones}
+                marcas={marcas}
+                marcasLoading={marcasLoading}
+                value={accion}
+                onChange={onChangeAccion}
+            />
+
             <div className="flex flex-col gap-2">
                 {motivos.map(cat => {
                     const seleccionado = porId.get(cat.motivoId)

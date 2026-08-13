@@ -14,17 +14,24 @@ const marcas: ICatalogoItem[] = [
     { code: 'FX', description: 'Fremax' },
 ]
 
-function setup(value: IOfrecimientoMotivo[] = []) {
+const acciones: ICatalogoItem[] = [{ code: 'CUPO', description: 'Plan cupo' }]
+
+function setup(value: IOfrecimientoMotivo[] = [], over: Record<string, unknown> = {}) {
     const onChange = vi.fn()
+    const onChangeAccion = vi.fn()
     render(
         <ResolucionOfrecimiento
             motivos={motivos}
             marcas={marcas}
+            acciones={acciones}
+            accion={null}
+            onChangeAccion={onChangeAccion}
             value={value}
             onChange={onChange}
+            {...over}
         />,
     )
-    return { onChange }
+    return { onChange, onChangeAccion }
 }
 
 it('renderiza el catálogo recibido, sin nombres hardcodeados', () => {
@@ -81,4 +88,27 @@ it('competidor sigue siendo texto libre', () => {
     expect(onChange).toHaveBeenCalledWith([
         { motivoId: 13, marca: null, competidor: 'Corven', pctDiferencia: null },
     ])
+})
+
+// El caso simple no cambió: sin acción, la pantalla es la de siempre.
+it('sin acción comercial, el checklist es el de motivos de ofrecimiento', () => {
+    setup()
+    expect(screen.getByText('Saqué pedido')).toBeInTheDocument()
+    expect(screen.getByText(/con acción comercial/i)).toBeInTheDocument()
+})
+
+it('ofrece cargar una acción comercial arriba del checklist', () => {
+    const { onChangeAccion } = setup()
+    fireEvent.click(screen.getByText(/con acción comercial/i))
+    fireEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
+    expect(onChangeAccion).toHaveBeenCalledWith({ accion: 'CUPO', marca: null })
+})
+
+// El checklist NO cambia con la acción: es siempre el catálogo de nivel
+// 'ofrecimiento', que el backend completa con los motivos que faltaban.
+it('con acción comercial cargada, el checklist sigue siendo el mismo', () => {
+    setup([], { accion: { accion: 'CUPO', marca: null } })
+
+    expect(screen.getByText('Saqué pedido')).toBeInTheDocument()
+    expect(screen.getByText('No lo ofrecí')).toBeInTheDocument()
 })
