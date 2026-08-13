@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import OfrecimientoBuscador, { type TipoOfrecible } from './OfrecimientoBuscador'
+import OfrecimientoBuscador, { type IElegidoOfrecimiento } from './OfrecimientoBuscador'
 import AlcancePicker from './AlcancePicker'
 import { registroDetalleAccion } from './accionDetalle/registro'
 import type { IAgregarOfrecimientoDTO, IAlcance, ICatalogoItem } from '@/types/planificacion'
@@ -12,12 +12,6 @@ interface AgregarOfrecimientoSheetProps {
     marcas: ICatalogoItem[]
     rubros: ICatalogoItem[]
     marcasLoading?: boolean
-}
-
-interface Elegido {
-    tipo: TipoOfrecible
-    codigo: string
-    descripcion: string
 }
 
 /**
@@ -42,7 +36,7 @@ export default function AgregarOfrecimientoSheet({
     rubros,
     marcasLoading,
 }: AgregarOfrecimientoSheetProps) {
-    const [elegido, setElegido] = useState<Elegido | null>(null)
+    const [elegido, setElegido] = useState<IElegidoOfrecimiento | null>(null)
     const [alcance, setAlcance] = useState<IAlcance[]>([])
     const [detalle, setDetalle] = useState<unknown>(undefined)
 
@@ -57,7 +51,7 @@ export default function AgregarOfrecimientoSheet({
     // Elegir un ítem distinto (de cualquier tipo) descarta el alcance y el detalle: un
     // tramo cargado para "Plan cupo" no debería sobrevivir si el vendedor elige otra
     // cosa sin agregar la anterior primero.
-    function elegir(item: Elegido) {
+    function elegir(item: IElegidoOfrecimiento) {
         setElegido(item)
         setAlcance([])
         setDetalle(undefined)
@@ -87,7 +81,7 @@ export default function AgregarOfrecimientoSheet({
                 marcas={marcas}
                 acciones={acciones}
                 marcasLoading={marcasLoading}
-                value={elegido?.descripcion ?? null}
+                value={elegido}
                 onSelect={elegir}
             />
 
@@ -98,6 +92,7 @@ export default function AgregarOfrecimientoSheet({
                     marcas={marcas}
                     rubros={rubros}
                     marcasLoading={marcasLoading}
+                    abrirPorDefecto
                 />
             )}
 

@@ -16,6 +16,20 @@ describe('AlcancePicker', () => {
         expect(screen.getByText('Todo el cliente')).toBeInTheDocument()
     })
 
+    it('con abrirPorDefecto, arranca ya expandido', () => {
+        render(
+            <AlcancePicker
+                value={[]}
+                onChange={vi.fn()}
+                marcas={marcas}
+                rubros={rubros}
+                abrirPorDefecto
+            />,
+        )
+
+        expect(screen.getByPlaceholderText(/buscar marca o rubro/i)).toBeInTheDocument()
+    })
+
     it('al expandir muestra el buscador único de marca/rubro', async () => {
         render(<AlcancePicker value={[]} onChange={vi.fn()} marcas={marcas} rubros={rubros} />)
 

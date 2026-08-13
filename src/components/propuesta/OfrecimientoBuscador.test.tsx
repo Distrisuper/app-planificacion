@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import OfrecimientoBuscador from './OfrecimientoBuscador'
+import OfrecimientoBuscador, { type IElegidoOfrecimiento } from './OfrecimientoBuscador'
 
 const rubros = [{ code: 'BUJES', description: 'Bujes' }]
 const marcas = [{ code: 'SKF', description: 'SKF' }]
@@ -87,21 +88,6 @@ describe('OfrecimientoBuscador', () => {
         })
     })
 
-    it('el elegido se marca con un tilde', () => {
-        render(
-            <OfrecimientoBuscador
-                rubros={rubros}
-                marcas={marcas}
-                acciones={acciones}
-                value="Descuento"
-                onSelect={vi.fn()}
-            />,
-        )
-
-        const boton = screen.getByRole('button', { name: /descuento/i })
-        expect(boton.querySelector('.lucide-check')).toBeTruthy()
-    })
-
     it('mientras marcasLoading, las marcas no aparecen pero rubros y acciones sí', () => {
         render(
             <OfrecimientoBuscador
@@ -129,5 +115,86 @@ describe('OfrecimientoBuscador', () => {
         })
 
         expect(screen.getByText(/sin resultados/i)).toBeInTheDocument()
+    })
+
+    describe('colapso tras elegir', () => {
+        it('sin nada elegido, arranca expandido (se ve la lista)', () => {
+            render(
+                <OfrecimientoBuscador rubros={rubros} marcas={marcas} acciones={acciones} onSelect={vi.fn()} />,
+            )
+
+            expect(screen.getByPlaceholderText(/buscar rubro, marca o acci/i)).toBeInTheDocument()
+        })
+
+        it('tocar un resultado colapsa la lista a un resumen', () => {
+            // Componente controlado: simula al padre (AgregarOfrecimientoSheet)
+            // actualizando `value` en respuesta a onSelect.
+            function Wrapper() {
+                const [value, setValue] = useState<IElegidoOfrecimiento | null>(null)
+                return (
+                    <OfrecimientoBuscador
+                        rubros={rubros}
+                        marcas={marcas}
+                        acciones={acciones}
+                        value={value}
+                        onSelect={setValue}
+                    />
+                )
+            }
+            render(<Wrapper />)
+
+            fireEvent.click(screen.getByRole('button', { name: /descuento/i }))
+
+            expect(screen.queryByPlaceholderText(/buscar rubro, marca o acci/i)).not.toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /descuento/i })).toHaveTextContent('Acción')
+        })
+
+        it('con algo ya elegido (value), arranca colapsado', () => {
+            render(
+                <OfrecimientoBuscador
+                    rubros={rubros}
+                    marcas={marcas}
+                    acciones={acciones}
+                    value={{ tipo: 'accion', codigo: 'DESCUENTO', descripcion: 'Descuento' }}
+                    onSelect={vi.fn()}
+                />,
+            )
+
+            expect(screen.queryByPlaceholderText(/buscar rubro, marca o acci/i)).not.toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /descuento/i })).toBeInTheDocument()
+        })
+
+        it('tocar el resumen colapsado lo vuelve a expandir', () => {
+            render(
+                <OfrecimientoBuscador
+                    rubros={rubros}
+                    marcas={marcas}
+                    acciones={acciones}
+                    value={{ tipo: 'accion', codigo: 'DESCUENTO', descripcion: 'Descuento' }}
+                    onSelect={vi.fn()}
+                />,
+            )
+
+            fireEvent.click(screen.getByRole('button', { name: /descuento/i }))
+
+            expect(screen.getByPlaceholderText(/buscar rubro, marca o acci/i)).toBeInTheDocument()
+        })
+
+        it('expandido de nuevo, lo ya elegido se marca con un tilde', () => {
+            render(
+                <OfrecimientoBuscador
+                    rubros={rubros}
+                    marcas={marcas}
+                    acciones={acciones}
+                    value={{ tipo: 'accion', codigo: 'DESCUENTO', descripcion: 'Descuento' }}
+                    onSelect={vi.fn()}
+                />,
+            )
+
+            fireEvent.click(screen.getByRole('button', { name: /descuento/i }))
+
+            const boton = screen.getByRole('button', { name: /descuento/i })
+            expect(boton.querySelector('.lucide-check')).toBeTruthy()
+        })
     })
 })

@@ -21,7 +21,8 @@ function cargarTramoCupo() {
 }
 
 /** SKF aparece dos veces en pantalla cuando "Para" está expandido: una en el
- *  buscador principal (rubro/marca/acción) y otra en el buscador de alcance. El de
+ *  buscador principal (rubro/marca/acción, colapsado a resumen tras elegir Plan
+ *  cupo, así que no debería matchear) y otra en el buscador de alcance. El de
  *  alcance se monta después, así que es el último de la lista. */
 function tocarSkfEnAlcance() {
     const opciones = screen.getAllByRole('button', { name: /^skf/i })
@@ -34,7 +35,7 @@ describe('AgregarOfrecimientoSheet', () => {
         render(<AgregarOfrecimientoSheet {...props} onAgregar={onAgregar} />)
 
         await userEvent.click(screen.getByRole('button', { name: /plan cupo/i }))
-        await userEvent.click(screen.getByRole('button', { name: /^para/i }))
+        // "Para" ya está expandido solo (abrirPorDefecto): no hace falta tocarlo.
         tocarSkfEnAlcance()
         cargarTramoCupo()
         await userEvent.click(screen.getByRole('button', { name: 'Agregar' }))
@@ -89,29 +90,35 @@ describe('AgregarOfrecimientoSheet', () => {
         expect(screen.queryByRole('button', { name: /^para/i })).not.toBeInTheDocument()
     })
 
+    it('elegir el resultado colapsa el buscador principal a un resumen', async () => {
+        render(<AgregarOfrecimientoSheet {...props} onAgregar={vi.fn()} />)
+
+        await userEvent.click(screen.getByRole('button', { name: /plan cupo/i }))
+
+        expect(screen.queryByPlaceholderText(/buscar rubro, marca o acci/i)).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /plan cupo/i })).toHaveTextContent('Acción')
+    })
+
     it('elegir otra cosa limpia el alcance y el detalle ya cargados', async () => {
         const onAgregar = vi.fn()
         render(<AgregarOfrecimientoSheet {...props} onAgregar={onAgregar} />)
 
         await userEvent.click(screen.getByRole('button', { name: /plan cupo/i }))
-        await userEvent.click(screen.getByRole('button', { name: /^para/i }))
         tocarSkfEnAlcance()
         cargarTramoCupo()
 
-        await userEvent.click(screen.getAllByRole('button', { name: /^skf/i })[0])
+        // Reabrir el buscador principal (colapsado a "Plan cupo") y elegir otra cosa.
         await userEvent.click(screen.getByRole('button', { name: /plan cupo/i }))
-        // Sin volver a cargar tramos: si quedaran los anteriores, "Agregar" ya estaría habilitado.
-        expect(screen.getByRole('button', { name: 'Agregar' })).toBeDisabled()
+        await userEvent.click(screen.getAllByRole('button', { name: /^skf/i })[0])
 
-        cargarTramoCupo()
         await userEvent.click(screen.getByRole('button', { name: 'Agregar' }))
 
+        // Si algo del alcance/detalle de Cupo hubiera quedado pegado, esto no matchearía.
         expect(onAgregar).toHaveBeenCalledWith({
-            tipo: 'accion',
-            codigo: 'CUPO',
-            descripcion: 'Plan cupo',
+            tipo: 'marca',
+            codigo: 'SKF',
+            descripcion: 'SKF',
             alcance: [],
-            detalle: { tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] },
         })
     })
 

@@ -10,6 +10,12 @@ interface AlcancePickerProps {
     marcas: ICatalogoItem[]
     rubros: ICatalogoItem[]
     marcasLoading?: boolean
+    /** true = arranca ya expandido. Lo usa AgregarOfrecimientoSheet apenas se elige
+     *  una acción: ahorra el toque de abrir "Para" cuando el paso siguiente casi
+     *  siempre es acotar. No es una propiedad del componente en general — cada
+     *  llamador decide cuándo tiene sentido, sin que el catálogo de acciones tenga
+     *  que declarar nada. */
+    abrirPorDefecto?: boolean
 }
 
 /**
@@ -34,8 +40,9 @@ export default function AlcancePicker({
     marcas,
     rubros,
     marcasLoading,
+    abrirPorDefecto,
 }: AlcancePickerProps) {
-    const [abierto, setAbierto] = useState(false)
+    const [abierto, setAbierto] = useState(!!abrirPorDefecto)
 
     return (
         <div className="mt-2 rounded-[10px] border-[1.5px] border-[#E4E8F0] bg-white p-2.5">

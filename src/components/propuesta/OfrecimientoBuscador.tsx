@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Search } from 'lucide-react'
+import { Check, ChevronDown, Search } from 'lucide-react'
 import type { ICatalogoItem } from '@/types/planificacion'
 
 export type TipoOfrecible = 'rubro' | 'marca' | 'accion'
@@ -27,14 +27,20 @@ const TIPO_OFRECIBLE_LABEL: Record<TipoOfrecible, string> = {
     accion: 'Acción',
 }
 
+export interface IElegidoOfrecimiento {
+    tipo: TipoOfrecible
+    codigo: string
+    descripcion: string
+}
+
 interface OfrecimientoBuscadorProps {
     rubros: ICatalogoItem[]
     marcas: ICatalogoItem[]
     acciones: ICatalogoItem[]
     marcasLoading?: boolean
-    /** Descripción del ítem ya elegido, para marcarlo con un tilde. */
-    value?: string | null
-    onSelect: (item: { tipo: TipoOfrecible; codigo: string; descripcion: string }) => void
+    /** Lo ya elegido, si hay algo. */
+    value?: IElegidoOfrecimiento | null
+    onSelect: (item: IElegidoOfrecimiento) => void
 }
 
 /** Buscador único sobre rubro + marca + acción mezclados, con un tag de tipo por
@@ -43,7 +49,12 @@ interface OfrecimientoBuscadorProps {
  *  acción?" antes de poder escribir lo que el vendedor ya tiene en la cabeza ("SKF",
  *  "Descuento", "Bujes"). El tipo se deriva de qué catálogo trajo el resultado elegido,
  *  no de una decisión previa. Mientras `marcas` está cargando, se excluyen del
- *  combinado (no bloquea la búsqueda de rubro/acción, que ya están disponibles). */
+ *  combinado (no bloquea la búsqueda de rubro/acción, que ya están disponibles).
+ *
+ *  Elegir algo colapsa la lista a un resumen de una línea: mostrar la lista completa
+ *  (hasta 50 filas con scroll) DEBAJO de "Para" (el picker de alcance) dejaba dos
+ *  listas largas apiladas en pantalla a la vez — mucho scroll para algo que ya se
+ *  eligió. Tocar el resumen la vuelve a expandir para cambiar la elección. */
 export default function OfrecimientoBuscador({
     rubros,
     marcas,
@@ -52,7 +63,31 @@ export default function OfrecimientoBuscador({
     value,
     onSelect,
 }: OfrecimientoBuscadorProps) {
+    const [abierto, setAbierto] = useState(!value)
     const [busqueda, setBusqueda] = useState('')
+
+    function elegir(item: IElegidoOfrecimiento) {
+        onSelect(item)
+        setAbierto(false)
+    }
+
+    if (!abierto && value) {
+        return (
+            <button
+                type="button"
+                onClick={() => setAbierto(true)}
+                className="animate-panel-in flex w-full items-center gap-2 rounded-[11px] border-[1.5px] border-[#B9CCEC] bg-[#EEF3FB] px-3 py-2.5 text-left"
+            >
+                <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#182645]">
+                    {value.descripcion}
+                </span>
+                <span className="shrink-0 rounded-full bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#213D82]">
+                    {TIPO_OFRECIBLE_LABEL[value.tipo]}
+                </span>
+                <ChevronDown className="h-4 w-4 shrink-0 text-dsmuted" strokeWidth={2.4} />
+            </button>
+        )
+    }
 
     // Acciones primero: son pocas (hoy 4, contra cientos de rubros/marcas), así que
     // ponerlas arriba las deja siempre a la vista sin escribir nada, sin competir por
@@ -69,7 +104,7 @@ export default function OfrecimientoBuscador({
     const ocultos = filtrados.length - visibles.length
 
     return (
-        <div>
+        <div className="animate-panel-in">
             <div className="relative mb-2">
                 <Search
                     className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8A93A6]"
@@ -90,13 +125,13 @@ export default function OfrecimientoBuscador({
                     con solo 200px se cortaba a los 4-5 primeros resultados. */}
                 <div className="flex max-h-[min(360px,50dvh)] flex-col gap-1.5 overflow-y-auto pr-0.5">
                     {visibles.map(item => {
-                        const elegido = value === item.description
+                        const elegido = value?.tipo === item.tipo && value.codigo === item.code
                         return (
                             <button
                                 key={`${item.tipo}:${item.code}`}
                                 type="button"
                                 onClick={() =>
-                                    onSelect({
+                                    elegir({
                                         tipo: item.tipo,
                                         codigo: item.code,
                                         descripcion: item.description,
