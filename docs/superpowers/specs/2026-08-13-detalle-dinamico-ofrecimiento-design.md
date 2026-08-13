@@ -186,6 +186,21 @@ no solo la regla de negocio que ya validó el frontend. `ofrecimientoValidation.
 (`validarOfrecimientoNuevo`) corre el validador correspondiente cuando `tipo === 'accion'` y hay uno
 registrado para el código; si falla, rechaza el alta con `DETALLE_INVALIDO`.
 
+**`detalle` con `tipo !== 'accion'`: se ignora, no se rechaza.** `detalle` conceptualmente solo
+aplica a `accion` — rubro/marca/línea/artículo son ítems de catálogo ofrecidos tal cual, su
+resultado vive en `pl_ofrecimiento_motivo`, no en parámetros propios de la oferta. Se evaluó y
+verificó contra `seguimientos.json`: los casos de marca/rubro con un % pegado directo sin la
+palabra "cupo"/"acción" (ej. *"Ofrezco Nakata 3% JH Mazas"*) resultan ser el mismo caso de
+acción-con-alcance sin etiquetar por el vendedor (hay ejemplos casi idénticos que sí dicen
+"accion" explícito), no un tercer concepto — y las menciones de "X% más barato que la competencia"
+son comparación de precio, ya cubierta por `pctDiferencia`/`competidor` del motivo "Precio". No hay
+evidencia de que rubro/marca necesiten su propio `detalle`.
+
+Dicho eso, **no se rechaza la request si de todos modos llega `detalle` con otro `tipo`** (ej. un
+cliente futuro, o un bug en otra pantalla): `crearFueraDePropuesta` solo persiste `detalle` cuando
+`tipo === 'accion'`, y lo descarta en silencio en cualquier otro caso — la fila queda con
+`detalle: null`, sin fallar el alta completa por un campo que no le correspondía.
+
 ---
 
 ## Puntos de integración
@@ -208,7 +223,7 @@ registrado para el código; si falla, rechaza el alta con `DETALLE_INVALIDO`.
 | `src/types/planificacion.ts` | mismo agregado espejado |
 | `src/services/planificacion/accionDetalleValidators.ts` **(nuevo)** | registro de validadores + `validarDetalleCupo` |
 | `src/services/planificacion/ofrecimientoValidation.ts` (`validarOfrecimientoNuevo`) | corre el validador si `tipo==='accion'` y hay uno registrado; rechaza con `DETALLE_INVALIDO` |
-| `src/repositories/OfrecimientoRepository.ts` (`crearFueraDePropuesta`) | el insert suma `detalle: dto.detalle ?? null` |
+| `src/repositories/OfrecimientoRepository.ts` (`crearFueraDePropuesta`) | el insert suma `detalle: tipo === 'accion' ? (dto.detalle ?? null) : null` — se ignora en silencio si el tipo no es `accion` |
 | `src/repositories/OfrecimientoRepository.ts` (`adjuntarMotivos`) | el mapper de respuesta selecciona y devuelve `detalle` |
 
 No toca `pl_ofrecimiento_alcance` ni su mecanismo — son ortogonales (alcance = a qué aplica;
@@ -234,7 +249,8 @@ detalle = con qué términos).
 - `ofrecimientoValidation.spec.ts` (ampliar): alta de `CUPO` con `detalle` inválido devuelve
   `DETALLE_INVALIDO`; con `detalle` válido pasa.
 - Service/repo spec (ampliar): crear un ofrecimiento con `detalle` y volver a leerlo (round-trip
-  create→GET) devuelve el mismo JSON.
+  create→GET) devuelve el mismo JSON; crear un ofrecimiento `tipo: 'rubro'` con `detalle` presente
+  en el body persiste con `detalle: null` (se ignora, no falla el alta).
 
 ---
 
