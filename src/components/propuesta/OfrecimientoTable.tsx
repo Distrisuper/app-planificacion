@@ -3,6 +3,7 @@ import { Check, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { fmtAmount } from '@/lib/fmtAmount'
 import { resumenAlcance } from '@/lib/alcance'
 import { registroDetalleAccion } from './accionDetalle/registro'
+import { separarAcciones } from './filas'
 import type { TipoOfrecimiento } from '@/types/planificacion'
 import type { IOfrecimientoFila, IOfrecimientoFilaResolucion } from './filas'
 
@@ -281,27 +282,60 @@ export default function OfrecimientoTable({
 }: OfrecimientoTableProps) {
     const [busqueda, setBusqueda] = useState('')
 
-    // Se filtra por `destacada` en vez de asumir que `filas` viene ordenada
+    // Una acción no tiene venta histórica por rubro: vive en su propia sección,
+    // arriba de todo, afuera de la tabla RUBRO·ACTUAL·M.ANT·P.6M — el resto de esta
+    // función sigue operando igual que siempre, pero solo sobre `resto`.
+    const { acciones, resto } = separarAcciones(filas)
+
+    // Se filtra por `destacada` en vez de asumir que `resto` viene ordenado
     // destacadas-primero: `construirFilas*` hoy respeta ese orden, pero
     // derivarlo así evita que un bloque de arriba vacío (o desordenado) se
     // confunda con "no hay bloque extra".
-    const bloqueArriba = filas.filter(f => f.destacada)
-    const bloqueAbajo = filas.filter(f => !f.destacada)
+    const bloqueArriba = resto.filter(f => f.destacada)
+    const bloqueAbajo = resto.filter(f => !f.destacada)
     const hayBloqueExtra = bloqueAbajo.length > 0
     const bloqueExtraEsAgregable = bloqueAbajo.some(f => f.agregable)
     // Tabla de una visita ⇒ hay chip de estado, y se reserva su ancho en todas las
     // filas y en el header. En la propuesta (ninguna fila resoluble) no se reserva
     // nada: ahí ese espacio es ancho de nombre.
-    const conChip = filas.some(f => f.resolucion)
-    const conColumnaQuitar = filas.some(f => f.resolucion && !f.resolucion.esPropuesto)
+    const conChip = resto.some(f => f.resolucion)
+    const conColumnaQuitar = resto.some(f => f.resolucion && !f.resolucion.esPropuesto)
+    // Grilla independiente de la de arriba: el bloque de acciones reserva su propio
+    // ancho de chip/quitar según lo que traigan sus propias filas, no las de `resto`.
+    const conChipAcciones = acciones.some(f => f.resolucion)
+    const conColumnaQuitarAcciones = acciones.some(f => f.resolucion && !f.resolucion.esPropuesto)
 
     const q = normalizar(busqueda.trim())
     const bloqueAbajoFiltrado = q === '' ? bloqueAbajo : bloqueAbajo.filter(f => normalizar(f.nombre).includes(q))
 
     return (
-        // Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
-        // overflow oculto anula el `position: sticky` de adentro contra el scroll del
-        // sheet. Las esquinas de arriba las redondea el propio header.
+        <>
+        {acciones.length > 0 && (
+            <div className="mb-2">
+                <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
+                    Acciones
+                </p>
+                <div className="w-full rounded-xl border border-dsline">
+                    {acciones.map((fila, i) => (
+                        <FilaOfrecimiento
+                            key={`${fila.tipo}:${fila.codigo}`}
+                            fila={fila}
+                            conBorde={i < acciones.length - 1}
+                            conChip={conChipAcciones}
+                            conColumnaQuitar={conColumnaQuitarAcciones}
+                            onResolucion={onResolucion}
+                            onAgregar={onAgregar}
+                            onEliminar={onEliminar}
+                            agregandoCodes={agregandoCodes}
+                            eliminandoIds={eliminandoIds}
+                        />
+                    ))}
+                </div>
+            </div>
+        )}
+        {/* Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
+            overflow oculto anula el `position: sticky` de adentro contra el scroll del
+            sheet. Las esquinas de arriba las redondea el propio header. */}
         <div className="w-full rounded-xl border border-dsline">
             {/* Sticky: con el catálogo abierto la lista pasa de 25 filas y, sin el rótulo
                 a la vista, las tres columnas de números quedan sin identificar apenas se
@@ -395,5 +429,6 @@ export default function OfrecimientoTable({
                 )}
             </div>
         </div>
+        </>
     )
 }

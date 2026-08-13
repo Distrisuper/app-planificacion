@@ -376,3 +376,40 @@ it('una fila con detalle pero sin módulo registrado para su código no rompe ni
     )
     expect(screen.getByText('Promo verano')).toBeInTheDocument()
 })
+
+it('con una acción, aparece la sección "Acciones" arriba de la tabla', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({ codigo: 'CUPO', nombre: 'Plan cupo', tipo: 'accion' }),
+                fila({ codigo: 'R1', nombre: 'Amortiguadores', tipo: 'rubro' }),
+            ]}
+        />,
+    )
+    expect(screen.getByText('Acciones')).toBeInTheDocument()
+    expect(screen.getByText('Plan cupo')).toBeInTheDocument()
+})
+
+it('sin ninguna acción, no aparece la etiqueta "Acciones"', () => {
+    render(<OfrecimientoTable filas={[fila({ codigo: 'R1', tipo: 'rubro' })]} />)
+    expect(screen.queryByText('Acciones')).not.toBeInTheDocument()
+})
+
+it('una acción del bloque de arriba dispara onResolucion con su ofrecimientoId', () => {
+    const onResolucion = vi.fn()
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    codigo: 'CUPO',
+                    nombre: 'Plan cupo',
+                    tipo: 'accion',
+                    resolucion: { ofrecimientoId: 9, motivosCargados: 0, completo: false, esPropuesto: true },
+                }),
+            ]}
+            onResolucion={onResolucion}
+        />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /resolución de plan cupo/i }))
+    expect(onResolucion).toHaveBeenCalledWith(9)
+})

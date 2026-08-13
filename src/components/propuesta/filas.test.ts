@@ -1,4 +1,4 @@
-import { construirFilasPropuesta, construirFilasVisita, totalesDe } from './filas'
+import { construirFilasPropuesta, construirFilasVisita, separarAcciones, totalesDe } from './filas'
 import type { IOfrecimiento, IRubroEstado, IRubroPropuesta } from '@/types/planificacion'
 
 function propuesta(over: Partial<IRubroPropuesta> = {}): IRubroPropuesta {
@@ -224,5 +224,46 @@ describe('construirFilasVisita', () => {
             true,
         )
         expect(filas[0].detalle).toEqual({ tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] })
+    })
+})
+
+describe('separarAcciones', () => {
+    function filaDe(over: Partial<import('./filas').IOfrecimientoFila> = {}) {
+        return {
+            codigo: 'R1',
+            nombre: 'Amortiguadores',
+            actual: null,
+            mesAnterior: null,
+            promedio6m: null,
+            destacada: true,
+            tipo: 'rubro' as const,
+            alcance: [],
+            ...over,
+        }
+    }
+
+    it('sin acciones, todo queda en resto y acciones queda vacío', () => {
+        const filas = [filaDe({ codigo: 'R1' }), filaDe({ codigo: 'R2', tipo: 'marca' })]
+        const { acciones, resto } = separarAcciones(filas)
+        expect(acciones).toEqual([])
+        expect(resto).toEqual(filas)
+    })
+
+    it('separa una acción del resto', () => {
+        const rubro = filaDe({ codigo: 'R1' })
+        const accion = filaDe({ codigo: 'CUPO', nombre: 'Plan cupo', tipo: 'accion' })
+        const { acciones, resto } = separarAcciones([rubro, accion])
+        expect(acciones).toEqual([accion])
+        expect(resto).toEqual([rubro])
+    })
+
+    it('separa varias acciones, preservando el orden de cada lista', () => {
+        const rubro1 = filaDe({ codigo: 'R1' })
+        const cupo = filaDe({ codigo: 'CUPO', tipo: 'accion' })
+        const rubro2 = filaDe({ codigo: 'R2' })
+        const descuento = filaDe({ codigo: 'DESCUENTO', tipo: 'accion' })
+        const { acciones, resto } = separarAcciones([rubro1, cupo, rubro2, descuento])
+        expect(acciones).toEqual([cupo, descuento])
+        expect(resto).toEqual([rubro1, rubro2])
     })
 })
