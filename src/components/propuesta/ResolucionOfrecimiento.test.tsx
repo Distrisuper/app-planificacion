@@ -133,6 +133,7 @@ it('con acción y marca ya cargadas, el chip Marca muestra esa misma marca', () 
 
 it('sacar la acción con una marca ya cargada conserva la marca', () => {
     const { onChangeAccion } = setup([], { accion: { accion: 'CUPO', marca: 'Fric-Rot' } })
+    fireEvent.click(screen.getByText('Plan cupo'))
     fireEvent.click(screen.getByRole('button', { name: /sin acción/i }))
 
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })

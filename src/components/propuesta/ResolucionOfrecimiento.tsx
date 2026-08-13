@@ -120,37 +120,44 @@ export default function ResolucionOfrecimiento({
             <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
                 Resolución
             </span>
-            <div className="flex flex-col gap-2">
+            {/* Grid de 2 columnas: con 12 motivos en el catálogo, una lista de una sola
+             *  columna se comía media pantalla del sheet. El motivo con detalle (hoy
+             *  "Precio") ocupa las 2 columnas mientras está tildado, para que su panel
+             *  de marca/competidor/% tenga espacio. */}
+            <div className="grid grid-cols-2 gap-2">
                 {motivos.map(cat => {
                     const seleccionado = porId.get(cat.motivoId)
                     const on = !!seleccionado
                     return (
-                        <div key={cat.motivoId} className="flex flex-col gap-0">
+                        <div
+                            key={cat.motivoId}
+                            className={`flex flex-col gap-0 ${cat.requiereDetalle && on ? 'col-span-2' : ''}`}
+                        >
                             <button
                                 onClick={() => toggle(cat.motivoId)}
-                                className={`flex w-full items-center gap-2.5 rounded-[11px] border-[1.5px] px-3 py-2.5 text-left font-sans ${
+                                className={`flex w-full items-center gap-2 rounded-[11px] border-[1.5px] px-2.5 py-2 text-left font-sans ${
                                     on ? 'border-[#B9CCEC] bg-[#EEF3FB]' : 'border-[#E4E8F0] bg-white'
                                 }`}
                             >
                                 <span
-                                    className="grid h-[21px] w-[21px] shrink-0 place-items-center rounded-md border-[1.5px]"
+                                    className="grid h-[19px] w-[19px] shrink-0 place-items-center rounded-md border-[1.5px]"
                                     style={{
                                         borderColor: on ? '#213D82' : '#CBD2E0',
                                         background: on ? '#213D82' : '#fff',
                                         color: on ? '#fff' : 'transparent',
                                     }}
                                 >
-                                    <Check className="h-[13px] w-[13px]" strokeWidth={3.2} />
+                                    <Check className="h-[12px] w-[12px]" strokeWidth={3.2} />
                                 </span>
                                 <span
-                                    className={`text-sm font-bold ${on ? 'text-[#182645]' : 'text-[#3B4560]'}`}
+                                    className={`min-w-0 truncate text-[13px] font-bold ${on ? 'text-[#182645]' : 'text-[#3B4560]'}`}
                                 >
                                     {cat.descripcion}
                                 </span>
                             </button>
 
                             {cat.requiereDetalle && on && (
-                                <div className="ml-8 mt-2 mb-0.5 flex flex-col gap-2.5 rounded-[10px] border-[1.5px] border-[#B9CCEC] bg-white p-2.5">
+                                <div className="animate-panel-in ml-8 mt-2 mb-0.5 flex flex-col gap-2.5 rounded-[10px] border-[1.5px] border-[#B9CCEC] bg-white p-2.5">
                                     <div className="flex flex-col gap-1">
                                         <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
                                             Marca

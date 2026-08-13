@@ -64,6 +64,37 @@ describe('AccionComercialPicker', () => {
         })
     })
 
+    // Con acción ya elegida, las opciones se colapsan a un resumen de una línea: no
+    // tiene sentido mostrar "Sin acción / Plan cupo / Descuento" lado a lado cuando ya
+    // se decidió una — solo ocupa espacio.
+    it('con una acción ya elegida, colapsa las opciones a un resumen', () => {
+        render(
+            <AccionComercialPicker
+                acciones={acciones}
+                value={{ accion: 'DESCUENTO' }}
+                onChange={vi.fn()}
+            />,
+        )
+
+        expect(screen.getByText('Descuento')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Plan cupo' })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /sin acción/i })).not.toBeInTheDocument()
+    })
+
+    it('tocar el resumen vuelve a desplegar las opciones', () => {
+        render(
+            <AccionComercialPicker
+                acciones={acciones}
+                value={{ accion: 'DESCUENTO' }}
+                onChange={vi.fn()}
+            />,
+        )
+
+        fireEvent.click(screen.getByText('Descuento'))
+
+        expect(screen.getByRole('button', { name: 'Plan cupo' })).toBeInTheDocument()
+    })
+
     // Los params de Cupo (tramos) no significan nada para Descuento (%).
     it('cambiar de acción descarta los params de la anterior', () => {
         const onChange = vi.fn()
@@ -75,6 +106,7 @@ describe('AccionComercialPicker', () => {
             />,
         )
 
+        fireEvent.click(screen.getByText('Descuento'))
         fireEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
 
         expect(onChange).toHaveBeenCalledWith({ accion: 'CUPO' })
@@ -90,6 +122,7 @@ describe('AccionComercialPicker', () => {
             />,
         )
 
+        fireEvent.click(screen.getByText('Descuento'))
         fireEvent.click(screen.getByRole('button', { name: /sin acción/i }))
 
         expect(onChange).toHaveBeenCalledWith(null)
