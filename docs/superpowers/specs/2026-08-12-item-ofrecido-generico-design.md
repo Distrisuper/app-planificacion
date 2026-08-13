@@ -102,8 +102,10 @@ esto dos refactors en uno.
 | `codigo` | `rubro_code` | igual, **`NOT NULL`** |
 | `descripcion` | `rubro_descripcion` | igual, snapshot |
 | `detalle` | — | `JSON NULL` — ver "La columna `detalle`" |
-| `gap_units` | igual | sigue nullable; solo tiene sentido con `tipo = 'rubro'` |
+| `gap_units`, `pesos_perdidos`, `caida_pct` | igual | siguen nullables; **las tres solo tienen sentido con `tipo = 'rubro'`** |
 | `origen`, `es_propuesto` | igual | sin cambios |
+
+**Son tres columnas de propuesta, no una.** El diseño original solo nombraba `gap_units`; el DDL real tiene además `pesos_perdidos` y `caida_pct`, y ahí `gap_units` está anotada como *"criterio viejo"* — el vigente es `pesos_perdidos`. Las tres las escribe únicamente `crearMuchos` desde la propuesta congelada, que siempre es `tipo = 'rubro'`, así que no entran en `IAgregarOfrecimientoDTO` y no necesitan validación. Pero quedan **semánticamente colgadas**: nada en la base impide un cupo con `pesos_perdidos`. Es deuda conocida, del mismo tipo que la columna que la opción B habría creado — la diferencia es que estas ya existían y no las inventa este cambio.
 
 **`codigo` es `NOT NULL`, incluso para acciones.** Durante el diseño se consideró hacerlo nullable
 porque "un cupo global no es de ninguna marca". Es un error: el cupo **sí tiene código** —

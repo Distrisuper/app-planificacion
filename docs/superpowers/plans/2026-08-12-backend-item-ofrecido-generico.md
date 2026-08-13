@@ -50,7 +50,9 @@
 
 **Borrar** (al final de su tarea, en el mismo commit del reemplazo): `VisitaRubro.ts`, `VisitaRubroMotivo.ts`, `VisitaRubroRepository.ts`, `RubrosService.ts` y sus `.spec.ts`.
 
-**Modificar:** `src/types/planificacion.ts`, `src/services/planificacion/motivoValidation.ts`, `src/services/planificacion/VisitasService.ts`, `src/services/planificacion/AgendaService.ts`, `src/services/planificacion/CicloService.ts`, `src/services/planificacion/AnaliticaService.ts`, `src/controllers/planificacionController.ts`, `src/routes/planificacion.ts`, `docs/db-notes/planificacion-ciclo-tables.sql`.
+**Modificar:** `src/types/planificacion.ts`, `src/types/analitica.ts`, `src/services/planificacion/motivoValidation.ts`, `src/services/planificacion/propuestaValidation.ts`, `src/services/planificacion/VisitasService.ts`, `src/services/planificacion/AgendaService.ts`, `src/services/planificacion/CicloService.ts`, `src/services/planificacion/AnaliticaService.ts`, `src/services/planificacion/indicadores/comercial.ts`, `src/repositories/AnaliticaRepository.ts`, `src/repositories/ResolucionRepository.ts`, `src/controllers/planificacionController.ts`, `src/routes/planificacion.ts`, `docs/db-notes/planificacion-ciclo-tables.sql`.
+
+**El radio real, medido:** `grep -rn "pl_visita_rubro\|visita_rubro_id\|VisitaRubro" src/ --include=*.ts` da hoy **178 hits en 22 archivos**, y esa lista **es** el alcance del refactor. Al terminar el plan tiene que dar **cero**. Los cinco archivos que se agregan arriba (`analitica.ts`, `propuestaValidation.ts`, `comercial.ts`, `AnaliticaRepository.ts`, `ResolucionRepository.ts`) salieron de ahí y tienen su tarea propia — ver Task 10.
 
 ---
 
@@ -193,6 +195,15 @@ SELECT * FROM pl_accion;                                   -- 4 filas
 ```
 
 Esperado: `pl_ofrecimiento` sin `uq_visita_rubro`, con `idx_ofrecimiento_resolucion`, `tipo` con default `'rubro'` y `detalle` JSON nullable. Cero filas perdidas.
+
+**Dos cosas más que mirar en ese `SHOW CREATE TABLE`, porque el DDL las tiene y el diseño no las menciona:**
+
+```sql
+SHOW CREATE TABLE pl_ofrecimiento_motivo;
+```
+
+1. **`PRIMARY KEY (visita_rubro_id, motivo_id)`** — la columna que se renombra es parte de la PK **y** origen de una FK a `pl_ofrecimiento(id)`. En MySQL 8 el `RENAME COLUMN` reapunta las dos solo, pero es lo primero a confirmar en local. Esa PK es además una garantía real que sobrevive el rename: **no se puede cargar el mismo motivo dos veces sobre el mismo ofrecimiento.** Ninguna tarea puede reintroducirla "por las dudas" en el service — ya está en la base.
+2. **La FK de `pl_visita_rubro` es anónima en el DDL**, así que MySQL la nombró `pl_visita_rubro_ibfk_1`, y `RENAME TABLE` **no renombra constraints**. Después de migrar, `SHOW CREATE TABLE pl_ofrecimiento` va a seguir mostrando ese nombre. Es cosmético y **no se arregla acá** (renombrar una FK es drop + create, riesgo sin beneficio); alcanza con que no sorprenda a quien verifique. Anotarlo en el comentario del DDL consolidado.
 
 - [ ] **Step 4: Verificar idempotencia**
 
@@ -339,7 +350,13 @@ Cambiar `NivelMotivo` de `'visita' | 'rubro'` a `'visita' | 'ofrecimiento'`.
 - [ ] **Step 2: Verificar que el build rompe donde tiene que romper**
 
 Run: `npm run build`
-Expected: FAIL con errores de tipo en `VisitaRubroRepository.ts`, `RubrosService.ts`, `motivoValidation.ts`, `VisitasService.ts` y el controller. Esa lista **es el mapa de las tareas 4 a 9** — anotarla.
+Expected: FAIL con errores de tipo en `VisitaRubroRepository.ts`, `RubrosService.ts`, `motivoValidation.ts`, `propuestaValidation.ts`, `VisitasService.ts` y el controller. Anotar la lista.
+
+**El build es PARTE del mapa, no el mapa.** Las tablas también se usan en **strings de SQL crudo**, que compilan perfecto y explotan en runtime contra la tabla renombrada. `AnaliticaRepository.ts` tiene seis referencias así (`FROM pl_visita_rubro`, `JOIN pl_visita_rubro_motivo`) y **no produce ni un error de tipo**. El mapa exhaustivo es el grep del "radio real" de arriba, no el compilador. Correrlo ahora y anotar el número:
+
+```bash
+grep -rn "pl_visita_rubro\|visita_rubro_id\|VisitaRubro" src/ --include=*.ts | wc -l
+```
 
 - [ ] **Step 3: Commit**
 
@@ -1574,8 +1591,14 @@ Montar los mocks con el molde que ya usa el spec para `detalleVisita`. **`result
 Run: `npx jest src/services/planificacion/AnaliticaService.spec.ts`
 Expected: PASS.
 
-Run: `grep -rn "rubro\|Rubro" src/ --include=*.ts | grep -v "sale/rubro\|RubroDrops\|RubroClients\|RubroRecommendation"`
-Expected: cero resultados en el dominio `planificacion`. Los que quedan son del motor de propuesta y de los catálogos del warehouse, que **no se tocan**.
+```bash
+grep -rn "pl_visita_rubro\|visita_rubro_id\|VisitaRubro" src/ --include=*.ts
+```
+Expected: **cero**. Arrancó en 178 hits sobre 22 archivos; si queda alguno, es un archivo que el refactor no tocó.
+
+**No usar el grep amplio** (`grep -rn "rubro\|Rubro" src/`) como criterio: da **1656 líneas**, casi todas legítimas —`RubroCatalogService`, `rubroBreakdownBuilder`, `orderRubros.ts` y el resto del motor de propuesta, que **no se tocan**—. Un check que devuelve mil líneas de ruido no se lee, se saltea. El grep de arriba es angosto a propósito: solo los tres identificadores que la migración hace desaparecer.
+
+Los `rubroCode` / `rubroDescripcion` que queden en `src/services/sales/` y `src/business/` son del motor y se quedan como están.
 
 - [ ] **Step 3: Definir las rutas nuevas y los alias**
 
@@ -1657,7 +1680,80 @@ git commit -m "feat: rutas /ofrecimientos, catalogo de acciones y alias temporal
 
 ---
 
-### Task 10: Verificación de punta a punta
+### Task 10: SQL crudo, validación de propuesta e indicadores
+
+**Files:**
+- Modify: `src/repositories/AnaliticaRepository.ts` (+ `.spec.ts`), `src/services/planificacion/propuestaValidation.ts`, `src/services/planificacion/indicadores/comercial.ts` (+ `.spec.ts`), `src/repositories/ResolucionRepository.ts`, `src/types/analitica.ts`
+
+**Interfaces:**
+- Consumes: `pl_ofrecimiento`, `pl_ofrecimiento_motivo` (Task 1); `PropuestaOfrecimiento` (Task 7).
+- Produces: nada nuevo — es el cierre del rename en las capas que el compilador no señala.
+
+**Por qué esta tarea existe y va al final:** son los archivos que las tareas 4 a 9 **no** tocan y que el `npm run build` **no** delata. Si se saltea, el plan termina con el build limpio, los tests en verde y la analítica rota en producción.
+
+- [ ] **Step 1: El SQL crudo de `AnaliticaRepository.ts`**
+
+Seis referencias a las tablas renombradas, ninguna de ellas un error de tipo:
+
+| línea (antes del refactor) | qué dice |
+|---|---|
+| 194 | `FROM pl_visita_rubro vr` |
+| 200 | `LEFT JOIN pl_visita_rubro_motivo vrm ON vrm.visita_rubro_id = vr.id` |
+| 313 | `FROM pl_visita_rubro vr` |
+| 314 | `JOIN pl_visita_rubro_motivo vrm ON vrm.visita_rubro_id = vr.id` |
+| 374 | `FROM pl_visita_rubro_motivo vrm` |
+| 376 | `JOIN pl_visita_rubro vr ON vr.id = vrm.visita_rubro_id` |
+
+Renombrar tabla y columna. Los alias (`vr`, `vrm`) son locales: cambiarlos es opcional y **no** hace falta para que funcione — si se cambian, que sea en el mismo commit y de forma consistente, no a medias. Renombrar también `IMotivoRubroRow` → `IMotivoOfrecimientoRow`.
+
+**Sumar `tipo` y el alcance a las queries de detalle** solo si Task 9 dejó `AnaliticaService` esperándolos; si no, esta tarea es rename puro.
+
+- [ ] **Step 2: El test que asserta sobre el string SQL**
+
+`AnaliticaRepository.spec.ts:215` tiene `expect(sql).toContain('LEFT JOIN pl_visita_rubro_motivo')`. **Va a fallar, y está bien que falle** — es la única red que atrapa el SQL crudo. Actualizar el string esperado.
+
+Esto **no** contradice el constraint global de "los tests pasan solo con cambios de nombre": lo que cambia acá es un nombre, que resulta estar dentro de un string. Si en cambio falla una aserción sobre un **número** de filas o un total, ahí sí parar.
+
+- [ ] **Step 3: `propuestaValidation.ts`**
+
+Importa `PropuestaItem` desde `VisitaRubroRepository`, así que este sí rompe el build. Pasa a `PropuestaOfrecimiento` desde `OfrecimientoRepository`. `MAX_PROPUESTA_ITEMS` y los mensajes de error que dicen "rubros" pasan a "ofrecimientos".
+
+**No cambiar el tope ni la validación de `rubroCode`**: la propuesta congelada que valida este archivo sigue siendo la del motor, que sigue siendo por rubro. Lo único que cambia son los nombres.
+
+- [ ] **Step 4: `indicadores/comercial.ts`**
+
+52 menciones. `visita_rubro_id` → `ofrecimiento_id`, `rubrosPropuestosTotal` → `ofrecimientosPropuestosTotal`.
+
+**Leer su comentario de cabecera antes de tocar nada:** documenta que la PK compuesta `(visita_rubro_id, motivo_id)` hace que un ofrecimiento con N motivos llegue como N filas del LEFT JOIN, y que la deduplicación depende de eso. Esa PK **sigue existiendo** después de la migración (ver Task 1, Step 3), así que la lógica no cambia — solo los nombres. Actualizar el comentario para que siga siendo cierto.
+
+- [ ] **Step 5: `ResolucionRepository.ts` y `types/analitica.ts`**
+
+En `ResolucionRepository.ts` son solo **comentarios** (líneas ~132-133) que explican que el motivo de una visita que sí ocurrió vive en `pl_visita_rubro_motivo`. Actualizarlos: un comentario que nombra una tabla inexistente es peor que no tenerlo.
+
+En `src/types/analitica.ts`, los tipos de rubro del detalle de visita pasan a ofrecimiento, en espejo con lo que hizo Task 9 en `AnaliticaService`.
+
+- [ ] **Step 6: Verificar que el radio llegó a cero**
+
+```bash
+grep -rn "pl_visita_rubro\|visita_rubro_id\|VisitaRubro" src/ --include=*.ts
+```
+Expected: **cero**. Arrancó en 178.
+
+```bash
+npm run build && npm test
+```
+Expected: build limpio, suite en verde.
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add src/repositories/ src/services/planificacion/ src/types/analitica.ts
+git commit -m "refactor: cierra el rename en analitica, indicadores y SQL crudo"
+```
+
+---
+
+### Task 11: Verificación de punta a punta
 
 **Files:** ninguno (verificación).
 
