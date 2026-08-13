@@ -152,9 +152,16 @@ function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
                     </div>
                 )}
             </div>
-            <Celda valor={fila.actual} promedio6m={fila.promedio6m} />
-            <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} />
-            <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia />
+            {/* Una acción (Plan cupo, Descuento) no tiene venta histórica por rubro —
+             *  mostrar las tres celdas en guiones se lee como "falta cargar" cuando en
+             *  realidad ese dato no existe para este tipo de ofrecimiento. */}
+            {fila.tipo !== 'accion' && (
+                <>
+                    <Celda valor={fila.actual} promedio6m={fila.promedio6m} />
+                    <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} />
+                    <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia />
+                </>
+            )}
         </>
     )
 }

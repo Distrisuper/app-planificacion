@@ -311,6 +311,40 @@ it('un rubro común no muestra chip de tipo', () => {
     expect(chips).toHaveLength(0)
 })
 
+// Las columnas ACTUAL/M.ANT/P.6M son venta histórica por rubro: una acción (Plan cupo,
+// Descuento) no tiene ese dato — mostrarlas en guiones es ruido, no "falta cargar".
+it('una fila de acción no muestra las columnas ACTUAL/M.ANT/P.6M', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    codigo: 'CUPO',
+                    nombre: 'Plan cupo',
+                    tipo: 'accion',
+                    actual: 600_000,
+                    mesAnterior: 800_000,
+                    promedio6m: 1_000_000,
+                }),
+            ]}
+        />,
+    )
+    expect(screen.getByText('Plan cupo')).toBeInTheDocument()
+    expect(screen.queryByText('600')).not.toBeInTheDocument()
+    expect(screen.queryByText('800')).not.toBeInTheDocument()
+    expect(screen.queryByText('1.000')).not.toBeInTheDocument()
+})
+
+it('una fila de rubro sigue mostrando sus tres columnas numéricas', () => {
+    render(
+        <OfrecimientoTable
+            filas={[fila({ tipo: 'rubro', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 })]}
+        />,
+    )
+    expect(screen.getByText('600')).toBeInTheDocument()
+    expect(screen.getByText('800')).toBeInTheDocument()
+    expect(screen.getByText('1.000')).toBeInTheDocument()
+})
+
 it('una fila de Cupo con detalle muestra el resumen de tramos', () => {
     render(
         <OfrecimientoTable
