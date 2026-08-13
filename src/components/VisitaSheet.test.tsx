@@ -460,3 +460,27 @@ it('dentro del wizard de resolución no aparecen las apps externas', async () =>
     expect(await screen.findByText('1 de 2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
 })
+
+it('la acción comercial cargada viaja en el batch de cierre', async () => {
+    ;(api.getAcciones as any).mockResolvedValue([{ codigo: 'DESCUENTO', descripcion: 'Descuento' }])
+
+    const { onCerrarVisita } = renderSheet()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+
+    fireEvent.click(await screen.findByText(/con acción comercial/i))
+    fireEvent.click(await screen.findByRole('button', { name: 'Descuento' }))
+    fireEvent.change(screen.getByLabelText(/% de descuento/i), { target: { value: '5' } })
+    fireEvent.click(await screen.findByText('Saqué pedido'))
+    fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+
+    await waitFor(() =>
+        expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
+            motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+            detalle: { accion: 'DESCUENTO', marca: null, params: { pct: 5 } },
+        }),
+    )
+    expect(onCerrarVisita).toHaveBeenCalled()
+})

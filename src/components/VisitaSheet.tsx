@@ -20,9 +20,16 @@ import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
 import { formatearDuracion } from '@/lib/visitaTimer'
 import { motivosIguales, tieneDetalleIncompleto } from '@/lib/resolucionOfrecimiento'
-import { leerBorrador, guardarBorrador, limpiarBorrador } from '@/lib/resolucionDraft'
+import {
+    leerBorrador,
+    guardarBorrador,
+    limpiarBorrador,
+    leerDetalles,
+    guardarDetalles,
+    limpiarDetalles,
+} from '@/lib/resolucionDraft'
 import type { AppExterna } from '@/lib/appsExternas'
-import type { IOfrecimiento, IOfrecimientoMotivo, IVisitClientCard } from '@/types/planificacion'
+import type { IAccionComercial, IOfrecimiento, IOfrecimientoMotivo, IVisitClientCard } from '@/types/planificacion'
 
 interface VisitaSheetProps {
     open: boolean
@@ -72,6 +79,7 @@ export default function VisitaSheet({
     // desde localStorage (o desde `ofrecimientos` si no había nada) y se persiste en cada
     // cambio. No se manda al backend hasta "Cerrar visita" — ver cerrarConBorrador.
     const [borradores, setBorradores] = useState<Record<number, IOfrecimientoMotivo[]>>({})
+    const [detalles, setDetalles] = useState<Record<number, IAccionComercial | null>>({})
     const [borradorListo, setBorradorListo] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
@@ -107,6 +115,7 @@ export default function VisitaSheet({
         if (!open) {
             setWizard(null)
             setBorradores({})
+            setDetalles({})
             setBorradorListo(false)
             setErrorGuardado(null)
             setAltaAbierta(false)
@@ -129,6 +138,7 @@ export default function VisitaSheet({
             for (const r of ofrecimientos) if (!(r.id in next)) next[r.id] = r.motivos
             return next
         })
+        setDetalles(prev => (Object.keys(prev).length > 0 ? prev : (leerDetalles(visitaId) ?? {})))
         setBorradorListo(true)
     }, [open, ofrecimientosCargados, visitaId, ofrecimientos])
 
@@ -137,7 +147,8 @@ export default function VisitaSheet({
     useEffect(() => {
         if (!open || !borradorListo) return
         guardarBorrador(visitaId, borradores)
-    }, [open, borradorListo, visitaId, borradores])
+        guardarDetalles(visitaId, detalles)
+    }, [open, borradorListo, visitaId, borradores, detalles])
 
     // Abre el wizard del ofrecimiento recién agregado, en cuanto el refetch de
     // `ofrecimientos` lo trae. Se resuelve acá y no en `agregarDesdeTabla`/
@@ -292,8 +303,16 @@ export default function VisitaSheet({
     async function cerrarConBorrador() {
         setErrorGuardado(null)
         const cambios = ofrecimientos
-            .filter(r => !motivosIguales(borradores[r.id] ?? [], r.motivos))
-            .map(r => ({ ofrecimientoId: r.id, motivos: borradores[r.id] ?? [] }))
+            .filter(
+                r =>
+                    !motivosIguales(borradores[r.id] ?? [], r.motivos) ||
+                    detalles[r.id] !== undefined,
+            )
+            .map(r => ({
+                ofrecimientoId: r.id,
+                motivos: borradores[r.id] ?? [],
+                ...(detalles[r.id] !== undefined ? { detalle: detalles[r.id] } : {}),
+            }))
 
         if (cambios.length > 0) {
             setGuardandoBorrador(true)
@@ -311,6 +330,7 @@ export default function VisitaSheet({
         }
 
         limpiarBorrador(visitaId)
+        limpiarDetalles(visitaId)
         onCerrarVisita()
     }
 
@@ -386,6 +406,10 @@ export default function VisitaSheet({
                         borradores={borradores}
                         onCambiarBorrador={(ofrecimientoId, m) =>
                             setBorradores(prev => ({ ...prev, [ofrecimientoId]: m }))
+                        }
+                        detalles={detalles}
+                        onCambiarAccion={(ofrecimientoId, accion) =>
+                            setDetalles(prev => ({ ...prev, [ofrecimientoId]: accion }))
                         }
                         onVolver={() => setWizard(null)}
                     />

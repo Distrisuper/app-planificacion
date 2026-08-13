@@ -6,7 +6,7 @@ import {
     resolverOfrecimiento,
 } from '@/api/planificacion'
 import { agendaKeys } from './useAgenda'
-import type { IAgregarOfrecimientoDTO, IOfrecimientoMotivo } from '@/types/planificacion'
+import type { IAccionComercial, IAgregarOfrecimientoDTO, IOfrecimientoMotivo } from '@/types/planificacion'
 
 export const ofrecimientoKeys = {
     deVisita: (visitaId: number) => ['ofrecimientos', visitaId] as const,
@@ -41,6 +41,7 @@ function useMutacionDeOfrecimientos<TVars, TData>(
 export interface IResolverOfrecimientosItem {
     ofrecimientoId: number
     motivos: IOfrecimientoMotivo[]
+    detalle?: IAccionComercial | null
 }
 
 export interface IResolverOfrecimientosResultado {
@@ -58,7 +59,10 @@ export function useResolverOfrecimientos(visitaId: number) {
         async (items: IResolverOfrecimientosItem[]): Promise<IResolverOfrecimientosResultado[]> => {
             const resultados = await Promise.allSettled(
                 items.map(item =>
-                    resolverOfrecimiento(visitaId, item.ofrecimientoId, { motivos: item.motivos }),
+                    resolverOfrecimiento(visitaId, item.ofrecimientoId, {
+                        motivos: item.motivos,
+                        ...(item.detalle !== undefined ? { detalle: item.detalle } : {}),
+                    }),
                 ),
             )
             return items.map((item, i) => ({
