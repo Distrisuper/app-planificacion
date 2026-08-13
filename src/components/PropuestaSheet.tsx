@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, Maximize2, Minimize2, Play } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
-import RubroTable from './propuesta/RubroTable'
+import OfrecimientoTable from './propuesta/OfrecimientoTable'
 import AccionesExternas from './AccionesExternas'
 import { construirFilasPropuesta } from './propuesta/filas'
 import { usePropuesta } from '@/hooks/usePropuesta'
@@ -151,7 +151,7 @@ export default function PropuestaSheet({
                 ) : filas.length === 0 ? (
                     <div className="text-sm text-dsmuted">Sin oportunidades destacadas.</div>
                 ) : (
-                    <RubroTable filas={filas} />
+                    <OfrecimientoTable filas={filas} />
                 )}
             </div>
         </BottomSheet>

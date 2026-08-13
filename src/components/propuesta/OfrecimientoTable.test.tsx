@@ -1,22 +1,24 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
-import RubroTable from './RubroTable'
-import type { IRubroFila } from './filas'
+import OfrecimientoTable from './OfrecimientoTable'
+import type { IOfrecimientoFila } from './filas'
 
-function fila(over: Partial<IRubroFila> = {}): IRubroFila {
+function fila(over: Partial<IOfrecimientoFila> = {}): IOfrecimientoFila {
     return {
-        rubroCode: 'R1',
+        codigo: 'R1',
         nombre: 'Amortiguadores',
         actual: 600_000,
         mesAnterior: 800_000,
         promedio6m: 1_000_000,
         destacada: true,
+        tipo: 'rubro',
+        alcance: [],
         ...over,
     }
 }
 
 it('columnas en el orden RUBRO · ACTUAL · M.ANT · P.6M', () => {
-    render(<RubroTable filas={[fila()]} />)
+    render(<OfrecimientoTable filas={[fila()]} />)
     const headers = screen.getAllByRole('columnheader').map(th => th.textContent)
     expect(headers[0]).toMatch(/rubro/i)
     expect(headers[1]).toMatch(/actual/i)
@@ -25,34 +27,34 @@ it('columnas en el orden RUBRO · ACTUAL · M.ANT · P.6M', () => {
 })
 
 it('pinta de rojo ACTUAL y M.ANT cuando caen bajo P.6M', () => {
-    render(<RubroTable filas={[fila({ actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 })]} />)
+    render(<OfrecimientoTable filas={[fila({ actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 })]} />)
     expect(screen.getByText('600').closest('span')).toHaveClass('text-dsred')
     expect(screen.getByText('800').closest('span')).toHaveClass('text-dsred')
 })
 
 it('no pinta de rojo cuando el valor es –', () => {
-    render(<RubroTable filas={[fila({ actual: null, promedio6m: 1_000_000 })]} />)
+    render(<OfrecimientoTable filas={[fila({ actual: null, promedio6m: 1_000_000 })]} />)
     const celdas = screen.getAllByText('–')
     expect(celdas.some(c => c.closest('span')?.classList.contains('text-dsred'))).toBe(false)
 })
 
 it('P.6M nunca se pinta de rojo (es la referencia)', () => {
-    render(<RubroTable filas={[fila({ actual: 50_000, mesAnterior: 50_000, promedio6m: 1_000_000 })]} />)
+    render(<OfrecimientoTable filas={[fila({ actual: 50_000, mesAnterior: 50_000, promedio6m: 1_000_000 })]} />)
     const promCell = screen.getByText('1.000')
     expect(promCell.closest('span')).not.toHaveClass('text-dsred')
 })
 
 it('sin filas fuera de la propuesta/visita, no muestra separador de sección', () => {
-    render(<RubroTable filas={[fila({ destacada: true })]} />)
+    render(<OfrecimientoTable filas={[fila({ destacada: true })]} />)
     expect(screen.queryByText(/otros rubros del cliente/i)).not.toBeInTheDocument()
 })
 
 it('con filas destacadas y no destacadas mezcladas, separa con una etiqueta', () => {
     render(
-        <RubroTable
+        <OfrecimientoTable
             filas={[
-                fila({ rubroCode: 'R1', destacada: true }),
-                fila({ rubroCode: 'R2', nombre: 'Filtros', destacada: false }),
+                fila({ codigo: 'R1', destacada: true }),
+                fila({ codigo: 'R2', nombre: 'Filtros', destacada: false }),
             ]}
         />,
     )
@@ -61,10 +63,10 @@ it('con filas destacadas y no destacadas mezcladas, separa con una etiqueta', ()
 
 it('si el bloque de otros rubros es agregable, la etiqueta invita a tocar', () => {
     render(
-        <RubroTable
+        <OfrecimientoTable
             filas={[
-                fila({ rubroCode: 'R1', destacada: true }),
-                fila({ rubroCode: 'R2', nombre: 'Filtros', destacada: false, agregable: true }),
+                fila({ codigo: 'R1', destacada: true }),
+                fila({ codigo: 'R2', nombre: 'Filtros', destacada: false, agregable: true }),
             ]}
         />,
     )
@@ -73,10 +75,10 @@ it('si el bloque de otros rubros es agregable, la etiqueta invita a tocar', () =
 
 it('si el bloque de otros rubros es de solo lectura, la etiqueta no invita a tocar', () => {
     render(
-        <RubroTable
+        <OfrecimientoTable
             filas={[
-                fila({ rubroCode: 'R1', destacada: true }),
-                fila({ rubroCode: 'R2', nombre: 'Filtros', destacada: false }),
+                fila({ codigo: 'R1', destacada: true }),
+                fila({ codigo: 'R2', nombre: 'Filtros', destacada: false }),
             ]}
         />,
     )
@@ -84,17 +86,17 @@ it('si el bloque de otros rubros es de solo lectura, la etiqueta no invita a toc
 })
 
 it('sin otros rubros, no se muestra el buscador', () => {
-    render(<RubroTable filas={[fila({ destacada: true })]} />)
+    render(<OfrecimientoTable filas={[fila({ destacada: true })]} />)
     expect(screen.queryByPlaceholderText(/buscar rubro/i)).not.toBeInTheDocument()
 })
 
 it('con otros rubros, el buscador filtra esa sección sin tocar el bloque de arriba', () => {
     render(
-        <RubroTable
+        <OfrecimientoTable
             filas={[
-                fila({ rubroCode: 'R1', nombre: 'Amortiguadores', destacada: true }),
-                fila({ rubroCode: 'R2', nombre: 'Baterías', destacada: false }),
-                fila({ rubroCode: 'R3', nombre: 'Filtros de aceite', destacada: false }),
+                fila({ codigo: 'R1', nombre: 'Amortiguadores', destacada: true }),
+                fila({ codigo: 'R2', nombre: 'Baterías', destacada: false }),
+                fila({ codigo: 'R3', nombre: 'Filtros de aceite', destacada: false }),
             ]}
         />,
     )
@@ -107,10 +109,10 @@ it('con otros rubros, el buscador filtra esa sección sin tocar el bloque de arr
 
 it('el buscador ignora acentos y mayúsculas', () => {
     render(
-        <RubroTable
+        <OfrecimientoTable
             filas={[
-                fila({ rubroCode: 'R1', destacada: true }),
-                fila({ rubroCode: 'R2', nombre: 'BATERÍAS', destacada: false }),
+                fila({ codigo: 'R1', destacada: true }),
+                fila({ codigo: 'R2', nombre: 'BATERÍAS', destacada: false }),
             ]}
         />,
     )
@@ -120,10 +122,10 @@ it('el buscador ignora acentos y mayúsculas', () => {
 
 it('sin resultados en la búsqueda, muestra el mensaje en vez de la lista', () => {
     render(
-        <RubroTable
+        <OfrecimientoTable
             filas={[
-                fila({ rubroCode: 'R1', destacada: true }),
-                fila({ rubroCode: 'R2', nombre: 'Baterías', destacada: false }),
+                fila({ codigo: 'R1', destacada: true }),
+                fila({ codigo: 'R2', nombre: 'Baterías', destacada: false }),
             ]}
         />,
     )
@@ -133,14 +135,14 @@ it('sin resultados en la búsqueda, muestra el mensaje en vez de la lista', () =
 })
 
 it('no hay ninguna fila de totales', () => {
-    render(<RubroTable filas={[fila({ rubroCode: 'R1' }), fila({ rubroCode: 'R2', nombre: 'Filtros' })]} />)
+    render(<OfrecimientoTable filas={[fila({ codigo: 'R1' }), fila({ codigo: 'R2', nombre: 'Filtros' })]} />)
     expect(screen.queryByText(/totales/i)).not.toBeInTheDocument()
 })
 
 it('una fila con resolución se agrupa con su botón en una tarjeta propia', () => {
     render(
-        <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
             onResolucion={vi.fn()}
         />,
     )
@@ -151,8 +153,8 @@ it('una fila con resolución se agrupa con su botón en una tarjeta propia', () 
 
 it('segunda línea: "Resolución" cuando no está completo', () => {
     render(
-        <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
             onResolucion={vi.fn()}
         />,
     )
@@ -161,19 +163,19 @@ it('segunda línea: "Resolución" cuando no está completo', () => {
 
 it('segunda línea: "✓ N motivos cargados" cuando está completo', () => {
     render(
-        <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 2, completo: true, esPropuesto: true } })]}
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 2, completo: true, esPropuesto: true } })]}
             onResolucion={vi.fn()}
         />,
     )
     expect(screen.getByRole('button', { name: /resolución de amortiguadores/i })).toHaveTextContent('✓ 2 motivos cargados')
 })
 
-it('el botón de resolución dispara onResolucion con el visitaRubroId', () => {
+it('el botón de resolución dispara onResolucion con el ofrecimientoId', () => {
     const onResolucion = vi.fn()
     render(
-        <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
             onResolucion={onResolucion}
         />,
     )
@@ -183,8 +185,8 @@ it('el botón de resolución dispara onResolucion con el visitaRubroId', () => {
 
 it('un rubro de la propuesta no ofrece Quitar rubro', () => {
     render(
-        <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
             onResolucion={vi.fn()}
         />,
     )
@@ -193,8 +195,8 @@ it('un rubro de la propuesta no ofrece Quitar rubro', () => {
 
 it('un rubro agregado dinámicamente (no propuesto) ofrece Quitar rubro junto a Resolución', () => {
     render(
-        <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
             onResolucion={vi.fn()}
             onEliminar={vi.fn()}
         />,
@@ -202,11 +204,11 @@ it('un rubro agregado dinámicamente (no propuesto) ofrece Quitar rubro junto a 
     expect(screen.getByRole('button', { name: /quitar amortiguadores/i })).toBeInTheDocument()
 })
 
-it('el botón Quitar rubro dispara onEliminar con el visitaRubroId', () => {
+it('el botón Quitar rubro dispara onEliminar con el ofrecimientoId', () => {
     const onEliminar = vi.fn()
     render(
-        <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
             onResolucion={vi.fn()}
             onEliminar={onEliminar}
         />,
@@ -217,8 +219,8 @@ it('el botón Quitar rubro dispara onEliminar con el visitaRubroId', () => {
 
 it('Quitar rubro en vuelo (eliminandoIds) queda deshabilitado', () => {
     render(
-        <RubroTable
-            filas={[fila({ resolucion: { visitaRubroId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
             onResolucion={vi.fn()}
             onEliminar={vi.fn()}
             eliminandoIds={new Set([7])}
@@ -230,8 +232,8 @@ it('Quitar rubro en vuelo (eliminandoIds) queda deshabilitado', () => {
 it('toda la fila agregable es el botón: tocarla dispara onAgregar con el rubroCode', () => {
     const onAgregar = vi.fn()
     render(
-        <RubroTable
-            filas={[fila({ rubroCode: 'BAT', nombre: 'Baterías', destacada: false, agregable: true })]}
+        <OfrecimientoTable
+            filas={[fila({ codigo: 'BAT', nombre: 'Baterías', destacada: false, agregable: true })]}
             onAgregar={onAgregar}
         />,
     )
@@ -243,10 +245,10 @@ it('toda la fila agregable es el botón: tocarla dispara onAgregar con el rubroC
 
 it('una fila agregable en vuelo (agregandoCodes) queda deshabilitada', () => {
     render(
-        <RubroTable
-            filas={[fila({ rubroCode: 'BAT', nombre: 'Baterías', destacada: false, agregable: true })]}
+        <OfrecimientoTable
+            filas={[fila({ codigo: 'BAT', nombre: 'Baterías', destacada: false, agregable: true })]}
             onAgregar={vi.fn()}
-            agregandoCodes={new Set(['BAT'])}
+            agregandoCodes={new Set(['rubro:BAT'])}
         />,
     )
     expect(screen.getByRole('button', { name: /agregar baterías/i })).toBeDisabled()
@@ -254,13 +256,13 @@ it('una fila agregable en vuelo (agregandoCodes) queda deshabilitada', () => {
 
 it('con varias filas agregables en vuelo a la vez, solo las que están en agregandoCodes quedan deshabilitadas', () => {
     render(
-        <RubroTable
+        <OfrecimientoTable
             filas={[
-                fila({ rubroCode: 'BAT', nombre: 'Baterías', destacada: false, agregable: true }),
-                fila({ rubroCode: 'FILT', nombre: 'Filtros', destacada: false, agregable: true }),
+                fila({ codigo: 'BAT', nombre: 'Baterías', destacada: false, agregable: true }),
+                fila({ codigo: 'FILT', nombre: 'Filtros', destacada: false, agregable: true }),
             ]}
             onAgregar={vi.fn()}
-            agregandoCodes={new Set(['BAT', 'FILT'])}
+            agregandoCodes={new Set(['rubro:BAT', 'rubro:FILT'])}
         />,
     )
     expect(screen.getByRole('button', { name: /agregar baterías/i })).toBeDisabled()
@@ -268,6 +270,31 @@ it('con varias filas agregables en vuelo a la vez, solo las que están en agrega
 })
 
 it('en solo lectura (sin resolucion ni agregable) no se renderiza ninguna acción', () => {
-    render(<RubroTable filas={[fila()]} />)
+    render(<OfrecimientoTable filas={[fila()]} />)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+})
+
+it('muestra el alcance de una acción', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    codigo: 'CUPO',
+                    nombre: 'Plan cupo',
+                    tipo: 'accion',
+                    alcance: [{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }],
+                    resolucion: { ofrecimientoId: 9, motivosCargados: 0, completo: false, esPropuesto: false },
+                }),
+            ]}
+            onResolucion={vi.fn()}
+        />,
+    )
+    expect(screen.getByText('Plan cupo')).toBeInTheDocument()
+    expect(screen.getByText('SKF')).toBeInTheDocument()
+})
+
+it('un rubro común no muestra chip de tipo', () => {
+    render(<OfrecimientoTable filas={[fila({ tipo: 'rubro' })]} />)
+    const chips = screen.queryAllByText('Rubro').filter(el => el.getAttribute('role') !== 'columnheader')
+    expect(chips).toHaveLength(0)
 })

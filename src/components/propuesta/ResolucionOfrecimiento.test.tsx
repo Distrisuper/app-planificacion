@@ -1,12 +1,12 @@
 import { render, screen, fireEvent } from '@testing-library/react'
 import { vi } from 'vitest'
-import ResolucionRubro from './ResolucionRubro'
-import type { ICatalogoItem, IMotivo, IRubroMotivo } from '@/types/planificacion'
+import ResolucionOfrecimiento from './ResolucionOfrecimiento'
+import type { ICatalogoItem, IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
 
 const motivos: IMotivo[] = [
-    { motivoId: 10, nivel: 'rubro', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 13, nivel: 'rubro', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
-    { motivoId: 16, nivel: 'rubro', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
+    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
+    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
+    { motivoId: 16, nivel: 'ofrecimiento', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
 ]
 
 const marcas: ICatalogoItem[] = [
@@ -14,10 +14,10 @@ const marcas: ICatalogoItem[] = [
     { code: 'FX', description: 'Fremax' },
 ]
 
-function setup(value: IRubroMotivo[] = []) {
+function setup(value: IOfrecimientoMotivo[] = []) {
     const onChange = vi.fn()
     render(
-        <ResolucionRubro
+        <ResolucionOfrecimiento
             motivos={motivos}
             marcas={marcas}
             value={value}

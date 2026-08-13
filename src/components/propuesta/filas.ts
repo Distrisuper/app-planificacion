@@ -1,18 +1,18 @@
-import type { IRubroEstado, IRubroPropuesta, IVisitaRubro } from '@/types/planificacion'
+import type { IAlcance, IOfrecimiento, IRubroEstado, IRubroPropuesta, TipoOfrecimiento } from '@/types/planificacion'
 
 /** Presente ⇒ segunda línea con el botón de resolución. Sólo en la visita. */
-export interface IRubroFilaResolucion {
-    visitaRubroId: number
+export interface IOfrecimientoFilaResolucion {
+    ofrecimientoId: number
     motivosCargados: number
     completo: boolean
     /** false ⇒ se agregó dinámicamente (no viene de la propuesta congelada):
-     *  la tarjeta ofrece "Quitar rubro" al lado de la Resolución. Los de la
-     *  propuesta no se pueden borrar (el backend responde RUBRO_DE_PROPUESTA). */
+     *  la tarjeta ofrece "Quitar" al lado de la Resolución. Los de la
+     *  propuesta no se pueden borrar (el backend responde OFRECIMIENTO_DE_PROPUESTA). */
     esPropuesto: boolean
 }
 
-export interface IRubroFila {
-    rubroCode: string
+export interface IOfrecimientoFila {
+    codigo: string
     nombre: string
     actual: number | null
     mesAnterior: number | null
@@ -20,12 +20,16 @@ export interface IRubroFila {
     /** Barra navy + negrita: está en la propuesta, o en la visita. */
     destacada: boolean
     /** Presente ⇒ segunda línea con el botón de resolución. Sólo en la visita. */
-    resolucion?: IRubroFilaResolucion
+    resolucion?: IOfrecimientoFilaResolucion
     /** true ⇒ ＋ al final de la fila. Sólo en la visita, expandida y editable. */
     agregable?: boolean
+    /** 'rubro' para todo lo que viene del motor de propuesta / rubroStatus. Los
+     *  agregados a mano pueden traer cualquier TipoOfrecimiento. */
+    tipo: TipoOfrecimiento
+    alcance: IAlcance[]
 }
 
-export interface IRubroFilaTotales {
+export interface IOfrecimientoFilaTotales {
     actual: number | null
     mesAnterior: number | null
     promedio6m: number | null
@@ -43,7 +47,7 @@ function suma(valores: (number | null)[]): number | null {
 
 /** Suma cada columna SOLO sobre las filas que recibe — el llamador decide qué es
  *  "visible" pasando la lista colapsada o expandida. */
-export function totalesDe(filas: IRubroFila[]): IRubroFilaTotales {
+export function totalesDe(filas: IOfrecimientoFila[]): IOfrecimientoFilaTotales {
     return {
         actual: suma(filas.map(f => f.actual)),
         mesAnterior: suma(filas.map(f => f.mesAnterior)),
@@ -60,71 +64,77 @@ export function construirFilasPropuesta(
     rubrosPropuesta: IRubroPropuesta[],
     rubroStatus: IRubroEstado[],
     expandido: boolean,
-): IRubroFila[] {
+): IOfrecimientoFila[] {
     const status = porCode(rubroStatus)
     const codesPropuesta = new Set(rubrosPropuesta.map(r => r.rubroCode))
 
-    const bloqueArriba: IRubroFila[] = rubrosPropuesta.map(r => {
+    const bloqueArriba: IOfrecimientoFila[] = rubrosPropuesta.map(r => {
         const s = status.get(r.rubroCode)
         return {
-            rubroCode: r.rubroCode,
+            codigo: r.rubroCode,
             nombre: r.nombre,
             actual: s ? s.actual : (r.current?.actual ?? null),
             mesAnterior: s ? s.mesAnterior : (r.prev?.actual ?? null),
             promedio6m: s ? s.promedio6m : (r.current?.baseline ?? null),
             destacada: true,
+            tipo: 'rubro',
+            alcance: [],
         }
     })
 
     if (!expandido) return bloqueArriba
 
-    const bloqueAbajo: IRubroFila[] = rubroStatus
+    const bloqueAbajo: IOfrecimientoFila[] = rubroStatus
         .filter(s => !codesPropuesta.has(s.rubroCode))
         .map(s => ({
-            rubroCode: s.rubroCode,
+            codigo: s.rubroCode,
             nombre: s.nombre,
             actual: s.actual,
             mesAnterior: s.mesAnterior,
             promedio6m: s.promedio6m,
             destacada: false,
+            tipo: 'rubro',
+            alcance: [],
         }))
 
     return [...bloqueArriba, ...bloqueAbajo]
 }
 
-export interface IEstadoResolucionRubro {
+export interface IEstadoResolucionOfrecimiento {
     motivosCargados: number
     completo: boolean
 }
 
-/** Colapsada: los rubros de la visita, en el orden que los devuelve el backend —
+/** Colapsada: los ofrecimientos de la visita, en el orden que los devuelve el backend —
  *  no se reordena al resolver (ver spec: reordenar dejando pendientes arriba haría
  *  saltar la fila que el vendedor acaba de tocar). Expandida: agrega el resto de los
  *  rubros del cliente, marcados `agregable` cuando la visita es editable. */
 export function construirFilasVisita(
-    rubrosVisita: IVisitaRubro[],
+    ofrecimientosVisita: IOfrecimiento[],
     rubroStatus: IRubroEstado[],
-    estados: Record<number, IEstadoResolucionRubro>,
+    estados: Record<number, IEstadoResolucionOfrecimiento>,
     expandido: boolean,
     editable: boolean,
-): IRubroFila[] {
+): IOfrecimientoFila[] {
     const status = porCode(rubroStatus)
-    const codesVisita = new Set(rubrosVisita.map(r => r.rubroCode))
+    const codesVisita = new Set(ofrecimientosVisita.map(r => r.codigo))
 
-    const bloqueArriba: IRubroFila[] = rubrosVisita.map(r => {
-        const s = status.get(r.rubroCode)
+    const bloqueArriba: IOfrecimientoFila[] = ofrecimientosVisita.map(r => {
+        const s = status.get(r.codigo)
         const estado = estados[r.id]
         return {
-            rubroCode: r.rubroCode,
-            nombre: r.rubroDescripcion,
+            codigo: r.codigo,
+            nombre: r.descripcion,
             actual: s?.actual ?? null,
             mesAnterior: s?.mesAnterior ?? null,
             promedio6m: s?.promedio6m ?? null,
             destacada: true,
+            tipo: r.tipo,
+            alcance: r.alcance,
             resolucion:
                 editable && estado
                     ? {
-                          visitaRubroId: r.id,
+                          ofrecimientoId: r.id,
                           motivosCargados: estado.motivosCargados,
                           completo: estado.completo,
                           esPropuesto: r.esPropuesto,
@@ -135,16 +145,18 @@ export function construirFilasVisita(
 
     if (!expandido) return bloqueArriba
 
-    const bloqueAbajo: IRubroFila[] = rubroStatus
+    const bloqueAbajo: IOfrecimientoFila[] = rubroStatus
         .filter(s => !codesVisita.has(s.rubroCode))
         .map(s => ({
-            rubroCode: s.rubroCode,
+            codigo: s.rubroCode,
             nombre: s.nombre,
             actual: s.actual,
             mesAnterior: s.mesAnterior,
             promedio6m: s.promedio6m,
             destacada: false,
             agregable: editable || undefined,
+            tipo: 'rubro',
+            alcance: [],
         }))
 
     return [...bloqueArriba, ...bloqueAbajo]

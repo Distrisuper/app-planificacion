@@ -1,6 +1,7 @@
-import type { IRubroMotivo } from '@/types/planificacion'
+import type { IOfrecimientoMotivo } from '@/types/planificacion'
 
-type Borrador = Record<number, IRubroMotivo[]>
+/** Claves por ofrecimientoId. */
+type Borrador = Record<number, IOfrecimientoMotivo[]>
 
 function key(visitaId: number): string {
     return `visita-borrador-${visitaId}`

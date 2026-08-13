@@ -1,5 +1,5 @@
 import { construirFilasPropuesta, construirFilasVisita, totalesDe } from './filas'
-import type { IRubroEstado, IRubroPropuesta, IVisitaRubro } from '@/types/planificacion'
+import type { IOfrecimiento, IRubroEstado, IRubroPropuesta } from '@/types/planificacion'
 
 function propuesta(over: Partial<IRubroPropuesta> = {}): IRubroPropuesta {
     return {
@@ -31,7 +31,7 @@ describe('construirFilasPropuesta', () => {
             [estado({ rubroCode: 'R1' }), estado({ rubroCode: 'R2', nombre: 'Filtros' })],
             false,
         )
-        expect(filas.map(f => f.rubroCode)).toEqual(['R1', 'R2'])
+        expect(filas.map(f => f.codigo)).toEqual(['R1', 'R2'])
         expect(filas.every(f => f.destacada)).toBe(true)
     })
 
@@ -41,7 +41,7 @@ describe('construirFilasPropuesta', () => {
             [estado({ rubroCode: 'R1' }), estado({ rubroCode: 'R2', nombre: 'Filtros' })],
             false,
         )
-        expect(filas.map(f => f.rubroCode)).toEqual(['R1'])
+        expect(filas.map(f => f.codigo)).toEqual(['R1'])
     })
 
     it('expandida trae todos los rubros del cliente sin duplicar los de la propuesta', () => {
@@ -50,7 +50,7 @@ describe('construirFilasPropuesta', () => {
             [estado({ rubroCode: 'R1' }), estado({ rubroCode: 'R2', nombre: 'Filtros', actual: 100 })],
             true,
         )
-        expect(filas.map(f => f.rubroCode)).toEqual(['R1', 'R2'])
+        expect(filas.map(f => f.codigo)).toEqual(['R1', 'R2'])
         expect(filas[0].destacada).toBe(true)
         expect(filas[1].destacada).toBe(false)
     })
@@ -70,12 +70,14 @@ describe('construirFilasPropuesta', () => {
         )
         expect(filas).toEqual([
             {
-                rubroCode: 'R3',
+                codigo: 'R3',
                 nombre: 'Lubricantes',
                 actual: 500_000,
                 mesAnterior: 700_000,
                 promedio6m: 900_000,
                 destacada: true,
+                tipo: 'rubro',
+                alcance: [],
             },
         ])
     })
@@ -97,16 +99,18 @@ describe('construirFilasPropuesta', () => {
     })
 })
 
-function visitaRubro(over: Partial<IVisitaRubro> = {}): IVisitaRubro {
+function ofrecimiento(over: Partial<IOfrecimiento> = {}): IOfrecimiento {
     return {
         id: 7,
         resolucionId: 42,
-        rubroCode: 'AMORT',
-        rubroDescripcion: 'Amortiguadores',
+        tipo: 'rubro',
+        codigo: 'AMORT',
+        descripcion: 'Amortiguadores',
         gapUnits: 12,
         esPropuesto: true,
         resuelto: false,
         motivos: [],
+        alcance: [],
         ...over,
     }
 }
@@ -114,18 +118,18 @@ function visitaRubro(over: Partial<IVisitaRubro> = {}): IVisitaRubro {
 describe('construirFilasVisita', () => {
     it('respeta el orden del backend, no reordena por estado', () => {
         const filas = construirFilasVisita(
-            [visitaRubro({ id: 7, rubroCode: 'AMORT' }), visitaRubro({ id: 8, rubroCode: 'FILT', rubroDescripcion: 'Filtros' })],
+            [ofrecimiento({ id: 7, codigo: 'AMORT' }), ofrecimiento({ id: 8, codigo: 'FILT', descripcion: 'Filtros' })],
             [],
             { 7: { motivosCargados: 0, completo: false }, 8: { motivosCargados: 1, completo: true } },
             false,
             true,
         )
-        expect(filas.map(f => f.rubroCode)).toEqual(['AMORT', 'FILT'])
+        expect(filas.map(f => f.codigo)).toEqual(['AMORT', 'FILT'])
     })
 
     it('un rubro de la visita ausente de rubroStatus queda en – en las tres columnas', () => {
         const filas = construirFilasVisita(
-            [visitaRubro({ id: 7, rubroCode: 'AMORT' })],
+            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
             [],
             { 7: { motivosCargados: 0, completo: false } },
             false,
@@ -136,7 +140,7 @@ describe('construirFilasVisita', () => {
 
     it('expandida agrega los rubros faltantes del cliente, marcados agregable', () => {
         const filas = construirFilasVisita(
-            [visitaRubro({ id: 7, rubroCode: 'AMORT' })],
+            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
             [
                 { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
                 { rubroCode: 'BAT', nombre: 'Baterías', actual: 0, mesAnterior: 200_000, promedio6m: 100_000 },
@@ -145,14 +149,14 @@ describe('construirFilasVisita', () => {
             true,
             true,
         )
-        expect(filas.map(f => f.rubroCode)).toEqual(['AMORT', 'BAT'])
+        expect(filas.map(f => f.codigo)).toEqual(['AMORT', 'BAT'])
         expect(filas[1]).toMatchObject({ destacada: false, agregable: true })
         expect(filas[0].agregable).toBeUndefined()
     })
 
     it('con la visita cerrada, ninguna fila trae resolucion ni agregable', () => {
         const filas = construirFilasVisita(
-            [visitaRubro({ id: 7, rubroCode: 'AMORT' })],
+            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
             [
                 { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
                 { rubroCode: 'BAT', nombre: 'Baterías', actual: 0, mesAnterior: 200_000, promedio6m: 100_000 },
@@ -167,14 +171,14 @@ describe('construirFilasVisita', () => {
 
     it('editable trae resolucion con motivosCargados y completo del estado dado', () => {
         const filas = construirFilasVisita(
-            [visitaRubro({ id: 7, rubroCode: 'AMORT', esPropuesto: true })],
+            [ofrecimiento({ id: 7, codigo: 'AMORT', esPropuesto: true })],
             [],
             { 7: { motivosCargados: 2, completo: true } },
             false,
             true,
         )
         expect(filas[0].resolucion).toEqual({
-            visitaRubroId: 7,
+            ofrecimientoId: 7,
             motivosCargados: 2,
             completo: true,
             esPropuesto: true,
@@ -183,12 +187,24 @@ describe('construirFilasVisita', () => {
 
     it('un rubro que no es de la propuesta trae resolucion.esPropuesto en false', () => {
         const filas = construirFilasVisita(
-            [visitaRubro({ id: 8, rubroCode: 'FILT', esPropuesto: false })],
+            [ofrecimiento({ id: 8, codigo: 'FILT', esPropuesto: false })],
             [],
             { 8: { motivosCargados: 0, completo: false } },
             false,
             true,
         )
         expect(filas[0].resolucion?.esPropuesto).toBe(false)
+    })
+
+    it('propaga el tipo y el alcance del ofrecimiento a la fila', () => {
+        const filas = construirFilasVisita(
+            [ofrecimiento({ id: 9, codigo: 'CUPO', tipo: 'accion', alcance: [{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }] })],
+            [],
+            { 9: { motivosCargados: 0, completo: false } },
+            false,
+            true,
+        )
+        expect(filas[0].tipo).toBe('accion')
+        expect(filas[0].alcance).toEqual([{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }])
     })
 })

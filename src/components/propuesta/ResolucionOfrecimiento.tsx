@@ -1,25 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import CatalogoPicker from './CatalogoPicker'
-import type { ICatalogoItem, IMotivo, IRubroMotivo } from '@/types/planificacion'
+import type { ICatalogoItem, IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
 
-interface ResolucionRubroProps {
-    /** Catálogo de nivel `rubro`. Nunca se hardcodea: agregar un motivo es un INSERT. */
+interface ResolucionOfrecimientoProps {
+    /** Catálogo de nivel `ofrecimiento`. Nunca se hardcodea: agregar un motivo es un INSERT. */
     motivos: IMotivo[]
     /** Catálogo de marcas. Restringir la elección es lo único que hace agregable la
      *  columna `marca`: con texto libre conviven "Fric Rot", "fricrot" y "FRIC-ROT". */
     marcas: ICatalogoItem[]
     marcasLoading?: boolean
-    value: IRubroMotivo[]
-    onChange: (motivos: IRubroMotivo[]) => void
+    value: IOfrecimientoMotivo[]
+    onChange: (motivos: IOfrecimientoMotivo[]) => void
 }
 
 const VACIO = { marca: null, competidor: null, pctDiferencia: null }
 
-/** Checklist + detalle de un rubro. Sin header, nombre de rubro ni botón de guardar
+/** Checklist + detalle de un ofrecimiento. Sin header, nombre ni botón de guardar
  *  propios: eso lo aporta ResolucionWizard, que envuelve a este componente en su header
  *  fijo y es el único con estado de posición/guardado. */
-export default function ResolucionRubro({ motivos, marcas, marcasLoading, value, onChange }: ResolucionRubroProps) {
+export default function ResolucionOfrecimiento({ motivos, marcas, marcasLoading, value, onChange }: ResolucionOfrecimientoProps) {
     const porId = new Map(value.map(m => [m.motivoId, m]))
 
     // Qué motivo tiene abierto su selector de marca (null = ninguno).
@@ -42,7 +42,7 @@ export default function ResolucionRubro({ motivos, marcas, marcasLoading, value,
         )
     }
 
-    // El detalle vive en la fila (visita_rubro_id, motivo_id), así que se edita POR
+    // El detalle vive en la fila (ofrecimiento_id, motivo_id), así que se edita POR
     // MOTIVO. Hoy solo "Precio" lo pide, pero modelarlo así hace que un segundo motivo
     // con requiereDetalle funcione sin tocar este código.
     function setDetalle(motivoId: number, campo: keyof typeof VACIO, valor: string) {

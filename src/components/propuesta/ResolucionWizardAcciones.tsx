@@ -1,16 +1,16 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { motivoIncompleto } from '@/lib/resolucionRubro'
-import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
+import { motivoIncompleto } from '@/lib/resolucionOfrecimiento'
+import type { IMotivo, IOfrecimiento, IOfrecimientoMotivo } from '@/types/planificacion'
 
 interface ResolucionWizardAccionesProps {
-    rubros: IVisitaRubro[]
+    ofrecimientos: IOfrecimiento[]
     index: number
     motivos: IMotivo[]
-    /** Borrador en memoria por rubroId — la única fuente de verdad mientras la
+    /** Borrador en memoria por ofrecimientoId — la única fuente de verdad mientras la
      *  visita está abierta; no se guarda contra el backend hasta "Cerrar visita"
      *  (ver VisitaSheet.cerrarConBorrador). */
-    borradores: Record<number, IRubroMotivo[]>
+    borradores: Record<number, IOfrecimientoMotivo[]>
     onIndexChange: (index: number) => void
     /** Cierra el wizard y vuelve a la lista. El cambio ya vive en `borradores` (se
      *  actualiza en cada tilde vía onCambiarBorrador), así que acá no hay nada que
@@ -22,18 +22,18 @@ interface ResolucionWizardAccionesProps {
  *  de scroll) para que siga a la vista aunque el detalle de un motivo (ej. Precio) empuje
  *  el contenido hacia abajo — si viviera en el scroll, expandir el detalle lo tapa. */
 export default function ResolucionWizardAcciones({
-    rubros,
+    ofrecimientos,
     index,
     motivos,
     borradores,
     onIndexChange,
     onFinalizar,
 }: ResolucionWizardAccionesProps) {
-    const esUltimo = index === rubros.length - 1
+    const esUltimo = index === ofrecimientos.length - 1
 
-    let bloqueado: IVisitaRubro | null = null
+    let bloqueado: IOfrecimiento | null = null
     let motivoBloqueante: IMotivo | null = null
-    for (const r of rubros) {
+    for (const r of ofrecimientos) {
         const m = motivoIncompleto(motivos, borradores[r.id] ?? [])
         if (m) {
             bloqueado = r
@@ -41,7 +41,7 @@ export default function ResolucionWizardAcciones({
             break
         }
     }
-    const bloqueadoIndex = bloqueado ? rubros.findIndex(r => r.id === bloqueado!.id) : -1
+    const bloqueadoIndex = bloqueado ? ofrecimientos.findIndex(r => r.id === bloqueado!.id) : -1
 
     return (
         <div>
@@ -77,8 +77,8 @@ export default function ResolucionWizardAcciones({
 
             {bloqueado && motivoBloqueante && (
                 <p className="mt-2 text-[12.5px] font-semibold text-[#B45309]">
-                    Completá el detalle de {motivoBloqueante.descripcion} en {bloqueado.rubroDescripcion} (rubro{' '}
-                    {bloqueadoIndex + 1} de {rubros.length}).
+                    Completá el detalle de {motivoBloqueante.descripcion} en {bloqueado.descripcion} (ofrecimiento{' '}
+                    {bloqueadoIndex + 1} de {ofrecimientos.length}).
                 </p>
             )}
         </div>
