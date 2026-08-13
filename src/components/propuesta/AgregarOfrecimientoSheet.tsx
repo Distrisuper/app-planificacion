@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import SelectorTipoOfrecimiento, { type TipoOfrecible } from './SelectorTipoOfrecimiento'
-import CatalogoPicker from './CatalogoPicker'
+import OfrecimientoBuscador, { type TipoOfrecible } from './OfrecimientoBuscador'
 import AlcancePicker from './AlcancePicker'
 import { registroDetalleAccion } from './accionDetalle/registro'
 import type { IAgregarOfrecimientoDTO, IAlcance, ICatalogoItem } from '@/types/planificacion'
@@ -15,6 +14,12 @@ interface AgregarOfrecimientoSheetProps {
     marcasLoading?: boolean
 }
 
+interface Elegido {
+    tipo: TipoOfrecible
+    codigo: string
+    descripcion: string
+}
+
 /**
  * Alta de un ofrecimiento que NO sale de la tabla de "cómo viene comprando".
  *
@@ -22,7 +27,11 @@ interface AgregarOfrecimientoSheetProps {
  * números de venta al lado — ese camino no se toca. Marcas y acciones no tienen tabla
  * equivalente, y esta es su puerta de entrada.
  *
- * UI deliberadamente mínima: el rediseño del wizard es una iteración aparte.
+ * `OfrecimientoBuscador` mezcla los tres catálogos (rubro/marca/acción) en una sola
+ * búsqueda: el tipo se deriva de qué catálogo trajo el resultado elegido, no de una
+ * pestaña que el vendedor tiene que decidir antes de poder escribir.
+ *
+ * UI deliberadamente mínima — el rediseño del wizard es una iteración aparte.
  */
 export default function AgregarOfrecimientoSheet({
     open,
@@ -33,47 +42,39 @@ export default function AgregarOfrecimientoSheet({
     rubros,
     marcasLoading,
 }: AgregarOfrecimientoSheetProps) {
-    const [tipo, setTipo] = useState<TipoOfrecible>('rubro')
-    const [elegido, setElegido] = useState<ICatalogoItem | null>(null)
+    const [elegido, setElegido] = useState<Elegido | null>(null)
     const [alcance, setAlcance] = useState<IAlcance[]>([])
     const [detalle, setDetalle] = useState<unknown>(undefined)
 
     if (!open) return null
 
-    const catalogo = tipo === 'rubro' ? rubros : tipo === 'marca' ? marcas : acciones
     // Solo las acciones pueden traer un módulo de detalle (tramos de Cupo, etc.) — ver
     // el registro en accionDetalle/registro.ts. Una acción sin módulo registrado (ej.
-    // Descuento, todavía sin diseñar) simplemente no muestra editor.
+    // Promoción, todavía sin diseñar) simplemente no muestra editor.
     const moduloDetalle =
-        tipo === 'accion' && elegido ? registroDetalleAccion[elegido.code] : undefined
+        elegido?.tipo === 'accion' ? registroDetalleAccion[elegido.codigo] : undefined
 
-    // Cambiar de tipo invalida lo elegido, el alcance Y el detalle: un detalle cargado
-    // para una acción no significa nada si el vendedor pasa a marca.
-    function cambiarTipo(nuevo: TipoOfrecible) {
-        setTipo(nuevo)
-        setElegido(null)
-        setAlcance([])
-        setDetalle(undefined)
-    }
-
-    // Elegir un ítem distinto dentro del mismo tipo también descarta el detalle: un
+    // Elegir un ítem distinto (de cualquier tipo) descarta el alcance y el detalle: un
     // tramo cargado para "Plan cupo" no debería sobrevivir si el vendedor elige otra
-    // acción sin volver a tocar el selector de tipo.
-    function elegir(item: ICatalogoItem) {
+    // cosa sin agregar la anterior primero.
+    function elegir(item: Elegido) {
         setElegido(item)
+        setAlcance([])
         setDetalle(undefined)
     }
 
     function confirmar() {
         if (!elegido) return
         onAgregar({
-            tipo,
-            codigo: elegido.code,
-            descripcion: elegido.description,
+            tipo: elegido.tipo,
+            codigo: elegido.codigo,
+            descripcion: elegido.descripcion,
             alcance,
             ...(moduloDetalle ? { detalle } : {}),
         })
-        cambiarTipo('rubro')
+        setElegido(null)
+        setAlcance([])
+        setDetalle(undefined)
         onClose()
     }
 
@@ -81,23 +82,16 @@ export default function AgregarOfrecimientoSheet({
 
     return (
         <div className="flex flex-col gap-2 p-3">
-            <SelectorTipoOfrecimiento value={tipo} onChange={cambiarTipo} />
-
-            <CatalogoPicker
-                items={catalogo}
-                loading={tipo === 'marca' ? marcasLoading : false}
-                value={elegido?.description ?? null}
+            <OfrecimientoBuscador
+                rubros={rubros}
+                marcas={marcas}
+                acciones={acciones}
+                marcasLoading={marcasLoading}
+                value={elegido?.descripcion ?? null}
                 onSelect={elegir}
-                placeholder={
-                    tipo === 'rubro'
-                        ? 'Buscar rubro…'
-                        : tipo === 'marca'
-                          ? 'Buscar marca…'
-                          : 'Buscar acción…'
-                }
             />
 
-            {tipo === 'accion' && (
+            {elegido?.tipo === 'accion' && (
                 <AlcancePicker
                     value={alcance}
                     onChange={setAlcance}

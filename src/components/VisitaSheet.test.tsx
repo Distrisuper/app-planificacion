@@ -310,8 +310,7 @@ it('dos ofrecimientos del mismo código y distinto tipo no comparten el spinner'
     // Agregar la acción "CUPO" (mismo código, tipo distinto) desde el sheet no debería
     // tocar el spinner del rubro "CUPO" que sigue en vuelo.
     fireEvent.click(screen.getByRole('button', { name: /agregar otra cosa/i }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Acción' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Plan cupo' }))
+    fireEvent.click(await screen.findByRole('button', { name: /plan cupo/i }))
     fireEvent.change(screen.getByLabelText(/tramo 1.*alcanza/i), { target: { value: '2500000' } })
     fireEvent.change(screen.getByLabelText(/tramo 1.*descuento/i), { target: { value: '3' } })
     fireEvent.click(screen.getByRole('button', { name: /^agregar$/i }))
