@@ -16,12 +16,12 @@ describe('AlcancePicker', () => {
         expect(screen.getByText('Todo el cliente')).toBeInTheDocument()
     })
 
-    it('al expandir muestra el buscador de marcas', async () => {
+    it('al expandir muestra el buscador único de marca/rubro', async () => {
         render(<AlcancePicker value={[]} onChange={vi.fn()} marcas={marcas} rubros={rubros} />)
 
         await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
 
-        expect(screen.getByPlaceholderText('Buscar marca…')).toBeInTheDocument()
+        expect(screen.getByPlaceholderText(/buscar marca o rubro/i)).toBeInTheDocument()
     })
 
     it('elegir una marca la agrega al alcance', async () => {
@@ -29,10 +29,22 @@ describe('AlcancePicker', () => {
         render(<AlcancePicker value={[]} onChange={onChange} marcas={marcas} rubros={rubros} />)
 
         await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
-        await userEvent.click(screen.getByRole('button', { name: 'SKF' }))
+        await userEvent.click(screen.getByRole('button', { name: /^skf/i }))
 
         expect(onChange).toHaveBeenCalledWith([
             { tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' },
+        ])
+    })
+
+    it('elegir un rubro sin cambiar de pestaña (ya no existen pestañas) también lo agrega', async () => {
+        const onChange = vi.fn()
+        render(<AlcancePicker value={[]} onChange={onChange} marcas={marcas} rubros={rubros} />)
+
+        await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
+        await userEvent.click(screen.getByRole('button', { name: /^rodamientos/i }))
+
+        expect(onChange).toHaveBeenCalledWith([
+            { tipo: 'rubro', codigo: 'RODAM', descripcion: 'Rodamientos' },
         ])
     })
 
@@ -45,7 +57,7 @@ describe('AlcancePicker', () => {
         )
 
         await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
-        await userEvent.click(screen.getByRole('button', { name: 'Corven' }))
+        await userEvent.click(screen.getByRole('button', { name: /^corven/i }))
 
         expect(onChange).toHaveBeenCalledWith([
             { tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' },
@@ -61,7 +73,7 @@ describe('AlcancePicker', () => {
         )
 
         await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
-        await userEvent.click(screen.getByRole('button', { name: 'SKF' }))
+        await userEvent.click(screen.getByRole('button', { name: /skf.*✕/i }))
 
         expect(onChange).toHaveBeenCalledWith([])
     })

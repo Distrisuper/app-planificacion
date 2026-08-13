@@ -37,7 +37,7 @@ describe('AgregarOfrecimientoSheet', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Acción' }))
         await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
         await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
-        await userEvent.click(screen.getByRole('button', { name: 'SKF' }))
+        await userEvent.click(screen.getByRole('button', { name: /skf.*marca/i }))
         cargarTramoCupo()
         await userEvent.click(screen.getByRole('button', { name: 'Agregar' }))
 
@@ -84,7 +84,7 @@ describe('AgregarOfrecimientoSheet', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Acción' }))
         await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
         await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
-        await userEvent.click(screen.getByRole('button', { name: 'SKF' }))
+        await userEvent.click(screen.getByRole('button', { name: /skf.*marca/i }))
         cargarTramoCupo()
 
         await userEvent.click(screen.getByRole('button', { name: 'Marca' }))

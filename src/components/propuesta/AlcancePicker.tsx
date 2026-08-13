@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import CatalogoPicker from './CatalogoPicker'
+import AlcanceBuscador from './AlcanceBuscador'
 import { resumenAlcance, toggleAlcance } from '@/lib/alcance'
-import type { IAlcance, ICatalogoItem, TipoAlcance } from '@/types/planificacion'
+import type { IAlcance, ICatalogoItem } from '@/types/planificacion'
 
 interface AlcancePickerProps {
     value: IAlcance[]
@@ -19,6 +19,10 @@ interface AlcancePickerProps {
  * Lista vacía se muestra como "Todo el cliente" y NO como "sin alcance": lo segundo se
  * leería como que falta cargar algo.
  *
+ * El buscador de adentro (`AlcanceBuscador`) mezcla marca y rubro en una sola lista, sin
+ * pestañas: el caso real ("AG bujes 5%") casi siempre combina los dos, y elegir pestaña
+ * antes de buscar era el paso que más costaba.
+ *
  * UI deliberadamente mínima — el rediseño del wizard es una iteración aparte. Lo que
  * importa acá es que el dato se pueda cargar para validar el modelo con uso real.
  */
@@ -30,9 +34,6 @@ export default function AlcancePicker({
     marcasLoading,
 }: AlcancePickerProps) {
     const [abierto, setAbierto] = useState(false)
-    const [tipo, setTipo] = useState<TipoAlcance>('marca')
-
-    const items = tipo === 'marca' ? marcas : rubros
 
     return (
         <div className="mt-2 rounded-[10px] border-[1.5px] border-[#E4E8F0] bg-white p-2.5">
@@ -57,37 +58,11 @@ export default function AlcancePicker({
 
             {abierto && (
                 <div className="animate-panel-in mt-2">
-                    <div className="mb-2 flex gap-1.5">
-                        {(['marca', 'rubro'] as TipoAlcance[]).map(t => (
-                            <button
-                                key={t}
-                                type="button"
-                                aria-pressed={tipo === t}
-                                onClick={() => setTipo(t)}
-                                className={`flex-1 rounded-lg border px-2 py-1.5 text-[12.5px] font-bold ${
-                                    tipo === t
-                                        ? 'border-[#B9CCEC] bg-[#EEF3FB] text-[#182645]'
-                                        : 'border-[#E1E6F0] bg-white text-[#3B4560]'
-                                }`}
-                            >
-                                {t === 'marca' ? 'Marcas' : 'Rubros'}
-                            </button>
-                        ))}
-                    </div>
-
-                    <CatalogoPicker
-                        items={items}
-                        loading={tipo === 'marca' ? marcasLoading : false}
-                        onSelect={item =>
-                            onChange(
-                                toggleAlcance(value, {
-                                    tipo,
-                                    codigo: item.code,
-                                    descripcion: item.description,
-                                }),
-                            )
-                        }
-                        placeholder={tipo === 'marca' ? 'Buscar marca…' : 'Buscar rubro…'}
+                    <AlcanceBuscador
+                        marcas={marcas}
+                        rubros={rubros}
+                        marcasLoading={marcasLoading}
+                        onSelect={destino => onChange(toggleAlcance(value, destino))}
                     />
 
                     {value.length > 0 && (
