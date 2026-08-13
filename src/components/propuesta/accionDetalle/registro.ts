@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { EditorCupo, esValidoCupo, resumenCupo, type ICupoDetalle } from './cupo'
+import { EditorDescuento, esValidoDescuento, resumenDescuento, type IDescuentoDetalle } from './descuento'
 
 /** Contrato que cualquier acción nueva cumple para sumarse al registro: un editor para
  *  el alta, un resumen de una línea para la tabla, y una validación para habilitar
@@ -18,9 +19,16 @@ const moduloCupo: IModuloDetalleAccion<ICupoDetalle> = {
     esValido: esValidoCupo,
 }
 
+const moduloDescuento: IModuloDetalleAccion<IDescuentoDetalle> = {
+    Editor: EditorDescuento,
+    resumen: resumenDescuento,
+    esValido: esValidoDescuento,
+}
+
 // `any` en el valor del Record a propósito: cada módulo es internamente consistente
 // (Editor/resumen/esValido comparten el mismo T), pero el registro es heterogéneo —
 // distintas acciones van a tener distintas formas de detalle.
 export const registroDetalleAccion: Record<string, IModuloDetalleAccion<any>> = {
     CUPO: moduloCupo,
+    DESCUENTO: moduloDescuento,
 }
