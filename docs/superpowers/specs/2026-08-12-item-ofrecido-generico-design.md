@@ -1,4 +1,4 @@
-# Ítem ofrecido genérico: de "rubro" a "qué le ofrecí"
+# El ofrecimiento genérico: de "rubro" a "qué le ofrecí"
 
 **Fecha:** 2026-08-12
 **Estado:** diseño aprobado, pendiente de plan de implementación
@@ -39,19 +39,19 @@ cuántos terminaron en pedido"*.
 
 ## La decisión
 
-**`pl_visita_rubro` deja de ser "un rubro" y pasa a ser "un ítem ofrecido".** Rubro, marca, línea,
+**`pl_visita_rubro` deja de ser "un rubro" y pasa a ser "un ofrecimiento".** Rubro, marca, línea,
 artículo y acción comercial son cinco formas del mismo slot: *esto le ofrecí, esto pasó*.
 
 Y como una oferta real puede ser compuesta —*"descuento en la marca SKF, sobre estos dos
-rubros"*— el ítem gana un **alcance** de 0..N destinos.
+rubros"*— el ofrecimiento gana un **alcance** de 0..N destinos.
 
 ### Enfoque elegido: rename real, sin alias de campo
 
 Se evaluaron tres caminos:
 
-- **A. Rename real** — tabla, columnas, endpoints y tipos del front pasan a `item`.
+- **A. Rename real** — tabla, columnas, endpoints y tipos del front pasan a `ofrecimiento`.
 - **B. Extender sin renombrar** — agregar `tipo` y dejar `rubro_code` conteniendo marcas.
-- **C. Rename con alias de campo** — la API expone `item*` y `rubro*` en paralelo un release.
+- **C. Rename con alias de campo** — la API expone `ofrecimiento*` y `rubro*` en paralelo un release.
 
 **Se eligió A.** Razón: esta app es el **único consumidor** de esos endpoints, no hay terceros que
 romper, y la batería de tests existente cubre el camino. B deja deuda permanente — un campo
@@ -61,11 +61,40 @@ puro: dos nombres para lo mismo, y el viejo es el equivocado.
 
 **Excepción deliberada: sí hay alias de *ruta* temporal.** Ver "Rollout".
 
+### La palabra: `ofrecimiento`, no `item`
+
+El diseño original nombraba la entidad `pl_visita_item`. Se cambió a **`pl_ofrecimiento`** antes de
+correr la migración, por tres razones que conviene dejar escritas porque el nombre viejo va a
+aparecer en conversaciones y commits de estos días:
+
+1. **El prefijo `visita_` está muerto.** `pl_visita` se fusionó en `pl_resolucion` y figura en la
+   tabla de "tablas que ya no existen" de [`tablas.md`](../../dominio/tablas.md), pero sus hijos
+   conservaron el prefijo — por eso hoy se lee `pl_visita_rubro.resolucion_id`, una tabla llamada
+   *visita* apuntando a una llamada *resolución*. Nombrar `pl_visita_item_alcance` y
+   `pl_visita_item_motivo` habría propagado un nombre difunto a dos tablas **nuevas**, justo en el
+   único momento en que renombrar sale gratis. El síntoma más visible de esa herencia es
+   `IAgendaClient.visitaId`, que contiene un `resolucion.id` y lo aclara en su propio comentario.
+2. **"Ítem" no significa nada.** Es la palabra que se elige para no elegir: dentro de dos años nadie
+   puede decir qué es un ítem sin abrir la tabla. "Ofrecimiento" es la palabra que este mismo
+   documento usa para explicarse — *esto le ofrecí, esto pasó* — y es la única que cubre un rubro
+   caído, un cupo y una marca sin mentir sobre ninguno.
+3. **Arregla `es_propuesto`.** Con el nombre viejo, una tabla descripta como "la propuesta
+   congelada" guardaba también lo que el vendedor agregó a mano — y después de esta feature el
+   desbalance crece, porque marca, artículo y acción entran **todos** por el camino manual (el motor
+   sigue siendo solo por rubro). Con `pl_ofrecimiento`, la columna se lee bien: *este ofrecimiento lo
+   propuso el sistema, aquel lo agregó el vendedor*. La propuesta es el subconjunto calculado, no el
+   contenedor.
+
+**Lo que NO se renombró, a propósito:** `pl_rotacion_semana` (donde "semana" significa zona) queda
+como está — es una tensión ya conocida y documentada, y tocarla son cuatro tablas ajenas a esta
+feature. Y el vocabulario `Resolucion*` del wizard del front tampoco se toca acá: mezclarlo haría de
+esto dos refactors en uno.
+
 ---
 
 ## Esquema
 
-### `pl_visita_rubro` → `pl_visita_item`
+### `pl_visita_rubro` → `pl_ofrecimiento`
 
 | columna | antes | ahora |
 |---|---|---|
@@ -90,12 +119,12 @@ codigo)` los bloquearía. **Es una garantía que se pierde a conciencia:** evita
 lo impide sola. Si en el futuro se quiere recuperar la garantía en la base, el camino es una
 columna generada con el hash del alcance; no se hace ahora.
 
-### `pl_visita_item_alcance` (nueva)
+### `pl_ofrecimiento_alcance` (nueva)
 
-`(id, visita_item_id, tipo, codigo, descripcion)` — **0..N filas por ítem**, misma forma que el
-ítem. Es sobre qué aplica la oferta.
+`(id, ofrecimiento_id, tipo, codigo, descripcion)` — **0..N filas por ofrecimiento**, misma forma que el
+ofrecimiento. Es sobre qué aplica la oferta.
 
-| oferta real | ítem | alcance |
+| oferta real | ofrecimiento | alcance |
 |---|---|---|
 | rubro caído (lo que existe hoy) | `rubro / RODAM` | — |
 | cupo global | `accion / CUPO` | — |
@@ -122,21 +151,21 @@ original por otra puerta.
 Los parámetros negociados (1.5M al 3%) **no** son entradas distintas del catálogo: el catálogo
 tiene "Cupo" una sola vez, y los números son dato de la fila.
 
-### `pl_visita_rubro_motivo` → `pl_visita_item_motivo`
+### `pl_visita_rubro_motivo` → `pl_ofrecimiento_motivo`
 
-Rename de tabla y de FK (`visita_rubro_id` → `visita_item_id`). **Las columnas de detalle
+Rename de tabla y de FK (`visita_rubro_id` → `ofrecimiento_id`). **Las columnas de detalle
 (`marca`, `competidor`, `pct_diferencia`) no se tocan:** siguen siendo el detalle del motivo
 "Precio".
 
-### `pl_motivo.nivel`: `'rubro'` → `'item'`
+### `pl_motivo.nivel`: `'rubro'` → `'ofrecimiento'`
 
-Un solo catálogo de motivos para todos los tipos de ítem. "Saqué pedido", "Precio" y "Flete"
+Un solo catálogo de motivos para todos los tipos de ofrecimiento. "Saqué pedido", "Precio" y "Flete"
 aplican igual a un cupo que a un rubro. Motivos distintos según el tipo es una complicación que
 nadie pidió.
 
 ### La columna `detalle`
 
-`JSON NULL` en `pl_visita_item`. **Se crea ahora y ningún código la escribe todavía.**
+`JSON NULL` en `pl_ofrecimiento`. **Se crea ahora y ningún código la escribe todavía.**
 
 Precedente en este mismo dominio: las tres columnas `seguimiento_*` de `pl_resolucion` están
 creadas y vacías, y `docs/dominio/tablas.md` explica por qué — *"acá un `ALTER` en producción es
@@ -146,7 +175,7 @@ cuesta una coordinación.
 
 **Qué va a vivir ahí:** lo que *ofrecí* con parámetros propios de la oferta — el 5% del descuento,
 el monto del cupo. **Qué NO va ahí:** lo que *pasó*, que ya tiene lugar en
-`pl_visita_item_motivo` (`marca` / `competidor` / `pct_diferencia`).
+`pl_ofrecimiento_motivo` (`marca` / `competidor` / `pct_diferencia`).
 
 **No reusar `pct_diferencia` para el porcentaje del cupo.** Esa columna significa "% por debajo del
 competidor"; meter ahí el 5% de un descuento es sobrecarga semántica y contamina el `GROUP BY` que
@@ -168,10 +197,10 @@ generada.
 ### Migración
 
 Script idempotente en `docs/db-notes/` de api-vendedores, aplicado como `ALTER` manual de ops según
-la convención del proyecto. Pasos: `RENAME TABLE` (ítem y tabla de motivos) → `CHANGE` de las dos
+la convención del proyecto. Pasos: `RENAME TABLE` (ofrecimiento y tabla de motivos) → `CHANGE` de las dos
 columnas → `ADD COLUMN tipo DEFAULT 'rubro'` y `detalle JSON NULL` → swap del unique por índice →
-`CREATE TABLE pl_accion` y `pl_visita_item_alcance` → seed de acciones → `UPDATE pl_motivo SET
-nivel='item' WHERE nivel='rubro'` con su cambio de ENUM.
+`CREATE TABLE pl_accion` y `pl_ofrecimiento_alcance` → seed de acciones → `UPDATE pl_motivo SET
+nivel='ofrecimiento' WHERE nivel='rubro'` con su cambio de ENUM.
 
 El backfill es trivial: **todo lo existente es un rubro**, que es el default de la columna nueva.
 Reversible.
@@ -182,7 +211,7 @@ Reversible.
 
 **El motor de propuesta sigue siendo por rubro.** `POST /sale/rubro/recommendations/drops` y los
 catálogos reusados (`/sale/brand/catalog`, `/sale/rubro/clients`) viven fuera del dominio
-`planificacion` y no se modifican. Lo único que cambia es que su salida entra al ítem con
+`planificacion` y no se modifican. Lo único que cambia es que su salida entra al ofrecimiento con
 `tipo: 'rubro'`.
 
 **Consecuencia explícita:** la propuesta precargada que el vendedor ve al llegar al cliente **sigue
@@ -191,7 +220,7 @@ camino `es_propuesto = 0` que ya existe.
 
 Un catálogo de campañas vigentes cargadas por gerencia (una tabla `pl_campania` que inyecte "Plan
 cupo agosto" en la propuesta de toda visita del período) es la evolución natural de esto y quedó
-**fuera de alcance**: no cambia el esquema del ítem, solo agrega una fuente más de `origen`.
+**fuera de alcance**: no cambia el esquema del ofrecimiento, solo agrega una fuente más de `origen`.
 
 ---
 
@@ -201,23 +230,23 @@ cupo agosto" en la propuesta de toda visita del período) es la evolución natur
 
 | hoy | pasa a ser |
 |---|---|
-| `GET /planificacion/visitas/:id/rubros` | `GET /planificacion/visitas/:id/items` |
-| `POST /planificacion/visitas/:id/rubros` | `POST /planificacion/visitas/:id/items` |
-| `PUT /planificacion/visitas/:id/rubros/:rubroId` | `PUT /planificacion/visitas/:id/items/:itemId` |
-| `DELETE /planificacion/visitas/:id/rubros/:rubroId` | `DELETE /planificacion/visitas/:id/items/:itemId` |
+| `GET /planificacion/visitas/:id/rubros` | `GET /planificacion/visitas/:id/ofrecimientos` |
+| `POST /planificacion/visitas/:id/rubros` | `POST /planificacion/visitas/:id/ofrecimientos` |
+| `PUT /planificacion/visitas/:id/rubros/:rubroId` | `PUT /planificacion/visitas/:id/ofrecimientos/:ofrecimientoId` |
+| `DELETE /planificacion/visitas/:id/rubros/:rubroId` | `DELETE /planificacion/visitas/:id/ofrecimientos/:ofrecimientoId` |
 | — | `GET /planificacion/acciones` (catálogo, `activo = 1`) |
-| `GET /planificacion/motivos?nivel=rubro` | `?nivel=item` |
+| `GET /planificacion/motivos?nivel=rubro` | `?nivel=ofrecimiento` |
 
 ### DTOs
 
 ```ts
 interface IAlcanceDTO {
-    tipo: TipoItem
+    tipo: TipoOfrecimiento
     codigo: string
     descripcion: string
 }
 
-interface IAgregarItemDTO {
+interface IAgregarOfrecimientoDTO {
     tipo: 'rubro' | 'marca' | 'linea' | 'articulo' | 'accion'
     codigo: string
     descripcion: string
@@ -225,45 +254,45 @@ interface IAgregarItemDTO {
 }
 ```
 
-`resolverItem` **no cambia de forma**: sigue recibiendo `{ motivos: IItemMotivo[] }` y sigue
+`resolverOfrecimiento` **no cambia de forma**: sigue recibiendo `{ motivos: IOfrecimientoMotivo[] }` y sigue
 **reemplazando** los motivos en vez de acumular. Es la parte que ya era genérica.
 
 ### Campos que se arrastran fuera del módulo
 
 Los tres viajan en respuestas de otras pantallas y son fáciles de olvidar:
 
-- `IAgendaClient.rubrosPendientes` → `itemsPendientes` (viaja en la card de la vista semanal).
-- `iniciarVisita` devuelve `{ visitaId, rubros }` → `{ visitaId, items }`.
-- `ICerrarVisitaResult.rubrosAutocompletados` → `itemsAutocompletados`.
+- `IAgendaClient.rubrosPendientes` → `ofrecimientosPendientes` (viaja en la card de la vista semanal).
+- `iniciarVisita` devuelve `{ visitaId, rubros }` → `{ visitaId, ofrecimientos }`.
+- `ICerrarVisitaResult.rubrosAutocompletados` → `ofrecimientosAutocompletados`.
 
 ### Validaciones nuevas en el service
 
 - `codigo` debe existir en el catálogo de su `tipo` (`pl_accion` para acciones, warehouse para el
   resto). **Sin esto `tipo` es decorativo** y el `GROUP BY` se rompe igual que con texto libre.
   Misma validación para cada fila de `alcance`.
-- `gapUnits` **no necesita validación de tipo**: no está en `IAgregarItemDTO`. Solo lo escribe
+- `gapUnits` **no necesita validación de tipo**: no está en `IAgregarOfrecimientoDTO`. Solo lo escribe
   `crearMuchos` desde la propuesta congelada, que siempre es `tipo = 'rubro'`. Un check en el DTO
   sería código muerto. (Corregido después de revisar el código; el diseño original lo pedía.)
 - Rechazo del duplicado exacto (mismo `tipo`, mismo `codigo`, mismo conjunto de alcance) — la
   garantía que dejó de dar el unique.
-- `RUBRO_DE_PROPUESTA` → `ITEM_DE_PROPUESTA`, mismo significado: no se borra lo que propuso el
+- `RUBRO_DE_PROPUESTA` → `OFRECIMIENTO_DE_PROPUESTA`, mismo significado: no se borra lo que propuso el
   sistema. Citado en `src/lib/apiError.ts`.
 
-### Estado del ítem: derivado, nunca guardado
+### Estado del ofrecimiento: derivado, nunca guardado
 
-**No se crea ninguna tabla de resolución por ítem, ni columna `estado`.**
+**No se crea ninguna tabla de resolución por ofrecimiento, ni columna `estado`.**
 
 El estado ya está derivado y eso es deliberado: `pl_visita_rubro` hoy no tiene `estado` porque
-*"un ítem está resuelto si tiene motivos"*. Es el mismo principio que gobierna el dominio entero
+*"un ofrecimiento está resuelto si tiene motivos"*. Es el mismo principio que gobierna el dominio entero
 (*"pendiente no es un estado, es la ausencia de resolución"*). Un estado guardado puede contradecir
 a los motivos; uno derivado no puede.
 
 El resultado comercial vive en `pl_motivo.resultado` (`ganado`/`diferido`/`perdido`/`no_ofrecido`),
 que la analítica ya lee por motivo.
 
-**Regla nueva — precedencia de resultado por ítem.** Un ítem puede tener dos motivos con resultado
+**Regla nueva — precedencia de resultado por ofrecimiento.** Un ofrecimiento puede tener dos motivos con resultado
 distinto ("Saqué pedido" + "Precio"), y con cupos negociados eso va a ser **más frecuente** que con
-rubros. El resultado del ítem se calcula con una precedencia única, en un solo helper del service:
+rubros. El resultado del ofrecimiento se calcula con una precedencia única, en un solo helper del service:
 
 ```
 ganado > diferido > perdido > no_ofrecido
@@ -272,7 +301,7 @@ ganado > diferido > perdido > no_ofrecido
 Si se sacó el pedido, lo demás es color. Derivado y cambiable, sin riesgo de desincronización.
 
 **Asimetría intencional, para que no se lea como incoherencia:** `pl_resolucion` es inmutable, pero
-los motivos del ítem se reemplazan. Mientras la visita está abierta el detalle es borrador; cerrar
+los motivos del ofrecimiento se reemplazan. Mientras la visita está abierta el detalle es borrador; cerrar
 la visita es lo que lo congela.
 
 ---
@@ -295,7 +324,7 @@ primer dato real entraría meses después junto con el rediseño — justo cuand
 alcance debía ser otra cosa cuesta caro. Dos semanas de uso real con un flujo feo dicen si
 "acción + alcance" es la forma correcta.
 
-**Resto del wizard**: sin cambios de diseño. `ResolucionRubro` → `ResolucionItem`, mostrando
+**Resto del wizard**: sin cambios de diseño. `ResolucionRubro` → `ResolucionOfrecimiento`, mostrando
 `descripcion` en vez de nombre de rubro. El checklist de motivos y el detalle de "Precio" quedan
 tal cual.
 
@@ -310,7 +339,7 @@ aparezca.
 ## Analítica
 
 Cambios de rename, no de lógica. `TablaVisitas.tsx`, `TablaActividad.tsx`, `DetalleVisitaPanel.tsx`
-y `ObjecionesMercado.tsx` leen ítems en vez de rubros. Los mapas de `resultado` no se tocan.
+y `ObjecionesMercado.tsx` leen ofrecimientos en vez de rubros. Los mapas de `resultado` no se tocan.
 
 Se agrega un **chip de tipo** junto a la descripción: "SKF" sin decir que es una marca es ambiguo.
 
@@ -357,6 +386,6 @@ confunde a un dev; un 404 deja al vendedor sin poder cargar la visita.
 
 ## Documentación viva a actualizar
 
-Al implementar, `docs/dominio/tablas.md` debe reflejar: `pl_visita_item`, `pl_visita_item_motivo`,
-`pl_visita_item_alcance`, `pl_accion`, el `nivel = 'item'` de `pl_motivo`, y sumar
+Al implementar, `docs/dominio/tablas.md` debe reflejar: `pl_ofrecimiento`, `pl_ofrecimiento_motivo`,
+`pl_ofrecimiento_alcance`, `pl_accion`, el `nivel = 'ofrecimiento'` de `pl_motivo`, y sumar
 `pl_visita_rubro` / `pl_visita_rubro_motivo` a la tabla de "tablas que ya no existen".
