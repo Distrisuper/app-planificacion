@@ -36,7 +36,7 @@ describe('AgregarOfrecimientoSheet', () => {
 
         await userEvent.click(screen.getByRole('button', { name: 'Acción' }))
         await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
-        await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
+        await userEvent.click(screen.getByRole('button', { name: /^para/i }))
         await userEvent.click(screen.getByRole('button', { name: /skf.*marca/i }))
         cargarTramoCupo()
         await userEvent.click(screen.getByRole('button', { name: 'Agregar' }))
@@ -71,10 +71,10 @@ describe('AgregarOfrecimientoSheet', () => {
     it('no ofrece acotar cuando el tipo es marca o rubro', async () => {
         render(<AgregarOfrecimientoSheet {...props} onAgregar={vi.fn()} />)
 
-        expect(screen.queryByRole('button', { name: /acotar/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^para/i })).not.toBeInTheDocument()
 
         await userEvent.click(screen.getByRole('button', { name: 'Marca' }))
-        expect(screen.queryByRole('button', { name: /acotar/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^para/i })).not.toBeInTheDocument()
     })
 
     it('cambiar de tipo limpia lo elegido, el alcance y el detalle', async () => {
@@ -83,7 +83,7 @@ describe('AgregarOfrecimientoSheet', () => {
 
         await userEvent.click(screen.getByRole('button', { name: 'Acción' }))
         await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
-        await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
+        await userEvent.click(screen.getByRole('button', { name: /^para/i }))
         await userEvent.click(screen.getByRole('button', { name: /skf.*marca/i }))
         cargarTramoCupo()
 

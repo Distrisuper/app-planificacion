@@ -13,8 +13,10 @@ interface AlcancePickerProps {
 }
 
 /**
- * "Acotar a…": sobre qué aplica la oferta. Opcional y colapsado por defecto, porque la
+ * "Para…": sobre qué aplica la oferta. Opcional y colapsado por defecto, porque la
  * mayoría de las ofertas son globales y el vendedor está parado en un mostrador.
+ * "Para" en vez de "Acotar a": completa la frase como la dice el vendedor
+ * ("Descuento... para Bujes de SKF..."), sin jerga técnica.
  *
  * Lista vacía se muestra como "Todo el cliente" y NO como "sin alcance": lo segundo se
  * leería como que falta cargar algo.
@@ -43,7 +45,7 @@ export default function AlcancePicker({
                 className="flex w-full items-center gap-2 text-left"
             >
                 <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
-                    Acotar a
+                    Para
                 </span>
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#182645]">
                     {resumenAlcance(value)}

@@ -19,7 +19,7 @@ describe('AlcancePicker', () => {
     it('al expandir muestra el buscador único de marca/rubro', async () => {
         render(<AlcancePicker value={[]} onChange={vi.fn()} marcas={marcas} rubros={rubros} />)
 
-        await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
+        await userEvent.click(screen.getByRole('button', { name: /^para/i }))
 
         expect(screen.getByPlaceholderText(/buscar marca o rubro/i)).toBeInTheDocument()
     })
@@ -28,7 +28,7 @@ describe('AlcancePicker', () => {
         const onChange = vi.fn()
         render(<AlcancePicker value={[]} onChange={onChange} marcas={marcas} rubros={rubros} />)
 
-        await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
+        await userEvent.click(screen.getByRole('button', { name: /^para/i }))
         await userEvent.click(screen.getByRole('button', { name: /^skf/i }))
 
         expect(onChange).toHaveBeenCalledWith([
@@ -40,7 +40,7 @@ describe('AlcancePicker', () => {
         const onChange = vi.fn()
         render(<AlcancePicker value={[]} onChange={onChange} marcas={marcas} rubros={rubros} />)
 
-        await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
+        await userEvent.click(screen.getByRole('button', { name: /^para/i }))
         await userEvent.click(screen.getByRole('button', { name: /^rodamientos/i }))
 
         expect(onChange).toHaveBeenCalledWith([
@@ -56,7 +56,7 @@ describe('AlcancePicker', () => {
             <AlcancePicker value={yaElegido} onChange={onChange} marcas={marcas} rubros={rubros} />,
         )
 
-        await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
+        await userEvent.click(screen.getByRole('button', { name: /^para/i }))
         await userEvent.click(screen.getByRole('button', { name: /^corven/i }))
 
         expect(onChange).toHaveBeenCalledWith([
@@ -72,7 +72,7 @@ describe('AlcancePicker', () => {
             <AlcancePicker value={yaElegido} onChange={onChange} marcas={marcas} rubros={rubros} />,
         )
 
-        await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
+        await userEvent.click(screen.getByRole('button', { name: /^para/i }))
         await userEvent.click(screen.getByRole('button', { name: /skf.*✕/i }))
 
         expect(onChange).toHaveBeenCalledWith([])
