@@ -191,6 +191,11 @@ export interface IOfrecimiento {
     motivos: IOfrecimientoMotivo[]
     /** Cero elementos = oferta global, no "falta cargar". */
     alcance: IAlcance[]
+    /** Parámetros propios de la oferta (ej. tramos de Cupo). Solo tiene sentido con
+     *  tipo: 'accion' — el backend lo ignora en silencio para el resto. Su forma
+     *  concreta la conoce el módulo del registro de detalle por código de acción
+     *  (ver src/components/propuesta/accionDetalle/registro.ts). */
+    detalle?: unknown
 }
 
 /** Catálogo de acciones comerciales. Agregar una es un INSERT en el back, no un deploy. */
@@ -339,6 +344,7 @@ export interface IAgregarOfrecimientoDTO {
     codigo: string
     descripcion: string
     alcance?: IAlcance[]
+    detalle?: unknown
 }
 
 export interface IAgregarOfrecimientoResult {

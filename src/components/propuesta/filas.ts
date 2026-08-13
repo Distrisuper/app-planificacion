@@ -27,6 +27,7 @@ export interface IOfrecimientoFila {
      *  agregados a mano pueden traer cualquier TipoOfrecimiento. */
     tipo: TipoOfrecimiento
     alcance: IAlcance[]
+    detalle?: unknown
 }
 
 export interface IOfrecimientoFilaTotales {
@@ -131,6 +132,7 @@ export function construirFilasVisita(
             destacada: true,
             tipo: r.tipo,
             alcance: r.alcance,
+            detalle: r.detalle,
             resolucion:
                 editable && estado
                     ? {

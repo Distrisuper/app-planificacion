@@ -207,4 +207,22 @@ describe('construirFilasVisita', () => {
         expect(filas[0].tipo).toBe('accion')
         expect(filas[0].alcance).toEqual([{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }])
     })
+
+    it('propaga el detalle del ofrecimiento a la fila', () => {
+        const filas = construirFilasVisita(
+            [
+                ofrecimiento({
+                    id: 9,
+                    codigo: 'CUPO',
+                    tipo: 'accion',
+                    detalle: { tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] },
+                }),
+            ],
+            [],
+            { 9: { motivosCargados: 0, completo: false } },
+            false,
+            true,
+        )
+        expect(filas[0].detalle).toEqual({ tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] })
+    })
 })
