@@ -2,6 +2,7 @@ import { useState } from 'react'
 import SelectorTipoOfrecimiento, { type TipoOfrecible } from './SelectorTipoOfrecimiento'
 import CatalogoPicker from './CatalogoPicker'
 import AlcancePicker from './AlcancePicker'
+import { registroDetalleAccion } from './accionDetalle/registro'
 import type { IAgregarOfrecimientoDTO, IAlcance, ICatalogoItem } from '@/types/planificacion'
 
 interface AgregarOfrecimientoSheetProps {
@@ -35,17 +36,32 @@ export default function AgregarOfrecimientoSheet({
     const [tipo, setTipo] = useState<TipoOfrecible>('rubro')
     const [elegido, setElegido] = useState<ICatalogoItem | null>(null)
     const [alcance, setAlcance] = useState<IAlcance[]>([])
+    const [detalle, setDetalle] = useState<unknown>(undefined)
 
     if (!open) return null
 
     const catalogo = tipo === 'rubro' ? rubros : tipo === 'marca' ? marcas : acciones
+    // Solo las acciones pueden traer un módulo de detalle (tramos de Cupo, etc.) — ver
+    // el registro en accionDetalle/registro.ts. Una acción sin módulo registrado (ej.
+    // Descuento, todavía sin diseñar) simplemente no muestra editor.
+    const moduloDetalle =
+        tipo === 'accion' && elegido ? registroDetalleAccion[elegido.code] : undefined
 
-    // Cambiar de tipo invalida lo elegido Y el alcance: un alcance cargado para una
-    // acción no significa nada si el vendedor pasa a marca.
+    // Cambiar de tipo invalida lo elegido, el alcance Y el detalle: un detalle cargado
+    // para una acción no significa nada si el vendedor pasa a marca.
     function cambiarTipo(nuevo: TipoOfrecible) {
         setTipo(nuevo)
         setElegido(null)
         setAlcance([])
+        setDetalle(undefined)
+    }
+
+    // Elegir un ítem distinto dentro del mismo tipo también descarta el detalle: un
+    // tramo cargado para "Plan cupo" no debería sobrevivir si el vendedor elige otra
+    // acción sin volver a tocar el selector de tipo.
+    function elegir(item: ICatalogoItem) {
+        setElegido(item)
+        setDetalle(undefined)
     }
 
     function confirmar() {
@@ -55,10 +71,13 @@ export default function AgregarOfrecimientoSheet({
             codigo: elegido.code,
             descripcion: elegido.description,
             alcance,
+            ...(moduloDetalle ? { detalle } : {}),
         })
         cambiarTipo('rubro')
         onClose()
     }
+
+    const puedeAgregar = !!elegido && (!moduloDetalle || moduloDetalle.esValido(detalle))
 
     return (
         <div className="flex flex-col gap-2 p-3">
@@ -68,7 +87,7 @@ export default function AgregarOfrecimientoSheet({
                 items={catalogo}
                 loading={tipo === 'marca' ? marcasLoading : false}
                 value={elegido?.description ?? null}
-                onSelect={setElegido}
+                onSelect={elegir}
                 placeholder={
                     tipo === 'rubro'
                         ? 'Buscar rubro…'
@@ -88,9 +107,11 @@ export default function AgregarOfrecimientoSheet({
                 />
             )}
 
+            {moduloDetalle && <moduloDetalle.Editor value={detalle} onChange={setDetalle} />}
+
             <button
                 type="button"
-                disabled={!elegido}
+                disabled={!puedeAgregar}
                 onClick={confirmar}
                 className="mt-1 rounded-[11px] bg-dsnavy px-4 py-3 text-sm font-bold text-white disabled:opacity-50"
             >

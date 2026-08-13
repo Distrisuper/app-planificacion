@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import AgregarOfrecimientoSheet from './AgregarOfrecimientoSheet'
@@ -15,6 +15,11 @@ const props = {
     rubros,
 }
 
+function cargarTramoCupo() {
+    fireEvent.change(screen.getByLabelText(/tramo 1.*alcanza/i), { target: { value: '2500000' } })
+    fireEvent.change(screen.getByLabelText(/tramo 1.*descuento/i), { target: { value: '3' } })
+}
+
 describe('AgregarOfrecimientoSheet', () => {
     it('arranca en Rubro', () => {
         render(<AgregarOfrecimientoSheet {...props} onAgregar={vi.fn()} />)
@@ -25,7 +30,7 @@ describe('AgregarOfrecimientoSheet', () => {
         )
     })
 
-    it('agrega una acción con alcance sobre una marca', async () => {
+    it('agrega una acción con alcance y detalle sobre una marca', async () => {
         const onAgregar = vi.fn()
         render(<AgregarOfrecimientoSheet {...props} onAgregar={onAgregar} />)
 
@@ -33,13 +38,15 @@ describe('AgregarOfrecimientoSheet', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
         await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
         await userEvent.click(screen.getByRole('button', { name: 'SKF' }))
-        await userEvent.click(screen.getByRole('button', { name: /agregar/i }))
+        cargarTramoCupo()
+        await userEvent.click(screen.getByRole('button', { name: 'Agregar' }))
 
         expect(onAgregar).toHaveBeenCalledWith({
             tipo: 'accion',
             codigo: 'CUPO',
             descripcion: 'Plan cupo',
             alcance: [{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }],
+            detalle: { tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] },
         })
     })
 
@@ -49,7 +56,7 @@ describe('AgregarOfrecimientoSheet', () => {
 
         await userEvent.click(screen.getByRole('button', { name: 'Marca' }))
         await userEvent.click(screen.getByRole('button', { name: 'SKF' }))
-        await userEvent.click(screen.getByRole('button', { name: /agregar/i }))
+        await userEvent.click(screen.getByRole('button', { name: 'Agregar' }))
 
         expect(onAgregar).toHaveBeenCalledWith({
             tipo: 'marca',
@@ -70,7 +77,7 @@ describe('AgregarOfrecimientoSheet', () => {
         expect(screen.queryByRole('button', { name: /acotar/i })).not.toBeInTheDocument()
     })
 
-    it('cambiar de tipo limpia lo elegido y el alcance', async () => {
+    it('cambiar de tipo limpia lo elegido, el alcance y el detalle', async () => {
         const onAgregar = vi.fn()
         render(<AgregarOfrecimientoSheet {...props} onAgregar={onAgregar} />)
 
@@ -78,23 +85,78 @@ describe('AgregarOfrecimientoSheet', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
         await userEvent.click(screen.getByRole('button', { name: /acotar/i }))
         await userEvent.click(screen.getByRole('button', { name: 'SKF' }))
+        cargarTramoCupo()
 
         await userEvent.click(screen.getByRole('button', { name: 'Marca' }))
         await userEvent.click(screen.getByRole('button', { name: 'Acción' }))
         await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
-        await userEvent.click(screen.getByRole('button', { name: /agregar/i }))
+        // Sin volver a cargar tramos: si quedaran los anteriores, "Agregar" ya estaría habilitado.
+        expect(screen.getByRole('button', { name: 'Agregar' })).toBeDisabled()
+
+        cargarTramoCupo()
+        await userEvent.click(screen.getByRole('button', { name: 'Agregar' }))
 
         expect(onAgregar).toHaveBeenCalledWith({
             tipo: 'accion',
             codigo: 'CUPO',
             descripcion: 'Plan cupo',
             alcance: [],
+            detalle: { tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] },
         })
     })
 
     it('no deja agregar sin elegir nada', () => {
         render(<AgregarOfrecimientoSheet {...props} onAgregar={vi.fn()} />)
 
-        expect(screen.getByRole('button', { name: /agregar/i })).toBeDisabled()
+        expect(screen.getByRole('button', { name: 'Agregar' })).toBeDisabled()
+    })
+
+    it('elegir una acción con módulo de detalle (Plan cupo) muestra el editor de tramos', async () => {
+        render(<AgregarOfrecimientoSheet {...props} onAgregar={vi.fn()} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Acción' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
+
+        expect(screen.getByLabelText(/tramo 1.*alcanza/i)).toBeInTheDocument()
+    })
+
+    it('con Plan cupo elegido y sin tramos completos, Agregar queda deshabilitado', async () => {
+        render(<AgregarOfrecimientoSheet {...props} onAgregar={vi.fn()} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Acción' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
+
+        expect(screen.getByRole('button', { name: 'Agregar' })).toBeDisabled()
+    })
+
+    it('completar los tramos habilita Agregar', async () => {
+        render(<AgregarOfrecimientoSheet {...props} onAgregar={vi.fn()} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Acción' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
+        cargarTramoCupo()
+
+        expect(screen.getByRole('button', { name: 'Agregar' })).toBeEnabled()
+    })
+
+    it('una acción sin módulo de detalle registrado no muestra editor y agrega con solo el DTO base', async () => {
+        const onAgregar = vi.fn()
+        const otrasAcciones = [{ code: 'PROMO', description: 'Promo verano' }]
+        render(
+            <AgregarOfrecimientoSheet {...props} acciones={otrasAcciones} onAgregar={onAgregar} />,
+        )
+
+        await userEvent.click(screen.getByRole('button', { name: 'Acción' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Promo verano' }))
+
+        expect(screen.queryByLabelText(/tramo 1/i)).not.toBeInTheDocument()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Agregar' }))
+        expect(onAgregar).toHaveBeenCalledWith({
+            tipo: 'accion',
+            codigo: 'PROMO',
+            descripcion: 'Promo verano',
+            alcance: [],
+        })
     })
 })
