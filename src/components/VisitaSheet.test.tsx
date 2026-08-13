@@ -285,13 +285,14 @@ it('agregar dos rubros distintos en simultáneo deshabilita cada fila por separa
     await waitFor(() => expect(screen.getByRole('button', { name: /agregar baterías/i })).not.toBeDisabled())
 })
 
-// Dos tipos distintos pueden compartir código (ej. rubro "CUPO" y acción "CUPO"): la clave
+// Dos tipos distintos pueden compartir código (ej. rubro "CUPO" y marca "CUPO"): la clave
 // de agregandoCodes es `${tipo}:${codigo}`, no el código solo.
 it('dos ofrecimientos del mismo código y distinto tipo no comparten el spinner', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
         { rubroCode: 'CUPO', nombre: 'Cupo', actual: 0, mesAnterior: 0, promedio6m: 0 },
     ])
+    ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'CUPO', description: 'Cupo' }])
     let resolverBat: (v: { ofrecimientoId: number }) => void = () => {}
     ;(api.agregarOfrecimiento as any).mockImplementation((_visitaId: number, dto: { tipo: string; codigo: string }) => {
         if (dto.tipo === 'rubro' && dto.codigo === 'CUPO') {
@@ -307,12 +308,13 @@ it('dos ofrecimientos del mismo código y distinto tipo no comparten el spinner'
     fireEvent.click(await screen.findByRole('button', { name: /agregar cupo/i }))
     expect(screen.getByRole('button', { name: /agregar cupo/i })).toBeDisabled()
 
-    // Agregar la acción "CUPO" (mismo código, tipo distinto) desde el sheet no debería
-    // tocar el spinner del rubro "CUPO" que sigue en vuelo.
+    // Agregar la marca "Cupo" (mismo código, tipo distinto) desde el sheet no debería
+    // tocar el spinner del rubro "CUPO" que sigue en vuelo. El buscador mezcla rubro y
+    // marca, así que "Cupo" aparece dos veces (una por catálogo) — la de marca es la
+    // segunda, porque rubros se listan primero.
     fireEvent.click(screen.getByRole('button', { name: /agregar otra cosa/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /plan cupo/i }))
-    fireEvent.change(screen.getByLabelText(/tramo 1.*alcanza/i), { target: { value: '2500000' } })
-    fireEvent.change(screen.getByLabelText(/tramo 1.*descuento/i), { target: { value: '3' } })
+    const opcionesCupo = await screen.findAllByRole('button', { name: /^cupo/i })
+    fireEvent.click(opcionesCupo[1])
     fireEvent.click(screen.getByRole('button', { name: /^agregar$/i }))
 
     await waitFor(() => expect(api.agregarOfrecimiento).toHaveBeenCalledTimes(2))

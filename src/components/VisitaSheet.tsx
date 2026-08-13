@@ -14,7 +14,6 @@ import {
     useAgregarOfrecimiento,
     useEliminarOfrecimiento,
 } from '@/hooks/useOfrecimientos'
-import { useAcciones } from '@/hooks/useAcciones'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
@@ -108,7 +107,6 @@ export default function VisitaSheet({
     // Se pide al abrir el sheet, no al entrar a una sub-vista: la tabla es la fuente de
     // los números en las dos pantallas y en los dos estados (colapsada/expandida).
     const { data: rubroStatus = [] } = useRubroStatus(open ? (codigoParticularCliente ?? null) : null)
-    const { data: acciones = [] } = useAcciones()
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(open)
 
     useEffect(() => {
@@ -294,7 +292,6 @@ export default function VisitaSheet({
         !visitaCerrada,
     )
     const rubrosCatalogo = rubroStatus.map(s => ({ code: s.rubroCode, description: s.nombre }))
-    const accionesCatalogo = acciones.map(a => ({ code: a.codigo, description: a.descripcion }))
 
     // Único punto de guardado contra el backend: junta todo lo que cambió contra lo
     // que ya tiene el servidor, lo manda en un solo batch y, si sale bien, recién ahí
@@ -455,7 +452,6 @@ export default function VisitaSheet({
                     open={altaAbierta}
                     onClose={() => setAltaAbierta(false)}
                     onAgregar={dto => agregarDesdeSheet(dto)}
-                    acciones={accionesCatalogo}
                     marcas={marcas}
                     rubros={rubrosCatalogo}
                     marcasLoading={marcasLoading}
