@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { fmtAmount } from '@/lib/fmtAmount'
 import { resumenAlcance } from '@/lib/alcance'
+import { registroDetalleAccion } from './accionDetalle/registro'
 import type { TipoOfrecimiento } from '@/types/planificacion'
 import type { IOfrecimientoFila, IOfrecimientoFilaResolucion } from './filas'
 
@@ -128,6 +129,7 @@ function ChipEstado({ resolucion }: { resolucion: IOfrecimientoFilaResolucion })
  *  'rubro': es el caso por defecto y repetirlo en cada fila es ruido. "SKF" sin decir
  *  que es una marca sí es ambiguo, y esa es la razón del chip. */
 function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
+    const moduloDetalle = registroDetalleAccion[fila.codigo]
     return (
         <>
             <div className="min-w-0 flex-1">
@@ -142,6 +144,11 @@ function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
                 {fila.alcance.length > 0 && (
                     <div className="truncate text-[11px] font-semibold text-dsmuted">
                         {resumenAlcance(fila.alcance)}
+                    </div>
+                )}
+                {fila.detalle != null && moduloDetalle && (
+                    <div className="truncate text-[11px] font-semibold text-dsmuted">
+                        {moduloDetalle.resumen(fila.detalle)}
                     </div>
                 )}
             </div>

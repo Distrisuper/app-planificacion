@@ -310,3 +310,35 @@ it('un rubro común no muestra chip de tipo', () => {
     const chips = screen.queryAllByText('Rubro').filter(el => el.getAttribute('role') !== 'columnheader')
     expect(chips).toHaveLength(0)
 })
+
+it('una fila de Cupo con detalle muestra el resumen de tramos', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    codigo: 'CUPO',
+                    nombre: 'Plan cupo',
+                    tipo: 'accion',
+                    detalle: { tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] },
+                }),
+            ]}
+        />,
+    )
+    expect(screen.getByText('$2.500.000→3%')).toBeInTheDocument()
+})
+
+it('una fila con detalle pero sin módulo registrado para su código no rompe ni muestra nada', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    codigo: 'PROMO',
+                    nombre: 'Promo verano',
+                    tipo: 'accion',
+                    detalle: { algo: 'lo que sea' },
+                }),
+            ]}
+        />,
+    )
+    expect(screen.getByText('Promo verano')).toBeInTheDocument()
+})
