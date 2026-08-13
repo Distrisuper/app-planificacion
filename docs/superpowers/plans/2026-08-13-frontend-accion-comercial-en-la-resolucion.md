@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Al resolver un rubro, el vendedor puede indicar que fue con una acción comercial (Plan cupo / Descuento), con qué marca y con qué parámetros — y entonces el checklist de motivos pasa al vocabulario propio de las acciones.
+**Goal:** Al resolver un rubro, el vendedor puede indicar que fue con una acción comercial (Plan cupo / Descuento), con qué marca y con qué parámetros — y eso queda guardado en el `detalle` de ese rubro.
 
 **Architecture:** Un `AccionComercialPicker` nuevo, presentacional puro, montado en `ResolucionOfrecimiento` arriba del checklist. La acción cargada viaja en un borrador paralelo al de motivos (`detalles`, misma mecánica de localStorage) y se manda en el mismo batch de "Cerrar visita". El alta de ofrecimientos deja de ofrecer `'accion'` como tipo.
 
@@ -15,35 +15,34 @@
 - `ResolucionOfrecimiento` sigue siendo **presentacional puro** (sin React Query en su test): los catálogos llegan por props desde `ResolucionWizard`.
 - **Borrador paralelo, no cambio de forma:** `borradores` (motivos) queda como está y se agrega `detalles` al lado. Cambiar la forma de `borradores` obligaría a tocar `VisitaSheet`, `ResolucionWizard`, `ResolucionWizardAcciones` y sus tests a la vez, y rompería en silencio los borradores ya guardados en localStorage de una visita en curso.
 - Spec de referencia: `docs/superpowers/specs/2026-08-13-accion-comercial-en-la-resolucion-design.md`.
-- **Depende del backend:** el plan `2026-08-13-backend-accion-comercial-en-la-resolucion.md` (repo `api-vendedores`) tiene que estar aplicado para que la resolución con motivos de nivel `'accion'` no sea rechazada con `MOTIVO_NIVEL_INVALIDO`.
+- **Depende del backend:** el plan `2026-08-13-backend-accion-comercial-en-la-resolucion.md` (repo `api-vendedores`) tiene que estar aplicado para que `resolverOfrecimiento` acepte `detalle` — sin eso, la acción cargada se pierde en silencio.
+- **El checklist de motivos NO cambia según haya acción o no.** Es siempre el catálogo de `nivel: 'ofrecimiento'`, que el backend completa con cinco motivos nuevos. No hay nivel `'accion'`: ver "Lo que se descartó" en el spec.
 
 ---
 
-### Task 1: Tipos y catálogo de nivel `'accion'`
+### Task 1: Tipo `IAccionComercial` y `detalle` en el DTO de resolución
 
 **Files:**
-- Modify: `src/types/planificacion.ts` (`NivelMotivo`, `IResolverOfrecimientoDTO`, nuevo `IAccionComercial`)
-- Modify: `src/api/planificacion.ts` — sin cambios de firma, se verifica que el DTO ya viaja entero
-- Test: `src/hooks/useMotivos.test.tsx` (si no existe, se crea)
+- Modify: `src/types/planificacion.ts` (nuevo `IAccionComercial`, `IResolverOfrecimientoDTO`)
 
 **Interfaces:**
-- Produces: `NivelMotivo = 'visita' | 'ofrecimiento' | 'accion'`; `IAccionComercial { accion: string; marca: string | null; params?: unknown }`; `IResolverOfrecimientoDTO.detalle?: IAccionComercial | null` — usados por las Tasks 2, 3 y 4.
+- Produces: `IAccionComercial { accion: string; marca: string | null; params?: unknown }`;
+  `IResolverOfrecimientoDTO.detalle?: IAccionComercial | null` — usados por las Tasks 2, 3 y 4.
 
-- [ ] **Step 1: Ampliar los tipos**
+**Nota:** `NivelMotivo` NO se toca — sigue siendo `'visita' | 'ofrecimiento'`. Los motivos
+nuevos entran al catálogo que el front ya pide.
 
-En `src/types/planificacion.ts`, reemplazar la declaración de `NivelMotivo`:
+- [ ] **Step 1: Agregar los tipos**
 
-```ts
-export type NivelMotivo = 'visita' | 'ofrecimiento' | 'accion'
-```
-
-Agregar, junto a los tipos de ofrecimiento:
+En `src/types/planificacion.ts`, junto a los tipos de ofrecimiento:
 
 ```ts
 /** La acción comercial con la que se resolvió un ofrecimiento (Plan cupo, Descuento).
  *  Vive en `pl_ofrecimiento.detalle` del propio ofrecimiento — NO es un ofrecimiento
- *  aparte. `params` es lo que produce el editor del registro de esa acción
- *  (`{tramos}` para Cupo, `{pct}` para Descuento); `unknown` acá a propósito: la forma
+ *  aparte. Distinguir una acción de otra es leer `accion`: por eso ningún MOTIVO dice
+ *  "cupo" ni "descuento" (sería el mismo dato cargado dos veces, y podrían
+ *  contradecirse). `params` es lo que produce el editor del registro de esa acción
+ *  (`{tramos}` para Cupo, `{pct}` para Descuento); `unknown` a propósito: la forma
  *  concreta solo la conoce su módulo. */
 export interface IAccionComercial {
     accion: string
@@ -62,58 +61,19 @@ export interface IResolverOfrecimientoDTO {
 }
 ```
 
-- [ ] **Step 2: Escribir el test que falla, en `src/hooks/useMotivos.test.tsx`**
-
-Crear el archivo (o agregar el caso si ya existe):
-
-```tsx
-import { renderHook, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { useMotivos } from './useMotivos'
-import * as api from '@/api/planificacion'
-
-vi.mock('@/api/planificacion')
-
-function wrapper({ children }: { children: React.ReactNode }) {
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-}
-
-beforeEach(() => {
-    vi.clearAllMocks()
-})
-
-describe('useMotivos', () => {
-    it('pide el catálogo de nivel accion cuando se le pasa ese nivel', async () => {
-        ;(api.getMotivos as any).mockResolvedValue([
-            { motivoId: 22, nivel: 'accion', descripcion: 'Lo va a considerar', resultado: 'diferido', requiereDetalle: false },
-        ])
-
-        const { result } = renderHook(() => useMotivos('accion'), { wrapper })
-
-        await waitFor(() => expect(result.current.isSuccess).toBe(true))
-        expect(api.getMotivos).toHaveBeenCalledWith('accion')
-        expect(result.current.data?.[0].nivel).toBe('accion')
-    })
-})
-```
-
-- [ ] **Step 3: Correr el test y verificar que pasa**
-
-Run: `npx vitest run src/hooks/useMotivos.test.tsx`
-Expected: PASS — `useMotivos` ya acepta cualquier `NivelMotivo`; el test confirma que `'accion'` es ahora un nivel válido para TypeScript (sin el cambio de la Step 1 no compilaría).
-
-- [ ] **Step 4: Type-check**
+- [ ] **Step 2: Type-check**
 
 Run: `npx tsc -b --noEmit`
 Expected: sin salida
 
-- [ ] **Step 5: Commit**
+No hay test propio: son tipos, y su corrección la ejercitan las Tasks 2-4, que los consumen
+de punta a punta.
+
+- [ ] **Step 3: Commit**
 
 ```bash
-git add src/types/planificacion.ts src/hooks/useMotivos.test.tsx
-git commit -m "feat(motivos): nivel accion y tipo IAccionComercial"
+git add src/types/planificacion.ts
+git commit -m "feat(resolucion): tipo IAccionComercial y detalle en el DTO de resolucion"
 ```
 
 ---
@@ -450,7 +410,7 @@ git commit -m "feat(resolucion): AccionComercialPicker (accion + marca + params)
 
 ---
 
-### Task 3: Montarlo en `ResolucionOfrecimiento` y cambiar el catálogo de motivos
+### Task 3: Montarlo en `ResolucionOfrecimiento`
 
 **Files:**
 - Modify: `src/components/propuesta/ResolucionOfrecimiento.tsx`
@@ -461,6 +421,7 @@ git commit -m "feat(resolucion): AccionComercialPicker (accion + marca + params)
 - Consumes: `AccionComercialPicker` (Task 2); `IAccionComercial` (Task 1).
 - Produces: `ResolucionOfrecimiento` suma props
   `{ acciones: ICatalogoItem[]; accion: IAccionComercial | null; onChangeAccion: (v: IAccionComercial | null) => void }` — usadas por la Task 4 vía `ResolucionWizard`.
+  `ResolucionWizard` suma props `{ detalles: Record<number, IAccionComercial | null>; onCambiarAccion: (ofrecimientoId: number, accion: IAccionComercial | null) => void }`.
 
 - [ ] **Step 1: Escribir los tests que fallan**
 
@@ -505,15 +466,13 @@ it('ofrece cargar una acción comercial arriba del checklist', () => {
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: 'CUPO', marca: null })
 })
 
-// Con acción, el vocabulario correcto es el de la acción: "Flete" no cierra un cupo.
-it('con acción comercial, el checklist muestra los motivos que recibe (nivel accion)', () => {
-    const motivosAccion: IMotivo[] = [
-        { motivoId: 22, nivel: 'accion', descripcion: 'Lo va a considerar', resultado: 'diferido', requiereDetalle: false },
-    ]
-    setup([], { accion: { accion: 'CUPO', marca: null }, motivos: motivosAccion })
+// El checklist NO cambia con la acción: es siempre el catálogo de nivel
+// 'ofrecimiento', que el backend completa con los motivos que faltaban.
+it('con acción comercial cargada, el checklist sigue siendo el mismo', () => {
+    setup([], { accion: { accion: 'CUPO', marca: null } })
 
-    expect(screen.getByText('Lo va a considerar')).toBeInTheDocument()
-    expect(screen.queryByText('Saqué pedido')).not.toBeInTheDocument()
+    expect(screen.getByText('Saqué pedido')).toBeInTheDocument()
+    expect(screen.getByText('No lo ofrecí')).toBeInTheDocument()
 })
 ```
 
@@ -577,8 +536,6 @@ import type { IAccionComercial, IMotivo, IOfrecimiento, IOfrecimientoMotivo } fr
 Sumar a `ResolucionWizardProps`:
 
 ```ts
-    /** Motivos de nivel 'accion', para cuando el ofrecimiento se resuelve con una. */
-    motivosAccion: IMotivo[]
     /** Acción comercial por ofrecimientoId — borrador paralelo al de motivos. */
     detalles: Record<number, IAccionComercial | null>
     onCambiarAccion: (ofrecimientoId: number, accion: IAccionComercial | null) => void
@@ -589,9 +546,6 @@ Dentro del componente, después de `const ofrecimiento = ofrecimientos[index]`:
 ```ts
     const { data: acciones = [] } = useAcciones()
     const accion = detalles[ofrecimiento.id] ?? null
-    // Con acción cargada, el checklist cambia al vocabulario de la acción: los motivos
-    // de rubro no la cierran ("Flete" no cierra un cupo; falta "lo va a considerar").
-    const motivosVisibles = accion ? motivosAccion : motivos
 ```
 
 El catálogo de marcas ya no se pide solo cuando hay un motivo con `requiereDetalle`: también
@@ -605,12 +559,12 @@ hace falta cuando hay acción (para elegir su marca). Reemplazar la línea de `n
         )
 ```
 
-Y en el render de `<ResolucionOfrecimiento ...>`, pasar `motivos={motivosVisibles}` en vez de
-`motivos={motivos}`, más las tres props nuevas:
+Y en el render de `<ResolucionOfrecimiento ...>`, agregar las tres props nuevas
+(`motivos` no cambia):
 
 ```tsx
                 <ResolucionOfrecimiento
-                    motivos={motivosVisibles}
+                    motivos={motivos}
                     marcas={marcas}
                     marcasLoading={marcasLoading}
                     acciones={acciones.map(a => ({ code: a.codigo, description: a.descripcion }))}
@@ -625,13 +579,13 @@ Y en el render de `<ResolucionOfrecimiento ...>`, pasar `motivos={motivosVisible
 
 Run: `npx vitest run src/components/propuesta/ResolucionWizard.test.tsx`
 Expected: FAIL — el `setup` del test no pasa las props nuevas. Agregar a su render:
-`motivosAccion={[]}`, `detalles={{}}` y `onCambiarAccion={vi.fn()}`, y volver a correr hasta PASS.
+`detalles={{}}` y `onCambiarAccion={vi.fn()}`, y volver a correr hasta PASS.
 
 - [ ] **Step 7: Commit**
 
 ```bash
 git add src/components/propuesta/ResolucionOfrecimiento.tsx src/components/propuesta/ResolucionOfrecimiento.test.tsx src/components/propuesta/ResolucionWizard.tsx src/components/propuesta/ResolucionWizard.test.tsx
-git commit -m "feat(resolucion): accion comercial arriba del checklist, con su catalogo de motivos"
+git commit -m "feat(resolucion): accion comercial arriba del checklist"
 ```
 
 ---
@@ -689,13 +643,6 @@ Y agregar el import del tipo al tope: `import type { IAccionComercial, IOfrecimi
 
 ```tsx
 it('la acción comercial cargada viaja en el batch de cierre', async () => {
-    ;(api.getMotivos as any).mockImplementation((nivel: string) =>
-        Promise.resolve(
-            nivel === 'accion'
-                ? [{ motivoId: 22, nivel: 'accion', descripcion: 'Lo va a considerar', resultado: 'diferido', requiereDetalle: false }]
-                : motivos,
-        ),
-    )
     ;(api.getAcciones as any).mockResolvedValue([{ codigo: 'DESCUENTO', descripcion: 'Descuento' }])
 
     const { onCerrarVisita } = renderSheet()
@@ -704,7 +651,7 @@ it('la acción comercial cargada viaja en el batch de cierre', async () => {
     fireEvent.click(await screen.findByText(/con acción comercial/i))
     fireEvent.click(await screen.findByRole('button', { name: 'Descuento' }))
     fireEvent.change(screen.getByLabelText(/% de descuento/i), { target: { value: '5' } })
-    fireEvent.click(await screen.findByText('Lo va a considerar'))
+    fireEvent.click(await screen.findByText('Saqué pedido'))
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
 
@@ -712,7 +659,7 @@ it('la acción comercial cargada viaja en el batch de cierre', async () => {
 
     await waitFor(() =>
         expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
-            motivos: [{ motivoId: 22, marca: null, competidor: null, pctDiferencia: null }],
+            motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
             detalle: { accion: 'DESCUENTO', marca: null, params: { pct: 5 } },
         }),
     )
@@ -740,13 +687,6 @@ import {
     limpiarDetalles,
 } from '@/lib/resolucionDraft'
 import type { IAccionComercial, IOfrecimiento, IOfrecimientoMotivo, IVisitClientCard } from '@/types/planificacion'
-```
-
-Agregar el catálogo de motivos de acción, junto al de ofrecimiento:
-
-```ts
-    const { data: motivos = [] } = useMotivos('ofrecimiento')
-    const { data: motivosAccion = [] } = useMotivos('accion')
 ```
 
 Agregar el estado, junto a `borradores`:
@@ -796,7 +736,6 @@ y después de `limpiarBorrador(visitaId)`:
 Finalmente, pasar las props nuevas al `<ResolucionWizard ...>`:
 
 ```tsx
-                        motivosAccion={motivosAccion}
                         detalles={detalles}
                         onCambiarAccion={(ofrecimientoId, accion) =>
                             setDetalles(prev => ({ ...prev, [ofrecimientoId]: accion }))
