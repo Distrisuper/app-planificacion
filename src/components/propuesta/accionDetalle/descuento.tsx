@@ -17,31 +17,28 @@ interface EditorDescuentoProps {
     onChange: (detalle: IDescuentoDetalle) => void
 }
 
-/** Mismo patrón visual que el campo `pctDiferencia` del wizard de motivos
- *  (ResolucionOfrecimiento.tsx) — un único input, sin tramos ni lista. */
+/** Un único input compacto, sin label visible propio: `layout: 'inline'` en el
+ *  registro hace que viva en la MISMA fila que el selector de acción, así que "%
+ *  de descuento" repetiría lo que ya dice "Descuento" ahí al lado — queda solo como
+ *  aria-label, para accesibilidad y para los tests que buscan por label. */
 export function EditorDescuento({ value, onChange }: EditorDescuentoProps) {
     const pct = value?.pct ?? 0
 
     return (
-        <div className="mt-2 flex items-center gap-2 rounded-[10px] border-[1.5px] border-[#E4E8F0] bg-white p-2.5">
-            <label htmlFor="descuento-pct" className="text-[12.5px] font-bold text-[#3B4560]">
-                % de descuento
-            </label>
-            <div className="flex flex-1 items-center justify-end gap-1">
-                <input
-                    id="descuento-pct"
-                    value={pct || ''}
-                    onChange={e =>
-                        onChange({
-                            pct: e.target.value === '' ? 0 : Number(e.target.value.replace(/[^0-9.]/g, '')),
-                        })
-                    }
-                    inputMode="decimal"
-                    placeholder="0"
-                    className="w-16 rounded-lg border border-[#E1E6F0] px-2 py-1.5 text-right text-sm font-extrabold text-dsnavy outline-none"
-                />
-                <span className="text-[15px] font-extrabold text-dsnavy">%</span>
-            </div>
+        <div className="flex w-[74px] shrink-0 items-center gap-1 rounded-lg border border-[#E1E6F0] bg-white px-2 py-2">
+            <input
+                aria-label="% de descuento"
+                value={pct || ''}
+                onChange={e =>
+                    onChange({
+                        pct: e.target.value === '' ? 0 : Number(e.target.value.replace(/[^0-9.]/g, '')),
+                    })
+                }
+                inputMode="decimal"
+                placeholder="0"
+                className="w-full min-w-0 bg-transparent text-right text-sm font-extrabold text-dsnavy outline-none"
+            />
+            <span className="text-[13px] font-extrabold text-dsnavy">%</span>
         </div>
     )
 }
