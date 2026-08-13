@@ -331,8 +331,23 @@ export interface INoVisitaResult {
     rotacionClienteId: number
 }
 
+/** La acción comercial con la que se resolvió un ofrecimiento (Plan cupo, Descuento).
+ *  Vive en `pl_ofrecimiento.detalle` del propio ofrecimiento — NO es un ofrecimiento
+ *  aparte. Distinguir una acción de otra es leer `accion`: por eso ningún MOTIVO dice
+ *  "cupo" ni "descuento" (sería el mismo dato cargado dos veces, y podrían
+ *  contradecirse). `params` es lo que produce el editor del registro de esa acción
+ *  (`{tramos}` para Cupo, `{pct}` para Descuento); `unknown` a propósito: la forma
+ *  concreta solo la conoce su módulo. */
+export interface IAccionComercial {
+    accion: string
+    marca: string | null
+    params?: unknown
+}
+
 export interface IResolverOfrecimientoDTO {
     motivos: IOfrecimientoMotivo[]
+    /** `undefined` = no se toca lo guardado. `null` = se sacó la acción. */
+    detalle?: IAccionComercial | null
 }
 
 export interface IResolverOfrecimientoResult {
