@@ -339,7 +339,8 @@ export interface INoVisitaResult {
  *  (`{tramos}` para Cupo, `{pct}` para Descuento); `unknown` a propósito: la forma
  *  concreta solo la conoce su módulo. */
 export interface IAccionComercial {
-    accion: string
+    /** null = sin acción comercial elegida (puede seguir habiendo marca cargada). */
+    accion: string | null
     marca: string | null
     params?: unknown
 }

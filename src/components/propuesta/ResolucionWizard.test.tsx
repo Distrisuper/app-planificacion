@@ -174,3 +174,38 @@ it('si falla el borrado, muestra el error y no vuelve a la lista', async () => {
     expect(await screen.findByText(/sin conexión/i)).toBeInTheDocument()
     expect(onVolver).not.toHaveBeenCalled()
 })
+
+it('sin nada cargado en el rubro actual, no ofrece "aplicar a todos"', () => {
+    setup()
+    expect(screen.queryByText(/aplicar a los/i)).not.toBeInTheDocument()
+})
+
+it('con algo cargado, ofrece aplicarlo a los rubros restantes', () => {
+    setup({ borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] } })
+    expect(screen.getByText('Aplicar a los 1 rubros restantes')).toBeInTheDocument()
+})
+
+it('aplicar a todos replica acción y motivos del actual a los restantes', () => {
+    const onCambiarBorrador = vi.fn()
+    const onCambiarAccion = vi.fn()
+    const cargados = [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }]
+    setup({
+        borradores: { 7: cargados, 8: [] },
+        detalles: { 7: { accion: 'CUPO', marca: null } },
+        onCambiarBorrador,
+        onCambiarAccion,
+    })
+
+    fireEvent.click(screen.getByText('Aplicar a los 1 rubros restantes'))
+
+    expect(onCambiarAccion).toHaveBeenCalledWith(8, { accion: 'CUPO', marca: null })
+    expect(onCambiarBorrador).toHaveBeenCalledWith(8, cargados)
+})
+
+it('con un solo rubro en el wizard, no ofrece "aplicar a todos": no hay restantes', () => {
+    setup({
+        ofrecimientos: [ofrecimientos[0]],
+        borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }] },
+    })
+    expect(screen.queryByText(/aplicar a los/i)).not.toBeInTheDocument()
+})

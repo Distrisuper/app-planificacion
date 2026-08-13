@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import CatalogoPicker from './CatalogoPicker'
 import AccionComercialPicker from './AccionComercialPicker'
+import MarcaOfrecimientoPicker from './MarcaOfrecimientoPicker'
 import type { IAccionComercial, ICatalogoItem, IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
 
 interface ResolucionOfrecimientoProps {
@@ -36,6 +37,27 @@ export default function ResolucionOfrecimiento({
     onChange,
 }: ResolucionOfrecimientoProps) {
     const porId = new Map(value.map(m => [m.motivoId, m]))
+
+    // Acción y marca son dos chips independientes, pero comparten el mismo dato de
+    // fondo (`accion`, el que viaja al backend como `detalle`): la marca no se duplica
+    // entre los dos — si hay acción elegida, es SU marca.
+    function onChangeAccionChip(nuevo: { accion: string; params?: unknown } | null) {
+        if (nuevo) {
+            onChangeAccion({ ...nuevo, marca: accion?.marca ?? null })
+        } else if (accion?.marca) {
+            onChangeAccion({ accion: null, marca: accion.marca })
+        } else {
+            onChangeAccion(null)
+        }
+    }
+
+    function onChangeMarcaChip(marca: string | null) {
+        if (!accion?.accion && !marca) {
+            onChangeAccion(null)
+        } else {
+            onChangeAccion({ accion: accion?.accion ?? null, marca, params: accion?.params })
+        }
+    }
 
     // Qué motivo tiene abierto su selector de marca (null = ninguno).
     const [marcaAbierta, setMarcaAbierta] = useState<number | null>(null)
@@ -84,12 +106,20 @@ export default function ResolucionOfrecimiento({
         <div>
             <AccionComercialPicker
                 acciones={acciones}
-                marcas={marcas}
-                marcasLoading={marcasLoading}
-                value={accion}
-                onChange={onChangeAccion}
+                value={accion?.accion ? { accion: accion.accion, params: accion.params } : null}
+                onChange={onChangeAccionChip}
             />
 
+            <MarcaOfrecimientoPicker
+                marcas={marcas}
+                marcasLoading={marcasLoading}
+                value={accion?.marca ?? null}
+                onChange={onChangeMarcaChip}
+            />
+
+            <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
+                Resolución
+            </span>
             <div className="flex flex-col gap-2">
                 {motivos.map(cat => {
                     const seleccionado = porId.get(cat.motivoId)

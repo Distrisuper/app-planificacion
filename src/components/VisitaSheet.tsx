@@ -308,7 +308,12 @@ export default function VisitaSheet({
             .map(r => ({
                 ofrecimientoId: r.id,
                 motivos: borradores[r.id] ?? [],
-                ...(detalles[r.id] !== undefined ? { detalle: detalles[r.id] } : {}),
+                // Marca sin acción es válida como borrador en pantalla, pero el backend
+                // exige un código de acción en todo `detalle` no nulo — sin eso, esa
+                // marca no tiene dónde persistir hoy.
+                ...(detalles[r.id] !== undefined
+                    ? { detalle: detalles[r.id]?.accion ? detalles[r.id] : null }
+                    : {}),
             }))
 
         if (cambios.length > 0) {

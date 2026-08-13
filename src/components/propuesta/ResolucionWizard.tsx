@@ -62,6 +62,20 @@ export default function ResolucionWizard({
         )
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
 
+    // Replica acción + marca + resolución del rubro actual al resto — la evidencia de
+    // seguimientos muestra que casi siempre el vendedor cuenta un solo desenlace para
+    // varios rubros de una acción. Queda como default: cada rubro sigue editable
+    // después, no queda "linkeado" al actual.
+    const restantes = ofrecimientos.filter((_, i) => i !== index)
+    const hayAlgoQueAplicar = accion !== null || (borradores[ofrecimiento.id]?.length ?? 0) > 0
+
+    function aplicarATodos() {
+        for (const r of restantes) {
+            onCambiarAccion(r.id, accion)
+            onCambiarBorrador(r.id, borradores[ofrecimiento.id] ?? [])
+        }
+    }
+
     const completos = ofrecimientos.filter(r => {
         const cargados = borradores[r.id] ?? []
         return cargados.length > 0 && !tieneDetalleIncompleto(motivos, cargados)
@@ -183,6 +197,16 @@ export default function ResolucionWizard({
                     value={borradores[ofrecimiento.id] ?? []}
                     onChange={m => onCambiarBorrador(ofrecimiento.id, m)}
                 />
+
+                {restantes.length > 0 && hayAlgoQueAplicar && (
+                    <button
+                        type="button"
+                        onClick={aplicarATodos}
+                        className="mt-1 w-full rounded-[11px] border-[1.5px] border-dashed border-[#C9D2E3] px-3 py-2.5 text-center text-[13px] font-bold text-dsnavy"
+                    >
+                        Aplicar a los {restantes.length} rubros restantes
+                    </button>
+                )}
             </div>
         </div>
     )

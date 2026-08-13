@@ -112,3 +112,28 @@ it('con acción comercial cargada, el checklist sigue siendo el mismo', () => {
     expect(screen.getByText('Saqué pedido')).toBeInTheDocument()
     expect(screen.getByText('No lo ofrecí')).toBeInTheDocument()
 })
+
+// La marca es un chip aparte, independiente de si hay acción: se puede cargar sola.
+it('ofrece cargar una marca sin acción comercial', () => {
+    const { onChangeAccion } = setup()
+    fireEvent.click(screen.getByText(/de qué marca/i))
+    fireEvent.click(screen.getByLabelText(/marca/i))
+    fireEvent.click(screen.getByText('Fric-Rot'))
+
+    expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
+})
+
+// La marca de la acción y la del chip Marca son EL MISMO dato — nunca se duplican.
+it('con acción y marca ya cargadas, el chip Marca muestra esa misma marca', () => {
+    setup([], { accion: { accion: 'CUPO', marca: 'Fric-Rot' } })
+
+    expect(screen.getByText('Fric-Rot')).toBeInTheDocument()
+    expect(screen.queryByText(/de qué marca/i)).not.toBeInTheDocument()
+})
+
+it('sacar la acción con una marca ya cargada conserva la marca', () => {
+    const { onChangeAccion } = setup([], { accion: { accion: 'CUPO', marca: 'Fric-Rot' } })
+    fireEvent.click(screen.getByRole('button', { name: /sin acción/i }))
+
+    expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
+})
