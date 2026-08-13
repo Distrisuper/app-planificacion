@@ -1,4 +1,4 @@
-import type { ResultadoMotivo, TipoResolucion } from './planificacion'
+import type { IAlcance, ResultadoMotivo, TipoOfrecimiento, TipoResolucion } from './planificacion'
 
 export interface ICoord {
     lat: number
@@ -54,16 +54,16 @@ export interface IVendedorMetricas {
     efectividadOperativa: number | null
 
     // Efectividad comercial
-    rubrosOfrecidos: number
-    rubrosGanados: number
-    rubrosDiferidos: number
-    rubrosPerdidos: number
-    /** 0..1 = ganados/ofrecidos. null si rubrosOfrecidos === 0. */
+    ofrecimientosTotales: number
+    ofrecimientosGanados: number
+    ofrecimientosDiferidos: number
+    ofrecimientosPerdidos: number
+    /** 0..1 = ganados/ofrecidos. null si ofrecimientosTotales === 0. */
     efectividadComercial: number | null
     /** 0..1 = propuestos que se cerraron sin ofrecer. null si no hubo propuestos. */
     pctNoOfrecidos: number | null
-    /** Rubros sin resolver en visitas ya cerradas. Mide calidad del dato. */
-    rubrosSinResolver: number
+    /** Ofrecimientos sin resolver en visitas ya cerradas. Mide calidad del dato. */
+    ofrecimientosSinResolver: number
 }
 
 export interface IAnaliticaResumen {
@@ -95,7 +95,7 @@ export interface IVisitaFila {
     tipo: TipoResolucion
     /** Descripciones de los motivos, ya resueltas contra el catálogo. */
     motivos: string[]
-    /** Resultado dominante de los rubros de la visita. null si no hay rubros resueltos. */
+    /** Resultado dominante de los ofrecimientos de la visita. null si no hay ninguno resuelto. */
     resultado: ResultadoMotivo | null
 }
 
@@ -116,7 +116,7 @@ export interface IVisitasArgs extends IAnaliticaFiltro {
     cant?: number
 }
 
-export interface IVisitaRubroMotivoDetalle {
+export interface IOfrecimientoMotivoDetalle {
     descripcion: string
     resultado: ResultadoMotivo | null
     marca: string | null
@@ -124,12 +124,14 @@ export interface IVisitaRubroMotivoDetalle {
     pctDiferencia: number | null
 }
 
-export interface IVisitaRubroDetalle {
-    rubroCode: string
-    rubroDescripcion: string
+export interface IOfrecimientoDetalle {
+    tipo: TipoOfrecimiento
+    codigo: string
+    descripcion: string
     esPropuesto: boolean
     resuelto: boolean
-    motivos: IVisitaRubroMotivoDetalle[]
+    motivos: IOfrecimientoMotivoDetalle[]
+    alcance: IAlcance[]
 }
 
 /** Nivel 3: el detalle completo de una visita. */
@@ -145,7 +147,7 @@ export interface IVisitaDetalle {
     coordFinal: ICoord | null
     coordCliente: ICoord | null
     distanciaMetros: number | null
-    rubros: IVisitaRubroDetalle[]
+    ofrecimientos: IOfrecimientoDetalle[]
 }
 
 export interface IObjecionFila {

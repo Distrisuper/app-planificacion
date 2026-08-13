@@ -20,7 +20,7 @@ const SEMANAS: ISemanaRotacionAdmin[] = [
                     dia: 1,
                     estado: 'pendiente',
                     visitaId: null,
-                    rubrosPendientes: 0,
+                    ofrecimientosPendientes: 0,
                     ultimoMovimiento: null,
                 },
             ] as never,

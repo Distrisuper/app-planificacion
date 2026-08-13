@@ -41,7 +41,7 @@ it('getVisitaDetalle devuelve el detalle de una visita existente', async () => {
     const id = MOCK_VISITAS['V1'][0].visitaId
     const det = await getVisitaDetalle(id)
     expect(det.visitaId).toBe(id)
-    expect(det.rubros.length).toBeGreaterThan(0)
+    expect(det.ofrecimientos.length).toBeGreaterThan(0)
 })
 
 it('getVisitaDetalle rechaza un id inexistente', async () => {

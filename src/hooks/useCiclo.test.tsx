@@ -64,7 +64,7 @@ describe('useSincronizar', () => {
             semanaCerrada: null,
             descripcionSemanaCerrada: null,
             sinVisitar: [],
-            rubrosAutocompletados: 0,
+            ofrecimientosAutocompletados: 0,
             altas: [],
             bajas: [],
             rotacionCerrada: false,

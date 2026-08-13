@@ -42,7 +42,7 @@ const PREVIEW_MOCK = {
 const SINCRONIZAR_MOCK = {
     semanaCerrada: null,
     sinVisitar: [],
-    rubrosAutocompletados: 0,
+    ofrecimientosAutocompletados: 0,
     altas: [],
     bajas: [],
     rotacionCerrada: false,
@@ -133,9 +133,9 @@ describe('motivos', () => {
 
     it('getMotivos filtra por nivel', async () => {
         ;(apiClient.get as any).mockResolvedValue(ok([]))
-        await getMotivos('rubro')
+        await getMotivos('ofrecimiento')
         expect(apiClient.get).toHaveBeenCalledWith('/planificacion/motivos', {
-            params: { nivel: 'rubro' },
+            params: { nivel: 'ofrecimiento' },
         })
     })
 })
@@ -149,23 +149,23 @@ describe('visitas', () => {
 
     it('iniciarVisita manda rotacionClienteId, NO codigoParticularCliente', async () => {
         // Regresión del contrato viejo, que mandaba código + nombre del cliente.
-        ;(apiClient.post as any).mockResolvedValue(ok({ visitaId: 42, rubros: 3 }))
+        ;(apiClient.post as any).mockResolvedValue(ok({ visitaId: 42, ofrecimientos: 3 }))
         const res = await iniciarVisita({ rotacionClienteId: 11, coordInicio: '-34.6,-58.4' })
         expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas', {
             rotacionClienteId: 11,
             coordInicio: '-34.6,-58.4',
         })
-        expect(res).toEqual({ visitaId: 42, rubros: 3 })
+        expect(res).toEqual({ visitaId: 42, ofrecimientos: 3 })
     })
 
     it('cerrarVisita manda SOLO coordFinal, nunca motivoIds', async () => {
-        // Regresión del contrato viejo: el resultado comercial ahora vive en los rubros.
-        ;(apiClient.put as any).mockResolvedValue(ok({ visitaId: 42, rubrosPendientes: 2 }))
+        // Regresión del contrato viejo: el resultado comercial ahora vive en los ofrecimientos.
+        ;(apiClient.put as any).mockResolvedValue(ok({ visitaId: 42, ofrecimientosPendientes: 2 }))
         const res = await cerrarVisita(42, { coordFinal: '-34.7,-58.4' })
         expect(apiClient.put).toHaveBeenCalledWith('/planificacion/visitas/42/cerrar', {
             coordFinal: '-34.7,-58.4',
         })
-        expect(res.rubrosPendientes).toBe(2)
+        expect(res.ofrecimientosPendientes).toBe(2)
     })
 
     it('registrarNoVisita manda rotacionClienteId y motivoIds', async () => {

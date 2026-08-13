@@ -94,8 +94,8 @@ export default function VisitaFlow({
         visitaEnCurso !== null && cliente !== null && visitaEnCurso.cliente.rotacionClienteId === cliente.rotacionClienteId
     const bloqueadoPorOtraVisita = visitaEnCurso !== null && !esClienteEnCurso
 
-    // Un cliente con visita ya abierta (o cerrada con rubros pendientes) entra derecho
-    // a los rubros: la propuesta pre-visita ya no aplica, manda el snapshot.
+    // Un cliente con visita ya abierta (o cerrada con ofrecimientos pendientes) entra
+    // derecho a los rubros: la propuesta pre-visita ya no aplica, manda el snapshot.
     // `visitaEnCurso` es la fuente de verdad para ESTE cliente mientras la agenda no
     // refrescó todavía (recién se inició en esta sesión); si no aplica, se usa el
     // snapshot que ya trae `cliente` del servidor.
@@ -190,10 +190,10 @@ export default function VisitaFlow({
             await conUbicacion(async coord => {
                 try {
                     const res = await cerrar.mutateAsync({ visitaId, coordFinal: coord })
-                    if (res.rubrosPendientes > 0) {
+                    if (res.ofrecimientosPendientes > 0) {
                         onAviso?.(
                             'info',
-                            `Visita cerrada. Te quedan ${res.rubrosPendientes} rubros por cargar.`,
+                            `Visita cerrada. Te quedan ${res.ofrecimientosPendientes} rubros por cargar.`,
                         )
                     } else {
                         onAviso?.('exito', 'Visita cerrada')

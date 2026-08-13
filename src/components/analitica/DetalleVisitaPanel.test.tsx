@@ -22,12 +22,14 @@ const DETALLE: IVisitaDetalle = {
     coordFinal: { lat: -32.9443, lng: -60.6506 },
     coordCliente: { lat: -32.9441, lng: -60.6504 },
     distanciaMetros: 29,
-    rubros: [
+    ofrecimientos: [
         {
-            rubroCode: 'R01',
-            rubroDescripcion: 'Lubricantes',
+            tipo: 'rubro',
+            codigo: 'R01',
+            descripcion: 'Lubricantes',
             esPropuesto: true,
             resuelto: true,
+            alcance: [],
             motivos: [
                 {
                     descripcion: 'Precio',
@@ -39,11 +41,24 @@ const DETALLE: IVisitaDetalle = {
             ],
         },
         {
-            rubroCode: 'R02',
-            rubroDescripcion: 'Filtros',
+            tipo: 'rubro',
+            codigo: 'R02',
+            descripcion: 'Filtros',
             esPropuesto: true,
             resuelto: false,
+            alcance: [],
             motivos: [],
+        },
+        {
+            tipo: 'accion',
+            codigo: 'CUPO',
+            descripcion: 'Plan cupo',
+            esPropuesto: false,
+            resuelto: true,
+            alcance: [{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }],
+            motivos: [
+                { descripcion: 'Saqué pedido', resultado: 'ganado', marca: null, competidor: null, pctDiferencia: null },
+            ],
         },
     ],
 }
@@ -81,7 +96,15 @@ it('marca los rubros que quedaron sin resolver', async () => {
     ;(api.getVisitaDetalle as any).mockResolvedValue(DETALLE)
     montar()
     await waitFor(() => expect(screen.getByText('Filtros')).toBeInTheDocument())
-    expect(screen.getByTestId('rubro-R02')).toHaveTextContent(/sin resolver/i)
+    expect(screen.getByTestId('ofrecimiento-rubro-R02')).toHaveTextContent(/sin resolver/i)
+})
+
+it('muestra el tipo y el alcance de un ofrecimiento que no es rubro', async () => {
+    ;(api.getVisitaDetalle as any).mockResolvedValue(DETALLE)
+    montar()
+    await waitFor(() => expect(screen.getByText('Plan cupo')).toBeInTheDocument())
+    expect(screen.getByText('Acción')).toBeInTheDocument()
+    expect(screen.getByText('SKF')).toBeInTheDocument()
 })
 
 it('no dibuja el mapa si el cliente no tiene coords', async () => {

@@ -125,7 +125,7 @@ export interface ISincronizarResult {
      *  "semana N" — ver "El vocabulario: zona, no semana" en el spec del 2026-08-12. */
     descripcionSemanaCerrada: string | null
     sinVisitar: string[]
-    rubrosAutocompletados: number
+    ofrecimientosAutocompletados: number
     altas: string[]
     bajas: string[]
     rotacionCerrada: boolean

@@ -1,5 +1,18 @@
+import type { TipoOfrecimiento } from '@/types/planificacion'
+
 /** Tolerancia heredada de api-mobiliza (TOLERANCIA_GEOLOCALIZACION). Inclusive. */
 export const TOLERANCIA_METROS = 300
+
+/** Etiqueta del chip de tipo en la analítica. Un solo lugar: DetalleVisitaPanel y
+ *  TablaVisitas lo comparten para no divergir. 'rubro' no se usa como chip — es el
+ *  caso por defecto y no se pinta. */
+export const TIPO_LABEL: Record<TipoOfrecimiento, string> = {
+    rubro: 'Rubro',
+    marca: 'Marca',
+    linea: 'Línea',
+    articulo: 'Artículo',
+    accion: 'Acción',
+}
 
 /** Un valor está en rojo si cae por debajo del 70% del promedio del equipo. */
 const PISO_RELATIVO = 0.7
