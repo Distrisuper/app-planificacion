@@ -25,15 +25,15 @@ it('useMotivos returns the motivos catalog', async () => {
 
 it('useMotivos manda el nivel a la API y lo incluye en la key', async () => {
     ;(api.getMotivos as any).mockResolvedValue([
-        { motivoId: 2, descripcion: 'Precio', nivel: 'rubro' },
+        { motivoId: 2, descripcion: 'Precio', nivel: 'ofrecimiento' },
     ])
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const { result } = renderHook(() => useMotivos('rubro'), {
+    const { result } = renderHook(() => useMotivos('ofrecimiento'), {
         wrapper: ({ children }) => (
             <QueryClientProvider client={qc}>{children}</QueryClientProvider>
         ),
     })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(api.getMotivos).toHaveBeenCalledWith('rubro')
-    expect(qc.getQueryData(['motivos', 'rubro'])).toEqual(result.current.data)
+    expect(api.getMotivos).toHaveBeenCalledWith('ofrecimiento')
+    expect(qc.getQueryData(['motivos', 'ofrecimiento'])).toEqual(result.current.data)
 })
