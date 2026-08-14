@@ -17,6 +17,7 @@ import { useMotivos } from '@/hooks/useMotivos'
 import { useNoVisita } from '@/hooks/useVisitas'
 import { useNotificacion } from '@/hooks/useNotificacion'
 import { useAppExterna } from '@/hooks/useAppExterna'
+import { abrirAppExternaEnPestana } from '@/lib/appsExternas'
 import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
@@ -449,7 +450,7 @@ export default function AgendaSemanaPage() {
                         onAbrir={abrirPropuesta}
                         onEstadoVisita={setEstadoVisitaCliente}
                         onIniciarVisita={iniciarDirecto}
-                        onAbrirAppExterna={appExterna.abrir}
+                        onAbrirAppExterna={abrirAppExternaEnPestana}
                     />
                 </>
             )}
@@ -466,7 +467,7 @@ export default function AgendaSemanaPage() {
                 }}
                 onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
                 onAviso={mostrar}
-                onAbrirAppExterna={appExterna.abrir}
+                onAbrirAppExterna={abrirAppExternaEnPestana}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar
