@@ -21,6 +21,10 @@ const moduloCupo: IModuloDetalleAccion<ICupoDetalle> = {
     Editor: EditorCupo,
     resumen: resumenCupo,
     esValido: esValidoCupo,
+    // Se probó 'inline' (compartir fila con el selector): con índice + monto + M/K +
+    // % + quitar, no entraba cómodo en la mitad de una pantalla chica. Va debajo, en
+    // su propio bloque de ancho completo — igual se compactó con el monto en M/K.
+    layout: 'stack',
 }
 
 const moduloDescuento: IModuloDetalleAccion<IDescuentoDetalle> = {

@@ -35,8 +35,9 @@ export default function AccionComercialPicker({ acciones, value, onChange }: Acc
     const moduloDetalle = value ? registroDetalleAccion[value.accion] : undefined
     const descripcionElegida = value ? (acciones.find(a => a.code === value.accion)?.description ?? value.accion) : null
     // Editores de un solo campo chico (ej. Descuento) entran en la misma fila que el
-    // resumen — un select + un input al lado, como cualquier form compacto. Los que no
-    // entran en una línea (Cupo, lista de tramos) van debajo, en su propio bloque.
+    // resumen — un select + un input al lado. Los que no entran en una línea (Cupo,
+    // con índice + monto + unidad + % + quitar por tramo) van debajo, en su propio
+    // bloque de ancho completo.
     const esInline = moduloDetalle?.layout === 'inline'
 
     // Cambiar de acción descarta los params: los tramos de un Cupo no significan nada
@@ -109,7 +110,7 @@ export default function AccionComercialPicker({ acciones, value, onChange }: Acc
                     <button
                         type="button"
                         onClick={() => setEligiendo(true)}
-                        className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-[#E1E6F0] bg-[#EEF3FB] px-2.5 py-2 text-left"
+                        className={`flex items-center gap-2 rounded-lg border border-[#E1E6F0] bg-[#EEF3FB] px-2.5 py-2 text-left ${esInline ? 'w-1/2 shrink-0' : 'min-w-0 flex-1'}`}
                     >
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#182645]">
                             {descripcionElegida}
@@ -117,10 +118,12 @@ export default function AccionComercialPicker({ acciones, value, onChange }: Acc
                         <ChevronDown className="h-4 w-4 shrink-0 text-dsmuted" strokeWidth={2.4} />
                     </button>
                     {value && moduloDetalle && esInline && (
-                        <moduloDetalle.Editor
-                            value={value.params}
-                            onChange={params => onChange({ ...value, params })}
-                        />
+                        <div className="min-w-0 flex-1">
+                            <moduloDetalle.Editor
+                                value={value.params}
+                                onChange={params => onChange({ ...value, params })}
+                            />
+                        </div>
                     )}
                 </div>
             )}

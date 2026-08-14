@@ -61,15 +61,51 @@ describe('EditorCupo', () => {
         expect(screen.queryByRole('button', { name: /quitar tramo/i })).not.toBeInTheDocument()
     })
 
-    it('cargar el umbral dispara onChange con el tramo actualizado', () => {
+    it('arranca en millones: cargar "2.5" dispara onChange con 2.500.000', () => {
         const onChange = vi.fn()
         render(<EditorCupo value={undefined} onChange={onChange} />)
 
-        fireEvent.change(screen.getByLabelText(/tramo 1.*alcanza/i), {
-            target: { value: '2500000' },
-        })
+        fireEvent.change(screen.getByLabelText(/tramo 1.*alcanza/i), { target: { value: '2.5' } })
 
         expect(onChange).toHaveBeenCalledWith({ tramos: [{ umbral: 2_500_000, descuentoPct: 0 }] })
+    })
+
+    // 3-4 dígitos en vez de 7: es lo que hace que el tramo entre en una línea.
+    it('alternar a K y cargar "2500" dispara onChange con el mismo monto en pesos', () => {
+        const onChange = vi.fn()
+        render(<EditorCupo value={undefined} onChange={onChange} />)
+
+        fireEvent.click(screen.getByRole('button', { name: 'M' }))
+        fireEvent.change(screen.getByLabelText(/tramo 1.*alcanza/i), { target: { value: '2500' } })
+
+        expect(onChange).toHaveBeenCalledWith({ tramos: [{ umbral: 2_500_000, descuentoPct: 0 }] })
+    })
+
+    it('un monto ya cargado se muestra en millones por defecto', () => {
+        render(
+            <EditorCupo
+                value={{ tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] }}
+                onChange={vi.fn()}
+            />,
+        )
+        expect(screen.getByLabelText(/tramo 1.*alcanza/i)).toHaveValue('2.5')
+    })
+
+    // Alternar la unidad solo cambia cómo se MUESTRA el monto ya cargado — no dispara
+    // onChange: el dato en pesos no cambió, solo la unidad de tipeo.
+    it('alternar la unidad sobre un monto ya cargado no dispara onChange', () => {
+        const onChange = vi.fn()
+        render(
+            <EditorCupo
+                value={{ tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] }}
+                onChange={onChange}
+            />,
+        )
+
+        fireEvent.click(screen.getByRole('button', { name: 'M' }))
+
+        expect(screen.getByLabelText(/tramo 1.*alcanza/i)).toHaveValue('2500')
+        expect(onChange).not.toHaveBeenCalled()
     })
 
     it('cargar el descuento dispara onChange con el tramo actualizado', () => {
