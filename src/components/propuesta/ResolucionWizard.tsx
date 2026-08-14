@@ -62,16 +62,33 @@ export default function ResolucionWizard({
         )
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
 
-    // Replica SOLO acción + marca del rubro actual al resto — nunca la resolución: qué
-    // pasó con cada rubro es suyo, y la evidencia de seguimientos muestra que el
-    // desenlace puede variar rubro a rubro aunque la acción sea la misma (un cupo se
-    // acepta pero un kit puntual se rechaza). Es una copia de una sola vez al tildar el
-    // check, no un vínculo: cada rubro sigue editable después.
+    // Replica SOLO acción o SOLO marca del rubro actual al resto — nunca juntas y nunca
+    // la resolución: qué pasó con cada rubro es suyo, y la evidencia de seguimientos
+    // muestra que el desenlace puede variar rubro a rubro aunque la acción sea la misma
+    // (un cupo se acepta pero un kit puntual se rechaza). Cada check copia SU campo sin
+    // tocar el otro que ya tuviera cargado ese rubro — es una copia de una sola vez, no
+    // un vínculo: cada rubro sigue editable después.
     const restantes = ofrecimientos.filter((_, i) => i !== index)
 
-    function aplicarAccionYMarca() {
+    function aplicarAccion() {
         for (const r of restantes) {
-            onCambiarAccion(r.id, accion)
+            const actual = detalles[r.id] ?? null
+            onCambiarAccion(r.id, {
+                accion: accion?.accion ?? null,
+                marca: actual?.marca ?? null,
+                params: accion?.params,
+            })
+        }
+    }
+
+    function aplicarMarca() {
+        for (const r of restantes) {
+            const actual = detalles[r.id] ?? null
+            onCambiarAccion(r.id, {
+                accion: actual?.accion ?? null,
+                marca: accion?.marca ?? null,
+                params: actual?.params,
+            })
         }
     }
 
@@ -196,7 +213,8 @@ export default function ResolucionWizard({
                     value={borradores[ofrecimiento.id] ?? []}
                     onChange={m => onCambiarBorrador(ofrecimiento.id, m)}
                     rubrosRestantes={restantes.length}
-                    onAplicarATodos={aplicarAccionYMarca}
+                    onAplicarAccion={aplicarAccion}
+                    onAplicarMarca={aplicarMarca}
                 />
             </div>
         </div>

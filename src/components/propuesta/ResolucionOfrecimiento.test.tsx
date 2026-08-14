@@ -119,7 +119,6 @@ it('con acción comercial cargada, el checklist sigue siendo el mismo', () => {
 it('ofrece cargar una marca sin acción comercial', () => {
     const { onChangeAccion } = setup()
     fireEvent.click(screen.getByText(/de qué marca/i))
-    fireEvent.click(screen.getByLabelText(/marca/i))
     fireEvent.click(screen.getByText('Fric-Rot'))
 
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
@@ -210,10 +209,10 @@ describe('un solo bucket de resultado a la vez', () => {
     })
 })
 
-// El check replica acción+marca a los rubros restantes — nunca la resolución, que es
-// de cada rubro.
-describe('aplicar acción y marca a los rubros restantes', () => {
-    it('sin acción ni marca, no se ofrece el check aunque haya rubros restantes', () => {
+// Cada chip tiene SU propio check ("Aplicar a restantes"), compacto en su header —
+// uno para acción, otro para marca. Nunca la resolución, que es de cada rubro.
+describe('aplicar a restantes: un check por chip', () => {
+    it('sin acción ni marca, no se ofrece ningún check aunque haya rubros restantes', () => {
         setup([], { rubrosRestantes: 3 })
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     })
@@ -223,21 +222,49 @@ describe('aplicar acción y marca a los rubros restantes', () => {
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     })
 
-    it('con acción y rubros restantes, ofrece el check con la cantidad', () => {
+    it('con solo acción cargada, ofrece un único check (el de Acción)', () => {
         setup([], { accion: { accion: 'CUPO', marca: null }, rubrosRestantes: 4 })
-        expect(screen.getByText('Aplicar esta acción y marca a los 4 rubros restantes')).toBeInTheDocument()
+        expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(1)
     })
 
-    it('tildarlo dispara onAplicarATodos', () => {
-        const onAplicarATodos = vi.fn()
-        setup([], { accion: { accion: 'CUPO', marca: null }, rubrosRestantes: 2, onAplicarATodos })
-
-        fireEvent.click(screen.getByRole('checkbox'))
-
-        expect(onAplicarATodos).toHaveBeenCalledTimes(1)
+    it('con acción y marca cargadas, ofrece un check en cada chip', () => {
+        setup([], { accion: { accion: 'CUPO', marca: 'AG' }, rubrosRestantes: 4 })
+        expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(2)
     })
 
-    it('con solo marca (sin acción) también se ofrece el check', () => {
+    it('tildar el check de Acción dispara onAplicarAccion, no onAplicarMarca', () => {
+        const onAplicarAccion = vi.fn()
+        const onAplicarMarca = vi.fn()
+        setup([], {
+            accion: { accion: 'CUPO', marca: 'AG' },
+            rubrosRestantes: 2,
+            onAplicarAccion,
+            onAplicarMarca,
+        })
+
+        fireEvent.click(screen.getAllByRole('checkbox')[0])
+
+        expect(onAplicarAccion).toHaveBeenCalledTimes(1)
+        expect(onAplicarMarca).not.toHaveBeenCalled()
+    })
+
+    it('tildar el check de Marca dispara onAplicarMarca, no onAplicarAccion', () => {
+        const onAplicarAccion = vi.fn()
+        const onAplicarMarca = vi.fn()
+        setup([], {
+            accion: { accion: 'CUPO', marca: 'AG' },
+            rubrosRestantes: 2,
+            onAplicarAccion,
+            onAplicarMarca,
+        })
+
+        fireEvent.click(screen.getAllByRole('checkbox')[1])
+
+        expect(onAplicarMarca).toHaveBeenCalledTimes(1)
+        expect(onAplicarAccion).not.toHaveBeenCalled()
+    })
+
+    it('con solo marca (sin acción) también se ofrece su check', () => {
         setup([], { accion: { accion: null, marca: 'Fric-Rot' }, rubrosRestantes: 1 })
         expect(screen.getByRole('checkbox')).toBeInTheDocument()
     })

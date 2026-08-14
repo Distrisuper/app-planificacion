@@ -12,6 +12,12 @@ interface AccionComercialPickerProps {
     acciones: ICatalogoItem[]
     value: IAccionSinMarca | null
     onChange: (value: IAccionSinMarca | null) => void
+    /** Cuántos rubros quedan por resolver además de este. 0 = no se ofrece el check de
+     *  "aplicar a restantes". */
+    rubrosRestantes?: number
+    /** Copia esta acción (y sus params) a los rubros restantes — una sola vez, al
+     *  tildar el check. La marca de cada rubro no se toca. */
+    onAplicarATodos?: () => void
 }
 
 /** "¿Con acción comercial?": con qué se ofreció este rubro (Plan cupo, Descuento) y con
@@ -28,9 +34,16 @@ interface AccionComercialPickerProps {
  *  su test no necesita React Query. Los editores de parámetros salen del registro por
  *  código de acción (accionDetalle/registro.ts) — sumar una acción con parámetros
  *  nuevos no toca este archivo. */
-export default function AccionComercialPicker({ acciones, value, onChange }: AccionComercialPickerProps) {
+export default function AccionComercialPicker({
+    acciones,
+    value,
+    onChange,
+    rubrosRestantes = 0,
+    onAplicarATodos,
+}: AccionComercialPickerProps) {
     const [abierto, setAbierto] = useState(!!value)
     const [eligiendo, setEligiendo] = useState(!value)
+    const [aplicado, setAplicado] = useState(false)
 
     const moduloDetalle = value ? registroDetalleAccion[value.accion] : undefined
     const descripcionElegida = value ? (acciones.find(a => a.code === value.accion)?.description ?? value.accion) : null
@@ -67,9 +80,25 @@ export default function AccionComercialPicker({ acciones, value, onChange }: Acc
 
     return (
         <div className="animate-panel-in mb-3 flex flex-col gap-2 rounded-[11px] border-[1.5px] border-[#B9CCEC] bg-white p-2.5">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
-                Acción comercial
-            </span>
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
+                    Acción comercial
+                </span>
+                {value && rubrosRestantes > 0 && (
+                    <label className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-dsnavy">
+                        <input
+                            type="checkbox"
+                            checked={aplicado}
+                            onChange={e => {
+                                setAplicado(e.target.checked)
+                                if (e.target.checked) onAplicarATodos?.()
+                            }}
+                            className="h-3.5 w-3.5 shrink-0 rounded border-[#C9D2E3] accent-dsnavy"
+                        />
+                        Aplicar a restantes
+                    </label>
+                )}
+            </div>
 
             {eligiendo ? (
                 <div className="animate-panel-in flex flex-wrap gap-1.5">

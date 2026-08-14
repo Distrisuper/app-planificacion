@@ -175,38 +175,55 @@ it('si falla el borrado, muestra el error y no vuelve a la lista', async () => {
     expect(onVolver).not.toHaveBeenCalled()
 })
 
-it('sin acción ni marca cargada, no ofrece el check de aplicar a los restantes', () => {
+it('sin acción ni marca cargada, no ofrece ningún check de aplicar a restantes', () => {
     // Con motivos tildados pero SIN acción/marca tampoco se ofrece: lo que se replica
-    // es acción+marca, nunca la resolución.
+    // es acción o marca, nunca la resolución.
     setup({ borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] } })
-    expect(screen.queryByText(/aplicar esta acción y marca/i)).not.toBeInTheDocument()
+    expect(screen.queryByText('Aplicar a restantes')).not.toBeInTheDocument()
 })
 
-it('con acción cargada, ofrece aplicarla a los rubros restantes', () => {
+it('con acción cargada, ofrece SOLO el check de la acción (no el de marca)', () => {
     setup({ detalles: { 7: { accion: 'CUPO', marca: null } } })
-    expect(screen.getByText('Aplicar esta acción y marca a los 1 rubros restantes')).toBeInTheDocument()
+    expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(1)
 })
 
-it('tildar el check replica SOLO la acción y la marca, nunca la resolución', () => {
+it('con acción y marca cargadas, ofrece un check en cada chip', () => {
+    setup({ detalles: { 7: { accion: 'CUPO', marca: 'AG' } } })
+    expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(2)
+})
+
+it('tildar el check de Acción copia solo la acción, sin tocar la marca ya cargada del otro rubro', () => {
     const onCambiarBorrador = vi.fn()
     const onCambiarAccion = vi.fn()
     setup({
         borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] },
-        detalles: { 7: { accion: 'CUPO', marca: 'AG' } },
+        detalles: { 7: { accion: 'CUPO', marca: 'AG' }, 8: { accion: null, marca: 'Fric-Rot' } },
         onCambiarBorrador,
         onCambiarAccion,
     })
 
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getAllByRole('checkbox')[0])
 
-    expect(onCambiarAccion).toHaveBeenCalledWith(8, { accion: 'CUPO', marca: 'AG' })
+    expect(onCambiarAccion).toHaveBeenCalledWith(8, { accion: 'CUPO', marca: 'Fric-Rot' })
     expect(onCambiarBorrador).not.toHaveBeenCalled()
 })
 
-it('con un solo rubro en el wizard, no ofrece el check: no hay restantes', () => {
+it('tildar el check de Marca copia solo la marca, sin tocar la acción ya cargada del otro rubro', () => {
+    const onCambiarAccion = vi.fn()
+    setup({
+        detalles: { 7: { accion: 'CUPO', marca: 'AG' }, 8: { accion: 'DESCUENTO', marca: null } },
+        onCambiarAccion,
+    })
+
+    fireEvent.click(screen.getAllByRole('checkbox')[1])
+
+    expect(onCambiarAccion).toHaveBeenCalledWith(8, { accion: 'DESCUENTO', marca: 'AG' })
+})
+
+it('con un solo rubro en el wizard, no ofrece ningún check: no hay restantes', () => {
     setup({
         ofrecimientos: [ofrecimientos[0]],
-        detalles: { 7: { accion: 'CUPO', marca: null } },
+        detalles: { 7: { accion: 'CUPO', marca: 'AG' } },
     })
-    expect(screen.queryByText(/aplicar esta acción y marca/i)).not.toBeInTheDocument()
+    expect(screen.queryByText('Aplicar a restantes')).not.toBeInTheDocument()
 })

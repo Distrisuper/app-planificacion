@@ -12,11 +12,11 @@ describe('MarcaOfrecimientoPicker', () => {
         expect(screen.queryByText('AG')).not.toBeInTheDocument()
     })
 
-    it('abrir muestra el buscador de marcas', () => {
+    // Un solo click: el buscador aparece de una, sin un segundo toque para desplegarlo.
+    it('abrir muestra el buscador de marcas de una, sin un segundo click', () => {
         render(<MarcaOfrecimientoPicker marcas={marcas} value={null} onChange={vi.fn()} />)
 
         fireEvent.click(screen.getByText(/de qué marca/i))
-        fireEvent.click(screen.getByLabelText(/marca/i))
 
         expect(screen.getByText('AG')).toBeInTheDocument()
     })
@@ -26,7 +26,6 @@ describe('MarcaOfrecimientoPicker', () => {
         render(<MarcaOfrecimientoPicker marcas={marcas} value={null} onChange={onChange} />)
 
         fireEvent.click(screen.getByText(/de qué marca/i))
-        fireEvent.click(screen.getByLabelText(/marca/i))
         fireEvent.click(screen.getByText('AG'))
 
         expect(onChange).toHaveBeenCalledWith('AG')
