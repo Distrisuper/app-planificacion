@@ -16,10 +16,14 @@ interface MarcaOfrecimientoPickerProps {
     onAplicarATodos?: () => void
 }
 
-/** "¿De qué marca?": la marca puntual de este rubro, independiente de si hubo o no
- *  acción comercial — el vendedor suele cargar lo más específico que sabe ("SKF"), pero
- *  si no lo sabe, alcanza con el rubro solo ("amortiguadores"). Colapsado por defecto y
- *  opcional. */
+/** "Marca": la marca puntual de este rubro, independiente de si hubo o no acción
+ *  comercial — el vendedor suele cargar lo más específico que sabe ("SKF"), pero si no
+ *  lo sabe, alcanza con el rubro solo ("amortiguadores").
+ *
+ *  El campo está siempre a la vista, con "Sin marca" como valor por defecto: esconderlo
+ *  detrás de un "¿De qué marca?" plegado hacía que el vendedor no supiera que existía.
+ *  Es un solo control (un select buscador): el disparador se REEMPLAZA por el buscador
+ *  al abrirlo, en vez de sumarse arriba — así el bloque no ocupa el doble de alto. */
 export default function MarcaOfrecimientoPicker({
     marcas,
     marcasLoading,
@@ -28,30 +32,15 @@ export default function MarcaOfrecimientoPicker({
     rubrosRestantes = 0,
     onAplicarATodos,
 }: MarcaOfrecimientoPickerProps) {
-    const [abierto, setAbierto] = useState(!!value)
     const [buscadorAbierto, setBuscadorAbierto] = useState(false)
     const [aplicado, setAplicado] = useState(false)
 
-    if (!abierto && !value) {
-        return (
-            <button
-                type="button"
-                onClick={() => {
-                    setAbierto(true)
-                    setBuscadorAbierto(true)
-                }}
-                className="mb-3 flex w-full items-center gap-2 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-white px-3 py-2.5 text-left"
-            >
-                <span className="min-w-0 flex-1 text-sm font-semibold text-[#8A93A6]">
-                    ¿De qué marca?
-                </span>
-                <ChevronDown className="h-4 w-4 shrink-0 text-dsmuted" strokeWidth={2.4} />
-            </button>
-        )
-    }
-
     return (
-        <div className="animate-panel-in mb-3 flex flex-col gap-2 rounded-[11px] border-[1.5px] border-[#B9CCEC] bg-white p-2.5">
+        <div
+            className={`mb-3 flex flex-col gap-2 rounded-[11px] border-[1.5px] bg-white p-2.5 ${
+                value ? 'border-[#B9CCEC]' : 'border-[#E4E8F0]'
+            }`}
+        >
             <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
                     Marca <span className="normal-case">(opcional)</span>
@@ -71,43 +60,9 @@ export default function MarcaOfrecimientoPicker({
                     </label>
                 )}
             </div>
-            <button
-                type="button"
-                aria-label="Marca"
-                onClick={() => setBuscadorAbierto(!buscadorAbierto)}
-                className="flex w-full items-center gap-2 rounded-lg border border-[#E1E6F0] px-2.5 py-2 text-left"
-            >
-                <span
-                    className={`min-w-0 flex-1 truncate text-sm font-semibold ${
-                        value ? 'text-[#182645]' : 'text-[#8A93A6]'
-                    }`}
-                >
-                    {value ?? 'Elegí una marca'}
-                </span>
-                {value && <Check className="h-4 w-4 shrink-0 text-[#213D82]" strokeWidth={3} />}
-                <ChevronDown
-                    className={`h-4 w-4 shrink-0 text-dsmuted transition-transform duration-150 ${
-                        buscadorAbierto ? 'rotate-180' : ''
-                    }`}
-                    strokeWidth={2.4}
-                />
-            </button>
-            {buscadorAbierto && (
-                <div className="animate-panel-in mt-1.5 flex flex-col gap-1.5">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            onChange(null)
-                            setBuscadorAbierto(false)
-                        }}
-                        className={`self-start rounded-lg border-[1.5px] px-2.5 py-1.5 text-[12.5px] font-bold ${
-                            value
-                                ? 'border-[#E1E6F0] bg-white text-[#3B4560]'
-                                : 'border-[#B9CCEC] bg-[#EEF3FB] text-[#182645]'
-                        }`}
-                    >
-                        Sin marca
-                    </button>
+
+            {buscadorAbierto ? (
+                <div className="animate-panel-in">
                     <CatalogoPicker
                         items={marcas}
                         loading={marcasLoading}
@@ -118,8 +73,33 @@ export default function MarcaOfrecimientoPicker({
                         }}
                         placeholder="Buscar marca…"
                         autoFocus
+                        opcionVacia={{
+                            label: 'Sin marca',
+                            onSelect: () => {
+                                onChange(null)
+                                setBuscadorAbierto(false)
+                            },
+                        }}
+                        ocultarContadorRestantes
                     />
                 </div>
+            ) : (
+                <button
+                    type="button"
+                    aria-label="Marca"
+                    onClick={() => setBuscadorAbierto(true)}
+                    className="flex w-full items-center gap-2 rounded-lg border border-[#E1E6F0] px-2.5 py-2 text-left"
+                >
+                    <span
+                        className={`min-w-0 flex-1 truncate text-sm font-semibold ${
+                            value ? 'text-[#182645]' : 'text-[#8A93A6]'
+                        }`}
+                    >
+                        {value ?? 'Sin marca'}
+                    </span>
+                    {value && <Check className="h-4 w-4 shrink-0 text-[#213D82]" strokeWidth={3} />}
+                    <ChevronDown className="h-4 w-4 shrink-0 text-dsmuted" strokeWidth={2.4} />
+                </button>
             )}
         </div>
     )

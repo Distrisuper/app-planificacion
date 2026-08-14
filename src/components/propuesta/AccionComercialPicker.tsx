@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { ChevronDown } from 'lucide-react'
 import { registroDetalleAccion } from './accionDetalle/registro'
 import type { ICatalogoItem } from '@/types/planificacion'
 
@@ -20,15 +19,17 @@ interface AccionComercialPickerProps {
     onAplicarATodos?: () => void
 }
 
-/** "¿Con acción comercial?": con qué se ofreció este rubro (Plan cupo, Descuento) y con
- *  qué parámetros. La marca es un chip aparte (`MarcaOfrecimientoPicker`) — este
- *  componente no la conoce. Colapsado por defecto y opcional: la mayoría de los rubros
- *  se resuelven sin acción, y ahí la pantalla queda igual que siempre.
+/** "Acción comercial": con qué se ofreció este rubro (Plan cupo, Descuento) y con qué
+ *  parámetros. La marca es un chip aparte (`MarcaOfrecimientoPicker`) — este componente
+ *  no la conoce. Siempre desplegado, con "Sin acción" elegido por defecto: plegado
+ *  detrás de un "¿Con acción comercial?" el vendedor no llegaba a ver que las opciones
+ *  existían. Sigue siendo opcional — "Sin acción" es un valor válido, no un vacío.
  *
- *  Una vez elegida una acción, las opciones (Sin acción / Plan cupo / Descuento…) se
- *  colapsan a un resumen de una línea: mostrarlas siempre lado a lado no aporta nada
- *  después de elegir, y con varias acciones en el catálogo se come la pantalla. Tocar
- *  el resumen las vuelve a desplegar para cambiar de opción.
+ *  Los chips (Sin acción / Plan cupo / Descuento…) quedan SIEMPRE a la vista, con el
+ *  elegido resaltado, y el editor de parámetros de esa acción aparece debajo (los
+ *  tramos del Cupo, el % del Descuento). Se probó colapsarlos a un resumen de una línea
+ *  al elegir: ahorraba una fila, pero cambiar de acción pasaba a costar dos toques y
+ *  desde el resumen no se veía qué otras opciones había.
  *
  *  Presentacional puro: el catálogo llega por props (lo pide ResolucionWizard), así que
  *  su test no necesita React Query. Los editores de parámetros salen del registro por
@@ -41,45 +42,22 @@ export default function AccionComercialPicker({
     rubrosRestantes = 0,
     onAplicarATodos,
 }: AccionComercialPickerProps) {
-    const [abierto, setAbierto] = useState(!!value)
-    const [eligiendo, setEligiendo] = useState(!value)
     const [aplicado, setAplicado] = useState(false)
 
     const moduloDetalle = value ? registroDetalleAccion[value.accion] : undefined
-    const descripcionElegida = value ? (acciones.find(a => a.code === value.accion)?.description ?? value.accion) : null
-    // Editores de un solo campo chico (ej. Descuento) entran en la misma fila que el
-    // resumen — un select + un input al lado. Los que no entran en una línea (Cupo,
-    // con índice + monto + unidad + % + quitar por tramo) van debajo, en su propio
-    // bloque de ancho completo.
-    const esInline = moduloDetalle?.layout === 'inline'
 
     // Cambiar de acción descarta los params: los tramos de un Cupo no significan nada
     // para un Descuento (que es un % suelto).
     function elegirAccion(item: ICatalogoItem) {
         onChange({ accion: item.code })
-        setEligiendo(false)
-    }
-
-    if (!abierto && !value) {
-        return (
-            <button
-                type="button"
-                onClick={() => {
-                    setAbierto(true)
-                    setEligiendo(true)
-                }}
-                className="mb-3 flex w-full items-center gap-2 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-white px-3 py-2.5 text-left"
-            >
-                <span className="min-w-0 flex-1 text-sm font-semibold text-[#8A93A6]">
-                    ¿Con acción comercial?
-                </span>
-                <ChevronDown className="h-4 w-4 shrink-0 text-dsmuted" strokeWidth={2.4} />
-            </button>
-        )
     }
 
     return (
-        <div className="animate-panel-in mb-3 flex flex-col gap-2 rounded-[11px] border-[1.5px] border-[#B9CCEC] bg-white p-2.5">
+        <div
+            className={`mb-3 flex flex-col gap-2 rounded-[11px] border-[1.5px] bg-white p-2.5 ${
+                value ? 'border-[#B9CCEC]' : 'border-[#E4E8F0]'
+            }`}
+        >
             <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
                     Acción comercial <span className="normal-case">(opcional)</span>
@@ -100,64 +78,38 @@ export default function AccionComercialPicker({
                 )}
             </div>
 
-            {eligiendo ? (
-                <div className="animate-panel-in flex flex-wrap gap-1.5">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            onChange(null)
-                            setAbierto(false)
-                        }}
-                        className={`rounded-lg border-[1.5px] px-2.5 py-1.5 text-[12.5px] font-bold ${
-                            value
-                                ? 'border-[#E1E6F0] bg-white text-[#3B4560]'
-                                : 'border-[#B9CCEC] bg-[#EEF3FB] text-[#182645]'
-                        }`}
-                    >
-                        Sin acción
-                    </button>
-                    {acciones.map(a => {
-                        const on = value?.accion === a.code
-                        return (
-                            <button
-                                key={a.code}
-                                type="button"
-                                onClick={() => elegirAccion(a)}
-                                className={`rounded-lg border-[1.5px] px-2.5 py-1.5 text-[12.5px] font-bold ${
-                                    on
-                                        ? 'border-[#B9CCEC] bg-[#EEF3FB] text-[#182645]'
-                                        : 'border-[#E1E6F0] bg-white text-[#3B4560]'
-                                }`}
-                            >
-                                {a.description}
-                            </button>
-                        )
-                    })}
-                </div>
-            ) : (
-                <div className="animate-panel-in flex items-center gap-1.5">
-                    <button
-                        type="button"
-                        onClick={() => setEligiendo(true)}
-                        className={`flex items-center gap-2 rounded-lg border border-[#E1E6F0] bg-[#EEF3FB] px-2.5 py-2 text-left ${esInline ? 'w-1/2 shrink-0' : 'min-w-0 flex-1'}`}
-                    >
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-[#182645]">
-                            {descripcionElegida}
-                        </span>
-                        <ChevronDown className="h-4 w-4 shrink-0 text-dsmuted" strokeWidth={2.4} />
-                    </button>
-                    {value && moduloDetalle && esInline && (
-                        <div className="min-w-0 flex-1">
-                            <moduloDetalle.Editor
-                                value={value.params}
-                                onChange={params => onChange({ ...value, params })}
-                            />
-                        </div>
-                    )}
-                </div>
-            )}
+            <div className="flex flex-wrap gap-1.5">
+                <button
+                    type="button"
+                    onClick={() => onChange(null)}
+                    className={`rounded-lg border-[1.5px] px-2.5 py-1.5 text-[12.5px] font-bold ${
+                        value
+                            ? 'border-[#E1E6F0] bg-white text-[#3B4560]'
+                            : 'border-[#B9CCEC] bg-[#EEF3FB] text-[#182645]'
+                    }`}
+                >
+                    Sin acción
+                </button>
+                {acciones.map(a => {
+                    const on = value?.accion === a.code
+                    return (
+                        <button
+                            key={a.code}
+                            type="button"
+                            onClick={() => elegirAccion(a)}
+                            className={`rounded-lg border-[1.5px] px-2.5 py-1.5 text-[12.5px] font-bold ${
+                                on
+                                    ? 'border-[#B9CCEC] bg-[#EEF3FB] text-[#182645]'
+                                    : 'border-[#E1E6F0] bg-white text-[#3B4560]'
+                            }`}
+                        >
+                            {a.description}
+                        </button>
+                    )
+                })}
+            </div>
 
-            {value && moduloDetalle && !esInline && (
+            {value && moduloDetalle && (
                 <div className="animate-panel-in">
                     <moduloDetalle.Editor
                         value={value.params}
