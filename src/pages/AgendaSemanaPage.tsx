@@ -11,6 +11,7 @@ import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import AppExternaSheet from '@/components/AppExternaSheet'
 import { BuscadorDiaSheet } from '@/components/buscador/BuscadorDiaSheet'
+import { BuscadorGeneralSheet } from '@/components/buscador/BuscadorGeneralSheet'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
@@ -217,6 +218,7 @@ export default function AgendaSemanaPage() {
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [buscadorAbierto, setBuscadorAbierto] = useState(false)
+    const [buscadorGeneralAbierto, setBuscadorGeneralAbierto] = useState(false)
     // La visita en curso del vendedor, independiente de qué card esté mirando ahora
     // (`visitaCliente`). Antes vivía adentro de VisitaFlow atada al cliente abierto: tocar
     // la propuesta de OTRO cliente y cerrarla la perdía, y la barra flotante desaparecía.
@@ -421,6 +423,7 @@ export default function AgendaSemanaPage() {
                 onLogout={logout}
                 onPrevWeek={() => moverSemana(-1)}
                 onNextWeek={() => moverSemana(1)}
+                onAbrirBuscadorGeneral={() => setBuscadorGeneralAbierto(true)}
             />
             <DiaTabs activo={diaActivo} counts={counts} onSelect={setDiaActivo} />
             <AgendaBoard
@@ -524,6 +527,11 @@ export default function AgendaSemanaPage() {
                     onNavegarAExistente={abrirPropuesta}
                 />
             )}
+            <BuscadorGeneralSheet
+                open={buscadorGeneralAbierto}
+                onClose={() => setBuscadorGeneralAbierto(false)}
+                onVerZona={setSemanaVista}
+            />
             <Notification notificacion={notificacion} onDismiss={ocultar} />
         </div>
     )

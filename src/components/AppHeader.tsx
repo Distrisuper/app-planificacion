@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import AccountMenu from '@/components/AccountMenu'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,10 @@ interface AppHeaderProps {
     onLogout?: () => void
     onPrevWeek?: () => void
     onNextWeek?: () => void
+    /** Abre el buscador general de solo lectura (spec 2026-08-12). Sin esta prop no se
+     *  pinta el ícono — mantiene el patrón de props-only del resto de las acciones, sin
+     *  acoplar este componente a react-query. */
+    onAbrirBuscadorGeneral?: () => void
 }
 
 function initialsOf(name: string) {
@@ -36,6 +40,7 @@ export default function AppHeader({
     onLogout,
     onPrevWeek,
     onNextWeek,
+    onAbrirBuscadorGeneral,
 }: AppHeaderProps) {
     const pct = total > 0 ? Math.round((completadas / total) * 100) : 0
     const preview = modo === 'preview'
@@ -51,7 +56,18 @@ export default function AppHeader({
                     </div>
                     <span className="truncate text-[15px] font-extrabold tracking-tight">DistriSuper</span>
                 </div>
-                <div className="flex shrink-0 items-center">
+                <div className="flex shrink-0 items-center gap-1">
+                    {onAbrirBuscadorGeneral && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Buscar en toda la rotación"
+                            onClick={onAbrirBuscadorGeneral}
+                            className="h-8 w-8 text-white/80 hover:bg-white/10 hover:text-white"
+                        >
+                            <Search className="h-[17px] w-[17px]" strokeWidth={2.2} />
+                        </Button>
+                    )}
                     {onLogout ? (
                         <AccountMenu nombre={vendedorNombre} onLogout={onLogout} />
                     ) : (
