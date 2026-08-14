@@ -22,6 +22,13 @@ interface CatalogoPickerProps {
     onSelect: (item: ICatalogoItem) => void
     placeholder: string
     autoFocus?: boolean
+    /** Opción de "ninguno" como PRIMERA fila de la lista (ej. "Sin marca"). Va adentro
+     *  de la lista y no como chip aparte arriba: afuera duplicaba la altura del control
+     *  y quedaba lejos del lugar donde se elige. Queda marcada cuando `value` es null. */
+    opcionVacia?: { label: string; onSelect: () => void }
+    /** Oculta el "+N más. Seguí escribiendo…" del pie. En un combo chico (marca dentro
+     *  del rubro) el cartel no aporta: el buscador ya está a la vista. */
+    ocultarContadorRestantes?: boolean
 }
 
 /** Sin acentos ni mayúsculas: nadie tipea la tilde de "BATERÍAS" parado en un mostrador. */
@@ -44,6 +51,8 @@ export default function CatalogoPicker({
     onSelect,
     placeholder,
     autoFocus,
+    opcionVacia,
+    ocultarContadorRestantes,
 }: CatalogoPickerProps) {
     const [busqueda, setBusqueda] = useState('')
 
@@ -109,6 +118,23 @@ export default function CatalogoPicker({
                      *  que queda visible del sheet; así se achica solo en vez de forzar
                      *  un segundo scroll para ver el pie (Atrás/Finalizar). */}
                     <div className="flex max-h-[min(200px,26dvh)] flex-col gap-1.5 overflow-y-auto pr-0.5">
+                        {opcionVacia && (
+                            <button
+                                type="button"
+                                disabled={bloqueada}
+                                onClick={opcionVacia.onSelect}
+                                className={`flex w-full items-center gap-2.5 rounded-[11px] border-[1.5px] px-3 py-2.5 text-left font-sans disabled:opacity-50 ${
+                                    value ? 'border-[#E4E8F0] bg-white' : 'border-[#B9CCEC] bg-[#EEF3FB]'
+                                }`}
+                            >
+                                <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#3B4560]">
+                                    {opcionVacia.label}
+                                </span>
+                                {!value && (
+                                    <Check className="h-4 w-4 shrink-0 text-[#213D82]" strokeWidth={3} />
+                                )}
+                            </button>
+                        )}
                         {visibles.map(item => {
                             const enCurso = pendingCode === item.code
                             const elegido = value === item.description
@@ -151,7 +177,7 @@ export default function CatalogoPicker({
                         )}
                     </div>
 
-                    {ocultos > 0 && (
+                    {ocultos > 0 && !ocultarContadorRestantes && (
                         <div className="py-2 text-center text-[12px] font-semibold text-dsmuted">
                             +{ocultos} más. Seguí escribiendo para afinar.
                         </div>

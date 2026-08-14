@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import AccountMenu from '@/components/AccountMenu'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,21 @@ interface AppHeaderProps {
     onLogout?: () => void
     onPrevWeek?: () => void
     onNextWeek?: () => void
+    /**
+     * Búsqueda general (solo lectura, toda la cartera). Sin `onAbrirBusqueda` no se
+     * pinta la lupa — este componente sigue siendo props-only, no toca react-query.
+     *
+     * Cuando `buscando` es true el header SE ADAPTA en vez de abrir un modal encima: la
+     * fila de marca se convierte en el campo de búsqueda, y la navegación de zonas y la
+     * barra de progreso se ocultan. Son de la zona que se está mirando, y buscar es
+     * justamente salir de esa zona — dejarlas prendidas mostraría el progreso de una
+     * zona mientras en pantalla hay clientes de otra.
+     */
+    buscando?: boolean
+    textoBusqueda?: string
+    onAbrirBusqueda?: () => void
+    onCambiarBusqueda?: (texto: string) => void
+    onCerrarBusqueda?: () => void
 }
 
 function initialsOf(name: string) {
@@ -36,6 +51,11 @@ export default function AppHeader({
     onLogout,
     onPrevWeek,
     onNextWeek,
+    buscando = false,
+    textoBusqueda = '',
+    onAbrirBusqueda,
+    onCambiarBusqueda,
+    onCerrarBusqueda,
 }: AppHeaderProps) {
     const pct = total > 0 ? Math.round((completadas / total) * 100) : 0
     const preview = modo === 'preview'
@@ -43,15 +63,47 @@ export default function AppHeader({
     return (
         <header className="bg-dsnavy text-white px-4 pt-3 pb-3.5">
             <div className="flex items-center justify-between gap-2">
-                <div className="flex min-w-0 shrink items-center gap-2">
-                    <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,.15)]">
-                        <span className="text-[15px] font-black leading-none tracking-tight text-dsnavy">
-                            D<span className="text-dsgreen">S</span>
-                        </span>
+                {buscando ? (
+                    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-[11px] bg-white/12 px-3 py-2">
+                        <Search className="h-4 w-4 shrink-0 text-white/60" strokeWidth={2.4} />
+                        <input
+                            className="min-w-0 flex-1 bg-transparent text-[14px] font-semibold text-white outline-none placeholder:font-medium placeholder:text-white/50"
+                            placeholder="Buscar cliente…"
+                            value={textoBusqueda}
+                            onChange={e => onCambiarBusqueda?.(e.target.value)}
+                            autoFocus
+                        />
+                        <button
+                            type="button"
+                            aria-label="Cerrar búsqueda"
+                            onClick={onCerrarBusqueda}
+                            className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-white/70 active:text-white"
+                        >
+                            <X className="h-4 w-4" strokeWidth={2.6} />
+                        </button>
                     </div>
-                    <span className="truncate text-[15px] font-extrabold tracking-tight">DistriSuper</span>
-                </div>
-                <div className="flex shrink-0 items-center">
+                ) : (
+                    <div className="flex min-w-0 shrink items-center gap-2">
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-[10px] bg-white shadow-[0_2px_8px_rgba(0,0,0,.15)]">
+                            <span className="text-[15px] font-black leading-none tracking-tight text-dsnavy">
+                                D<span className="text-dsgreen">S</span>
+                            </span>
+                        </div>
+                        <span className="truncate text-[15px] font-extrabold tracking-tight">DistriSuper</span>
+                    </div>
+                )}
+                <div className="flex shrink-0 items-center gap-1">
+                    {onAbrirBusqueda && !buscando && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label="Buscar cliente"
+                            onClick={onAbrirBusqueda}
+                            className="h-8 w-8 text-white/80 hover:bg-white/10 hover:text-white"
+                        >
+                            <Search className="h-[17px] w-[17px]" strokeWidth={2.2} />
+                        </Button>
+                    )}
                     {onLogout ? (
                         <AccountMenu nombre={vendedorNombre} onLogout={onLogout} />
                     ) : (
@@ -64,7 +116,7 @@ export default function AppHeader({
                 los tests (y el lector de pantalla) las identifican por nombre accesible, no por
                 el ícono. "Zona", no "semana": el vendedor no ve vocabulario de ciclo/rotación
                 (ver docs/dominio/modelo.md y el spec de 2026-08-12). */}
-            <div className="mt-2.5 flex items-center justify-between gap-2">
+            <div className={`mt-2.5 flex items-center justify-between gap-2 ${buscando ? 'hidden' : ''}`}>
                 <Button
                     variant="ghost"
                     size="icon"
@@ -97,7 +149,7 @@ export default function AppHeader({
 
             {/* Sin barra de progreso en preview: no hay progreso de una semana que no se trabaja,
                 y mostrar 0/39 se leería como "no hiciste nada" en vez de "no es tu semana". */}
-            {!preview && (
+            {!preview && !buscando && (
                 <div className="mt-2.5">
                     <div className="mb-1.5 flex justify-between text-[11.5px] font-semibold text-white/70">
                         <span>Visitas completadas</span>

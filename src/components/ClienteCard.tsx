@@ -98,6 +98,11 @@ export default function ClienteCard({
                             No visitado
                         </span>
                     )}
+                    {cliente.esExtra && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#E0E7FF] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-[#3730A3]">
+                            Agregado
+                        </span>
+                    )}
                 </div>
                 {cliente.estado === 'visitada' && (
                     <span

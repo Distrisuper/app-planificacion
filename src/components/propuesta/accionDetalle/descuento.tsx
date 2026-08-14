@@ -17,10 +17,10 @@ interface EditorDescuentoProps {
     onChange: (detalle: IDescuentoDetalle) => void
 }
 
-/** Un único input compacto, sin label visible propio: `layout: 'inline'` en el
- *  registro hace que viva en la MISMA fila que el selector de acción, así que "%
- *  de descuento" repetiría lo que ya dice "Descuento" ahí al lado — queda solo como
- *  aria-label, para accesibilidad y para los tests que buscan por label. */
+/** Un único input compacto, sin label visible propio: aparece justo debajo del chip
+ *  "Descuento" ya resaltado, así que un "% de descuento" arriba repetiría lo que el
+ *  chip dice — queda solo como aria-label, para accesibilidad y para los tests que
+ *  buscan por label. */
 export function EditorDescuento({ value, onChange }: EditorDescuentoProps) {
     const pct = value?.pct ?? 0
 

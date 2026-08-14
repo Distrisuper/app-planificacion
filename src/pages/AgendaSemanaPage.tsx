@@ -9,6 +9,8 @@ import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import AppExternaSheet from '@/components/AppExternaSheet'
+import { BuscadorDiaSheet } from '@/components/buscador/BuscadorDiaSheet'
+import { BuscadorGeneralPanel } from '@/components/buscador/BuscadorGeneralPanel'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
@@ -22,6 +24,15 @@ import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
 import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
+
+/** Para los avisos: el vendedor lee "movido al jueves", no "movido a JUE". */
+const NOMBRE_DIA: Record<Dia, string> = {
+    LUN: 'lunes',
+    MAR: 'martes',
+    MIE: 'miércoles',
+    JUE: 'jueves',
+    VIE: 'viernes',
+}
 
 const MENSAJE_GEO = {
     denegado:
@@ -214,6 +225,13 @@ export default function AgendaSemanaPage() {
     const [directoAMapa, setDirectoAMapa] = useState(false)
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
+    // El día destino del "+" que se tocó. null = sheet cerrado. Es el día del ENCABEZADO,
+    // no `diaActivo`: el board scrollea entre columnas y los dos pueden diferir por un
+    // instante mientras el swipe se asienta.
+    const [diaAAgregar, setDiaAAgregar] = useState<Dia | null>(null)
+    // Búsqueda general: null = no se está buscando. El texto vive acá y no adentro del
+    // header porque el panel de resultados es hermano del header, no hijo.
+    const [textoBusqueda, setTextoBusqueda] = useState<string | null>(null)
     // La visita en curso del vendedor, independiente de qué card esté mirando ahora
     // (`visitaCliente`). Antes vivía adentro de VisitaFlow atada al cliente abierto: tocar
     // la propuesta de OTRO cliente y cerrarla la perdía, y la barra flotante desaparecía.
@@ -401,19 +419,40 @@ export default function AgendaSemanaPage() {
                 onLogout={logout}
                 onPrevWeek={() => moverSemana(-1)}
                 onNextWeek={() => moverSemana(1)}
+                buscando={textoBusqueda !== null}
+                textoBusqueda={textoBusqueda ?? ''}
+                onAbrirBusqueda={() => setTextoBusqueda('')}
+                onCambiarBusqueda={setTextoBusqueda}
+                onCerrarBusqueda={() => setTextoBusqueda(null)}
             />
-            <DiaTabs activo={diaActivo} counts={counts} onSelect={setDiaActivo} />
-            <AgendaBoard
-                semana={semana}
-                activo={diaActivo}
-                modo={operable && ciclo != null ? 'operable' : 'preview'}
-                hayVisitaEnCurso={visitaEnCurso !== null}
-                onActivoChange={setDiaActivo}
-                onAbrir={abrirPropuesta}
-                onEstadoVisita={setEstadoVisitaCliente}
-                onIniciarVisita={iniciarDirecto}
-                onAbrirAppExterna={appExterna.abrir}
-            />
+            {/* Buscar REEMPLAZA la agenda en vez de taparla con un modal: los resultados
+                son de toda la vuelta, no del día que quedó abajo, y así el vendedor
+                vuelve con la X del header en vez de tener que cerrar algo encima. */}
+            {textoBusqueda !== null ? (
+                <BuscadorGeneralPanel
+                    texto={textoBusqueda}
+                    onVerZona={semana => {
+                        setSemanaVista(semana)
+                        setTextoBusqueda(null)
+                    }}
+                />
+            ) : (
+                <>
+                    <DiaTabs activo={diaActivo} counts={counts} onSelect={setDiaActivo} />
+                    <AgendaBoard
+                        semana={semana}
+                        activo={diaActivo}
+                        modo={operable && ciclo != null ? 'operable' : 'preview'}
+                        hayVisitaEnCurso={visitaEnCurso !== null}
+                        onActivoChange={setDiaActivo}
+                        onAgregarCliente={operable && ciclo != null ? setDiaAAgregar : undefined}
+                        onAbrir={abrirPropuesta}
+                        onEstadoVisita={setEstadoVisitaCliente}
+                        onIniciarVisita={iniciarDirecto}
+                        onAbrirAppExterna={appExterna.abrir}
+                    />
+                </>
+            )}
 
             <VisitaFlow
                 cliente={visitaCliente}
@@ -476,6 +515,24 @@ export default function AgendaSemanaPage() {
                         if (appExterna.clienteActivo) appExterna.abrir(app, appExterna.clienteActivo)
                     }}
                     onClose={appExterna.ocultar}
+                />
+            )}
+            {ciclo != null && diaAAgregar != null && (
+                <BuscadorDiaSheet
+                    open
+                    onClose={() => setDiaAAgregar(null)}
+                    semana={ciclo.semana}
+                    dia={DIAS.indexOf(diaAAgregar) + 1}
+                    onExtraCreada={() => {
+                        setDiaActivo(diaAAgregar)
+                        mostrar('exito', `Cliente agregado al ${NOMBRE_DIA[diaAAgregar]}`)
+                    }}
+                    onTraido={() => {
+                        setDiaActivo(diaAAgregar)
+                        mostrar('exito', `Cliente movido al ${NOMBRE_DIA[diaAAgregar]}`)
+                    }}
+                    onNavegarAExistente={abrirPropuesta}
+                    onAviso={mostrar}
                 />
             )}
             <Notification notificacion={notificacion} onDismiss={ocultar} />

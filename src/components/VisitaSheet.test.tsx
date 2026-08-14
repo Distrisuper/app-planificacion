@@ -434,7 +434,6 @@ it('la acción comercial cargada viaja en el batch de cierre', async () => {
     const { onCerrarVisita } = renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
 
-    fireEvent.click(await screen.findByText(/con acción comercial/i))
     fireEvent.click(await screen.findByRole('button', { name: 'Descuento' }))
     fireEvent.change(screen.getByLabelText(/% de descuento/i), { target: { value: '5' } })
     fireEvent.click(await screen.findByText('Saqué pedido'))

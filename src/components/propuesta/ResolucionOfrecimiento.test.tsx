@@ -60,13 +60,13 @@ it('destildar un motivo lo saca', () => {
 
 it('el detalle aparece por requiereDetalle, no por el nombre del motivo', () => {
     setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
-    expect(screen.getByLabelText(/marca/i)).toBeInTheDocument()
+    expect(screen.getByLabelText('Marca del motivo')).toBeInTheDocument()
     expect(screen.getByLabelText(/competidor/i)).toBeInTheDocument()
 })
 
 it('la marca se elige del catálogo, no se escribe', () => {
     setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
-    fireEvent.click(screen.getByLabelText(/marca/i))
+    fireEvent.click(screen.getByLabelText('Marca del motivo'))
     expect(screen.getByText('Fric-Rot')).toBeInTheDocument()
 })
 
@@ -74,7 +74,7 @@ it('elegir una marca la guarda por su descripción', () => {
     const { onChange } = setup([
         { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
     ])
-    fireEvent.click(screen.getByLabelText(/marca/i))
+    fireEvent.click(screen.getByLabelText('Marca del motivo'))
     fireEvent.click(screen.getByText('Fric-Rot'))
     expect(onChange).toHaveBeenCalledWith([
         { motivoId: 13, marca: 'Fric-Rot', competidor: null, pctDiferencia: null },
@@ -96,12 +96,11 @@ it('competidor sigue siendo texto libre', () => {
 it('sin acción comercial, el checklist es el de motivos de ofrecimiento', () => {
     setup()
     expect(screen.getByText('Saqué pedido')).toBeInTheDocument()
-    expect(screen.getByText(/con acción comercial/i)).toBeInTheDocument()
+    expect(screen.getByText(/acción comercial/i)).toBeInTheDocument()
 })
 
 it('ofrece cargar una acción comercial arriba del checklist', () => {
     const { onChangeAccion } = setup()
-    fireEvent.click(screen.getByText(/con acción comercial/i))
     fireEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: 'CUPO', marca: null })
 })
@@ -118,7 +117,7 @@ it('con acción comercial cargada, el checklist sigue siendo el mismo', () => {
 // La marca es un chip aparte, independiente de si hay acción: se puede cargar sola.
 it('ofrece cargar una marca sin acción comercial', () => {
     const { onChangeAccion } = setup()
-    fireEvent.click(screen.getByText(/de qué marca/i))
+    fireEvent.click(screen.getByLabelText('Marca'))
     fireEvent.click(screen.getByText('Fric-Rot'))
 
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
@@ -128,13 +127,11 @@ it('ofrece cargar una marca sin acción comercial', () => {
 it('con acción y marca ya cargadas, el chip Marca muestra esa misma marca', () => {
     setup([], { accion: { accion: 'CUPO', marca: 'Fric-Rot' } })
 
-    expect(screen.getByText('Fric-Rot')).toBeInTheDocument()
-    expect(screen.queryByText(/de qué marca/i)).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Marca')).toHaveTextContent('Fric-Rot')
 })
 
 it('sacar la acción con una marca ya cargada conserva la marca', () => {
     const { onChangeAccion } = setup([], { accion: { accion: 'CUPO', marca: 'Fric-Rot' } })
-    fireEvent.click(screen.getByText('Plan cupo'))
     fireEvent.click(screen.getByRole('button', { name: /sin acción/i }))
 
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })

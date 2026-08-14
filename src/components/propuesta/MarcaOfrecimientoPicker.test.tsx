@@ -5,37 +5,40 @@ import MarcaOfrecimientoPicker from './MarcaOfrecimientoPicker'
 const marcas = [{ code: 'AG', description: 'AG' }]
 
 describe('MarcaOfrecimientoPicker', () => {
-    it('sin marca elegida, solo muestra el disparador', () => {
+    // El campo está siempre a la vista (como Acción comercial), con "Sin marca" de
+    // arranque: plegado detrás de un "¿De qué marca?" nadie sabía que existía.
+    it('sin marca elegida, muestra el campo con "Sin marca" y sin la lista abierta', () => {
         render(<MarcaOfrecimientoPicker marcas={marcas} value={null} onChange={vi.fn()} />)
 
-        expect(screen.getByText(/de qué marca/i)).toBeInTheDocument()
+        expect(screen.getByLabelText('Marca')).toHaveTextContent('Sin marca')
         expect(screen.queryByText('AG')).not.toBeInTheDocument()
     })
 
-    // Un solo click: el buscador aparece de una, sin un segundo toque para desplegarlo.
-    it('abrir muestra el buscador de marcas de una, sin un segundo click', () => {
+    // Un solo control: al abrir, el buscador REEMPLAZA al disparador en vez de sumarse
+    // arriba — así el bloque no ocupa el doble de alto.
+    it('abrir muestra el buscador en lugar del disparador, no además de él', () => {
         render(<MarcaOfrecimientoPicker marcas={marcas} value={null} onChange={vi.fn()} />)
 
-        fireEvent.click(screen.getByText(/de qué marca/i))
+        fireEvent.click(screen.getByLabelText('Marca'))
 
         expect(screen.getByText('AG')).toBeInTheDocument()
+        expect(screen.queryByLabelText('Marca')).not.toBeInTheDocument()
     })
 
     it('elegir una marca la guarda por su descripción', () => {
         const onChange = vi.fn()
         render(<MarcaOfrecimientoPicker marcas={marcas} value={null} onChange={onChange} />)
 
-        fireEvent.click(screen.getByText(/de qué marca/i))
+        fireEvent.click(screen.getByLabelText('Marca'))
         fireEvent.click(screen.getByText('AG'))
 
         expect(onChange).toHaveBeenCalledWith('AG')
     })
 
-    it('con marca ya elegida, la muestra sin el disparador', () => {
+    it('con marca ya elegida, la muestra en el disparador', () => {
         render(<MarcaOfrecimientoPicker marcas={marcas} value="AG" onChange={vi.fn()} />)
 
-        expect(screen.queryByText(/de qué marca/i)).not.toBeInTheDocument()
-        expect(screen.getByText('AG')).toBeInTheDocument()
+        expect(screen.getByLabelText('Marca')).toHaveTextContent('AG')
     })
 
     it('el header deja explícito que es opcional', () => {
@@ -43,8 +46,9 @@ describe('MarcaOfrecimientoPicker', () => {
         expect(screen.getByText('(opcional)')).toBeInTheDocument()
     })
 
-    // Simétrico a "Sin acción" en AccionComercialPicker: sacar una marca ya elegida.
-    it('ofrece "Sin marca" para sacar la que ya estaba elegida', () => {
+    // Simétrico a "Sin acción" en AccionComercialPicker, pero como PRIMERA fila de la
+    // lista y no como chip aparte arriba del buscador.
+    it('ofrece "Sin marca" como primera opción de la lista', () => {
         const onChange = vi.fn()
         render(<MarcaOfrecimientoPicker marcas={marcas} value="AG" onChange={onChange} />)
 

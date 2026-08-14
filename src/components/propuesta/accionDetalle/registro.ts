@@ -11,27 +11,18 @@ export interface IModuloDetalleAccion<T = unknown> {
     Editor: ComponentType<{ value: T | undefined; onChange: (v: T) => void }>
     resumen: (detalle: T) => string
     esValido: (detalle: T | undefined) => boolean
-    /** 'inline' = el editor entra en la misma fila que el selector de acción (un campo
-     *  chico, ej. Descuento). 'stack' (default) = va debajo en su propio bloque, para
-     *  editores que no entran en una línea (ej. Cupo, lista de tramos). */
-    layout?: 'inline' | 'stack'
 }
 
 const moduloCupo: IModuloDetalleAccion<ICupoDetalle> = {
     Editor: EditorCupo,
     resumen: resumenCupo,
     esValido: esValidoCupo,
-    // Se probó 'inline' (compartir fila con el selector): con índice + monto + M/K +
-    // % + quitar, no entraba cómodo en la mitad de una pantalla chica. Va debajo, en
-    // su propio bloque de ancho completo — igual se compactó con el monto en M/K.
-    layout: 'stack',
 }
 
 const moduloDescuento: IModuloDetalleAccion<IDescuentoDetalle> = {
     Editor: EditorDescuento,
     resumen: resumenDescuento,
     esValido: esValidoDescuento,
-    layout: 'inline',
 }
 
 // `any` en el valor del Record a propósito: cada módulo es internamente consistente

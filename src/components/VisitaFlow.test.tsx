@@ -33,6 +33,7 @@ const cliente: IAgendaClient = {
     estado: 'pendiente',
     visitaId: null,
     ofrecimientosPendientes: 0,
+    esExtra: false,
 }
 
 interface HarnessProps {
@@ -495,6 +496,7 @@ const otroCliente: IAgendaClient = {
     estado: 'pendiente',
     visitaId: null,
     ofrecimientosPendientes: 0,
+    esExtra: false,
 }
 
 it('la visita en curso sigue viva aunque se abra y cierre la propuesta de otro cliente', async () => {

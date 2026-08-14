@@ -212,7 +212,10 @@ export default function ResolucionOfrecimiento({
                                         </span>
                                         <button
                                             type="button"
-                                            aria-label="Marca"
+                                            /* No "Marca" a secas: choca con el chip
+                                             * Marca del rubro, que está siempre a la
+                                             * vista arriba. */
+                                            aria-label="Marca del motivo"
                                             onClick={() =>
                                                 setMarcaAbierta(
                                                     marcaAbierta === cat.motivoId

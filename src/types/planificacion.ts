@@ -72,6 +72,9 @@ export interface IAgendaClient extends IVisitClientCard {
     visitaId: number | null
     /** Ofrecimientos de esa visita todavía sin motivos. 0 si no hay visita. */
     ofrecimientosPendientes: number
+    /** true = fila creada por el buscador (spec 2026-08-12), no por el template de la
+     *  rotación. No cuenta en el denominador de cobertura — ver docs/dominio/modelo.md. */
+    esExtra: boolean
 }
 
 /** El plan de una semana que no es necesariamente la abierta, con el estado REAL de
@@ -397,6 +400,8 @@ export interface IAgendaClientAdmin {
     dia: number
     estado: EstadoCicloCliente
     ultimoMovimiento: IReacomodacionInfo | null
+    /** true = fila creada por el buscador del vendedor, no por el template. */
+    esExtra: boolean
 }
 
 export interface ISemanaRotacionAdmin {
@@ -422,4 +427,41 @@ export interface IRotacionResumen {
 /** El grid completo de una rotación, en un solo payload. */
 export interface IRotacionCompleta extends IRotacionResumen {
     semanas: ISemanaRotacionAdmin[]
+}
+
+// ── Buscador de clientes (spec 2026-08-12, extendido 2026-08-13) ───────────────
+
+/** Resultado de consultar un cliente contra la zona en curso, antes de decidir si se
+ *  crea una fila `es_extra` o se navega a la que ya existe. */
+export type EstadoBuscadorDia = 'pendiente_zona_actual' | 'pendiente_otra_zona' | 'sin_fila_disponible'
+
+export interface IConsultaBuscador {
+    estado: EstadoBuscadorDia
+    /** La fila ya existente en la zona en curso — presente solo si estado es
+     *  'pendiente_zona_actual'. */
+    filaExistente: IAgendaClient | null
+    /** Dónde más tiene el cliente una fila pendiente sin resolver — presente solo si
+     *  estado es 'pendiente_otra_zona'. `rotacionClienteId` es lo que permite ofrecer
+     *  TRAER esa fila (reacomodar, que mueve el plan y queda auditado) además de crear
+     *  la extra: son las dos salidas legítimas y la elección es del vendedor. */
+    otraZona: {
+        rotacionClienteId: number
+        semana: number
+        dia: number
+        descripcionZona: string | null
+    } | null
+}
+
+/** Una fila del buscador general (solo lectura, toda la rotación). */
+export interface IResultadoBuscadorGeneral {
+    codigoParticularCliente: string
+    nombreCliente: string
+    estado: 'pendiente' | 'visitado' | 'no_visita' | 'sin_plan'
+    semana: number | null
+    dia: number | null
+    /** El NOMBRE de la zona ("Zárate"). El vendedor no ve números de zona — el número
+     *  solo se usa como fallback cuando la zona nunca se nombró. */
+    descripcionZona: string | null
+    fecha: string | null
+    motivo: string | null
 }

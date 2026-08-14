@@ -8,11 +8,13 @@ const acciones = [
 ]
 
 describe('AccionComercialPicker', () => {
-    it('sin acción elegida, solo muestra el disparador', () => {
+    // Plegado detrás de un "¿Con acción comercial?" el vendedor no veía que las
+    // opciones existían: ahora arranca desplegado, con "Sin acción" como default.
+    it('sin acción elegida, arranca desplegado con las opciones a la vista', () => {
         render(<AccionComercialPicker acciones={acciones} value={null} onChange={vi.fn()} />)
 
-        expect(screen.getByText(/con acción comercial/i)).toBeInTheDocument()
-        expect(screen.queryByText('Plan cupo')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /sin acción/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Plan cupo' })).toBeInTheDocument()
     })
 
     it('el header deja explícito que es opcional', () => {
@@ -20,10 +22,8 @@ describe('AccionComercialPicker', () => {
         expect(screen.getByText('(opcional)')).toBeInTheDocument()
     })
 
-    it('abrir muestra las acciones del catálogo', () => {
+    it('muestra las acciones del catálogo', () => {
         render(<AccionComercialPicker acciones={acciones} value={null} onChange={vi.fn()} />)
-
-        fireEvent.click(screen.getByText(/con acción comercial/i))
 
         expect(screen.getByRole('button', { name: 'Plan cupo' })).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Descuento' })).toBeInTheDocument()
@@ -33,7 +33,6 @@ describe('AccionComercialPicker', () => {
         const onChange = vi.fn()
         render(<AccionComercialPicker acciones={acciones} value={null} onChange={onChange} />)
 
-        fireEvent.click(screen.getByText(/con acción comercial/i))
         fireEvent.click(screen.getByRole('button', { name: 'Descuento' }))
 
         expect(onChange).toHaveBeenCalledWith({ accion: 'DESCUENTO' })
@@ -69,10 +68,9 @@ describe('AccionComercialPicker', () => {
         })
     })
 
-    // Con acción ya elegida, las opciones se colapsan a un resumen de una línea: no
-    // tiene sentido mostrar "Sin acción / Plan cupo / Descuento" lado a lado cuando ya
-    // se decidió una — solo ocupa espacio.
-    it('con una acción ya elegida, colapsa las opciones a un resumen', () => {
+    // Los chips no se colapsan al elegir: cambiar de acción tiene que costar un toque,
+    // y desde un resumen de una línea no se ve qué otras opciones había.
+    it('con una acción ya elegida, los chips siguen a la vista', () => {
         render(
             <AccionComercialPicker
                 acciones={acciones}
@@ -81,23 +79,9 @@ describe('AccionComercialPicker', () => {
             />,
         )
 
-        expect(screen.getByText('Descuento')).toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: 'Plan cupo' })).not.toBeInTheDocument()
-        expect(screen.queryByRole('button', { name: /sin acción/i })).not.toBeInTheDocument()
-    })
-
-    it('tocar el resumen vuelve a desplegar las opciones', () => {
-        render(
-            <AccionComercialPicker
-                acciones={acciones}
-                value={{ accion: 'DESCUENTO' }}
-                onChange={vi.fn()}
-            />,
-        )
-
-        fireEvent.click(screen.getByText('Descuento'))
-
+        expect(screen.getByRole('button', { name: 'Descuento' })).toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Plan cupo' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /sin acción/i })).toBeInTheDocument()
     })
 
     // Los params de Cupo (tramos) no significan nada para Descuento (%).
@@ -111,7 +95,6 @@ describe('AccionComercialPicker', () => {
             />,
         )
 
-        fireEvent.click(screen.getByText('Descuento'))
         fireEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
 
         expect(onChange).toHaveBeenCalledWith({ accion: 'CUPO' })
@@ -127,7 +110,6 @@ describe('AccionComercialPicker', () => {
             />,
         )
 
-        fireEvent.click(screen.getByText('Descuento'))
         fireEvent.click(screen.getByRole('button', { name: /sin acción/i }))
 
         expect(onChange).toHaveBeenCalledWith(null)
