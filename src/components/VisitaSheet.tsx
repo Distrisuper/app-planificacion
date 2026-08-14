@@ -422,16 +422,6 @@ export default function VisitaSheet({
                             resuelven con <b className="font-bold text-[#182645]">"No lo ofrecí"</b>.
                         </p>
 
-                        {!visitaCerrada && (
-                            <Button
-                                variant="outline"
-                                onClick={() => setAltaAbierta(true)}
-                                className="mb-3 h-10 w-full border-[#C9D2E3] text-[13px] font-bold text-dsnavy"
-                            >
-                                Agregar otra cosa
-                            </Button>
-                        )}
-
                         {filas.length === 0 ? (
                             <div className="text-sm text-dsmuted">Esta visita no tiene rubros propuestos.</div>
                         ) : (

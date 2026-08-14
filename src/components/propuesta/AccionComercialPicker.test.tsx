@@ -15,6 +15,11 @@ describe('AccionComercialPicker', () => {
         expect(screen.queryByText('Plan cupo')).not.toBeInTheDocument()
     })
 
+    it('el header deja explícito que es opcional', () => {
+        render(<AccionComercialPicker acciones={acciones} value={{ accion: 'CUPO' }} onChange={vi.fn()} />)
+        expect(screen.getByText('(opcional)')).toBeInTheDocument()
+    })
+
     it('abrir muestra las acciones del catálogo', () => {
         render(<AccionComercialPicker acciones={acciones} value={null} onChange={vi.fn()} />)
 

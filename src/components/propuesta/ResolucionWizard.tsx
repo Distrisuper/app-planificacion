@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, Loader2, Trash2 } from 'lucide-react'
+import { ChevronLeft, Eraser, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import ResolucionOfrecimiento from './ResolucionOfrecimiento'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { useAcciones } from '@/hooks/useAcciones'
 import { useEliminarOfrecimiento } from '@/hooks/useOfrecimientos'
-import { tieneDetalleIncompleto } from '@/lib/resolucionOfrecimiento'
 import type { IAccionComercial, IMotivo, IOfrecimiento, IOfrecimientoMotivo } from '@/types/planificacion'
 
 interface ResolucionWizardProps {
@@ -92,10 +91,14 @@ export default function ResolucionWizard({
         }
     }
 
-    const completos = ofrecimientos.filter(r => {
-        const cargados = borradores[r.id] ?? []
-        return cargados.length > 0 && !tieneDetalleIncompleto(motivos, cargados)
-    }).length
+    // Limpia SOLO el borrador en pantalla de este rubro (acción + marca + motivos) — no
+    // toca el backend ni los demás rubros. Vuelve a "sin nada cargado", como si recién
+    // se hubiera entrado a resolverlo.
+    const hayAlgoQueLimpiar = accion !== null || (borradores[ofrecimiento.id]?.length ?? 0) > 0
+    function limpiarBorrador() {
+        onCambiarAccion(ofrecimiento.id, null)
+        onCambiarBorrador(ofrecimiento.id, [])
+    }
 
     const eliminar = useEliminarOfrecimiento(visitaId)
     const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
@@ -139,6 +142,16 @@ export default function ResolucionWizard({
                 <span className="shrink-0 text-[12px] font-semibold text-dsmuted">
                     {index + 1} de {ofrecimientos.length}
                 </span>
+                {hayAlgoQueLimpiar && (
+                    <button
+                        type="button"
+                        aria-label="Limpiar lo cargado en este rubro"
+                        onClick={limpiarBorrador}
+                        className="shrink-0 text-dsmuted"
+                    >
+                        <Eraser className="h-4 w-4" strokeWidth={2} />
+                    </button>
+                )}
                 {!ofrecimiento.esPropuesto && (
                     <button
                         type="button"
@@ -154,39 +167,6 @@ export default function ResolucionWizard({
                         )}
                     </button>
                 )}
-                </div>
-
-                {/* Un segmento por ofrecimiento: verde el que ya tiene su resolución completa,
-                 *  navy y más alto el que se está cargando, gris el que falta. "2 de 6" es
-                 *  texto y solo dice dónde estás; esto dice además qué hiciste y cuánto
-                 *  queda, que es lo que el vendedor no podía saber sin salir a la lista. */}
-                <div
-                    className="mt-2 flex h-1.5 items-center gap-1"
-                    role="progressbar"
-                    aria-valuemin={1}
-                    aria-valuemax={ofrecimientos.length}
-                    aria-valuenow={index + 1}
-                    aria-label={`Rubro ${index + 1} de ${ofrecimientos.length}, ${completos} resueltos`}
-                >
-                    {ofrecimientos.map((r, i) => {
-                        const cargados = borradores[r.id] ?? []
-                        const completo =
-                            cargados.length > 0 && !tieneDetalleIncompleto(motivos, cargados)
-                        return (
-                            <div
-                                key={r.id}
-                                className={`flex-1 rounded-full transition-all ${
-                                    i === index ? 'h-1.5' : 'h-[3px]'
-                                } ${
-                                    completo
-                                        ? 'bg-dsgreen'
-                                        : i === index
-                                          ? 'bg-dsnavy'
-                                          : 'bg-[#E4E8F0]'
-                                }`}
-                            />
-                        )
-                    })}
                 </div>
             </div>
 

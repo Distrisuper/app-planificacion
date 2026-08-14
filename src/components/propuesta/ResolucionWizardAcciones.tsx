@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, List } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { motivoIncompleto } from '@/lib/resolucionOfrecimiento'
 import type { IMotivo, IOfrecimiento, IOfrecimientoMotivo } from '@/types/planificacion'
@@ -55,10 +55,13 @@ export default function ResolucionWizardAcciones({
                     <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
                     Atrás
                 </Button>
-                {/* Salida al alcance del pulgar. La misma salida que el ‹ del header, que
-                 *  queda arriba a la izquierda y se confunde con "Atrás" (mismo ícono,
-                 *  distinto significado: uno sale a la lista, el otro va al rubro
-                 *  anterior). En el último rubro no va: ahí "Finalizar" ya es esto mismo.
+                {/* Salida al alcance del pulgar: minimiza el wizard y vuelve a la lista.
+                 *  Sin texto — la flecha hacia abajo ya se lee como "minimizar" (mismo
+                 *  lenguaje que el botón del header del sheet). La misma salida que el ‹
+                 *  del header, que queda arriba a la izquierda y se confunde con "Atrás"
+                 *  (mismo ícono, distinto significado: uno sale a la lista, el otro va al
+                 *  rubro anterior). En el último rubro no va: ahí "Finalizar" ya es esto
+                 *  mismo.
                  *
                  *  NO se deshabilita con `bloqueado`, a diferencia de Finalizar: es la
                  *  vía de escape de quien entró por error, y un escape deshabilitado deja
@@ -67,12 +70,13 @@ export default function ResolucionWizardAcciones({
                  *  "Cerrar visita" sigue bloqueado hasta completarlo. */}
                 {!esUltimo && (
                     <Button
-                        variant="ghost"
+                        variant="outline"
+                        size="icon"
                         onClick={onFinalizar}
-                        className="h-12 shrink-0 px-3 text-[13.5px] font-bold text-dsmuted"
+                        aria-label="Minimizar y ver lista"
+                        className="h-12 w-12 shrink-0 rounded-lg text-dsmuted"
                     >
-                        <List className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                        Ver lista
+                        <ChevronDown className="h-5 w-5" strokeWidth={2.4} />
                     </Button>
                 )}
                 {esUltimo ? (

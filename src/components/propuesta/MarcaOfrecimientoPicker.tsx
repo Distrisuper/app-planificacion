@@ -54,7 +54,7 @@ export default function MarcaOfrecimientoPicker({
         <div className="animate-panel-in mb-3 flex flex-col gap-2 rounded-[11px] border-[1.5px] border-[#B9CCEC] bg-white p-2.5">
             <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
-                    Marca
+                    Marca <span className="normal-case">(opcional)</span>
                 </span>
                 {value && rubrosRestantes > 0 && (
                     <label className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-dsnavy">
@@ -93,7 +93,21 @@ export default function MarcaOfrecimientoPicker({
                 />
             </button>
             {buscadorAbierto && (
-                <div className="animate-panel-in mt-1.5">
+                <div className="animate-panel-in mt-1.5 flex flex-col gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            onChange(null)
+                            setBuscadorAbierto(false)
+                        }}
+                        className={`self-start rounded-lg border-[1.5px] px-2.5 py-1.5 text-[12.5px] font-bold ${
+                            value
+                                ? 'border-[#E1E6F0] bg-white text-[#3B4560]'
+                                : 'border-[#B9CCEC] bg-[#EEF3FB] text-[#182645]'
+                        }`}
+                    >
+                        Sin marca
+                    </button>
                     <CatalogoPicker
                         items={marcas}
                         loading={marcasLoading}

@@ -288,44 +288,6 @@ it('agregar dos rubros distintos en simultáneo deshabilita cada fila por separa
     await waitFor(() => expect(screen.getByRole('button', { name: /agregar baterías/i })).not.toBeDisabled())
 })
 
-// Dos tipos distintos pueden compartir código (ej. rubro "CUPO" y marca "CUPO"): la clave
-// de agregandoCodes es `${tipo}:${codigo}`, no el código solo.
-it('dos ofrecimientos del mismo código y distinto tipo no comparten el spinner', async () => {
-    ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'CUPO', nombre: 'Cupo', actual: 0, mesAnterior: 0, promedio6m: 0 },
-    ])
-    ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'CUPO', description: 'Cupo' }])
-    let resolverBat: (v: { ofrecimientoId: number }) => void = () => {}
-    ;(api.agregarOfrecimiento as any).mockImplementation((_visitaId: number, dto: { tipo: string; codigo: string }) => {
-        if (dto.tipo === 'rubro' && dto.codigo === 'CUPO') {
-            return new Promise(resolve => {
-                resolverBat = resolve
-            })
-        }
-        return Promise.resolve({ ofrecimientoId: 200 })
-    })
-    renderSheet({ codigoParticularCliente: '10034' })
-    await screen.findByText('Amortiguadores')
-
-    fireEvent.click(await screen.findByRole('button', { name: /agregar cupo/i }))
-    expect(screen.getByRole('button', { name: /agregar cupo/i })).toBeDisabled()
-
-    // Agregar la marca "Cupo" (mismo código, tipo distinto) desde el sheet no debería
-    // tocar el spinner del rubro "CUPO" que sigue en vuelo. El buscador mezcla rubro y
-    // marca, así que "Cupo" aparece dos veces (una por catálogo) — la de marca es la
-    // segunda, porque rubros se listan primero.
-    fireEvent.click(screen.getByRole('button', { name: /agregar otra cosa/i }))
-    const opcionesCupo = await screen.findAllByRole('button', { name: /^cupo/i })
-    fireEvent.click(opcionesCupo[1])
-    fireEvent.click(screen.getByRole('button', { name: /^agregar$/i }))
-
-    await waitFor(() => expect(api.agregarOfrecimiento).toHaveBeenCalledTimes(2))
-    expect(screen.getByRole('button', { name: /agregar cupo/i })).toBeDisabled()
-
-    resolverBat({ ofrecimientoId: 201 })
-    await waitFor(() => expect(screen.getByRole('button', { name: /agregar cupo/i })).not.toBeDisabled())
-})
 
 it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaban', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
@@ -437,8 +399,8 @@ it('con la visita cerrada, "otros rubros del cliente" no son tocables para agreg
     expect(screen.queryByRole('button', { name: /agregar baterías/i })).not.toBeInTheDocument()
 })
 
-it('con la visita cerrada, no ofrece "Agregar otra cosa"', async () => {
-    renderSheet({ visitaCerrada: true })
+it('nunca ofrece "Agregar otra cosa": la vía de alta está oculta', async () => {
+    renderSheet()
     await screen.findByText('Amortiguadores')
     expect(screen.queryByRole('button', { name: /agregar otra cosa/i })).not.toBeInTheDocument()
 })

@@ -37,4 +37,20 @@ describe('MarcaOfrecimientoPicker', () => {
         expect(screen.queryByText(/de qué marca/i)).not.toBeInTheDocument()
         expect(screen.getByText('AG')).toBeInTheDocument()
     })
+
+    it('el header deja explícito que es opcional', () => {
+        render(<MarcaOfrecimientoPicker marcas={marcas} value="AG" onChange={vi.fn()} />)
+        expect(screen.getByText('(opcional)')).toBeInTheDocument()
+    })
+
+    // Simétrico a "Sin acción" en AccionComercialPicker: sacar una marca ya elegida.
+    it('ofrece "Sin marca" para sacar la que ya estaba elegida', () => {
+        const onChange = vi.fn()
+        render(<MarcaOfrecimientoPicker marcas={marcas} value="AG" onChange={onChange} />)
+
+        fireEvent.click(screen.getByLabelText('Marca'))
+        fireEvent.click(screen.getByText('Sin marca'))
+
+        expect(onChange).toHaveBeenCalledWith(null)
+    })
 })

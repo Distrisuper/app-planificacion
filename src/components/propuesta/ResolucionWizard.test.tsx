@@ -82,29 +82,29 @@ it('muestra la posición y el ofrecimiento actual', () => {
     expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
 })
 
-it('la barra tiene un segmento por ofrecimiento y marca en cuál se está', () => {
+it('sin nada cargado, no ofrece el botón de limpiar', () => {
     setup()
-    const barra = screen.getByRole('progressbar')
-    expect(barra).toHaveAttribute('aria-valuenow', '1')
-    expect(barra).toHaveAttribute('aria-valuemax', '2')
-    expect(barra.children).toHaveLength(2)
+    expect(screen.queryByLabelText(/limpiar/i)).not.toBeInTheDocument()
 })
 
-it('el segmento de un ofrecimiento ya resuelto va en verde; el que tiene el detalle a medias, no', () => {
-    // Ofrecimiento 7: motivo simple tildado ⇒ completo. Ofrecimiento 8: Precio
-    // (requiereDetalle) sin detalle ⇒ sigue contando como pendiente, igual que en el
-    // chip de la tabla.
+it('con motivos tildados, ofrece limpiar y lo vacía', () => {
+    const onCambiarBorrador = vi.fn()
+    const onCambiarAccion = vi.fn()
     setup({
-        index: 1,
-        borradores: {
-            7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
-            8: [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }],
-        },
+        borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] },
+        onCambiarBorrador,
+        onCambiarAccion,
     })
-    const barra = screen.getByRole('progressbar')
-    expect(barra).toHaveAttribute('aria-label', 'Rubro 2 de 2, 1 resueltos')
-    expect(barra.children[0].className).toContain('bg-dsgreen')
-    expect(barra.children[1].className).toContain('bg-dsnavy')
+
+    fireEvent.click(screen.getByLabelText(/limpiar/i))
+
+    expect(onCambiarBorrador).toHaveBeenCalledWith(7, [])
+    expect(onCambiarAccion).toHaveBeenCalledWith(7, null)
+})
+
+it('con acción cargada (sin motivos), también ofrece limpiar', () => {
+    setup({ detalles: { 7: { accion: 'CUPO', marca: null } } })
+    expect(screen.getByLabelText(/limpiar/i)).toBeInTheDocument()
 })
 
 it('avanzar de ofrecimiento entra desde la derecha, y volver desde la izquierda', () => {
