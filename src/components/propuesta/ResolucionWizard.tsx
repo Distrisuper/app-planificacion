@@ -62,17 +62,16 @@ export default function ResolucionWizard({
         )
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
 
-    // Replica acción + marca + resolución del rubro actual al resto — la evidencia de
-    // seguimientos muestra que casi siempre el vendedor cuenta un solo desenlace para
-    // varios rubros de una acción. Queda como default: cada rubro sigue editable
-    // después, no queda "linkeado" al actual.
+    // Replica SOLO acción + marca del rubro actual al resto — nunca la resolución: qué
+    // pasó con cada rubro es suyo, y la evidencia de seguimientos muestra que el
+    // desenlace puede variar rubro a rubro aunque la acción sea la misma (un cupo se
+    // acepta pero un kit puntual se rechaza). Es una copia de una sola vez al tildar el
+    // check, no un vínculo: cada rubro sigue editable después.
     const restantes = ofrecimientos.filter((_, i) => i !== index)
-    const hayAlgoQueAplicar = accion !== null || (borradores[ofrecimiento.id]?.length ?? 0) > 0
 
-    function aplicarATodos() {
+    function aplicarAccionYMarca() {
         for (const r of restantes) {
             onCambiarAccion(r.id, accion)
-            onCambiarBorrador(r.id, borradores[ofrecimiento.id] ?? [])
         }
     }
 
@@ -196,17 +195,9 @@ export default function ResolucionWizard({
                     onChangeAccion={a => onCambiarAccion(ofrecimiento.id, a)}
                     value={borradores[ofrecimiento.id] ?? []}
                     onChange={m => onCambiarBorrador(ofrecimiento.id, m)}
+                    rubrosRestantes={restantes.length}
+                    onAplicarATodos={aplicarAccionYMarca}
                 />
-
-                {restantes.length > 0 && hayAlgoQueAplicar && (
-                    <button
-                        type="button"
-                        onClick={aplicarATodos}
-                        className="mt-1 w-full rounded-[11px] border-[1.5px] border-dashed border-[#C9D2E3] px-3 py-2.5 text-center text-[13px] font-bold text-dsnavy"
-                    >
-                        Aplicar a los {restantes.length} rubros restantes
-                    </button>
-                )}
             </div>
         </div>
     )

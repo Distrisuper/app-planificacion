@@ -19,6 +19,11 @@ interface ResolucionOfrecimientoProps {
     onChangeAccion: (accion: IAccionComercial | null) => void
     value: IOfrecimientoMotivo[]
     onChange: (motivos: IOfrecimientoMotivo[]) => void
+    /** Cuántos rubros quedan por resolver además de este. 0 = no se ofrece el check. */
+    rubrosRestantes?: number
+    /** Copia la acción y la marca actuales a esos rubros restantes — una sola vez, al
+     *  tildar el check. NO copia la resolución: qué pasó es de cada rubro. */
+    onAplicarATodos?: () => void
 }
 
 const VACIO = { marca: null, competidor: null, pctDiferencia: null }
@@ -55,7 +60,10 @@ export default function ResolucionOfrecimiento({
     onChangeAccion,
     value,
     onChange,
+    rubrosRestantes = 0,
+    onAplicarATodos,
 }: ResolucionOfrecimientoProps) {
+    const [aplicado, setAplicado] = useState(false)
     const porId = new Map(value.map(m => [m.motivoId, m]))
     const resultadoPorId = new Map(motivos.map(m => [m.motivoId, m.resultado]))
 
@@ -142,6 +150,21 @@ export default function ResolucionOfrecimiento({
                 value={accion?.marca ?? null}
                 onChange={onChangeMarcaChip}
             />
+
+            {rubrosRestantes > 0 && (accion?.accion || accion?.marca) && (
+                <label className="mb-3 flex items-center gap-2 rounded-[11px] border-[1.5px] border-dashed border-[#C9D2E3] px-3 py-2.5 text-[13px] font-bold text-dsnavy">
+                    <input
+                        type="checkbox"
+                        checked={aplicado}
+                        onChange={e => {
+                            setAplicado(e.target.checked)
+                            if (e.target.checked) onAplicarATodos?.()
+                        }}
+                        className="h-4 w-4 shrink-0 rounded border-[#C9D2E3] accent-dsnavy"
+                    />
+                    Aplicar esta acción y marca a los {rubrosRestantes} rubros restantes
+                </label>
+            )}
 
             <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
                 Resolución

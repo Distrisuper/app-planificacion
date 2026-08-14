@@ -175,37 +175,38 @@ it('si falla el borrado, muestra el error y no vuelve a la lista', async () => {
     expect(onVolver).not.toHaveBeenCalled()
 })
 
-it('sin nada cargado en el rubro actual, no ofrece "aplicar a todos"', () => {
-    setup()
-    expect(screen.queryByText(/aplicar a los/i)).not.toBeInTheDocument()
-})
-
-it('con algo cargado, ofrece aplicarlo a los rubros restantes', () => {
+it('sin acción ni marca cargada, no ofrece el check de aplicar a los restantes', () => {
+    // Con motivos tildados pero SIN acción/marca tampoco se ofrece: lo que se replica
+    // es acción+marca, nunca la resolución.
     setup({ borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] } })
-    expect(screen.getByText('Aplicar a los 1 rubros restantes')).toBeInTheDocument()
+    expect(screen.queryByText(/aplicar esta acción y marca/i)).not.toBeInTheDocument()
 })
 
-it('aplicar a todos replica acción y motivos del actual a los restantes', () => {
+it('con acción cargada, ofrece aplicarla a los rubros restantes', () => {
+    setup({ detalles: { 7: { accion: 'CUPO', marca: null } } })
+    expect(screen.getByText('Aplicar esta acción y marca a los 1 rubros restantes')).toBeInTheDocument()
+})
+
+it('tildar el check replica SOLO la acción y la marca, nunca la resolución', () => {
     const onCambiarBorrador = vi.fn()
     const onCambiarAccion = vi.fn()
-    const cargados = [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }]
     setup({
-        borradores: { 7: cargados, 8: [] },
-        detalles: { 7: { accion: 'CUPO', marca: null } },
+        borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] },
+        detalles: { 7: { accion: 'CUPO', marca: 'AG' } },
         onCambiarBorrador,
         onCambiarAccion,
     })
 
-    fireEvent.click(screen.getByText('Aplicar a los 1 rubros restantes'))
+    fireEvent.click(screen.getByRole('checkbox'))
 
-    expect(onCambiarAccion).toHaveBeenCalledWith(8, { accion: 'CUPO', marca: null })
-    expect(onCambiarBorrador).toHaveBeenCalledWith(8, cargados)
+    expect(onCambiarAccion).toHaveBeenCalledWith(8, { accion: 'CUPO', marca: 'AG' })
+    expect(onCambiarBorrador).not.toHaveBeenCalled()
 })
 
-it('con un solo rubro en el wizard, no ofrece "aplicar a todos": no hay restantes', () => {
+it('con un solo rubro en el wizard, no ofrece el check: no hay restantes', () => {
     setup({
         ofrecimientos: [ofrecimientos[0]],
-        borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }] },
+        detalles: { 7: { accion: 'CUPO', marca: null } },
     })
-    expect(screen.queryByText(/aplicar a los/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/aplicar esta acción y marca/i)).not.toBeInTheDocument()
 })

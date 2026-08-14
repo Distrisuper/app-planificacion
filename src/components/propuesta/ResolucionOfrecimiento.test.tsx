@@ -209,3 +209,36 @@ describe('un solo bucket de resultado a la vez', () => {
         ])
     })
 })
+
+// El check replica acción+marca a los rubros restantes — nunca la resolución, que es
+// de cada rubro.
+describe('aplicar acción y marca a los rubros restantes', () => {
+    it('sin acción ni marca, no se ofrece el check aunque haya rubros restantes', () => {
+        setup([], { rubrosRestantes: 3 })
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    })
+
+    it('sin rubros restantes, no se ofrece el check aunque haya acción cargada', () => {
+        setup([], { accion: { accion: 'CUPO', marca: null }, rubrosRestantes: 0 })
+        expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    })
+
+    it('con acción y rubros restantes, ofrece el check con la cantidad', () => {
+        setup([], { accion: { accion: 'CUPO', marca: null }, rubrosRestantes: 4 })
+        expect(screen.getByText('Aplicar esta acción y marca a los 4 rubros restantes')).toBeInTheDocument()
+    })
+
+    it('tildarlo dispara onAplicarATodos', () => {
+        const onAplicarATodos = vi.fn()
+        setup([], { accion: { accion: 'CUPO', marca: null }, rubrosRestantes: 2, onAplicarATodos })
+
+        fireEvent.click(screen.getByRole('checkbox'))
+
+        expect(onAplicarATodos).toHaveBeenCalledTimes(1)
+    })
+
+    it('con solo marca (sin acción) también se ofrece el check', () => {
+        setup([], { accion: { accion: null, marca: 'Fric-Rot' }, rubrosRestantes: 1 })
+        expect(screen.getByRole('checkbox')).toBeInTheDocument()
+    })
+})
