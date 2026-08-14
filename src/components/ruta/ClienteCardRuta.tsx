@@ -58,8 +58,13 @@ export default function ClienteCardRuta({ cliente, arrastrable }: ClienteCardRut
                 {titleCaseNombre(cliente.nombreCliente)}
             </p>
             <div className="mt-0.5 flex items-center justify-between gap-1">
-                <span className="text-[11px] text-slate-500">
+                <span className="flex items-center gap-1 text-[11px] text-slate-500">
                     {cliente.codigoParticularCliente}
+                    {cliente.esExtra && (
+                        <span className="inline-flex items-center rounded-full bg-[#E0E7FF] px-1 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#3730A3]">
+                            Agregado
+                        </span>
+                    )}
                 </span>
                 {autoria && (
                     <span
