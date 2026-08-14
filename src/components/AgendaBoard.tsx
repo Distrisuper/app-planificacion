@@ -50,23 +50,27 @@ export default function AgendaBoard({
     // restarted the scroll animation toward it (the "roto"/jittery tab behavior).
     // Ignore every scroll event for the animation's duration instead of just one.
     const ignoreScrollUntil = useRef(0)
-    // El primer render siempre arranca en LUN (el primer día, índice 0): el scroll
-    // container ya nace con scrollLeft 0, no hace falta ningún scrollIntoView para
-    // mostrarlo. Forzar ese scroll al montar — antes de que la agenda cargue y el layout
-    // termine de asentarse — es lo que dejaba la columna corrida (scrollIntoView calcula
-    // la posición con el layout que haya en ese instante; si corre temprano, esa posición
-    // puede quedar levemente mal y, al ser instantánea, nada la vuelve a corregir). Este
-    // efecto arranca ignorando su primera corrida: solo actúa ante un cambio real de
-    // `activo` (tocar un tab), momento en el que el layout ya está asentado hace rato.
+    // El scroll container nace con scrollLeft 0 (columna LUN), pero `activo` YA puede ser
+    // otro día al montar: AgendaSemanaPage arranca en el día de hoy (getDiaDeHoy()), no en
+    // LUN. Si el primer render no corrige el scroll, el board queda mostrando LUN mientras
+    // los tabs de arriba marcan VIE — el board nunca lo corrige solo porque nada dispara
+    // onScroll hasta que el vendedor swipea.
+    //
+    // La corrección en el montaje va sin animación (instantánea, `behavior: 'auto'`): un
+    // smooth scroll de varias columnas al abrir la app se ve como una animación no pedida.
+    // Los montajes posteriores (tocar un tab) sí animan — ahí es una respuesta directa al
+    // toque del vendedor.
     const montado = useRef(false)
 
     useEffect(() => {
-        if (!montado.current) {
-            montado.current = true
-            return
-        }
         const el = columnRefs.current[activo]
         if (!el?.scrollIntoView) return
+        if (!montado.current) {
+            montado.current = true
+            ignoreScrollUntil.current = Date.now() + 500
+            el.scrollIntoView({ behavior: 'auto', inline: 'start', block: 'nearest' })
+            return
+        }
         ignoreScrollUntil.current = Date.now() + 500
         el.scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' })
     }, [activo])
