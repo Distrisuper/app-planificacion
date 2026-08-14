@@ -9,6 +9,7 @@ import type {
     ICerrarVisitaDTO,
     ICerrarVisitaResult,
     ICicloActualResult,
+    IConsultaBuscador,
     IIniciarVisitaDTO,
     IMotivo,
     INoVisitaDTO,
@@ -19,6 +20,7 @@ import type {
     IResolucion,
     IResolverOfrecimientoDTO,
     IResolverOfrecimientoResult,
+    IResultadoBuscadorGeneral,
     IRubroClientsPageResponse,
     IRubroDropsResponse,
     IRubroEstado,
@@ -206,5 +208,32 @@ export const getBrandCatalog = async (): Promise<ICatalogoItem[]> => {
 /** Acciones comerciales del catálogo propio (pl_accion): plan cupo, descuento, promo. */
 export const getAcciones = async (): Promise<IAccion[]> => {
     const res = await apiClient.get('/planificacion/acciones')
+    return res.data.data
+}
+
+// ── Buscador de clientes (spec 2026-08-12) ─────────────────────────────────────
+
+/** Consulta si el cliente ya tiene fila pendiente en la zona en curso o en otra zona,
+ *  antes de decidir si el buscador navega o crea la extra. No escribe nada. */
+export const consultarBuscador = async (
+    codigo: string,
+    semana: number,
+): Promise<IConsultaBuscador> => {
+    const res = await apiClient.get(`/planificacion/buscador/cliente/${codigo}`, {
+        params: { semana },
+    })
+    return res.data.data
+}
+
+/** Crea (o devuelve, si ya existía por `uq_rotacion_cliente`) la fila `es_extra` de
+ *  `(zona en curso, hoy)` para este cliente. */
+export const confirmarExtra = async (codigo: string, semana: number): Promise<IAgendaClient> => {
+    const res = await apiClient.post(`/planificacion/buscador/cliente/${codigo}/extra`, { semana })
+    return res.data.data
+}
+
+/** Buscador general de solo lectura: toda la cartera de la rotación, cualquier zona. */
+export const buscarEnCartera = async (texto: string): Promise<IResultadoBuscadorGeneral[]> => {
+    const res = await apiClient.get('/planificacion/buscador/rotacion', { params: { q: texto } })
     return res.data.data
 }
