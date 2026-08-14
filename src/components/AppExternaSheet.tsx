@@ -151,6 +151,12 @@ function AppExternaFrame({ montada, activa, recargarSignal }: AppExternaFramePro
  * NO reusa BottomSheet: ese primitivo topea en 85vh, tiene padding lateral y scroll interno,
  * y los tres arruinan un iframe (viewport recortado, franjas blancas, doble scroll). Sí reusa
  * su lenguaje visual de header.
+ *
+ * Desconectado del camino principal desde el spec 2026-08-14 (ver
+ * docs/superpowers/specs/2026-08-14-apps-externas-pestana-nueva-design.md): el tap en
+ * `AccionesExternas` ahora abre `window.open` directo (`abrirAppExternaEnPestana`, en
+ * appsExternas.ts) y ya no llama a `useAppExterna().abrir`, así que este sheet nunca llega a
+ * montar `montadas`. Se deja funcional a propósito, por si se necesita reactivar el embebido.
  */
 export default function AppExternaSheet({
     cliente,

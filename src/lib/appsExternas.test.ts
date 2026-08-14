@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import {
     APPS_EXTERNAS,
+    abrirAppExternaEnPestana,
     resolverHandoff,
     resolverToken,
     type AppExterna,
@@ -217,5 +218,20 @@ describe('appsExternas', () => {
             vi.resetModules()
             error.mockRestore()
         }
+    })
+
+    // Camino principal desde el spec 2026-08-14: el tap abre ventana/pestaña nueva, no el
+    // sheet embebido.
+    describe('abrirAppExternaEnPestana', () => {
+        it('abre la URL de handoff en una pestaña nueva sin exponer window.opener', () => {
+            const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+            abrirAppExternaEnPestana(appDePagos(), CLIENTE)
+            expect(open).toHaveBeenCalledTimes(1)
+            const [url, target, features] = open.mock.calls[0]
+            expect(new URL(String(url)).searchParams.get('client')).toBe('05519')
+            expect(target).toBe('_blank')
+            expect(features).toBe('noopener,noreferrer')
+            open.mockRestore()
+        })
     })
 })

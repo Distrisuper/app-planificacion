@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
@@ -58,16 +58,6 @@ const clienteLunes = {
     estado: 'pendiente' as const,
     visitaId: null,
     ofrecimientosPendientes: 0,
-}
-
-/** Segundo cliente del mismo día: es lo que hace falta para cambiar de cliente sin cambiar
- *  de día (el cambio de día desmonta la instancia por otro camino). */
-const otroClienteLunes = {
-    ...clienteLunes,
-    codigoCliente: 'C2',
-    codigoParticularCliente: '20077',
-    nombreCliente: 'KIOSCO RUBEN',
-    rotacionClienteId: 43,
 }
 
 /** `url` permite arrancar en una posición concreta (?dia=/?semana=), que es de donde la
@@ -391,112 +381,31 @@ it('con vuelta abierta se puede espiar otra semana en solo lectura', async () =>
     expect(await screen.findByText(/vista previa/i)).toBeInTheDocument()
 })
 
-it('abre pagos-lupa embebido con el contexto del cliente desde la agenda', async () => {
+// Desde el spec 2026-08-14: el tap abre ventana/pestaña nueva (window.open), no el sheet
+// embebido. AppExternaSheet/useAppExterna quedan sin invocar desde este camino (ver comentario
+// en AppExternaSheet.tsx) — se conservan funcionales por si se reactiva el embebido, pero no
+// hay wiring que los dispare desde la agenda.
+it('abre pagos-lupa en una pestaña nueva con el contexto del cliente, sin montar el sheet embebido', async () => {
     fijarLunes() // el cliente está sembrado en LUN; con ciclo activo, HOY gana siempre
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     renderPage()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
 
-    const iframe = screen.getByTitle('Pagos')
-    const url = new URL(iframe.getAttribute('src') as string)
+    expect(open).toHaveBeenCalledTimes(1)
+    const [urlArg, target, features] = open.mock.calls[0]
+    const url = new URL(String(urlArg))
     expect(url.pathname).toBe('/')
     expect(url.searchParams.get('client')).toBe('10034')
     expect(url.searchParams.has('token')).toBe(false)
+    expect(target).toBe('_blank')
+    expect(features).toBe('noopener,noreferrer')
 
-    fireEvent.click(screen.getByLabelText('Cerrar'))
-    // Oculto pero montado: reabrir tiene que ser instantáneo.
-    expect(screen.getByTitle('Pagos')).toBeInTheDocument()
-})
-
-// Cambiar de cliente tiene que REMONTAR el iframe, no reescribirle el `src`: navegar un
-// browsing context anidado suma una entrada al historial del top-level y en la PWA de
-// Android el gesto de "atrás" pasa a retroceder dentro del iframe.
-it('abrir otro cliente monta un iframe nuevo en vez de navegar el vivo', async () => {
-    fijarLunes()
-    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
-    ;(api.getAgendaSemana as any).mockResolvedValue({
-        ...semanaVacia,
-        LUN: [clienteLunes, otroClienteLunes],
-    })
-    renderPage()
-
-    const [pagosA, pagosB] = await screen.findAllByRole('button', { name: 'Pagos' })
-    fireEvent.click(pagosA)
-    const antes = screen.getByTitle('Pagos')
-    expect(new URL(antes.getAttribute('src') as string).searchParams.get('client')).toBe('10034')
-
-    fireEvent.click(screen.getByLabelText('Cerrar'))
-    fireEvent.click(pagosB)
-
-    const despues = screen.getByTitle('Pagos')
-    expect(despues).not.toBe(antes)
-    expect(new URL(despues.getAttribute('src') as string).searchParams.get('client')).toBe('20077')
-})
-
-// La contracara: ocultar ≠ desmontar. Con el mismo cliente la key no cambia, así que el
-// nodo del iframe es el MISMO y reabrir es instantáneo (no recarga el bundle ajeno).
-it('reabrir el mismo cliente reusa el iframe vivo', async () => {
-    fijarLunes()
-    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
-    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
-    renderPage()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
-    const antes = screen.getByTitle('Pagos')
-
-    fireEvent.click(screen.getByLabelText('Cerrar'))
-    // Ocultar no desmonta: el sheet sigue en el DOM con su propia tab "Pagos", así que a
-    // partir de acá hay dos botones con ese nombre (el chip de la card y la tab). El de la
-    // card es el que sigue haciendo lo mismo que antes: reabrir el mismo cliente.
-    fireEvent.click(screen.getAllByRole('button', { name: 'Pagos' })[0])
-
-    expect(screen.getByTitle('Pagos')).toBe(antes)
-})
-
-// El pedido original: pasar de una app a otra del mismo cliente sin cerrar el sheet.
-it('tocar otra tab dentro del sheet mantiene la primera app viva y cambia el frame visible', async () => {
-    fijarLunes()
-    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
-    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
-    renderPage()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
-    const framePagos = screen.getByTitle('Pagos')
-
-    const sheet = screen.getByTestId('app-externa-contenedor')
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Versus' }))
-
-    expect(screen.getByTitle('Versus')).toBeInTheDocument()
-    // Pagos sigue en el DOM (no se recargó al volver): mismo nodo, ahora oculto.
-    expect(screen.getByTitle('Pagos')).toBe(framePagos)
-})
-
-it('suelta la instancia embebida al cambiar de semana', async () => {
-    fijarLunes()
-    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
-    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
-    renderPage()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
-    expect(screen.getByTitle('Pagos')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
-    await waitFor(() => expect(screen.queryByTitle('Pagos')).not.toBeInTheDocument())
-})
-
-it('suelta la instancia embebida al cambiar de día', async () => {
-    fijarLunes()
-    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
-    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
-    renderPage()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Pagos' }))
-    expect(screen.getByTitle('Pagos')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: /^MAR/ }))
     expect(screen.queryByTitle('Pagos')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('app-externa-contenedor')).not.toBeInTheDocument()
+    open.mockRestore()
 })
 
 it('volver a la semana abierta devuelve el modo operable', async () => {

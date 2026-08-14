@@ -195,6 +195,17 @@ export function resolverToken(app: AppExterna): string | null {
     return app.token === 'sesion' ? localStorage.getItem('access_token') : null
 }
 
+/**
+ * Camino principal de apertura (ver spec 2026-08-14): ventana/pestaña nueva, first-party para
+ * la app ajena, sin la fricción del selector de pestañas que descartó el iframe embebido no
+ * aplica acá porque ESTE es el default — no una salida de emergencia sobre un sheet embebido.
+ * `noopener,noreferrer`: la pestaña ajena no debe poder navegar esta app vía `window.opener`.
+ */
+export function abrirAppExternaEnPestana(app: AppExterna, cliente: IVisitClientCard): void {
+    const { url } = resolverHandoff(app, cliente)
+    window.open(url, '_blank', 'noopener,noreferrer')
+}
+
 /** Se invoca UNA vez por apertura (ver useAppExterna): re-ejecutarlo en cada render
  *  recargaría el bundle de la app ajena. */
 export function resolverHandoff(app: AppExterna, cliente: IVisitClientCard): HandoffResuelto {
