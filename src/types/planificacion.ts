@@ -441,8 +441,15 @@ export interface IConsultaBuscador {
      *  'pendiente_zona_actual'. */
     filaExistente: IAgendaClient | null
     /** Dónde más tiene el cliente una fila pendiente sin resolver — presente solo si
-     *  estado es 'pendiente_otra_zona'. */
-    otraZona: { semana: number; dia: number; descripcionZona: string | null } | null
+     *  estado es 'pendiente_otra_zona'. `rotacionClienteId` es lo que permite ofrecer
+     *  TRAER esa fila (reacomodar, que mueve el plan y queda auditado) además de crear
+     *  la extra: son las dos salidas legítimas y la elección es del vendedor. */
+    otraZona: {
+        rotacionClienteId: number
+        semana: number
+        dia: number
+        descripcionZona: string | null
+    } | null
 }
 
 /** Una fila del buscador general (solo lectura, toda la rotación). */
@@ -452,6 +459,9 @@ export interface IResultadoBuscadorGeneral {
     estado: 'pendiente' | 'visitado' | 'no_visita' | 'sin_plan'
     semana: number | null
     dia: number | null
+    /** El NOMBRE de la zona ("Zárate"). El vendedor no ve números de zona — el número
+     *  solo se usa como fallback cuando la zona nunca se nombró. */
+    descripcionZona: string | null
     fecha: string | null
     motivo: string | null
 }

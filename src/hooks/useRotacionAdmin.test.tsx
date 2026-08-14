@@ -128,6 +128,7 @@ describe('useReacomodarAdmin — update optimista', () => {
                             dia: 1,
                             estado: 'pendiente' as const,
                             ultimoMovimiento: null,
+                            esExtra: false,
                         },
                     ],
                 },

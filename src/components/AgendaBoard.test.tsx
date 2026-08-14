@@ -12,6 +12,7 @@ function cliente(over: Partial<IAgendaClient> = {}): IAgendaClient {
         estado: 'pendiente',
         visitaId: null,
         ofrecimientosPendientes: 0,
+        esExtra: false,
         ...over,
     }
 }

@@ -1,39 +1,30 @@
 import { useEffect, useState } from 'react'
 import { Search } from 'lucide-react'
 import BottomSheet from '@/components/ui/BottomSheet'
-import { useConfirmarExtra, useConsultarBuscador } from '@/hooks/useBuscador'
-import type { IAgendaClient, IConsultaBuscador, IVisitClientCard } from '@/types/planificacion'
-
-const DIA_NOMBRE = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes']
-
-function diaLabel(dia: number): string {
-    return DIA_NOMBRE[dia - 1] ?? `día ${dia}`
-}
-
-/** Sin acentos ni mayúsculas: mismo criterio que AlcanceBuscador — nadie tipea la
- *  tilde parado en un mostrador. */
-function normalizar(texto: string): string {
-    return texto
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .toLowerCase()
-}
+import { useConfirmarExtra, useConsultarBuscador, useBuscarEnCartera } from '@/hooks/useBuscador'
+import { useReacomodar } from '@/hooks/useCiclo'
+import { diaLabel, etiquetaEstado, zonaLabel } from './etiquetas'
+import type { NotificacionTipo } from '@/components/ui/Notification'
+import type {
+    IAgendaClient,
+    IConsultaBuscador,
+    IResultadoBuscadorGeneral,
+} from '@/types/planificacion'
 
 interface BuscadorDiaSheetProps {
     open: boolean
     onClose: () => void
-    /** Se creó una fila `es_extra` nueva — el caller decide qué hacer con ella (hoy:
-     *  abrir el mismo flujo de propuesta que `ClienteCard.onAbrir`). */
+    /** La zona (semana de rotación) en curso y el día del "+" que se tocó: la celda
+     *  destino de todo lo que hace este sheet. */
+    semana: number
+    dia: number
+    /** Se creó una fila `es_extra` nueva en la celda destino. */
     onExtraCreada: (cliente: IAgendaClient) => void
-    /** El cliente ya tenía una fila pendiente en la zona en curso — mismo destino que
-     *  `onExtraCreada`, sin crear nada nuevo. */
+    /** El cliente ya tenía una fila pendiente y se decidió ir a verla en vez de crear. */
     onNavegarAExistente: (cliente: IAgendaClient) => void
-    /** La zona (semana de rotación) que el vendedor tiene abierta ahora mismo. */
-    semanaEnCurso: number
-    /** La cartera contra la que se busca. Hoy: los clientes ya cargados en la agenda de
-     *  la semana en curso (no hay todavía un hook de "toda la cartera del vendedor" en
-     *  este repo) — ver nota de limitación en el plan. */
-    clientesCartera: IVisitClientCard[]
+    /** Se movió una fila existente a la celda destino (reacomodar, no crear). */
+    onTraido: () => void
+    onAviso: (tipo: NotificacionTipo, mensaje: string) => void
 }
 
 type Consulta = {
@@ -42,21 +33,44 @@ type Consulta = {
     resultado: IConsultaBuscador
 }
 
+/**
+ * El buscador que ESCRIBE, colgado del "+" del encabezado de cada día.
+ *
+ * Dos salidas, y la elección es del vendedor porque el sistema no puede distinguirlas
+ * (ver "Corregir el plan y registrar un hecho son cosas distintas" en CLAUDE.md):
+ *
+ *  - **Traer**: el cliente cambia de lugar en el plan. Mueve la fila con `reacomodar`,
+ *    queda auditado en `pl_reacomodacion` y el denominador no se mueve.
+ *  - **Agregar**: pasada puntual fuera de plan. Crea una fila `es_extra` y deja la fila
+ *    planificada donde estaba, todavía pendiente.
+ *
+ * Lo que NUNCA ofrece es resolver la fila de otra zona sin moverla: eso es lo que
+ * rompe la cadencia sin dejar rastro, y es el agujero que este buscador vino a tapar
+ * (spec 2026-08-12).
+ */
 export function BuscadorDiaSheet({
     open,
     onClose,
+    semana,
+    dia,
     onExtraCreada,
     onNavegarAExistente,
-    semanaEnCurso,
-    clientesCartera,
+    onTraido,
+    onAviso,
 }: BuscadorDiaSheetProps) {
     const [texto, setTexto] = useState('')
     const [consulta, setConsulta] = useState<Consulta | null>(null)
+    const { data: resultados = [], buscando } = useBuscarEnCartera(texto)
     const consultarBuscador = useConsultarBuscador()
     const confirmarExtra = useConfirmarExtra()
+    const reacomodar = useReacomodar()
 
-    // El sheet queda montado entre aperturas — sin esto la búsqueda anterior quedaría
-    // pegada la próxima vez que se abre (mismo criterio que EstadoVisitaSheet).
+    const nombreDia = diaLabel(dia)
+    const trabajando = confirmarExtra.isPending || reacomodar.isPending
+
+    // Hoy la página desmonta el sheet al cerrarlo, así que el estado se limpia solo;
+    // esto lo deja igual de correcto si algún día se lo deja montado, sin que el texto
+    // de la búsqueda anterior reaparezca en la próxima apertura.
     useEffect(() => {
         if (!open) {
             setTexto('')
@@ -64,41 +78,71 @@ export function BuscadorDiaSheet({
         }
     }, [open])
 
-    const filtrados =
-        texto.trim().length === 0
-            ? []
-            : clientesCartera
-                  .filter(c => normalizar(c.nombreCliente).includes(normalizar(texto)))
-                  .slice(0, 50)
+    function cerrar() {
+        setTexto('')
+        setConsulta(null)
+        onClose()
+    }
 
-    async function handleSeleccionar(cliente: IVisitClientCard) {
-        const resultado = await consultarBuscador.mutateAsync({
-            codigo: cliente.codigoParticularCliente,
-            semana: semanaEnCurso,
-        })
-        setConsulta({ codigo: cliente.codigoParticularCliente, nombre: cliente.nombreCliente, resultado })
+    async function handleSeleccionar(r: IResultadoBuscadorGeneral) {
+        try {
+            const resultado = await consultarBuscador.mutateAsync({
+                codigo: r.codigoParticularCliente,
+                semana,
+            })
+            setConsulta({ codigo: r.codigoParticularCliente, nombre: r.nombreCliente, resultado })
+        } catch {
+            onAviso('error', 'No pudimos consultar este cliente. Volvé a intentar.')
+        }
     }
 
     function handleVerExistente() {
-        if (!consulta?.resultado.filaExistente) return
-        const cliente = consulta.resultado.filaExistente
-        setConsulta(null)
-        setTexto('')
+        const cliente = consulta?.resultado.filaExistente
+        if (!cliente) return
+        cerrar()
         onNavegarAExistente(cliente)
-        onClose()
     }
 
-    async function handleConfirmarExtra() {
-        if (!consulta) return
-        const creada = await confirmarExtra.mutateAsync({ codigo: consulta.codigo, semana: semanaEnCurso })
-        setConsulta(null)
-        setTexto('')
-        onExtraCreada(creada)
-        onClose()
+    async function handleTraer(rotacionClienteId: number) {
+        try {
+            await reacomodar.mutateAsync({ rotacionClienteId, semana, dia })
+            cerrar()
+            onTraido()
+        } catch {
+            onAviso('error', 'No se pudo mover el cliente. Volvé a intentar.')
+        }
     }
+
+    async function handleAgregarExtra() {
+        if (!consulta) return
+        try {
+            const creada = await confirmarExtra.mutateAsync({ codigo: consulta.codigo, semana, dia })
+            cerrar()
+            onExtraCreada(creada)
+        } catch {
+            onAviso('error', 'No se pudo agregar el cliente. Volvé a intentar.')
+        }
+    }
+
+    const fila = consulta?.resultado.filaExistente
+    // Ya está pendiente en esta zona pero en OTRO día: traerlo acá es reagendar dentro
+    // de la zona, que es una decisión táctica del vendedor. Si ya está en este mismo
+    // día no hay nada que mover — solo queda verlo.
+    const enOtroDiaDeEstaZona = fila != null && fila.dia !== dia
 
     return (
-        <BottomSheet open={open} onClose={onClose} title="Buscar cliente" altura="hasta-completa">
+        <BottomSheet
+            open={open}
+            onClose={cerrar}
+            eyebrow="Agregar al"
+            title={nombreDia}
+            /* Altura FIJA mientras se busca: con 'hasta-completa' el sheet se estiraba y
+               encogía con cada tecla —cada resultado que entra o sale mueve el alto— y el
+               input se iba corriendo bajo el dedo. La lista scrollea adentro. Al pasar a
+               confirmar sí baja a 'auto': ahí el contenido es un párrafo y dos botones, y
+               es un cambio de paso deliberado, no un salto mientras se tipea. */
+            altura={consulta ? 'auto' : 'completa'}
+        >
             {!consulta && (
                 <div className="flex flex-col gap-2">
                     <div className="relative mb-1">
@@ -108,28 +152,37 @@ export function BuscadorDiaSheet({
                         />
                         <input
                             className="w-full rounded-[11px] border-[1.5px] border-[#E4E8F0] py-2.5 pl-9 pr-3 text-sm font-semibold text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6]"
-                            placeholder="Nombre del cliente"
+                            placeholder="Nombre o código del cliente"
                             value={texto}
                             onChange={e => setTexto(e.target.value)}
                             autoFocus
                         />
                     </div>
+                    {buscando && <p className="px-1 text-sm text-dsmuted">Buscando…</p>}
                     <div className="flex flex-col gap-1.5">
-                        {filtrados.map(cliente => (
+                        {resultados.map(r => (
                             <button
-                                key={cliente.codigoParticularCliente}
+                                key={r.codigoParticularCliente}
                                 type="button"
                                 disabled={consultarBuscador.isPending}
-                                className="flex w-full items-center gap-2.5 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-white px-3 py-2.5 text-left disabled:opacity-60"
-                                onClick={() => handleSeleccionar(cliente)}
+                                className="flex w-full flex-col items-start gap-0.5 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-white px-3 py-2.5 text-left disabled:opacity-60"
+                                onClick={() => handleSeleccionar(r)}
                             >
-                                <span className="min-w-0 flex-1 truncate text-sm font-bold text-[#3B4560]">
-                                    {cliente.nombreCliente}
+                                <span className="w-full truncate text-sm font-bold text-[#3B4560]">
+                                    {r.nombreCliente}
                                 </span>
+                                <span className="text-xs text-dsmuted">{etiquetaEstado(r)}</span>
                             </button>
                         ))}
-                        {texto.trim().length > 0 && filtrados.length === 0 && (
+                        {texto.trim().length >= 2 && !buscando && resultados.length === 0 && (
                             <div className="py-6 text-center text-sm text-dsmuted">Sin resultados</div>
+                        )}
+                        {texto.trim().length < 2 && (
+                            <div className="py-6 text-center text-sm leading-relaxed text-dsmuted">
+                                Buscá en toda tu cartera,
+                                <br />
+                                esté o no en la hoja de ruta.
+                            </div>
                         )}
                     </div>
                 </div>
@@ -138,7 +191,97 @@ export function BuscadorDiaSheet({
             {consulta && consulta.resultado.estado === 'pendiente_zona_actual' && (
                 <div className="flex flex-col gap-3">
                     <p className="text-sm leading-snug text-[#182645]">
-                        <b>{consulta.nombre}</b> — pendiente hoy en esta zona.
+                        <b>{consulta.nombre}</b>{' '}
+                        {enOtroDiaDeEstaZona
+                            ? `ya está en tu ruta el ${diaLabel(fila!.dia)} de esta zona.`
+                            : `ya está en tu ruta el ${nombreDia}.`}
+                    </p>
+                    <div className="flex flex-col gap-2">
+                        {enOtroDiaDeEstaZona && (
+                            <button
+                                type="button"
+                                disabled={trabajando}
+                                className="h-11 w-full rounded-lg bg-dsnavy text-sm font-semibold text-white disabled:opacity-60"
+                                onClick={() => handleTraer(fila!.rotacionClienteId)}
+                            >
+                                Traerlo al {nombreDia}
+                            </button>
+                        )}
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                className="h-11 flex-1 rounded-lg border-[1.5px] border-[#E1E6F0] text-sm font-semibold text-[#182645]"
+                                onClick={() => setConsulta(null)}
+                            >
+                                Volver
+                            </button>
+                            <button
+                                type="button"
+                                className={`h-11 flex-1 rounded-lg text-sm font-semibold ${
+                                    enOtroDiaDeEstaZona
+                                        ? 'border-[1.5px] border-[#E1E6F0] text-[#182645]'
+                                        : 'bg-dsnavy text-white'
+                                }`}
+                                onClick={handleVerExistente}
+                            >
+                                Ver cliente
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {consulta &&
+                consulta.resultado.estado === 'pendiente_otra_zona' &&
+                consulta.resultado.otraZona && (
+                    <div className="flex flex-col gap-3">
+                        <p className="text-sm leading-snug text-[#182645]">
+                            <b>{consulta.nombre}</b> ya está planificado el{' '}
+                            {diaLabel(consulta.resultado.otraZona.dia)} en{' '}
+                            <b>
+                                {zonaLabel(
+                                    consulta.resultado.otraZona.descripcionZona,
+                                    consulta.resultado.otraZona.semana,
+                                )}
+                            </b>
+                            .
+                        </p>
+                        <div className="flex flex-col gap-2">
+                            <button
+                                type="button"
+                                disabled={trabajando}
+                                className="h-11 w-full rounded-lg bg-dsnavy text-sm font-semibold text-white disabled:opacity-60"
+                                onClick={() => handleTraer(consulta.resultado.otraZona!.rotacionClienteId)}
+                            >
+                                Traerlo al {nombreDia}
+                            </button>
+                            {/* Segundo, y sin color de acción principal: mover el plan es lo
+                                correcto cuando el cliente cambió de lugar; la extra es para la
+                                pasada puntual, y deja la visita de la otra zona pendiente. */}
+                            <button
+                                type="button"
+                                disabled={trabajando}
+                                className="h-11 w-full rounded-lg border-[1.5px] border-[#E1E6F0] text-sm font-semibold text-[#182645] disabled:opacity-60"
+                                onClick={handleAgregarExtra}
+                            >
+                                Agregar igual, sin sacarlo de ahí
+                            </button>
+                            <button
+                                type="button"
+                                className="h-11 w-full text-sm font-semibold text-dsmuted"
+                                onClick={() => setConsulta(null)}
+                            >
+                                Volver
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+            {consulta && consulta.resultado.estado === 'sin_fila_disponible' && (
+                <div className="flex flex-col gap-3">
+                    <p className="text-sm leading-snug text-[#182645]">
+                        <b>{consulta.nombre}</b> no está pendiente en ningún día de esta vuelta. Se
+                        agrega al {nombreDia} como visita extra.
                     </p>
                     <div className="flex gap-2">
                         <button
@@ -150,64 +293,9 @@ export function BuscadorDiaSheet({
                         </button>
                         <button
                             type="button"
-                            className="h-11 flex-1 rounded-lg bg-dsnavy text-sm font-semibold text-white"
-                            onClick={handleVerExistente}
-                        >
-                            Ver
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {consulta && consulta.resultado.estado === 'pendiente_otra_zona' && consulta.resultado.otraZona && (
-                <div className="flex flex-col gap-3">
-                    <p className="text-sm leading-snug text-[#182645]">
-                        Ya está planificado el {diaLabel(consulta.resultado.otraZona.dia)} en{' '}
-                        <b>
-                            {consulta.resultado.otraZona.descripcionZona ??
-                                `zona ${consulta.resultado.otraZona.semana}`}
-                        </b>
-                        .
-                    </p>
-                    <div className="flex gap-2">
-                        <button
-                            type="button"
-                            className="h-11 flex-1 rounded-lg border-[1.5px] border-[#E1E6F0] text-sm font-semibold text-[#182645]"
-                            onClick={() => setConsulta(null)}
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            disabled={confirmarExtra.isPending}
-                            className="h-11 flex-1 rounded-lg bg-dsnavy text-sm font-semibold text-white disabled:opacity-60"
-                            onClick={handleConfirmarExtra}
-                        >
-                            Agregar igual
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {consulta && consulta.resultado.estado === 'sin_fila_disponible' && (
-                <div className="flex flex-col gap-3">
-                    <p className="text-sm leading-snug text-[#182645]">
-                        <b>{consulta.nombre}</b> no está planificado hoy. Se va a agregar como visita
-                        extra.
-                    </p>
-                    <div className="flex gap-2">
-                        <button
-                            type="button"
-                            className="h-11 flex-1 rounded-lg border-[1.5px] border-[#E1E6F0] text-sm font-semibold text-[#182645]"
-                            onClick={() => setConsulta(null)}
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            type="button"
-                            disabled={confirmarExtra.isPending}
+                            disabled={trabajando}
                             className="h-11 flex-1 rounded-lg bg-dsgreen text-sm font-semibold text-white disabled:opacity-60"
-                            onClick={handleConfirmarExtra}
+                            onClick={handleAgregarExtra}
                         >
                             Agregar
                         </button>

@@ -226,9 +226,16 @@ export const consultarBuscador = async (
 }
 
 /** Crea (o devuelve, si ya existía por `uq_rotacion_cliente`) la fila `es_extra` de
- *  `(zona en curso, hoy)` para este cliente. */
-export const confirmarExtra = async (codigo: string, semana: number): Promise<IAgendaClient> => {
-    const res = await apiClient.post(`/planificacion/buscador/cliente/${codigo}/extra`, { semana })
+ *  `(zona en curso, dia)` para este cliente. Sin `dia`, el backend cae a HOY. */
+export const confirmarExtra = async (
+    codigo: string,
+    semana: number,
+    dia?: number,
+): Promise<IAgendaClient> => {
+    const res = await apiClient.post(`/planificacion/buscador/cliente/${codigo}/extra`, {
+        semana,
+        dia,
+    })
     return res.data.data
 }
 

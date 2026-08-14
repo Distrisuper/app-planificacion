@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
+import { Plus } from 'lucide-react'
 import ClienteCard from './ClienteCard'
 import { getWeekDates, formatDayDate, isSameDay } from '@/lib/weekDates'
 import { estaResuelto } from '@/lib/estadoCiclo'
@@ -16,6 +17,10 @@ interface AgendaBoardProps {
      *  en el resto de las cards pendientes (el vendedor no puede estar en dos a la vez). */
     hayVisitaEnCurso?: boolean
     onActivoChange: (dia: Dia) => void
+    /** Si se pasa, cada encabezado de día muestra un "+" que abre el buscador con ESE
+     *  día como destino. Sin la prop no se pinta: en preview de otra zona no hay dónde
+     *  agregar (la extra y el reacomodar van contra la zona en curso). */
+    onAgregarCliente?: (dia: Dia) => void
     onAbrir: (cliente: IAgendaClient) => void
     onEstadoVisita: (cliente: IAgendaClient) => void
     onIniciarVisita: (cliente: IAgendaClient) => void
@@ -28,6 +33,7 @@ export default function AgendaBoard({
     modo,
     hayVisitaEnCurso = false,
     onActivoChange,
+    onAgregarCliente,
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
@@ -136,15 +142,35 @@ export default function AgendaBoard({
                                         {formatDayDate(weekDates[d])}
                                     </span>
                                 </div>
-                                <span
-                                    className="rounded-full px-2.5 py-1 text-[11px] font-extrabold"
-                                    style={{
-                                        background: allDone ? '#009E4F' : isToday ? 'rgba(255,255,255,.18)' : '#EEF1F7',
-                                        color: allDone || isToday ? '#FFFFFF' : '#4B577A',
-                                    }}
-                                >
-                                    {done}/{total}
-                                </span>
+                                <div className="flex shrink-0 items-center gap-1.5">
+                                    <span
+                                        className="rounded-full px-2.5 py-1 text-[11px] font-extrabold"
+                                        style={{
+                                            background: allDone ? '#009E4F' : isToday ? 'rgba(255,255,255,.18)' : '#EEF1F7',
+                                            color: allDone || isToday ? '#FFFFFF' : '#4B577A',
+                                        }}
+                                    >
+                                        {done}/{total}
+                                    </span>
+                                    {/* Dentro del encabezado del día y no flotando sobre el board:
+                                        el board es swipeable entre columnas, así que un botón fijo
+                                        no puede decir a QUÉ día agrega — y este sheet escribe en una
+                                        celda concreta (semana, día). */}
+                                    {onAgregarCliente && (
+                                        <button
+                                            type="button"
+                                            aria-label={`Agregar cliente al ${DIA_NOMBRE[d].toLowerCase()}`}
+                                            onClick={() => onAgregarCliente(d)}
+                                            className={`grid h-7 w-7 place-items-center rounded-full transition-colors ${
+                                                isToday
+                                                    ? 'bg-white/20 text-white active:bg-white/30'
+                                                    : 'bg-[#EEF1F7] text-[#4B577A] active:bg-[#E1E6F0]'
+                                            }`}
+                                        >
+                                            <Plus className="h-4 w-4" strokeWidth={2.6} />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                             <div className="no-scrollbar flex flex-1 flex-col gap-2.5 overflow-y-auto bg-[#F7F8FB] p-2.5" style={{ minHeight: 0 }}>
                                 {clientes.map(c => (
