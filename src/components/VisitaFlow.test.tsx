@@ -32,7 +32,7 @@ const cliente: IAgendaClient = {
     dia: 1,
     estado: 'pendiente',
     visitaId: null,
-    rubrosPendientes: 0,
+    ofrecimientosPendientes: 0,
 }
 
 interface HarnessProps {
@@ -142,9 +142,9 @@ function renderFlow(
 beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getPropuesta as any).mockResolvedValue({ rubros: [] })
-    ;(api.getRubros as any).mockResolvedValue([])
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
     ;(api.getMotivos as any).mockResolvedValue([])
-    ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 99, rubros: 3 })
+    ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 99, ofrecimientos: 3 })
     ;(geo.capturarUbicacion as any).mockResolvedValue({
         ok: true,
         coord: '-34.6,-58.4',
@@ -191,7 +191,7 @@ it('sin señal tampoco inicia', async () => {
 it('tras iniciar pasa a los rubros congelados', async () => {
     renderFlow()
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
-    await waitFor(() => expect(api.getRubros).toHaveBeenCalledWith(99))
+    await waitFor(() => expect(api.getOfrecimientos).toHaveBeenCalledWith(99))
 })
 
 it('al iniciar avisa con una notificación de éxito', async () => {
@@ -211,14 +211,14 @@ it('aunque el cliente de la agenda siga en pendiente, tras iniciar se ve como en
 
 it('un cliente con visita en curso entra directo a los rubros', async () => {
     renderFlow({ cliente: { ...cliente, estado: 'en_curso', visitaId: 55 } })
-    await waitFor(() => expect(api.getRubros).toHaveBeenCalledWith(55))
+    await waitFor(() => expect(api.getOfrecimientos).toHaveBeenCalledWith(55))
     expect(api.getPropuesta).not.toHaveBeenCalled()
 })
 
 it('al cerrar sin rubros pendientes avisa con una notificación de éxito', async () => {
     ;(api.cerrarVisita as any).mockResolvedValue({
         visitaId: 55,
-        rubrosPendientes: 0,
+        ofrecimientosPendientes: 0,
     })
     const { onAviso } = renderFlow({ cliente: { ...cliente, estado: 'en_curso', visitaId: 55 } })
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
@@ -228,7 +228,7 @@ it('al cerrar sin rubros pendientes avisa con una notificación de éxito', asyn
 it('cerrar visita también exige ubicación', async () => {
     ;(api.cerrarVisita as any).mockResolvedValue({
         visitaId: 55,
-        rubrosPendientes: 0,
+        ofrecimientosPendientes: 0,
     })
     renderFlow({ cliente: { ...cliente, estado: 'en_curso', visitaId: 55 } })
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
@@ -494,7 +494,7 @@ const otroCliente: IAgendaClient = {
     dia: 1,
     estado: 'pendiente',
     visitaId: null,
-    rubrosPendientes: 0,
+    ofrecimientosPendientes: 0,
 }
 
 it('la visita en curso sigue viva aunque se abra y cierre la propuesta de otro cliente', async () => {

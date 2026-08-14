@@ -1,38 +1,45 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, Loader2, Trash2 } from 'lucide-react'
+import { ChevronLeft, Eraser, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import ResolucionRubro from './ResolucionRubro'
+import ResolucionOfrecimiento from './ResolucionOfrecimiento'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
-import { useEliminarRubro } from '@/hooks/useRubros'
-import { tieneDetalleIncompleto } from '@/lib/resolucionRubro'
-import type { IMotivo, IRubroMotivo, IVisitaRubro } from '@/types/planificacion'
+import { useAcciones } from '@/hooks/useAcciones'
+import { useEliminarOfrecimiento } from '@/hooks/useOfrecimientos'
+import type { IAccionComercial, IMotivo, IOfrecimiento, IOfrecimientoMotivo } from '@/types/planificacion'
 
 interface ResolucionWizardProps {
     visitaId: number
-    /** Subconjunto fijo de rubros que se está recorriendo (ya filtrado por el llamador). */
-    rubros: IVisitaRubro[]
-    /** Posición actual dentro de `rubros`. */
+    /** Subconjunto fijo de ofrecimientos que se está recorriendo (ya filtrado por el llamador). */
+    ofrecimientos: IOfrecimiento[]
+    /** Posición actual dentro de `ofrecimientos`. */
     index: number
     motivos: IMotivo[]
-    /** Borrador en memoria por rubroId — lo que el vendedor tildó, guardado o no. */
-    borradores: Record<number, IRubroMotivo[]>
-    onCambiarBorrador: (rubroId: number, motivos: IRubroMotivo[]) => void
+    /** Borrador en memoria por ofrecimientoId — lo que el vendedor tildó, guardado o no. */
+    borradores: Record<number, IOfrecimientoMotivo[]>
+    onCambiarBorrador: (ofrecimientoId: number, motivos: IOfrecimientoMotivo[]) => void
+    /** Acción comercial por ofrecimientoId — borrador paralelo al de motivos. */
+    detalles: Record<number, IAccionComercial | null>
+    onCambiarAccion: (ofrecimientoId: number, accion: IAccionComercial | null) => void
     onVolver: () => void
 }
 
-/** Header (contexto/salida) + checklist del rubro actual. Va en el área scrolleable del
- *  sheet — la navegación y el guardado en lote viven en ResolucionWizardAcciones, que se
- *  renderiza aparte, en el pie fijo, para que no se oculten al expandirse el detalle. */
+/** Header (contexto/salida) + checklist del ofrecimiento actual. Va en el área scrolleable
+ *  del sheet — la navegación y el guardado en lote viven en ResolucionWizardAcciones, que
+ *  se renderiza aparte, en el pie fijo, para que no se oculten al expandirse el detalle. */
 export default function ResolucionWizard({
     visitaId,
-    rubros,
+    ofrecimientos,
     index,
     motivos,
     borradores,
     onCambiarBorrador,
+    detalles,
+    onCambiarAccion,
     onVolver,
 }: ResolucionWizardProps) {
-    const rubro = rubros[index]
+    const ofrecimiento = ofrecimientos[index]
+    const { data: acciones = [] } = useAcciones()
+    const accion = detalles[ofrecimiento.id] ?? null
 
     // Sentido del último movimiento, para que la entrada acompañe a la navegación. Se lee
     // en el render (no en el efecto) porque la clase tiene que salir en el MISMO render en
@@ -43,31 +50,67 @@ export default function ResolucionWizard({
         indexAnterior.current = index
     }, [index])
 
-    // El catálogo de marcas se pide desde acá y no desde ResolucionRubro: el wizard es
-    // el ancestro más cercano que ve a la vez el catálogo de motivos y el borrador, así
-    // que puede pedirlo SOLO cuando hace falta — y deja a ResolucionRubro presentacional
-    // puro, sin React Query en su test.
-    const necesitaMarcas = (borradores[rubro.id] ?? []).some(
-        m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
-    )
+    // El catálogo de marcas se pide desde acá y no desde ResolucionOfrecimiento: el wizard
+    // es el ancestro más cercano que ve a la vez el catálogo de motivos y el borrador, así
+    // que puede pedirlo SOLO cuando hace falta — y deja a ResolucionOfrecimiento
+    // presentacional puro, sin React Query en su test.
+    const necesitaMarcas =
+        accion !== null ||
+        (borradores[ofrecimiento.id] ?? []).some(
+            m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
+        )
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
 
-    const completos = rubros.filter(r => {
-        const cargados = borradores[r.id] ?? []
-        return cargados.length > 0 && !tieneDetalleIncompleto(motivos, cargados)
-    }).length
+    // Replica SOLO acción o SOLO marca del rubro actual al resto — nunca juntas y nunca
+    // la resolución: qué pasó con cada rubro es suyo, y la evidencia de seguimientos
+    // muestra que el desenlace puede variar rubro a rubro aunque la acción sea la misma
+    // (un cupo se acepta pero un kit puntual se rechaza). Cada check copia SU campo sin
+    // tocar el otro que ya tuviera cargado ese rubro — es una copia de una sola vez, no
+    // un vínculo: cada rubro sigue editable después.
+    const restantes = ofrecimientos.filter((_, i) => i !== index)
 
-    const eliminar = useEliminarRubro(visitaId)
+    function aplicarAccion() {
+        for (const r of restantes) {
+            const actual = detalles[r.id] ?? null
+            onCambiarAccion(r.id, {
+                accion: accion?.accion ?? null,
+                marca: actual?.marca ?? null,
+                params: accion?.params,
+            })
+        }
+    }
+
+    function aplicarMarca() {
+        for (const r of restantes) {
+            const actual = detalles[r.id] ?? null
+            onCambiarAccion(r.id, {
+                accion: actual?.accion ?? null,
+                marca: accion?.marca ?? null,
+                params: actual?.params,
+            })
+        }
+    }
+
+    // Limpia SOLO el borrador en pantalla de este rubro (acción + marca + motivos) — no
+    // toca el backend ni los demás rubros. Vuelve a "sin nada cargado", como si recién
+    // se hubiera entrado a resolverlo.
+    const hayAlgoQueLimpiar = accion !== null || (borradores[ofrecimiento.id]?.length ?? 0) > 0
+    function limpiarBorrador() {
+        onCambiarAccion(ofrecimiento.id, null)
+        onCambiarBorrador(ofrecimiento.id, [])
+    }
+
+    const eliminar = useEliminarOfrecimiento(visitaId)
     const [errorEliminar, setErrorEliminar] = useState<string | null>(null)
 
-    // Los rubros de la propuesta NO se borran (el backend responde RUBRO_DE_PROPUESTA):
-    // si no se ofreció, se resuelve con "No lo ofrecí". Poner el borrado detrás del
-    // wizard (y no al lado del target grande de la fila en la tabla) evita el borrado
-    // accidental.
-    async function quitarRubro() {
+    // Los ofrecimientos de la propuesta NO se borran (el backend responde
+    // OFRECIMIENTO_DE_PROPUESTA): si no se ofreció, se resuelve con "No lo ofrecí". Poner
+    // el borrado detrás del wizard (y no al lado del target grande de la fila en la tabla)
+    // evita el borrado accidental.
+    async function quitarOfrecimiento() {
         setErrorEliminar(null)
         try {
-            await eliminar.mutateAsync(rubro.id)
+            await eliminar.mutateAsync(ofrecimiento.id)
             onVolver()
         } catch {
             setErrorEliminar('Sin conexión. Volvé a intentar; no se perdió lo que cargaste.')
@@ -76,11 +119,12 @@ export default function ResolucionWizard({
 
     return (
         <div>
-            {/* Sticky: el nombre del rubro es la info que más importa en esta pantalla —
-             *  si scrollea con el resto (ej. al expandirse el detalle de Precio), el
-             *  vendedor pierde de vista cuál está resolviendo a mitad de la lista. El
-             *  -mx/px negativo hace que el fondo llegue a los bordes del sheet en vez de
-             *  dejar ver el contenido de abajo por el padding lateral del scroll. */}
+            {/* Sticky: el nombre del ofrecimiento es la info que más importa en esta
+             *  pantalla — si scrollea con el resto (ej. al expandirse el detalle de
+             *  Precio), el vendedor pierde de vista cuál está resolviendo a mitad de la
+             *  lista. El -mx/px negativo hace que el fondo llegue a los bordes del sheet
+             *  en vez de dejar ver el contenido de abajo por el padding lateral del
+             *  scroll. */}
             <div className="sticky top-0 z-10 -mx-[18px] mb-3 border-b border-[#EEF0F5] bg-white px-[18px] pb-2.5">
                 <div className="flex items-center gap-2">
                 <Button
@@ -93,16 +137,26 @@ export default function ResolucionWizard({
                     <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
                 </Button>
                 <span className="min-w-0 flex-1 truncate text-[15px] font-extrabold text-[#182645]">
-                    {rubro.rubroDescripcion}
+                    {ofrecimiento.descripcion}
                 </span>
                 <span className="shrink-0 text-[12px] font-semibold text-dsmuted">
-                    {index + 1} de {rubros.length}
+                    {index + 1} de {ofrecimientos.length}
                 </span>
-                {!rubro.esPropuesto && (
+                {hayAlgoQueLimpiar && (
                     <button
                         type="button"
-                        aria-label={`Quitar ${rubro.rubroDescripcion}`}
-                        onClick={quitarRubro}
+                        aria-label="Limpiar lo cargado en este rubro"
+                        onClick={limpiarBorrador}
+                        className="shrink-0 text-dsmuted"
+                    >
+                        <Eraser className="h-4 w-4" strokeWidth={2} />
+                    </button>
+                )}
+                {!ofrecimiento.esPropuesto && (
+                    <button
+                        type="button"
+                        aria-label={`Quitar ${ofrecimiento.descripcion}`}
+                        onClick={quitarOfrecimiento}
                         disabled={eliminar.isPending}
                         className="shrink-0 text-dsmuted disabled:opacity-50"
                     >
@@ -114,39 +168,6 @@ export default function ResolucionWizard({
                     </button>
                 )}
                 </div>
-
-                {/* Un segmento por rubro: verde el que ya tiene su resolución completa,
-                 *  navy y más alto el que se está cargando, gris el que falta. "2 de 6" es
-                 *  texto y solo dice dónde estás; esto dice además qué hiciste y cuánto
-                 *  queda, que es lo que el vendedor no podía saber sin salir a la lista. */}
-                <div
-                    className="mt-2 flex h-1.5 items-center gap-1"
-                    role="progressbar"
-                    aria-valuemin={1}
-                    aria-valuemax={rubros.length}
-                    aria-valuenow={index + 1}
-                    aria-label={`Rubro ${index + 1} de ${rubros.length}, ${completos} resueltos`}
-                >
-                    {rubros.map((r, i) => {
-                        const cargados = borradores[r.id] ?? []
-                        const completo =
-                            cargados.length > 0 && !tieneDetalleIncompleto(motivos, cargados)
-                        return (
-                            <div
-                                key={r.id}
-                                className={`flex-1 rounded-full transition-all ${
-                                    i === index ? 'h-1.5' : 'h-[3px]'
-                                } ${
-                                    completo
-                                        ? 'bg-dsgreen'
-                                        : i === index
-                                          ? 'bg-dsnavy'
-                                          : 'bg-[#E4E8F0]'
-                                }`}
-                            />
-                        )
-                    })}
-                </div>
             </div>
 
             {errorEliminar && (
@@ -155,19 +176,25 @@ export default function ResolucionWizard({
                 </p>
             )}
 
-            {/* `key` por rubro: sin él React reusa el mismo árbol al cambiar de índice y
-             *  la animación no se vuelve a disparar (además de arrastrar el estado
-             *  interno del rubro anterior). */}
+            {/* `key` por ofrecimiento: sin él React reusa el mismo árbol al cambiar de
+             *  índice y la animación no se vuelve a disparar (además de arrastrar el
+             *  estado interno del ofrecimiento anterior). */}
             <div
-                key={rubro.id}
+                key={ofrecimiento.id}
                 className={haciaAdelante ? 'animate-rubro-adelante' : 'animate-rubro-atras'}
             >
-                <ResolucionRubro
+                <ResolucionOfrecimiento
                     motivos={motivos}
                     marcas={marcas}
                     marcasLoading={marcasLoading}
-                    value={borradores[rubro.id] ?? []}
-                    onChange={m => onCambiarBorrador(rubro.id, m)}
+                    acciones={acciones.map(a => ({ code: a.codigo, description: a.descripcion }))}
+                    accion={accion}
+                    onChangeAccion={a => onCambiarAccion(ofrecimiento.id, a)}
+                    value={borradores[ofrecimiento.id] ?? []}
+                    onChange={m => onCambiarBorrador(ofrecimiento.id, m)}
+                    rubrosRestantes={restantes.length}
+                    onAplicarAccion={aplicarAccion}
+                    onAplicarMarca={aplicarMarca}
                 />
             </div>
         </div>

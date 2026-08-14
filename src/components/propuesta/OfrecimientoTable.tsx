@@ -1,19 +1,24 @@
 import { useState } from 'react'
 import { Check, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { fmtAmount } from '@/lib/fmtAmount'
-import type { IRubroFila, IRubroFilaResolucion } from './filas'
+import { resumenAlcance } from '@/lib/alcance'
+import { registroDetalleAccion } from './accionDetalle/registro'
+import { separarSegmentos } from './filas'
+import type { TipoOfrecimiento } from '@/types/planificacion'
+import type { IOfrecimientoFila, IOfrecimientoFilaResolucion } from './filas'
 
-interface RubroTableProps {
-    filas: IRubroFila[]
-    onResolucion?: (visitaRubroId: number) => void
-    onAgregar?: (rubroCode: string) => void
-    onEliminar?: (visitaRubroId: number) => void
-    /** rubroCodes cuyas mutaciones de "agregar" están en vuelo: esas filas
+interface OfrecimientoTableProps {
+    filas: IOfrecimientoFila[]
+    onResolucion?: (ofrecimientoId: number) => void
+    onAgregar?: (codigo: string) => void
+    onEliminar?: (ofrecimientoId: number) => void
+    /** codes cuyas mutaciones de "agregar" están en vuelo: esas filas
      *  quedan atenuadas y deshabilitadas. Es un set (no un solo valor) porque
      *  el vendedor puede tocar varias filas agregables antes de que la
-     *  primera request vuelva. */
+     *  primera request vuelva. Clave `` `${tipo}:${codigo}` ``: dos tipos
+     *  distintos pueden compartir código. */
     agregandoCodes?: Set<string>
-    /** visitaRubroIds cuyas mutaciones de "eliminar" están en vuelo: esos
+    /** ofrecimientoIds cuyas mutaciones de "eliminar" están en vuelo: esos
      *  botones muestran spinner y quedan deshabilitados. */
     eliminandoIds?: Set<number>
 }
@@ -33,6 +38,14 @@ function fmtCelda(valor: number | null) {
 
 function cae(valor: number | null, promedio6m: number | null): boolean {
     return promedio6m != null && promedio6m > 0 && valor != null && valor < promedio6m
+}
+
+const TIPO_LABEL: Record<TipoOfrecimiento, string> = {
+    rubro: 'Rubro',
+    marca: 'Marca',
+    linea: 'Línea',
+    articulo: 'Artículo',
+    accion: 'Acción',
 }
 
 // Mismo ancho fijo y el mismo padding horizontal (cero acá, todo lo aporta el
@@ -78,17 +91,11 @@ function Celda({
     )
 }
 
-/** Nombre + las tres columnas numéricas, siempre en ese orden y con el mismo
- *  ancho de columna que el header, en las dos únicas variantes que existen:
- *  read-only (`div`) o agregable (`button`, toda la fila es el target táctil).
- *  Ninguna variante agrega una columna extra al final — por eso el ancho de
- *  ACTUAL/M.ANT/P.6M es siempre el mismo, sea esta fila una tarjeta con
- *  Resolución arriba, una fila de solo lectura, o una fila agregable. */
-/** Estado de la resolución del rubro, en 26px: ＋ (sin cargar), el número de motivos
- *  en ámbar (empezado pero incompleto) o ✓ verde (completo). Reemplaza al
- *  botón "Resolución" de ancho completo que ocupaba una segunda línea por rubro: con
+/** Estado de la resolución del ofrecimiento, en 26px: ＋ (sin cargar), el número de
+ *  motivos en ámbar (empezado pero incompleto) o ✓ verde (completo). Reemplaza al
+ *  botón "Resolución" de ancho completo que ocupaba una segunda línea por fila: con
  *  5 rubros esa línea costaba ~250px de una pantalla que tiene ~500 útiles. */
-function ChipEstado({ resolucion }: { resolucion: IRubroFilaResolucion }) {
+function ChipEstado({ resolucion }: { resolucion: IOfrecimientoFilaResolucion }) {
     const { completo, motivosCargados } = resolucion
     return (
         <div className={`${ANCHO_CHIP} flex justify-start`}>
@@ -118,13 +125,45 @@ function ChipEstado({ resolucion }: { resolucion: IRubroFilaResolucion }) {
     )
 }
 
-function ContenidoFila({ fila }: { fila: IRubroFila }) {
+/** Nombre (+ chip de tipo y alcance si aplica) y las tres columnas numéricas, siempre en
+ *  ese orden y con el mismo ancho de columna que el header. El chip no se pinta para
+ *  'rubro': es el caso por defecto y repetirlo en cada fila es ruido. "SKF" sin decir
+ *  que es una marca sí es ambiguo, y esa es la razón del chip. */
+function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
+    const moduloDetalle = registroDetalleAccion[fila.codigo]
     return (
         <>
-            <div className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#182645]">{fila.nombre}</div>
-            <Celda valor={fila.actual} promedio6m={fila.promedio6m} />
-            <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} />
-            <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia />
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#182645]">{fila.nombre}</span>
+                    {fila.tipo !== 'rubro' && (
+                        <span className="shrink-0 rounded-full bg-[#EEF3FB] px-1.5 py-0.5 text-[10px] font-bold text-[#213D82]">
+                            {TIPO_LABEL[fila.tipo]}
+                        </span>
+                    )}
+                </div>
+                {fila.alcance.length > 0 && (
+                    <div className="truncate text-[11px] font-semibold text-dsmuted">
+                        {resumenAlcance(fila.alcance)}
+                    </div>
+                )}
+                {fila.detalle != null && moduloDetalle && (
+                    <div className="truncate text-[11px] font-semibold text-dsmuted">
+                        {moduloDetalle.resumen(fila.detalle)}
+                    </div>
+                )}
+            </div>
+            {/* `rubroStatus` (de donde salen estos tres números) está indexado por
+             *  código de RUBRO — una acción o una marca nunca matchean ahí, así que
+             *  mostrar las tres celdas en guiones se lee como "falta cargar" cuando en
+             *  realidad ese dato no existe para estos tipos de ofrecimiento. */}
+            {fila.tipo === 'rubro' && (
+                <>
+                    <Celda valor={fila.actual} promedio6m={fila.promedio6m} />
+                    <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} />
+                    <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia />
+                </>
+            )}
         </>
     )
 }
@@ -132,7 +171,7 @@ function ContenidoFila({ fila }: { fila: IRubroFila }) {
 /** Una fila completa, siempre de UNA sola línea. Las tres variantes (read-only,
  *  resoluble, agregable) comparten la misma altura y las mismas columnas — lo único
  *  que cambia es qué pasa al tocarla y qué muestra el chip del principio. */
-function FilaRubro({
+function FilaOfrecimiento({
     fila,
     conBorde,
     conChip,
@@ -143,19 +182,19 @@ function FilaRubro({
     agregandoCodes,
     eliminandoIds,
 }: {
-    fila: IRubroFila
+    fila: IOfrecimientoFila
     conBorde: boolean
     conChip: boolean
     conColumnaQuitar: boolean
-    onResolucion?: (visitaRubroId: number) => void
-    onAgregar?: (rubroCode: string) => void
-    onEliminar?: (visitaRubroId: number) => void
+    onResolucion?: (ofrecimientoId: number) => void
+    onAgregar?: (codigo: string) => void
+    onEliminar?: (ofrecimientoId: number) => void
     agregandoCodes?: Set<string>
     eliminandoIds?: Set<number>
 }) {
     const resolucion = fila.resolucion
-    const agregando = fila.agregable ? (agregandoCodes?.has(fila.rubroCode) ?? false) : false
-    const eliminando = resolucion ? (eliminandoIds?.has(resolucion.visitaRubroId) ?? false) : false
+    const agregando = fila.agregable ? (agregandoCodes?.has(`${fila.tipo}:${fila.codigo}`) ?? false) : false
+    const eliminando = resolucion ? (eliminandoIds?.has(resolucion.ofrecimientoId) ?? false) : false
     const clasesFila = 'flex min-w-0 flex-1 items-center gap-1 px-2.5 py-2 text-left'
 
     const interior = (
@@ -177,8 +216,8 @@ function FilaRubro({
                     disabled={agregando}
                     onClick={() =>
                         resolucion
-                            ? onResolucion?.(resolucion.visitaRubroId)
-                            : onAgregar?.(fila.rubroCode)
+                            ? onResolucion?.(resolucion.ofrecimientoId)
+                            : onAgregar?.(fila.codigo)
                     }
                     className={`${clasesFila} active:bg-[#F7F8FB] disabled:opacity-50`}
                 >
@@ -187,18 +226,18 @@ function FilaRubro({
             ) : (
                 <div className={clasesFila}>{interior}</div>
             )}
-            {/* Solo para rubros agregados dinámicamente — los de la propuesta congelada
-             *  no se pueden borrar (el backend responde RUBRO_DE_PROPUESTA); si el
-             *  vendedor no lo ofreció, se resuelve con "No lo ofrecí" en vez de
-             *  borrarlo. La columna se reserva en toda la tabla (ver ANCHO_QUITAR) para
-             *  que las filas sin ✕ no corran sus números. */}
+            {/* Solo para ofrecimientos agregados dinámicamente — los de la propuesta
+             *  congelada no se pueden borrar (el backend responde
+             *  OFRECIMIENTO_DE_PROPUESTA); si el vendedor no lo ofreció, se resuelve
+             *  con "No lo ofrecí" en vez de borrarlo. La columna se reserva en toda la
+             *  tabla (ver ANCHO_QUITAR) para que las filas sin ✕ no corran sus números. */}
             {conColumnaQuitar && (
                 <div className={`${ANCHO_QUITAR} flex justify-center`}>
                     {resolucion && !resolucion.esPropuesto && (
                         <button
                             type="button"
                             aria-label={`Quitar ${fila.nombre}`}
-                            onClick={() => onEliminar?.(resolucion.visitaRubroId)}
+                            onClick={() => onEliminar?.(resolucion.ofrecimientoId)}
                             disabled={eliminando}
                             className="grid h-7 w-7 place-items-center rounded-md text-dsred disabled:opacity-50"
                         >
@@ -211,6 +250,58 @@ function FilaRubro({
                     )}
                 </div>
             )}
+        </div>
+    )
+}
+
+/** Un segmento propio (Acciones, Marcas) arriba de la tabla de rubros: mismo
+ *  componente de fila de una línea, pero con su propia grilla de chip/columna-quitar
+ *  y su propia etiqueta — no comparte contenedor con la tabla RUBRO·ACTUAL·M.ANT·P.6M
+ *  porque ninguna fila de un segmento tiene esos tres números. Sin filas, no
+ *  renderiza nada (ni etiqueta vacía). */
+function SegmentoOfrecimientos({
+    titulo,
+    filas,
+    onResolucion,
+    onAgregar,
+    onEliminar,
+    agregandoCodes,
+    eliminandoIds,
+}: {
+    titulo: string
+    filas: IOfrecimientoFila[]
+    onResolucion?: (ofrecimientoId: number) => void
+    onAgregar?: (codigo: string) => void
+    onEliminar?: (ofrecimientoId: number) => void
+    agregandoCodes?: Set<string>
+    eliminandoIds?: Set<number>
+}) {
+    if (filas.length === 0) return null
+
+    const conChip = filas.some(f => f.resolucion)
+    const conColumnaQuitar = filas.some(f => f.resolucion && !f.resolucion.esPropuesto)
+
+    return (
+        <div className="mb-2">
+            <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
+                {titulo}
+            </p>
+            <div className="w-full rounded-xl border border-dsline">
+                {filas.map((fila, i) => (
+                    <FilaOfrecimiento
+                        key={`${fila.tipo}:${fila.codigo}`}
+                        fila={fila}
+                        conBorde={i < filas.length - 1}
+                        conChip={conChip}
+                        conColumnaQuitar={conColumnaQuitar}
+                        onResolucion={onResolucion}
+                        onAgregar={onAgregar}
+                        onEliminar={onEliminar}
+                        agregandoCodes={agregandoCodes}
+                        eliminandoIds={eliminandoIds}
+                    />
+                ))}
+            </div>
         </div>
     )
 }
@@ -230,41 +321,65 @@ function FilaRubro({
  *
  *  El buscador solo filtra "otros rubros del cliente": esa es la lista que
  *  puede crecer a docenas de filas (todo el historial de compra del
- *  cliente), mientras que el bloque de arriba (la propuesta, o los rubros ya
- *  cargados en la visita) es corto y es justamente lo que el vendedor tiene
- *  que ver siempre — filtrarlo escondería el trabajo pendiente detrás de una
- *  búsqueda que no viene al caso ahí. */
-export default function RubroTable({
+ *  cliente), mientras que el bloque de arriba (la propuesta, o los
+ *  ofrecimientos ya cargados en la visita) es corto y es justamente lo que
+ *  el vendedor tiene que ver siempre — filtrarlo escondería el trabajo
+ *  pendiente detrás de una búsqueda que no viene al caso ahí. */
+export default function OfrecimientoTable({
     filas,
     onResolucion,
     onAgregar,
     onEliminar,
     agregandoCodes,
     eliminandoIds,
-}: RubroTableProps) {
+}: OfrecimientoTableProps) {
     const [busqueda, setBusqueda] = useState('')
 
-    // Se filtra por `destacada` en vez de asumir que `filas` viene ordenada
+    // Ninguna acción ni marca tiene venta histórica por rubro: cada una vive en su
+    // propia sección, arriba de todo, afuera de la tabla RUBRO·ACTUAL·M.ANT·P.6M — el
+    // resto de esta función sigue operando igual que siempre, pero solo sobre `resto`.
+    const { acciones, marcas, resto } = separarSegmentos(filas)
+
+    // Se filtra por `destacada` en vez de asumir que `resto` viene ordenado
     // destacadas-primero: `construirFilas*` hoy respeta ese orden, pero
     // derivarlo así evita que un bloque de arriba vacío (o desordenado) se
     // confunda con "no hay bloque extra".
-    const bloqueArriba = filas.filter(f => f.destacada)
-    const bloqueAbajo = filas.filter(f => !f.destacada)
+    const bloqueArriba = resto.filter(f => f.destacada)
+    const bloqueAbajo = resto.filter(f => !f.destacada)
     const hayBloqueExtra = bloqueAbajo.length > 0
     const bloqueExtraEsAgregable = bloqueAbajo.some(f => f.agregable)
     // Tabla de una visita ⇒ hay chip de estado, y se reserva su ancho en todas las
     // filas y en el header. En la propuesta (ninguna fila resoluble) no se reserva
     // nada: ahí ese espacio es ancho de nombre.
-    const conChip = filas.some(f => f.resolucion)
-    const conColumnaQuitar = filas.some(f => f.resolucion && !f.resolucion.esPropuesto)
+    const conChip = resto.some(f => f.resolucion)
+    const conColumnaQuitar = resto.some(f => f.resolucion && !f.resolucion.esPropuesto)
 
     const q = normalizar(busqueda.trim())
     const bloqueAbajoFiltrado = q === '' ? bloqueAbajo : bloqueAbajo.filter(f => normalizar(f.nombre).includes(q))
 
     return (
-        // Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
-        // overflow oculto anula el `position: sticky` de adentro contra el scroll del
-        // sheet. Las esquinas de arriba las redondea el propio header.
+        <>
+        <SegmentoOfrecimientos
+            titulo="Acciones"
+            filas={acciones}
+            onResolucion={onResolucion}
+            onAgregar={onAgregar}
+            onEliminar={onEliminar}
+            agregandoCodes={agregandoCodes}
+            eliminandoIds={eliminandoIds}
+        />
+        <SegmentoOfrecimientos
+            titulo="Marcas"
+            filas={marcas}
+            onResolucion={onResolucion}
+            onAgregar={onAgregar}
+            onEliminar={onEliminar}
+            agregandoCodes={agregandoCodes}
+            eliminandoIds={eliminandoIds}
+        />
+        {/* Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
+            overflow oculto anula el `position: sticky` de adentro contra el scroll del
+            sheet. Las esquinas de arriba las redondea el propio header. */}
         <div className="w-full rounded-xl border border-dsline">
             {/* Sticky: con el catálogo abierto la lista pasa de 25 filas y, sin el rótulo
                 a la vista, las tres columnas de números quedan sin identificar apenas se
@@ -293,8 +408,8 @@ export default function RubroTable({
 
             <div>
                 {bloqueArriba.map((fila, i) => (
-                    <FilaRubro
-                        key={fila.rubroCode}
+                    <FilaOfrecimiento
+                        key={`${fila.tipo}:${fila.codigo}`}
                         fila={fila}
                         // La última no lleva borde propio cuando sigue la banda: la banda
                         // ya trae el suyo arriba (border-y, que necesita para no dejar
@@ -337,8 +452,8 @@ export default function RubroTable({
                 )}
 
                 {bloqueAbajoFiltrado.map((fila, i) => (
-                    <FilaRubro
-                        key={fila.rubroCode}
+                    <FilaOfrecimiento
+                        key={`${fila.tipo}:${fila.codigo}`}
                         fila={fila}
                         conBorde={i < bloqueAbajoFiltrado.length - 1}
                         conChip={conChip}
@@ -358,5 +473,6 @@ export default function RubroTable({
                 )}
             </div>
         </div>
+        </>
     )
 }

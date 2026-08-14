@@ -29,8 +29,8 @@ it('incluye un vendedor con duración promedio bajo el piso de 20 min', () => {
     expect(v).toBeDefined()
 })
 
-it('incluye un vendedor sin rubros ofrecidos: efectividad null, nunca 0', () => {
-    const v = MOCK_RESUMEN.vendedores.find(v => v.rubrosOfrecidos === 0)
+it('incluye un vendedor sin ofrecimientos: efectividad null, nunca 0', () => {
+    const v = MOCK_RESUMEN.vendedores.find(v => v.ofrecimientosTotales === 0)
     expect(v).toBeDefined()
     expect(v!.efectividadComercial).toBeNull()
 })

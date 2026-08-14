@@ -1,26 +1,96 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import CatalogoPicker from './CatalogoPicker'
-import type { ICatalogoItem, IMotivo, IRubroMotivo } from '@/types/planificacion'
+import AccionComercialPicker from './AccionComercialPicker'
+import MarcaOfrecimientoPicker from './MarcaOfrecimientoPicker'
+import type { IAccionComercial, ICatalogoItem, IMotivo, IOfrecimientoMotivo, ResultadoMotivo } from '@/types/planificacion'
 
-interface ResolucionRubroProps {
-    /** Catálogo de nivel `rubro`. Nunca se hardcodea: agregar un motivo es un INSERT. */
+interface ResolucionOfrecimientoProps {
+    /** Catálogo de nivel `ofrecimiento`. Nunca se hardcodea: agregar un motivo es un INSERT. */
     motivos: IMotivo[]
     /** Catálogo de marcas. Restringir la elección es lo único que hace agregable la
      *  columna `marca`: con texto libre conviven "Fric Rot", "fricrot" y "FRIC-ROT". */
     marcas: ICatalogoItem[]
     marcasLoading?: boolean
-    value: IRubroMotivo[]
-    onChange: (motivos: IRubroMotivo[]) => void
+    /** Catálogo de acciones comerciales (pl_accion). */
+    acciones: ICatalogoItem[]
+    /** La acción con la que se resolvió este ofrecimiento, si hubo. */
+    accion: IAccionComercial | null
+    onChangeAccion: (accion: IAccionComercial | null) => void
+    value: IOfrecimientoMotivo[]
+    onChange: (motivos: IOfrecimientoMotivo[]) => void
+    /** Cuántos rubros quedan por resolver además de este. 0 = no se ofrecen los checks
+     *  de "aplicar a restantes" (uno en el chip de Acción, otro en el de Marca). */
+    rubrosRestantes?: number
+    /** Copia esta acción a los rubros restantes — una sola vez, al tildar SU check. La
+     *  marca de cada rubro no se toca. */
+    onAplicarAccion?: () => void
+    /** Copia esta marca a los rubros restantes — una sola vez, al tildar SU check. La
+     *  acción de cada rubro no se toca. */
+    onAplicarMarca?: () => void
 }
 
 const VACIO = { marca: null, competidor: null, pctDiferencia: null }
 
-/** Checklist + detalle de un rubro. Sin header, nombre de rubro ni botón de guardar
+/** Color del motivo tildado, según qué tan buena/mala es esa resolución — no según su
+ *  nombre (eso hardcodearía la lista). `resultado` ya distingue exactamente esto:
+ *  ganado = verde, diferido = amarillo (ni ganado ni perdido todavía), perdido =
+ *  naranja (una objeción con la que se puede volver), no_ofrecido = rojo (ni se
+ *  intentó). Sin tildar, el motivo queda neutro (ver uso más abajo). */
+function colorDeResultado(resultado: ResultadoMotivo | null): { border: string; bg: string; check: string } {
+    switch (resultado) {
+        case 'ganado':
+            return { border: '#9BE3B4', bg: '#EAFBF1', check: '#009E4F' }
+        case 'diferido':
+            return { border: '#F7DD8F', bg: '#FEF9E8', check: '#B8860B' }
+        case 'perdido':
+            return { border: '#F3C8A0', bg: '#FDF2E9', check: '#B45309' }
+        case 'no_ofrecido':
+            return { border: '#F1B3AC', bg: '#FDECEB', check: '#B42318' }
+        default:
+            return { border: '#B9CCEC', bg: '#EEF3FB', check: '#213D82' }
+    }
+}
+
+/** Checklist + detalle de un ofrecimiento. Sin header, nombre ni botón de guardar
  *  propios: eso lo aporta ResolucionWizard, que envuelve a este componente en su header
  *  fijo y es el único con estado de posición/guardado. */
-export default function ResolucionRubro({ motivos, marcas, marcasLoading, value, onChange }: ResolucionRubroProps) {
+export default function ResolucionOfrecimiento({
+    motivos,
+    marcas,
+    marcasLoading,
+    acciones,
+    accion,
+    onChangeAccion,
+    value,
+    onChange,
+    rubrosRestantes = 0,
+    onAplicarAccion,
+    onAplicarMarca,
+}: ResolucionOfrecimientoProps) {
     const porId = new Map(value.map(m => [m.motivoId, m]))
+    const resultadoPorId = new Map(motivos.map(m => [m.motivoId, m.resultado]))
+
+    // Acción y marca son dos chips independientes, pero comparten el mismo dato de
+    // fondo (`accion`, el que viaja al backend como `detalle`): la marca no se duplica
+    // entre los dos — si hay acción elegida, es SU marca.
+    function onChangeAccionChip(nuevo: { accion: string; params?: unknown } | null) {
+        if (nuevo) {
+            onChangeAccion({ ...nuevo, marca: accion?.marca ?? null })
+        } else if (accion?.marca) {
+            onChangeAccion({ accion: null, marca: accion.marca })
+        } else {
+            onChangeAccion(null)
+        }
+    }
+
+    function onChangeMarcaChip(marca: string | null) {
+        if (!accion?.accion && !marca) {
+            onChangeAccion(null)
+        } else {
+            onChangeAccion({ accion: accion?.accion ?? null, marca, params: accion?.params })
+        }
+    }
 
     // Qué motivo tiene abierto su selector de marca (null = ninguno).
     const [marcaAbierta, setMarcaAbierta] = useState<number | null>(null)
@@ -34,15 +104,20 @@ export default function ResolucionRubro({ motivos, marcas, marcasLoading, value,
         }
     }, [marcaAbierta])
 
+    // Varios motivos del MISMO bucket conviven (dos razones de un "perdido": Precio +
+    // Trabaja con otro). Pero "ganado" y "perdido" a la vez no tienen sentido — tildar
+    // uno de otro bucket reemplaza lo que había, no lo acumula.
     function toggle(motivoId: number) {
-        onChange(
-            porId.has(motivoId)
-                ? value.filter(m => m.motivoId !== motivoId)
-                : [...value, { motivoId, ...VACIO }],
-        )
+        if (porId.has(motivoId)) {
+            onChange(value.filter(m => m.motivoId !== motivoId))
+            return
+        }
+        const resultadoNuevo = resultadoPorId.get(motivoId) ?? null
+        const mismoBucket = value.every(m => (resultadoPorId.get(m.motivoId) ?? null) === resultadoNuevo)
+        onChange(mismoBucket ? [...value, { motivoId, ...VACIO }] : [{ motivoId, ...VACIO }])
     }
 
-    // El detalle vive en la fila (visita_rubro_id, motivo_id), así que se edita POR
+    // El detalle vive en la fila (ofrecimiento_id, motivo_id), así que se edita POR
     // MOTIVO. Hoy solo "Precio" lo pide, pero modelarlo así hace que un segundo motivo
     // con requiereDetalle funcione sin tocar este código.
     function setDetalle(motivoId: number, campo: keyof typeof VACIO, valor: string) {
@@ -67,37 +142,70 @@ export default function ResolucionRubro({ motivos, marcas, marcasLoading, value,
 
     return (
         <div>
-            <div className="flex flex-col gap-2">
+            <AccionComercialPicker
+                acciones={acciones}
+                value={accion?.accion ? { accion: accion.accion, params: accion.params } : null}
+                onChange={onChangeAccionChip}
+                rubrosRestantes={rubrosRestantes}
+                onAplicarATodos={onAplicarAccion}
+            />
+
+            <MarcaOfrecimientoPicker
+                marcas={marcas}
+                marcasLoading={marcasLoading}
+                value={accion?.marca ?? null}
+                onChange={onChangeMarcaChip}
+                rubrosRestantes={rubrosRestantes}
+                onAplicarATodos={onAplicarMarca}
+            />
+
+            <span className="mb-1.5 block text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
+                Resolución
+            </span>
+            {/* Grid de 2 columnas: con 12 motivos en el catálogo, una lista de una sola
+             *  columna se comía media pantalla del sheet. El motivo con detalle (hoy
+             *  "Precio") ocupa las 2 columnas mientras está tildado, para que su panel
+             *  de marca/competidor/% tenga espacio. */}
+            <div className="grid grid-cols-2 gap-2">
                 {motivos.map(cat => {
                     const seleccionado = porId.get(cat.motivoId)
                     const on = !!seleccionado
+                    const color = colorDeResultado(cat.resultado)
                     return (
-                        <div key={cat.motivoId} className="flex flex-col gap-0">
+                        <div
+                            key={cat.motivoId}
+                            className={`flex flex-col gap-0 ${cat.requiereDetalle && on ? 'col-span-2' : ''}`}
+                        >
                             <button
                                 onClick={() => toggle(cat.motivoId)}
-                                className={`flex w-full items-center gap-2.5 rounded-[11px] border-[1.5px] px-3 py-2.5 text-left font-sans ${
-                                    on ? 'border-[#B9CCEC] bg-[#EEF3FB]' : 'border-[#E4E8F0] bg-white'
-                                }`}
+                                className="flex w-full items-center gap-2 rounded-[11px] border-[1.5px] px-2.5 py-2 text-left font-sans"
+                                style={{
+                                    borderColor: on ? color.border : '#E4E8F0',
+                                    background: on ? color.bg : '#fff',
+                                }}
                             >
                                 <span
-                                    className="grid h-[21px] w-[21px] shrink-0 place-items-center rounded-md border-[1.5px]"
+                                    className="grid h-[19px] w-[19px] shrink-0 place-items-center rounded-md border-[1.5px]"
                                     style={{
-                                        borderColor: on ? '#213D82' : '#CBD2E0',
-                                        background: on ? '#213D82' : '#fff',
+                                        borderColor: on ? color.check : '#CBD2E0',
+                                        background: on ? color.check : '#fff',
                                         color: on ? '#fff' : 'transparent',
                                     }}
                                 >
-                                    <Check className="h-[13px] w-[13px]" strokeWidth={3.2} />
+                                    <Check className="h-[12px] w-[12px]" strokeWidth={3.2} />
                                 </span>
                                 <span
-                                    className={`text-sm font-bold ${on ? 'text-[#182645]' : 'text-[#3B4560]'}`}
+                                    className={`min-w-0 truncate text-[13px] font-bold ${on ? 'text-[#182645]' : 'text-[#3B4560]'}`}
                                 >
                                     {cat.descripcion}
                                 </span>
                             </button>
 
                             {cat.requiereDetalle && on && (
-                                <div className="ml-8 mt-2 mb-0.5 flex flex-col gap-2.5 rounded-[10px] border-[1.5px] border-[#B9CCEC] bg-white p-2.5">
+                                <div
+                                    className="animate-panel-in ml-8 mt-2 mb-0.5 flex flex-col gap-2.5 rounded-[10px] border-[1.5px] bg-white p-2.5"
+                                    style={{ borderColor: color.border }}
+                                >
                                     <div className="flex flex-col gap-1">
                                         <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
                                             Marca

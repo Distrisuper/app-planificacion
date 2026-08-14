@@ -1,7 +1,8 @@
 import { X } from 'lucide-react'
 import MapaVisita from './MapaVisita'
 import { useVisitaDetalle } from '@/hooks/useAnalitica'
-import { claseDistancia, formatDistancia, formatDuracion } from '@/lib/analiticaFormat'
+import { claseDistancia, formatDistancia, formatDuracion, TIPO_LABEL } from '@/lib/analiticaFormat'
+import { resumenAlcance } from '@/lib/alcance'
 import { horaNegocio } from '@/lib/fechas'
 import type { ResultadoMotivo } from '@/types/planificacion'
 
@@ -98,22 +99,34 @@ export default function DetalleVisitaPanel({ visitaId, onCerrar }: DetalleVisita
                             Rubros de la visita
                         </p>
                         <ul className="space-y-2">
-                            {data.rubros.map(r => (
+                            {data.ofrecimientos.map(r => (
                                 <li
-                                    key={r.rubroCode}
-                                    data-testid={`rubro-${r.rubroCode}`}
+                                    key={`${r.tipo}:${r.codigo}`}
+                                    data-testid={`ofrecimiento-${r.tipo}-${r.codigo}`}
                                     className="rounded-md border border-slate-200 px-3 py-2"
                                 >
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm font-medium text-slate-900">
-                                            {r.rubroDescripcion}
-                                        </span>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex min-w-0 items-center gap-1.5">
+                                            <span className="truncate text-sm font-medium text-slate-900">
+                                                {r.descripcion}
+                                            </span>
+                                            {r.tipo !== 'rubro' && (
+                                                <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">
+                                                    {TIPO_LABEL[r.tipo]}
+                                                </span>
+                                            )}
+                                        </div>
                                         {!r.resuelto && (
-                                            <span className="text-xs text-amber-600">
+                                            <span className="shrink-0 text-xs text-amber-600">
                                                 Sin resolver
                                             </span>
                                         )}
                                     </div>
+                                    {r.alcance.length > 0 && (
+                                        <p className="mt-0.5 text-xs text-slate-500">
+                                            {resumenAlcance(r.alcance)}
+                                        </p>
+                                    )}
                                     {r.motivos.map((m, i) => (
                                         <p key={i} className="mt-1 text-xs text-slate-600">
                                             {m.descripcion} · {etiqueta(m.resultado)}

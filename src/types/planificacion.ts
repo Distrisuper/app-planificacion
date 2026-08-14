@@ -1,8 +1,8 @@
 export type Dia = 'LUN' | 'MAR' | 'MIE' | 'JUE' | 'VIE'
 
-export type NivelMotivo = 'visita' | 'rubro'
+export type NivelMotivo = 'visita' | 'ofrecimiento'
 
-/** Qué significa comercialmente el motivo. Solo los de nivel 'rubro' lo tienen. */
+/** Qué significa comercialmente el motivo. Solo los de nivel 'ofrecimiento' lo tienen. */
 export type ResultadoMotivo = 'ganado' | 'diferido' | 'perdido' | 'no_ofrecido'
 
 export type TipoResolucion = 'visita' | 'no_visita'
@@ -12,7 +12,7 @@ export type EstadoCiclo = 'abierta' | 'cerrada'
 /** DERIVADO en el backend de la resolución del cliente — no existe como columna. */
 export type EstadoCicloCliente = 'pendiente' | 'en_curso' | 'visitada' | 'no_visita'
 
-/** Entrada de catálogo para poblar selects. Rubros y marcas comparten forma. */
+/** Entrada de catálogo para poblar selects. Rubros, marcas y acciones comparten forma. */
 export interface ICatalogoItem {
     code: string
     description: string
@@ -23,7 +23,7 @@ export interface IMotivo {
     nivel: NivelMotivo
     descripcion: string
     resultado: ResultadoMotivo | null
-    /** Si es true, resolver un rubro con este motivo exige marca/competidor/pctDiferencia. */
+    /** Si es true, resolver un ofrecimiento con este motivo exige marca/competidor/pctDiferencia. */
     requiereDetalle: boolean
 }
 
@@ -68,10 +68,10 @@ export interface IAgendaClient extends IVisitClientCard {
     rotacionClienteId: number
     dia: number
     estado: EstadoCicloCliente
-    /** Id de la resolución si es una visita (para retomar la carga de rubros). */
+    /** Id de la resolución si es una visita (para retomar la carga de ofrecimientos). */
     visitaId: number | null
-    /** Rubros de esa visita todavía sin motivos. 0 si no hay visita. */
-    rubrosPendientes: number
+    /** Ofrecimientos de esa visita todavía sin motivos. 0 si no hay visita. */
+    ofrecimientosPendientes: number
 }
 
 /** El plan de una semana que no es necesariamente la abierta, con el estado REAL de
@@ -125,7 +125,7 @@ export interface ISincronizarResult {
      *  "semana N" — ver "El vocabulario: zona, no semana" en el spec del 2026-08-12. */
     descripcionSemanaCerrada: string | null
     sinVisitar: string[]
-    rubrosAutocompletados: number
+    ofrecimientosAutocompletados: number
     altas: string[]
     bajas: string[]
     rotacionCerrada: boolean
@@ -157,25 +157,51 @@ export interface IResolucion {
     coordCliente: string | null
 }
 
-/** Un motivo aplicado a un rubro. marca/competidor/pctDiferencia solo se usan cuando el
+export type TipoOfrecimiento = 'rubro' | 'marca' | 'linea' | 'articulo' | 'accion'
+
+/** Los tipos que pueden ser DESTINO de una oferta. 'accion' no: una acción no se
+ *  aplica sobre otra acción. */
+export type TipoAlcance = Exclude<TipoOfrecimiento, 'accion'>
+
+export interface IAlcance {
+    tipo: TipoAlcance
+    codigo: string
+    descripcion: string
+}
+
+/** Un motivo aplicado a un ofrecimiento. marca/competidor/pctDiferencia solo se usan cuando el
  *  motivo tiene requiereDetalle; en el resto van null. */
-export interface IRubroMotivo {
+export interface IOfrecimientoMotivo {
     motivoId: number
     marca: string | null
     competidor: string | null
     pctDiferencia: number | null
 }
 
-/** Un rubro de la propuesta congelada. `resuelto` lo deriva el backend de motivos.length. */
-export interface IVisitaRubro {
+/** Un ofrecimiento de la propuesta congelada. `resuelto` lo deriva el backend de motivos.length. */
+export interface IOfrecimiento {
     id: number
     resolucionId: number
-    rubroCode: string
-    rubroDescripcion: string
+    tipo: TipoOfrecimiento
+    codigo: string
+    descripcion: string
     gapUnits: number | null
     esPropuesto: boolean
     resuelto: boolean
-    motivos: IRubroMotivo[]
+    motivos: IOfrecimientoMotivo[]
+    /** Cero elementos = oferta global, no "falta cargar". */
+    alcance: IAlcance[]
+    /** Parámetros propios de la oferta (ej. tramos de Cupo). Solo tiene sentido con
+     *  tipo: 'accion' — el backend lo ignora en silencio para el resto. Su forma
+     *  concreta la conoce el módulo del registro de detalle por código de acción
+     *  (ver src/components/propuesta/accionDetalle/registro.ts). */
+    detalle?: unknown
+}
+
+/** Catálogo de acciones comerciales. Agregar una es un INSERT en el back, no un deploy. */
+export interface IAccion {
+    codigo: string
+    descripcion: string
 }
 
 export type SemanaAgenda = Record<Dia, IAgendaClient[]>
@@ -284,7 +310,7 @@ export interface IIniciarVisitaDTO {
     propuesta?: IPropuestaRubroDTO[]
 }
 
-/** Sin motivoIds: al cerrar una visita el resultado comercial vive en los rubros. */
+/** Sin motivoIds: al cerrar una visita el resultado comercial vive en los ofrecimientos. */
 export interface ICerrarVisitaDTO {
     coordFinal: string
 }
@@ -292,7 +318,7 @@ export interface ICerrarVisitaDTO {
 export interface ICerrarVisitaResult {
     visitaId: number
     /** Si es > 0, la visita cerró pero falta cargar resoluciones. */
-    rubrosPendientes: number
+    ofrecimientosPendientes: number
 }
 
 /** Único lugar donde se piden motivos a nivel visita. */
@@ -305,21 +331,40 @@ export interface INoVisitaResult {
     rotacionClienteId: number
 }
 
-export interface IResolverRubroDTO {
-    motivos: IRubroMotivo[]
+/** La acción comercial con la que se resolvió un ofrecimiento (Plan cupo, Descuento).
+ *  Vive en `pl_ofrecimiento.detalle` del propio ofrecimiento — NO es un ofrecimiento
+ *  aparte. Distinguir una acción de otra es leer `accion`: por eso ningún MOTIVO dice
+ *  "cupo" ni "descuento" (sería el mismo dato cargado dos veces, y podrían
+ *  contradecirse). `params` es lo que produce el editor del registro de esa acción
+ *  (`{tramos}` para Cupo, `{pct}` para Descuento); `unknown` a propósito: la forma
+ *  concreta solo la conoce su módulo. */
+export interface IAccionComercial {
+    /** null = sin acción comercial elegida (puede seguir habiendo marca cargada). */
+    accion: string | null
+    marca: string | null
+    params?: unknown
 }
 
-export interface IResolverRubroResult {
-    rubrosPendientes: number
+export interface IResolverOfrecimientoDTO {
+    motivos: IOfrecimientoMotivo[]
+    /** `undefined` = no se toca lo guardado. `null` = se sacó la acción. */
+    detalle?: IAccionComercial | null
 }
 
-export interface IAgregarRubroDTO {
-    rubroCode: string
-    rubroDescripcion: string
+export interface IResolverOfrecimientoResult {
+    ofrecimientosPendientes: number
 }
 
-export interface IAgregarRubroResult {
-    visitaRubroId: number
+export interface IAgregarOfrecimientoDTO {
+    tipo: TipoOfrecimiento
+    codigo: string
+    descripcion: string
+    alcance?: IAlcance[]
+    detalle?: unknown
+}
+
+export interface IAgregarOfrecimientoResult {
+    ofrecimientoId: number
 }
 
 // ── Gerencia: la rotación de OTRO vendedor ─────────────────────────────────────

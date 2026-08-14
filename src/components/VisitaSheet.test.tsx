@@ -8,9 +8,9 @@ import type { IVisitClientCard } from '@/types/planificacion'
 vi.mock('@/api/planificacion')
 
 const motivos = [
-    { motivoId: 10, nivel: 'rubro', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 13, nivel: 'rubro', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
-    { motivoId: 16, nivel: 'rubro', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
+    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
+    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
+    { motivoId: 16, nivel: 'ofrecimiento', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
 ]
 
 const CLIENTE: IVisitClientCard = {
@@ -19,15 +19,15 @@ const CLIENTE: IVisitClientCard = {
     nombreCliente: 'Almacén Don José',
 }
 
-const rubros = [
+const ofrecimientos = [
     {
-        id: 7, resolucionId: 42, rubroCode: 'AMORT', rubroDescripcion: 'Amortiguadores',
-        gapUnits: 12, esPropuesto: true, resuelto: false, motivos: [],
+        id: 7, resolucionId: 42, tipo: 'rubro', codigo: 'AMORT', descripcion: 'Amortiguadores',
+        gapUnits: 12, esPropuesto: true, resuelto: false, motivos: [], alcance: [],
     },
     {
-        id: 8, resolucionId: 42, rubroCode: 'FILT', rubroDescripcion: 'Filtros',
+        id: 8, resolucionId: 42, tipo: 'rubro', codigo: 'FILT', descripcion: 'Filtros',
         gapUnits: null, esPropuesto: false, resuelto: true,
-        motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+        motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], alcance: [],
     },
 ]
 
@@ -53,15 +53,16 @@ function renderSheet(over: Record<string, unknown> = {}) {
 beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    ;(api.getRubros as any).mockResolvedValue(rubros)
+    ;(api.getOfrecimientos as any).mockResolvedValue(ofrecimientos)
     ;(api.getMotivos as any).mockResolvedValue(motivos)
-    ;(api.resolverRubro as any).mockResolvedValue({ rubrosPendientes: 0 })
+    ;(api.resolverOfrecimiento as any).mockResolvedValue({ ofrecimientosPendientes: 0 })
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
     ])
-    ;(api.agregarRubro as any).mockResolvedValue({ visitaRubroId: 99 })
-    ;(api.eliminarRubro as any).mockResolvedValue(undefined)
+    ;(api.agregarOfrecimiento as any).mockResolvedValue({ ofrecimientoId: 99 })
+    ;(api.eliminarOfrecimiento as any).mockResolvedValue(undefined)
     ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
+    ;(api.getAcciones as any).mockResolvedValue([{ codigo: 'CUPO', descripcion: 'Plan cupo' }])
 })
 
 it('lista los rubros de la propuesta congelada', async () => {
@@ -70,10 +71,10 @@ it('lista los rubros de la propuesta congelada', async () => {
     expect(screen.getByText('Filtros')).toBeInTheDocument()
 })
 
-it('pide el catálogo de nivel rubro, no el completo', async () => {
+it('pide el catálogo de nivel ofrecimiento, no el completo', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
-    expect(api.getMotivos).toHaveBeenCalledWith('rubro')
+    expect(api.getMotivos).toHaveBeenCalledWith('ofrecimiento')
 })
 
 it('el botón Resolución abre el wizard de resolución', async () => {
@@ -93,7 +94,7 @@ it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borr
     // Volvió a la lista (el wizard ya no está) y el rubro quedó marcado como completo.
     expect(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' })).toBeInTheDocument()
     expect(screen.queryByText('2 de 2')).not.toBeInTheDocument()
-    expect(api.resolverRubro).not.toHaveBeenCalled()
+    expect(api.resolverOfrecimiento).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
 })
 
@@ -105,7 +106,10 @@ it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /atrás/i }))
     expect(await screen.findByText('1 de 2')).toBeInTheDocument()
-    expect(screen.getByText('Saqué pedido').closest('button')).toHaveClass('border-[#B9CCEC]')
+    // Sigue tildado: el color de "on" (por resultado) reemplazó al borde blanco neutro.
+    expect(screen.getByText('Saqué pedido').closest('button')).not.toHaveStyle({
+        borderColor: '#E4E8F0',
+    })
 })
 
 it('el cambio tildado en el wizard se persiste en localStorage al instante', async () => {
@@ -119,17 +123,17 @@ it('el cambio tildado en el wizard se persiste en localStorage al instante', asy
     })
 })
 
-it('un rubro de la propuesta no se puede borrar (el wizard no ofrece Quitar rubro)', async () => {
+it('un rubro de la propuesta no se puede borrar (el wizard no ofrece Quitar)', async () => {
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     expect(screen.queryByRole('button', { name: /quitar amortiguadores/i })).not.toBeInTheDocument()
 })
 
-it('un rubro que no es de la propuesta ofrece Quitar rubro dentro del wizard', async () => {
+it('un rubro que no es de la propuesta ofrece Quitar dentro del wizard', async () => {
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Filtros' }))
     fireEvent.click(await screen.findByRole('button', { name: /quitar filtros/i }))
-    await waitFor(() => expect(api.eliminarRubro).toHaveBeenCalledWith(42, 8))
+    await waitFor(() => expect(api.eliminarOfrecimiento).toHaveBeenCalledWith(42, 8))
 })
 
 it('con la visita cerrada no ofrece cerrarla de nuevo', async () => {
@@ -170,17 +174,17 @@ it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo 
     fireEvent.click(cerrarBtn)
 
     await waitFor(() =>
-        expect(api.resolverRubro).toHaveBeenCalledWith(42, 7, {
+        expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
             motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
         }),
     )
-    expect(api.resolverRubro).toHaveBeenCalledTimes(1)
+    expect(api.resolverOfrecimiento).toHaveBeenCalledTimes(1)
     expect(onCerrarVisita).toHaveBeenCalled()
     expect(localStorage.getItem('visita-borrador-42')).toBeNull()
 })
 
 it('si el batch de cierre falla, no limpia el borrador ni dispara el cierre', async () => {
-    ;(api.resolverRubro as any).mockRejectedValue(new Error('Network Error'))
+    ;(api.resolverOfrecimiento as any).mockRejectedValue(new Error('Network Error'))
     const { onCerrarVisita } = renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     fireEvent.click(await screen.findByText('Saqué pedido'))
@@ -226,7 +230,7 @@ it('con codigoParticularCliente, los números de rubroStatus aparecen en la tabl
 })
 
 it('visita sin rubros pero con otros rubros del cliente: la tabla se ve de una', async () => {
-    ;(api.getRubros as any).mockResolvedValue([])
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
     ])
@@ -246,7 +250,11 @@ it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de 
     fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
 
     await waitFor(() =>
-        expect(api.agregarRubro).toHaveBeenCalledWith(42, { rubroCode: 'BAT', rubroDescripcion: 'Baterías' }),
+        expect(api.agregarOfrecimiento).toHaveBeenCalledWith(42, {
+            tipo: 'rubro',
+            codigo: 'BAT',
+            descripcion: 'Baterías',
+        }),
     )
 })
 
@@ -256,40 +264,41 @@ it('agregar dos rubros distintos en simultáneo deshabilita cada fila por separa
         { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
         { rubroCode: 'FOCO', nombre: 'Focos', actual: 200_000, mesAnterior: 150_000, promedio6m: 180_000 },
     ])
-    const resolvers: Record<string, (v: { visitaRubroId: number }) => void> = {}
-    ;(api.agregarRubro as any).mockImplementation((_visitaId: number, dto: { rubroCode: string }) =>
+    const resolvers: Record<string, (v: { ofrecimientoId: number }) => void> = {}
+    ;(api.agregarOfrecimiento as any).mockImplementation((_visitaId: number, dto: { codigo: string }) =>
         new Promise(resolve => {
-            resolvers[dto.rubroCode] = resolve
+            resolvers[dto.codigo] = resolve
         }),
     )
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
     fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
     fireEvent.click(await screen.findByRole('button', { name: /agregar focos/i }))
-    await waitFor(() => expect(api.agregarRubro).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(api.agregarOfrecimiento).toHaveBeenCalledTimes(2))
 
     expect(screen.getByRole('button', { name: /agregar baterías/i })).toBeDisabled()
     expect(screen.getByRole('button', { name: /agregar focos/i })).toBeDisabled()
 
-    resolvers.FOCO({ visitaRubroId: 100 })
+    resolvers.FOCO({ ofrecimientoId: 100 })
     await waitFor(() => expect(screen.getByRole('button', { name: /agregar focos/i })).not.toBeDisabled())
     // BAT sigue en vuelo: no se apagó por el settle de FOCO.
     expect(screen.getByRole('button', { name: /agregar baterías/i })).toBeDisabled()
 
-    resolvers.BAT({ visitaRubroId: 101 })
+    resolvers.BAT({ ofrecimientoId: 101 })
     await waitFor(() => expect(screen.getByRole('button', { name: /agregar baterías/i })).not.toBeDisabled())
 })
+
 
 it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaban', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
         { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
         { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
     ])
-    ;(api.getRubros as any).mockResolvedValueOnce(rubros).mockResolvedValue([
-        ...rubros,
+    ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
+        ...ofrecimientos,
         {
-            id: 99, resolucionId: 42, rubroCode: 'BAT', rubroDescripcion: 'Baterías',
-            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [],
+            id: 99, resolucionId: 42, tipo: 'rubro', codigo: 'BAT', descripcion: 'Baterías',
+            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [], alcance: [],
         },
     ])
     renderSheet({ codigoParticularCliente: '10034' })
@@ -312,11 +321,11 @@ it('agregar un rubro del catálogo abre su resolución de una, sin volver a la l
         { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
         { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
     ])
-    ;(api.getRubros as any).mockResolvedValueOnce(rubros).mockResolvedValue([
-        ...rubros,
+    ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
+        ...ofrecimientos,
         {
-            id: 99, resolucionId: 42, rubroCode: 'BAT', rubroDescripcion: 'Baterías',
-            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [],
+            id: 99, resolucionId: 42, tipo: 'rubro', codigo: 'BAT', descripcion: 'Baterías',
+            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [], alcance: [],
         },
     ])
     renderSheet({ codigoParticularCliente: '10034' })
@@ -334,11 +343,11 @@ it('un rubro agregado se mantiene arriba aunque se resuelva (no se reordena por 
         { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
         { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
     ])
-    ;(api.getRubros as any).mockResolvedValueOnce(rubros).mockResolvedValue([
-        ...rubros,
+    ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
+        ...ofrecimientos,
         {
-            id: 99, resolucionId: 42, rubroCode: 'BAT', rubroDescripcion: 'Baterías',
-            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [],
+            id: 99, resolucionId: 42, tipo: 'rubro', codigo: 'BAT', descripcion: 'Baterías',
+            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [], alcance: [],
         },
     ])
     renderSheet({ codigoParticularCliente: '10034' })
@@ -360,16 +369,16 @@ it('el botón Quitar rubro en la tabla llama al backend para un rubro que no es 
     renderSheet()
     await screen.findByText('Amortiguadores')
     fireEvent.click(screen.getByRole('button', { name: /quitar filtros/i }))
-    await waitFor(() => expect(api.eliminarRubro).toHaveBeenCalledWith(42, 8))
+    await waitFor(() => expect(api.eliminarOfrecimiento).toHaveBeenCalledWith(42, 8))
 })
 
-it('un rubro de la propuesta no ofrece Quitar rubro en la tabla', async () => {
+it('un rubro de la propuesta no ofrece Quitar en la tabla', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
     expect(screen.queryByRole('button', { name: /quitar amortiguadores/i })).not.toBeInTheDocument()
 })
 
-it('si getRubroStatus falla, la tabla igual lista los rubros de la visita y el botón de Resolución funciona', async () => {
+it('si getRubroStatus falla, la tabla igual lista los ofrecimientos de la visita y el botón de Resolución funciona', async () => {
     ;(api.getRubroStatus as any).mockRejectedValue(new Error('offline'))
     renderSheet({ codigoParticularCliente: '10034' })
     expect(await screen.findByText('Amortiguadores')).toBeInTheDocument()
@@ -388,6 +397,12 @@ it('con la visita cerrada, "otros rubros del cliente" no son tocables para agreg
     await screen.findByText('Amortiguadores')
     expect(await screen.findByText('Baterías')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /agregar baterías/i })).not.toBeInTheDocument()
+})
+
+it('nunca ofrece "Agregar otra cosa": la vía de alta está oculta', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+    expect(screen.queryByRole('button', { name: /agregar otra cosa/i })).not.toBeInTheDocument()
 })
 
 it('ofrece las apps externas cuando se le pasa el callback y el cliente', async () => {
@@ -411,4 +426,28 @@ it('dentro del wizard de resolución no aparecen las apps externas', async () =>
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     expect(await screen.findByText('1 de 2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
+})
+
+it('la acción comercial cargada viaja en el batch de cierre', async () => {
+    ;(api.getAcciones as any).mockResolvedValue([{ codigo: 'DESCUENTO', descripcion: 'Descuento' }])
+
+    const { onCerrarVisita } = renderSheet()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+
+    fireEvent.click(await screen.findByText(/con acción comercial/i))
+    fireEvent.click(await screen.findByRole('button', { name: 'Descuento' }))
+    fireEvent.change(screen.getByLabelText(/% de descuento/i), { target: { value: '5' } })
+    fireEvent.click(await screen.findByText('Saqué pedido'))
+    fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+
+    await waitFor(() =>
+        expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
+            motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+            detalle: { accion: 'DESCUENTO', marca: null, params: { pct: 5 } },
+        }),
+    )
+    expect(onCerrarVisita).toHaveBeenCalled()
 })

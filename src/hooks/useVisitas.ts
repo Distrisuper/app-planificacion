@@ -34,7 +34,7 @@ export function useIniciarVisita() {
     return useMutacionDeVisita((dto: IIniciarVisitaDTO) => iniciarVisita(dto))
 }
 
-/** Sin motivoIds: el resultado comercial vive en los rubros. */
+/** Sin motivoIds: el resultado comercial vive en los ofrecimientos. */
 export function useCerrarVisita() {
     return useMutacionDeVisita((args: { visitaId: number } & ICerrarVisitaDTO) =>
         cerrarVisita(args.visitaId, { coordFinal: args.coordFinal }),

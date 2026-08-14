@@ -31,7 +31,7 @@ it('useIniciarVisita calls the API with rotacionClienteId/coordInicio and return
 })
 
 it('useCerrarVisita calls cerrarVisita with the visitaId and coordFinal only, and returns the result', async () => {
-    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 42, rubrosPendientes: 0 })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 42, ofrecimientosPendientes: 0 })
     const { result } = renderHook(() => useCerrarVisita(), { wrapper })
     let out: any
     await waitFor(async () => {
@@ -43,7 +43,7 @@ it('useCerrarVisita calls cerrarVisita with the visitaId and coordFinal only, an
     expect(api.cerrarVisita).toHaveBeenCalledWith(42, {
         coordFinal: '-34.6,-58.6',
     })
-    expect(out.rubrosPendientes).toBe(0)
+    expect(out.ofrecimientosPendientes).toBe(0)
 })
 
 it('useNoVisita calls registrarNoVisita with rotacionClienteId and motivoIds', async () => {

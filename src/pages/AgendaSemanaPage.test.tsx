@@ -57,7 +57,7 @@ const clienteLunes = {
     dia: 1,
     estado: 'pendiente' as const,
     visitaId: null,
-    rubrosPendientes: 0,
+    ofrecimientosPendientes: 0,
 }
 
 /** Segundo cliente del mismo día: es lo que hace falta para cambiar de cliente sin cambiar
@@ -99,7 +99,7 @@ beforeEach(() => {
         semanaCerrada: null,
         descripcionSemanaCerrada: null,
         sinVisitar: [],
-        rubrosAutocompletados: 0,
+        ofrecimientosAutocompletados: 0,
         altas: [],
         bajas: [],
         rotacionCerrada: false,
@@ -299,7 +299,7 @@ it('las flechas hacen wrap sobre el set real de semanas, no sobre 5 fijo', async
 it('sincroniza al montar y avisa cuántas visitas quedaron sin hacer, sin lenguaje de cierre', async () => {
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
     ;(api.sincronizar as any).mockResolvedValue({
-        semanaCerrada: 2, descripcionSemanaCerrada: null, sinVisitar: ['101', '102'], rubrosAutocompletados: 0,
+        semanaCerrada: 2, descripcionSemanaCerrada: null, sinVisitar: ['101', '102'], ofrecimientosAutocompletados: 0,
         altas: [], bajas: [], rotacionCerrada: false,
     })
     ;(api.previewSemana as any).mockResolvedValue({ semana: 3, clientes: 0, omitidos: [], dias: semanaVacia })
@@ -316,7 +316,7 @@ it('con descripción de zona disponible, el aviso dice el nombre y no el número
     // el aviso decía "Zona 2" mientras el header, dos taps después, ya decía "Zárate".
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
     ;(api.sincronizar as any).mockResolvedValue({
-        semanaCerrada: 2, descripcionSemanaCerrada: 'Zárate', sinVisitar: ['101'], rubrosAutocompletados: 0,
+        semanaCerrada: 2, descripcionSemanaCerrada: 'Zárate', sinVisitar: ['101'], ofrecimientosAutocompletados: 0,
         altas: [], bajas: [], rotacionCerrada: false,
     })
     ;(api.previewSemana as any).mockResolvedValue({ semana: 3, clientes: 0, omitidos: [], dias: semanaVacia })
@@ -340,7 +340,7 @@ it('el cierre de semana no se pierde cuando además cambió el padrón', async (
     // cola: el de la ruta borraba el del cierre, que es el que importa.
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
     ;(api.sincronizar as any).mockResolvedValue({
-        semanaCerrada: 2, descripcionSemanaCerrada: null, sinVisitar: ['101', '102'], rubrosAutocompletados: 0,
+        semanaCerrada: 2, descripcionSemanaCerrada: null, sinVisitar: ['101', '102'], ofrecimientosAutocompletados: 0,
         altas: ['201'], bajas: ['301'], rotacionCerrada: false,
     })
     ;(api.previewSemana as any).mockResolvedValue({ semana: 3, clientes: 0, omitidos: [], dias: semanaVacia })
