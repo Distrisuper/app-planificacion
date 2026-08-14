@@ -57,6 +57,7 @@ export default function ResolucionOfrecimiento({
     onChange,
 }: ResolucionOfrecimientoProps) {
     const porId = new Map(value.map(m => [m.motivoId, m]))
+    const resultadoPorId = new Map(motivos.map(m => [m.motivoId, m.resultado]))
 
     // Acción y marca son dos chips independientes, pero comparten el mismo dato de
     // fondo (`accion`, el que viaja al backend como `detalle`): la marca no se duplica
@@ -91,12 +92,17 @@ export default function ResolucionOfrecimiento({
         }
     }, [marcaAbierta])
 
+    // Varios motivos del MISMO bucket conviven (dos razones de un "perdido": Precio +
+    // Trabaja con otro). Pero "ganado" y "perdido" a la vez no tienen sentido — tildar
+    // uno de otro bucket reemplaza lo que había, no lo acumula.
     function toggle(motivoId: number) {
-        onChange(
-            porId.has(motivoId)
-                ? value.filter(m => m.motivoId !== motivoId)
-                : [...value, { motivoId, ...VACIO }],
-        )
+        if (porId.has(motivoId)) {
+            onChange(value.filter(m => m.motivoId !== motivoId))
+            return
+        }
+        const resultadoNuevo = resultadoPorId.get(motivoId) ?? null
+        const mismoBucket = value.every(m => (resultadoPorId.get(m.motivoId) ?? null) === resultadoNuevo)
+        onChange(mismoBucket ? [...value, { motivoId, ...VACIO }] : [{ motivoId, ...VACIO }])
     }
 
     // El detalle vive en la fila (ofrecimiento_id, motivo_id), así que se edita POR

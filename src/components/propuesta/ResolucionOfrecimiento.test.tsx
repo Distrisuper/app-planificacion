@@ -7,6 +7,7 @@ const motivos: IMotivo[] = [
     { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
     { motivoId: 11, nivel: 'ofrecimiento', descripcion: 'Pasa pedido mañana', resultado: 'diferido', requiereDetalle: false },
     { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
+    { motivoId: 15, nivel: 'ofrecimiento', descripcion: 'DS', resultado: 'perdido', requiereDetalle: false },
     { motivoId: 16, nivel: 'ofrecimiento', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
 ]
 
@@ -171,5 +172,40 @@ describe('color por resultado', () => {
         setup([{ motivoId: 16, marca: null, competidor: null, pctDiferencia: null }])
         const boton = screen.getByText('No lo ofrecí').closest('button') as HTMLElement
         expect(boton).toHaveStyle({ borderColor: '#F1B3AC', background: '#FDECEB' })
+    })
+})
+
+// Varios motivos del mismo bucket conviven (dos razones de una misma pérdida); un
+// motivo de OTRO bucket reemplaza, nunca convive con uno contradictorio.
+describe('un solo bucket de resultado a la vez', () => {
+    it('dos motivos "perdido" conviven', () => {
+        const { onChange } = setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
+        fireEvent.click(screen.getByText('DS'))
+
+        expect(onChange).toHaveBeenCalledWith([
+            { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
+            { motivoId: 15, marca: null, competidor: null, pctDiferencia: null },
+        ])
+    })
+
+    it('tildar un motivo "ganado" reemplaza uno "perdido" ya tildado', () => {
+        const { onChange } = setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
+        fireEvent.click(screen.getByText('Saqué pedido'))
+
+        expect(onChange).toHaveBeenCalledWith([
+            { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
+        ])
+    })
+
+    it('destildar sigue funcionando igual, sin importar el bucket de los demás', () => {
+        const { onChange } = setup([
+            { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
+            { motivoId: 15, marca: null, competidor: null, pctDiferencia: null },
+        ])
+        fireEvent.click(screen.getByText('DS'))
+
+        expect(onChange).toHaveBeenCalledWith([
+            { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
+        ])
     })
 })
