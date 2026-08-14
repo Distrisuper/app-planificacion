@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { Search } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
 import DiaTabs from '@/components/DiaTabs'
@@ -9,6 +10,7 @@ import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import AppExternaSheet from '@/components/AppExternaSheet'
+import { BuscadorDiaSheet } from '@/components/buscador/BuscadorDiaSheet'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
@@ -19,7 +21,7 @@ import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
-import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
+import type { Dia, IAgendaClient, IVisitClientCard, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 
@@ -214,6 +216,7 @@ export default function AgendaSemanaPage() {
     const [directoAMapa, setDirectoAMapa] = useState(false)
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
+    const [buscadorAbierto, setBuscadorAbierto] = useState(false)
     // La visita en curso del vendedor, independiente de qué card esté mirando ahora
     // (`visitaCliente`). Antes vivía adentro de VisitaFlow atada al cliente abierto: tocar
     // la propuesta de OTRO cliente y cerrarla la perdía, y la barra flotante desaparecía.
@@ -277,6 +280,23 @@ export default function AgendaSemanaPage() {
 
     const totalClientes = DIAS.reduce((n, d) => n + (semana?.[d]?.length ?? 0), 0)
     const totalDone = DIAS.reduce((n, d) => n + counts[d].done, 0)
+
+    // Cartera contra la que busca `BuscadorDiaSheet`: hoy no hay un endpoint de "toda la
+    // cartera del vendedor" en este repo, así que se usa lo más cercano que ya está
+    // cargado — los clientes de la agenda/preview de la zona en curso (deduplicados: un
+    // quincenal aparece dos veces en `semana`). Limitación conocida: no incluye clientes
+    // de otras zonas que nunca aparecieron acá — ver nota en el plan de este dominio.
+    const clientesCartera = useMemo<IVisitClientCard[]>(() => {
+        const vistos = new Map<string, IVisitClientCard>()
+        for (const d of DIAS) {
+            for (const cliente of semana?.[d] ?? []) {
+                if (!vistos.has(cliente.codigoParticularCliente)) {
+                    vistos.set(cliente.codigoParticularCliente, cliente)
+                }
+            }
+        }
+        return Array.from(vistos.values())
+    }, [semana])
 
     function moverSemana(delta: number) {
         if (!semanas || semanas.length === 0) return
@@ -415,6 +435,19 @@ export default function AgendaSemanaPage() {
                 onAbrirAppExterna={appExterna.abrir}
             />
 
+            {/* Solo con zona en curso real: "hoy" no tiene sentido hojeando el preview de
+                otra zona (spec 2026-08-12, requisito 4 — la extra usa el día de HOY). */}
+            {operable && ciclo != null && (
+                <button
+                    type="button"
+                    aria-label="Buscar cliente"
+                    onClick={() => setBuscadorAbierto(true)}
+                    className="fixed bottom-24 right-4 z-30 grid h-12 w-12 place-items-center rounded-full bg-dsnavy text-white shadow-[0_6px_18px_rgba(24,38,69,.35)]"
+                >
+                    <Search className="h-5 w-5" strokeWidth={2.2} />
+                </button>
+            )}
+
             <VisitaFlow
                 cliente={visitaCliente}
                 visitaEnCurso={visitaEnCurso}
@@ -476,6 +509,19 @@ export default function AgendaSemanaPage() {
                         if (appExterna.clienteActivo) appExterna.abrir(app, appExterna.clienteActivo)
                     }}
                     onClose={appExterna.ocultar}
+                />
+            )}
+            {operable && ciclo != null && (
+                <BuscadorDiaSheet
+                    open={buscadorAbierto}
+                    onClose={() => setBuscadorAbierto(false)}
+                    semanaEnCurso={ciclo.semana}
+                    clientesCartera={clientesCartera}
+                    onExtraCreada={cliente => {
+                        mostrar('exito', 'Cliente agregado a la agenda de hoy')
+                        abrirPropuesta(cliente)
+                    }}
+                    onNavegarAExistente={abrirPropuesta}
                 />
             )}
             <Notification notificacion={notificacion} onDismiss={ocultar} />
