@@ -3,7 +3,7 @@ import { Check, ChevronDown } from 'lucide-react'
 import CatalogoPicker from './CatalogoPicker'
 import AccionComercialPicker from './AccionComercialPicker'
 import MarcaOfrecimientoPicker from './MarcaOfrecimientoPicker'
-import type { IAccionComercial, ICatalogoItem, IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
+import type { IAccionComercial, ICatalogoItem, IMotivo, IOfrecimientoMotivo, ResultadoMotivo } from '@/types/planificacion'
 
 interface ResolucionOfrecimientoProps {
     /** Catálogo de nivel `ofrecimiento`. Nunca se hardcodea: agregar un motivo es un INSERT. */
@@ -22,6 +22,26 @@ interface ResolucionOfrecimientoProps {
 }
 
 const VACIO = { marca: null, competidor: null, pctDiferencia: null }
+
+/** Color del motivo tildado, según qué tan buena/mala es esa resolución — no según su
+ *  nombre (eso hardcodearía la lista). `resultado` ya distingue exactamente esto:
+ *  ganado = verde, diferido = amarillo (ni ganado ni perdido todavía), perdido =
+ *  naranja (una objeción con la que se puede volver), no_ofrecido = rojo (ni se
+ *  intentó). Sin tildar, el motivo queda neutro (ver uso más abajo). */
+function colorDeResultado(resultado: ResultadoMotivo | null): { border: string; bg: string; check: string } {
+    switch (resultado) {
+        case 'ganado':
+            return { border: '#9BE3B4', bg: '#EAFBF1', check: '#009E4F' }
+        case 'diferido':
+            return { border: '#F7DD8F', bg: '#FEF9E8', check: '#B8860B' }
+        case 'perdido':
+            return { border: '#F3C8A0', bg: '#FDF2E9', check: '#B45309' }
+        case 'no_ofrecido':
+            return { border: '#F1B3AC', bg: '#FDECEB', check: '#B42318' }
+        default:
+            return { border: '#B9CCEC', bg: '#EEF3FB', check: '#213D82' }
+    }
+}
 
 /** Checklist + detalle de un ofrecimiento. Sin header, nombre ni botón de guardar
  *  propios: eso lo aporta ResolucionWizard, que envuelve a este componente en su header
@@ -128,6 +148,7 @@ export default function ResolucionOfrecimiento({
                 {motivos.map(cat => {
                     const seleccionado = porId.get(cat.motivoId)
                     const on = !!seleccionado
+                    const color = colorDeResultado(cat.resultado)
                     return (
                         <div
                             key={cat.motivoId}
@@ -135,15 +156,17 @@ export default function ResolucionOfrecimiento({
                         >
                             <button
                                 onClick={() => toggle(cat.motivoId)}
-                                className={`flex w-full items-center gap-2 rounded-[11px] border-[1.5px] px-2.5 py-2 text-left font-sans ${
-                                    on ? 'border-[#B9CCEC] bg-[#EEF3FB]' : 'border-[#E4E8F0] bg-white'
-                                }`}
+                                className="flex w-full items-center gap-2 rounded-[11px] border-[1.5px] px-2.5 py-2 text-left font-sans"
+                                style={{
+                                    borderColor: on ? color.border : '#E4E8F0',
+                                    background: on ? color.bg : '#fff',
+                                }}
                             >
                                 <span
                                     className="grid h-[19px] w-[19px] shrink-0 place-items-center rounded-md border-[1.5px]"
                                     style={{
-                                        borderColor: on ? '#213D82' : '#CBD2E0',
-                                        background: on ? '#213D82' : '#fff',
+                                        borderColor: on ? color.check : '#CBD2E0',
+                                        background: on ? color.check : '#fff',
                                         color: on ? '#fff' : 'transparent',
                                     }}
                                 >
@@ -157,7 +180,10 @@ export default function ResolucionOfrecimiento({
                             </button>
 
                             {cat.requiereDetalle && on && (
-                                <div className="animate-panel-in ml-8 mt-2 mb-0.5 flex flex-col gap-2.5 rounded-[10px] border-[1.5px] border-[#B9CCEC] bg-white p-2.5">
+                                <div
+                                    className="animate-panel-in ml-8 mt-2 mb-0.5 flex flex-col gap-2.5 rounded-[10px] border-[1.5px] bg-white p-2.5"
+                                    style={{ borderColor: color.border }}
+                                >
                                     <div className="flex flex-col gap-1">
                                         <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
                                             Marca

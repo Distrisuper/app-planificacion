@@ -5,6 +5,7 @@ import type { ICatalogoItem, IMotivo, IOfrecimientoMotivo } from '@/types/planif
 
 const motivos: IMotivo[] = [
     { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
+    { motivoId: 11, nivel: 'ofrecimiento', descripcion: 'Pasa pedido mañana', resultado: 'diferido', requiereDetalle: false },
     { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
     { motivoId: 16, nivel: 'ofrecimiento', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
 ]
@@ -137,4 +138,38 @@ it('sacar la acción con una marca ya cargada conserva la marca', () => {
     fireEvent.click(screen.getByRole('button', { name: /sin acción/i }))
 
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
+})
+
+// El color no depende del nombre del motivo, sino de `resultado` — así un motivo
+// nuevo con `resultado: 'ganado'` sale verde sin tocar este componente.
+describe('color por resultado', () => {
+    it('un motivo sin tildar no tiene color propio', () => {
+        setup()
+        const boton = screen.getByText('Saqué pedido').closest('button') as HTMLElement
+        expect(boton).toHaveStyle({ borderColor: '#E4E8F0', background: '#fff' })
+    })
+
+    it('ganado se tilda en verde', () => {
+        setup([{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])
+        const boton = screen.getByText('Saqué pedido').closest('button') as HTMLElement
+        expect(boton).toHaveStyle({ borderColor: '#9BE3B4', background: '#EAFBF1' })
+    })
+
+    it('diferido se tilda en amarillo', () => {
+        setup([{ motivoId: 11, marca: null, competidor: null, pctDiferencia: null }])
+        const boton = screen.getByText('Pasa pedido mañana').closest('button') as HTMLElement
+        expect(boton).toHaveStyle({ borderColor: '#F7DD8F', background: '#FEF9E8' })
+    })
+
+    it('perdido se tilda en naranja', () => {
+        setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
+        const boton = screen.getByText('Precio').closest('button') as HTMLElement
+        expect(boton).toHaveStyle({ borderColor: '#F3C8A0', background: '#FDF2E9' })
+    })
+
+    it('no_ofrecido se tilda en rojo', () => {
+        setup([{ motivoId: 16, marca: null, competidor: null, pctDiferencia: null }])
+        const boton = screen.getByText('No lo ofrecí').closest('button') as HTMLElement
+        expect(boton).toHaveStyle({ borderColor: '#F1B3AC', background: '#FDECEB' })
+    })
 })

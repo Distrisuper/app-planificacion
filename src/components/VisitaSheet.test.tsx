@@ -106,7 +106,10 @@ it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /atrás/i }))
     expect(await screen.findByText('1 de 2')).toBeInTheDocument()
-    expect(screen.getByText('Saqué pedido').closest('button')).toHaveClass('border-[#B9CCEC]')
+    // Sigue tildado: el color de "on" (por resultado) reemplazó al borde blanco neutro.
+    expect(screen.getByText('Saqué pedido').closest('button')).not.toHaveStyle({
+        borderColor: '#E4E8F0',
+    })
 })
 
 it('el cambio tildado en el wizard se persiste en localStorage al instante', async () => {
