@@ -4,6 +4,7 @@ import KpisEquipo from '@/components/analitica/KpisEquipo'
 import TablaVendedores from '@/components/analitica/TablaVendedores'
 import ObjecionesMercado from '@/components/analitica/ObjecionesMercado'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
+import EfectividadOperativaSection from '@/components/analitica/EfectividadOperativaSection'
 import AccountMenu from '@/components/AccountMenu'
 import { useAuth } from '@/context/AuthContext'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
@@ -44,6 +45,8 @@ export default function AnaliticaPage() {
             />
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
+                <EfectividadOperativaSection />
+
                 {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
                 {isError && (
