@@ -45,7 +45,7 @@ Tres criterios únicamente, en lenguaje de gerencia:
 
 | Columna | ¿Qué muestra? | Cómo se calcula |
 |---|---|---|
-| **Efectividad operativa** | Puntaje de 0 a 100% (puede superar 100%) de qué tan cerca estuvo el vendedor de su meta mensual de actividad | Promedio 50/50 entre: % de la meta de clientes distintos visitados (160/mes) y % de la meta de horas trabajadas (100 hs/mes). Siempre mensual, sin prorrateo. |
+| **Efectividad operativa** | Puntaje de 0 a 100% (tope en 100%, nunca lo supera) de qué tan cerca estuvo el vendedor de su meta mensual de actividad | Promedio 50/50 entre: % de la meta de clientes distintos visitados y % de la meta de horas trabajadas, cada uno topeado a 100% antes de promediar. Se pide siempre con un rango de mes calendario completo. |
 | **Visitas (mensual)** | Cantidad de visitas válidas en el mes | Solo cuentan visitas con GPS confirmado (dentro de 300 m del cliente). |
 | **Horas (mensual)** | Horas totales dedicadas a esas mismas visitas válidas | Suma la duración de las visitas que cuentan en "Visitas" — consistente con esa columna, a diferencia del sistema viejo. |
 
@@ -54,31 +54,50 @@ Tres criterios únicamente, en lenguaje de gerencia:
 - **Efectividad comercial** (`efectividadComercial`, ofrecimientos ganados/perdidos) — no se muestra en
   esta iteración. Queda pendiente para una futura que combine plan vs. visitas reales.
 
-## Metas
+## Metas — corrección tras revisar `api-vendedores`
 
-- **Fijas para todos los vendedores**: 160 clientes distintos / mes, 100 horas (6000 min) / mes —
-  mismos números que el sistema viejo, para continuidad histórica con lo que gerencia ya conoce.
-- **Hardcodeadas como constante de negocio en el backend** (`api-vendedores`, dominio `planificacion`),
-  no en una tabla de configuración. No se crea `pl_objetivo`: es un alcance mayor que esta iteración no
-  pide.
+**Esta sección se escribió mal en la primera versión de este spec** (asumía que había que crear
+`pl_objetivo` desde cero, con metas fijas hardcodeadas). Al revisar el repo real se encontró que **el
+backend ya lo tiene implementado y mergeado en `master`** (`feat(analitica): backend de analítica de
+visitas (#98)`, spec `docs/superpowers/specs/2026-08-03-analitica-visitas-backend-design.md` de ese
+repo), con un diseño mejor que el que se iba a proponer acá:
+
+- **`pl_objetivo` ya existe**, sembrada con los valores de mobiliza (160 clientes / 6000 min) vía
+  `INSERT IGNORE`, con columnas `codigo_particular_vendedor` (NULL = objetivo global),
+  `vigencia_desde`/`vigencia_hasta`. El objetivo propio del vendedor gana sobre el global si ambos
+  están vigentes (`ObjetivoRepository.findVigentes`, `indicadores/objetivo.ts:resolverObjetivoVigente`).
+  **No hay que crear nada nuevo.**
+- **Prorratea** para rangos que no son mes calendario completo
+  (`indicadores/objetivo.ts:prorratearObjetivo`, días hábiles del rango / 22 días típicos). No es un
+  problema para este bloque: como el selector de mes de esta iteración siempre pide un rango de mes
+  calendario completo, `esMesCalendarioCompleto` da `true` y el prorrateo no se aplica nunca en la
+  práctica.
+- **Cada componente se topea a 100% antes de promediar**
+  (`Math.min(pctClientes, 100) * 0.5 + Math.min(pctMinutos, 100) * 0.5`) — a diferencia de mobiliza,
+  acá `efectividadOperativa` **nunca supera el 100%**. Se adopta ese comportamiento tal cual está: no
+  hay motivo para pedir un cambio de backend solo para poder superar el 100%.
 
 ## Arquitectura
 
-- **Este spec y su implementación en `app-planificacion` son solo la Fase 1 (frontend sobre mock)**,
-  igual que el resto de `/analitica`. El cálculo real vive después en `api-vendedores`, sobre
-  `pl_resolucion` y la lógica de visita válida por GPS que ya existe en ese dominio — **no** sobre
-  `Visitas`/`api-mobiliza`.
-- El contrato de tipos (`IVendedorMetricas`) **no cambia**: los campos `efectividadOperativa`,
-  `visitasValidas`, `minutosTotales`, `clientesDistintos` ya existen (reservados desde el plan de
-  mock de analítica, sin usar hasta ahora). Se reutilizan tal cual.
+- **`app-planificacion` sigue en Fase 1 (frontend sobre mock)** por ahora — el plan de implementación de
+  este spec no cambia de mock a la API real, eso es un paso aparte (apagar `VITE_ANALITICA_MOCK`).
+- El contrato de tipos (`IVendedorMetricas`) de `app-planificacion` **no cambia**: los campos
+  `efectividadOperativa`, `pctCumplimientoClientes`, `pctCumplimientoMinutos`, `visitasValidas`,
+  `clientesDistintos` ya existen y ya los devuelve el backend real tal cual.
+- **Gap real encontrado, y único trabajo pendiente del lado backend:** `GET /planificacion/analitica/resumen`
+  calcula `minutosTotales` internamente (lo necesita para `pctCumplimientoMinutos`) pero lo **descarta
+  antes de responder** — no está en el `IVendedorMetricas` de `api-vendedores`
+  (`AnaliticaService.ts`, función `defaultsActividad`: `const { minutosTotales, ...deLaFila } = act`).
+  Sin ese campo no se puede mostrar "Horas (mensual)" como cantidad. Es un cambio chico y aditivo
+  (dejar de descartar un valor que ya se calcula), documentado como tarea aparte en
+  `api-vendedores` — ver el worktree `efectividad-operativa-kpi` de ese repo.
 - El bloque nuevo pide su propio resumen llamando a `useResumen` con un `filtro` calculado a partir del
   mes elegido (primer y último día de ese mes calendario), en paralelo e independiente del `filtro` que
   ya usa el resto de la página. No hace falta un endpoint ni un hook nuevo — es el mismo
   `getResumen(filtro)` con otro rango.
-- El mock actual (`analiticaMock.ts`) solo cubre una semana (`2026-07-20` a `2026-07-24`) y
-  `dentroDelRango` devuelve vacío fuera de ese rango. Para que el bloque mensual tenga datos en
-  desarrollo, el mock necesita ampliar su rango cubierto o generar datos también para el mes calendario
-  que lo contiene — detalle de implementación, no de este diseño.
+- El mock actual (`analiticaMock.ts`) ya responde a cualquier rango que incluya el día de hoy
+  (`dentroDelRango` usa `incluyeHoy`), así que el mes en curso por defecto va a traer datos sin tocar el
+  mock.
 
 ## Componentes afectados
 
@@ -101,6 +120,6 @@ Tres criterios únicamente, en lenguaje de gerencia:
 
 ## Fuera de alcance
 
-- Metas configurables por vendedor/zona (`pl_objetivo` o similar).
 - Mostrar "Efectividad comercial" o "Cobertura del plan" en este bloque.
-- Implementación real en `api-vendedores` (queda para un plan y spec propios de ese repo).
+- Cambiar de mock a la API real en `app-planificacion` (apagar `VITE_ANALITICA_MOCK`) — queda para
+  cuando se confirme que `api-vendedores` ya expone `minutosTotales`.

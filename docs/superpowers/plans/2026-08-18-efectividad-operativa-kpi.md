@@ -861,11 +861,13 @@ git commit -m "feat(analitica): montar EfectividadOperativaSection en /analitica
 
 ---
 
-## Nota para la Fase 2 (fuera de este plan)
+## Nota sobre el backend (corregida)
 
-Este plan **no toca `api-vendedores`**. Cuando se implemente el cálculo real ahí, el endpoint que ya
-consume `getResumen` (`GET /planificacion/analitica/resumen`) tiene que devolver `efectividadOperativa`,
-`visitasValidas` y `minutosTotales` calculados según el spec: 50% cumplimiento de clientes distintos +
-50% cumplimiento de horas contra metas fijas de 160 clientes / 100 hs mensuales, contando solo visitas
-con GPS confirmado, siempre sobre mes calendario completo (sin prorrateo). Ver
+Este plan **no toca `api-vendedores`**. A diferencia de lo que se pensaba al escribir la primera
+versión de este plan, **el cálculo real ya existe y está mergeado en `master`** de ese repo
+(`GET /planificacion/analitica/resumen`, con metas configurables vía `pl_objetivo`) — no hace falta
+construirlo. El único gap real es que ese endpoint no expone `minutosTotales` en la respuesta (lo
+calcula pero lo descarta antes de responder). Ese trabajo, chico y aditivo, está anotado en el
+worktree `efectividad-operativa-kpi` de `api-vendedores`. Recién cuando esté resuelto tiene sentido
+apagar `VITE_ANALITICA_MOCK` en esta app. Ver
 `docs/superpowers/specs/2026-08-18-efectividad-operativa-kpi-design.md`.
