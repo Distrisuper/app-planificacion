@@ -6,6 +6,7 @@ import {
     formatDuracion,
     formatNumero,
     formatPct,
+    formatPctEscalado,
 } from '@/lib/analiticaFormat'
 import type { IVendedorMetricas } from '@/types/analitica'
 
@@ -41,7 +42,7 @@ const COLUMNAS: Columna[] = [
     {
         clave: 'efectividadOperativa',
         titulo: 'Cumplimiento',
-        render: v => (v.efectividadOperativa === null ? 's/d' : `${Math.round(v.efectividadOperativa)}%`),
+        render: v => formatPctEscalado(v.efectividadOperativa),
         comparar: true,
     },
 ]

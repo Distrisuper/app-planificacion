@@ -5,8 +5,10 @@ import {
     esBajoPromedio,
     formatDistancia,
     formatDuracion,
+    formatHoras,
     formatNumero,
     formatPct,
+    formatPctEscalado,
 } from './analiticaFormat'
 
 it('la tolerancia es de 300 m', () => {
@@ -76,4 +78,17 @@ it('alertasAbsolutas no marca nada en un vendedor sano', () => {
 it('alertasAbsolutas no marca geo sin visitas: 0 de 0 no es una alerta', () => {
     const alertas = alertasAbsolutas({ duracionPromedioMin: null, visitasTotales: 0, visitasNoValidadas: 0 })
     expect(alertas).toEqual([])
+})
+
+it('formatPctEscalado redondea un valor ya expresado en escala 0..100, nunca 0% por null', () => {
+    expect(formatPctEscalado(null)).toBe('s/d')
+    expect(formatPctEscalado(89.4)).toBe('89%')
+    expect(formatPctEscalado(100)).toBe('100%')
+    expect(formatPctEscalado(104)).toBe('104%')
+})
+
+it('formatHoras convierte minutos a horas con un decimal', () => {
+    expect(formatHoras(null)).toBe('s/d')
+    expect(formatHoras(1216)).toBe('20,3 hs')
+    expect(formatHoras(60)).toBe('1 hs')
 })
