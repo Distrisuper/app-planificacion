@@ -1,5 +1,5 @@
 import { afterEach, vi } from 'vitest'
-import { fechaHoraNegocio, horaNegocio, incluyeHoy, isoLocal, rangoHoy } from './fechas'
+import { fechaHoraNegocio, horaNegocio, incluyeHoy, isoLocal, nombreMes, rangoHoy, rangoMes } from './fechas'
 
 afterEach(() => vi.useRealTimers())
 
@@ -71,5 +71,23 @@ describe('fechaHoraNegocio', () => {
     it('null o basura devuelven guión', () => {
         expect(fechaHoraNegocio(null)).toBe('—')
         expect(fechaHoraNegocio('no-es-una-fecha')).toBe('—')
+    })
+})
+
+describe('rangoMes', () => {
+    it('devuelve el primer y último día del mes calendario de la fecha dada', () => {
+        expect(rangoMes(new Date(2026, 7, 18))).toEqual({ desde: '2026-08-01', hasta: '2026-08-31' })
+    })
+
+    it('funciona en meses de 30 y 28/29 días', () => {
+        expect(rangoMes(new Date(2026, 3, 5))).toEqual({ desde: '2026-04-01', hasta: '2026-04-30' })
+        expect(rangoMes(new Date(2026, 1, 10))).toEqual({ desde: '2026-02-01', hasta: '2026-02-28' })
+    })
+})
+
+describe('nombreMes', () => {
+    it('devuelve el nombre del mes capitalizado seguido del año', () => {
+        expect(nombreMes(new Date(2026, 7, 18))).toBe('Agosto 2026')
+        expect(nombreMes(new Date(2026, 0, 1))).toBe('Enero 2026')
     })
 })

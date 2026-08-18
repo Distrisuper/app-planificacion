@@ -79,3 +79,28 @@ export function fechaHoraNegocio(iso: string | null | undefined): string {
     const hora = partes.hour === '24' ? '00' : pad2(partes.hour)
     return `${pad2(partes.day)}/${pad2(partes.month)} ${hora}:${pad2(partes.minute)}`
 }
+
+/** Primer y último día del mes calendario que contiene `fecha`, en formato YYYY-MM-DD.
+ *  Es el filtro que usa el bloque de Efectividad operativa: siempre mes completo,
+ *  nunca un rango libre. */
+export function rangoMes(fecha: Date): { desde: string; hasta: string } {
+    const anio = fecha.getFullYear()
+    const mes = fecha.getMonth()
+    return {
+        desde: isoLocal(new Date(anio, mes, 1)),
+        // Día 0 del mes siguiente = último día de este mes.
+        hasta: isoLocal(new Date(anio, mes + 1, 0)),
+    }
+}
+
+const NOMBRES_MES = [
+    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+]
+
+/** "Agosto 2026". Se arma a mano (no con Intl) para no depender de que el locale
+ *  del runtime devuelva "agosto de 2026" o algo distinto según la plataforma. */
+export function nombreMes(fecha: Date): string {
+    const nombre = NOMBRES_MES[fecha.getMonth()]
+    return `${nombre[0].toUpperCase()}${nombre.slice(1)} ${fecha.getFullYear()}`
+}
