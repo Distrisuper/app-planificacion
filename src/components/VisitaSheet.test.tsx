@@ -436,6 +436,40 @@ it('dentro del wizard de resolución no aparecen las apps externas', async () =>
     expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
 })
 
+// Un borrador guardado puede referenciar un motivo que se dio de baja en el catálogo
+// después (pl_motivo.activo = 0, que es cómo se itera el formulario). El backend lo rechaza
+// con 400 MOTIVO_INEXISTENTE — imposible cerrar la visita — y el checklist tampoco lo dibuja,
+// así que el vendedor no tiene forma de destildarlo. Se poda en cuanto llega el catálogo.
+it('poda del borrador los motivos que ya no están en el catálogo', async () => {
+    // motivoId 99 no está en `motivos`: quedó de un catálogo anterior.
+    localStorage.setItem(
+        'visita-borrador-42',
+        JSON.stringify({
+            7: [
+                { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
+                { motivoId: 99, marca: null, competidor: null, pctDiferencia: null },
+            ],
+            8: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+        }),
+    )
+
+    renderSheet()
+    // Se espera la poda antes de cerrar: es lo que este test verifica que ocurra, y sin
+    // esperarla el cierre podría salir con el motivo muerto todavía adentro.
+    await waitFor(() => {
+        const guardado = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
+        expect(guardado[7]).toEqual([{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])
+    })
+
+    fireEvent.click(await screen.findByRole('button', { name: /^cerrar visita$/i }))
+
+    await waitFor(() =>
+        expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
+            motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+        }),
+    )
+})
+
 // Acción Comercial se sacó del formulario de resolución (spec 2026-08-19), y con ella el
 // único código de acción que el backend exige para persistir `detalle`
 // (api-vendedores/ofrecimientoValidation.ts: `validarDetalleAccion` rechaza con 400 todo

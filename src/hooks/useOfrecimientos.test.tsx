@@ -67,3 +67,21 @@ it('un fallo no descarta los que sí guardaron', async () => {
         { ofrecimientoId: 8, error: 'Sin conexión. Volvé a intentar; no se perdió lo que cargaste.' },
     ])
 })
+
+// Un 400 del servidor NO es un problema de red: reintentar no lo arregla nunca. Decirle
+// "Sin conexión" al vendedor lo manda a un loop de reintentos inútil, y encima le esconde
+// que el problema está en lo que cargó.
+it('un rechazo del servidor no se reporta como falta de conexión', async () => {
+    ;(api.resolverOfrecimiento as any).mockRejectedValue({
+        response: { data: { code: 'MOTIVO_INEXISTENTE' } },
+    })
+    const { result } = renderHook(() => useResolverOfrecimientos(42), { wrapper })
+
+    let out: any
+    await waitFor(async () => {
+        out = await result.current.mutateAsync([{ ofrecimientoId: 7, motivos: [] }])
+    })
+
+    expect(out[0].error).not.toMatch(/sin conexión/i)
+    expect(out[0].error).toMatch(/rechazó/i)
+})

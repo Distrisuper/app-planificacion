@@ -140,6 +140,31 @@ export default function VisitaSheet({
         setBorradorListo(true)
     }, [open, ofrecimientosCargados, visitaId, ofrecimientos])
 
+    // El catálogo se itera dando de baja motivos (`pl_motivo.activo = 0`), y un borrador
+    // guardado antes de esa baja sigue apuntando al motivo viejo. Eso no se puede dejar
+    // pasar: el backend rechaza el cierre con 400 MOTIVO_INEXISTENTE (el catálogo que valida
+    // filtra por activo), y el checklist tampoco dibuja ese motivo, así que el vendedor no
+    // tiene forma de destildarlo — queda sin poder cerrar la visita.
+    //
+    // Va en su propio efecto y no en la inicialización de arriba porque el catálogo puede
+    // llegar después que los ofrecimientos. Con `motivos` vacío no poda nada: filtrar contra
+    // un catálogo que todavía no cargó vaciaría el borrador entero.
+    useEffect(() => {
+        if (!open || !borradorListo || motivos.length === 0) return
+        const vivos = new Set(motivos.map(m => m.motivoId))
+        setBorradores(prev => {
+            let podado = false
+            const next: Record<number, IOfrecimientoMotivo[]> = {}
+            for (const [id, lista] of Object.entries(prev)) {
+                const vigentes = lista.filter(m => vivos.has(m.motivoId))
+                if (vigentes.length !== lista.length) podado = true
+                next[Number(id)] = vigentes
+            }
+            // Devolver `prev` cuando no hubo poda es lo que corta el re-render en loop.
+            return podado ? next : prev
+        })
+    }, [open, borradorListo, motivos])
+
     // Recién después de inicializar (ver arriba): si esto corriera antes, un objeto
     // vacío pisaría un borrador ya guardado de una sesión anterior.
     useEffect(() => {
