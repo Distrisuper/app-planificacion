@@ -42,6 +42,26 @@ it('los precios se guardan como número', () => {
     expect(onChange).toHaveBeenCalledWith({ precio_competidor: 150 })
 })
 
+describe('decimales en los campos de precio', () => {
+    it('el punto no se trunca: se puede seguir tipeando "150." hasta completar el decimal', () => {
+        const { onChange } = setup()
+        const input = screen.getByLabelText(/precio del competidor/i) as HTMLInputElement
+        fireEvent.change(input, { target: { value: '150.' } })
+        // Todavía no es un número completo: no se commitea, pero el punto sigue visible.
+        expect(input.value).toBe('150.')
+        fireEvent.change(input, { target: { value: '150.50' } })
+        expect(input.value).toBe('150.50')
+        expect(onChange).toHaveBeenCalledWith({ precio_competidor: 150.5 })
+    })
+
+    it('una entrada rota (dos puntos) nunca muestra el literal "NaN"', () => {
+        setup()
+        const input = screen.getByLabelText(/mi precio/i) as HTMLInputElement
+        fireEvent.change(input, { target: { value: '1..2' } })
+        expect(input.value).not.toBe('NaN')
+    })
+})
+
 describe('el % contra el competidor', () => {
     it('no se muestra hasta tener los dos precios', () => {
         setup({ precio_competidor: 150 })

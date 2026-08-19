@@ -2,21 +2,25 @@ import { useState } from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import CatalogoPicker from '../CatalogoPicker'
 import { pctVsCompetidor, type IPropsEditorMotivo } from './validadores'
+import { useCampoNumero } from './numero'
 
 const INPUT =
     'w-full rounded-lg border border-[#E1E6F0] px-2.5 py-2 text-sm font-semibold text-[#182645] outline-none'
 const LABEL = 'text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]'
-
-function aNumero(texto: string): number | null {
-    const limpio = texto.replace(/[^0-9.]/g, '')
-    return limpio === '' ? null : Number(limpio)
-}
 
 /** Precio: contra qué marca, contra quién, y a cuánto cada uno. El % NO se tipea — se deriva
  *  de los dos precios, así queda el dato completo y no solo el delta. */
 export function EditorPrecio({ valores, onChange, marcas, marcasLoading }: IPropsEditorMotivo) {
     const [buscadorAbierto, setBuscadorAbierto] = useState(false)
     const pct = pctVsCompetidor(valores)
+    const [textoPrecioCompetidor, onChangePrecioCompetidor] = useCampoNumero(
+        valores.precio_competidor as number | null,
+        precio_competidor => onChange({ precio_competidor }),
+    )
+    const [textoMiPrecio, onChangeMiPrecio] = useCampoNumero(
+        valores.mi_precio as number | null,
+        mi_precio => onChange({ mi_precio }),
+    )
 
     return (
         <div className="flex flex-col gap-2.5">
@@ -71,8 +75,8 @@ export function EditorPrecio({ valores, onChange, marcas, marcasLoading }: IProp
                 <label className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className={LABEL}>Precio del competidor</span>
                     <input
-                        value={(valores.precio_competidor as number) ?? ''}
-                        onChange={e => onChange({ precio_competidor: aNumero(e.target.value) })}
+                        value={textoPrecioCompetidor}
+                        onChange={e => onChangePrecioCompetidor(e.target.value)}
                         inputMode="decimal"
                         className={INPUT}
                     />
@@ -80,8 +84,8 @@ export function EditorPrecio({ valores, onChange, marcas, marcasLoading }: IProp
                 <label className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className={LABEL}>Mi precio</span>
                     <input
-                        value={(valores.mi_precio as number) ?? ''}
-                        onChange={e => onChange({ mi_precio: aNumero(e.target.value) })}
+                        value={textoMiPrecio}
+                        onChange={e => onChangeMiPrecio(e.target.value)}
                         inputMode="decimal"
                         className={INPUT}
                     />

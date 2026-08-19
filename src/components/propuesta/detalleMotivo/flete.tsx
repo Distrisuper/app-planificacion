@@ -1,26 +1,30 @@
 import { pctFleteSobreCompra, type IPropsEditorMotivo } from './validadores'
+import { useCampoNumero } from './numero'
 
 const INPUT =
     'w-full rounded-lg border border-[#E1E6F0] px-2.5 py-2 text-sm font-semibold text-[#182645] outline-none'
 const LABEL = 'text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]'
 
-function aNumero(texto: string): number | null {
-    const limpio = texto.replace(/[^0-9.]/g, '')
-    return limpio === '' ? null : Number(limpio)
-}
-
 /** Flete: cuánto cuesta contra cuánto se compraría. El % es el argumento de venta —
  *  "$60.000 de flete" no dice nada solo; "el 2% de la compra" sí. */
 export function EditorFlete({ valores, onChange }: IPropsEditorMotivo) {
     const pct = pctFleteSobreCompra(valores)
+    const [textoValorFlete, onChangeValorFlete] = useCampoNumero(
+        valores.valor_flete as number | null,
+        valor_flete => onChange({ valor_flete }),
+    )
+    const [textoCompraFuturo, onChangeCompraFuturo] = useCampoNumero(
+        valores.compra_futuro as number | null,
+        compra_futuro => onChange({ compra_futuro }),
+    )
 
     return (
         <div className="flex flex-col gap-2.5">
             <label className="flex flex-col gap-1">
                 <span className={LABEL}>Valor del flete</span>
                 <input
-                    value={(valores.valor_flete as number) ?? ''}
-                    onChange={e => onChange({ valor_flete: aNumero(e.target.value) })}
+                    value={textoValorFlete}
+                    onChange={e => onChangeValorFlete(e.target.value)}
                     inputMode="decimal"
                     className={INPUT}
                 />
@@ -28,8 +32,8 @@ export function EditorFlete({ valores, onChange }: IPropsEditorMotivo) {
             <label className="flex flex-col gap-1">
                 <span className={LABEL}>Compra en $ a futuro</span>
                 <input
-                    value={(valores.compra_futuro as number) ?? ''}
-                    onChange={e => onChange({ compra_futuro: aNumero(e.target.value) })}
+                    value={textoCompraFuturo}
+                    onChange={e => onChangeCompraFuturo(e.target.value)}
                     inputMode="decimal"
                     className={INPUT}
                 />

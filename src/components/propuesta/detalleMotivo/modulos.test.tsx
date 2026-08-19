@@ -32,6 +32,24 @@ describe('Flete', () => {
         render(<EditorFlete {...props} valores={{ valor_flete: 60000 }} />)
         expect(screen.queryByText(/representa/i)).not.toBeInTheDocument()
     })
+
+    it('el punto decimal no se trunca al tipear', () => {
+        const onChange = vi.fn()
+        render(<EditorFlete {...props} valores={{}} onChange={onChange} />)
+        const input = screen.getByLabelText(/valor del flete/i) as HTMLInputElement
+        fireEvent.change(input, { target: { value: '150.' } })
+        expect(input.value).toBe('150.')
+        fireEvent.change(input, { target: { value: '150.5' } })
+        expect(input.value).toBe('150.5')
+        expect(onChange).toHaveBeenCalledWith({ valor_flete: 150.5 })
+    })
+
+    it('una entrada rota nunca muestra el literal "NaN"', () => {
+        render(<EditorFlete {...props} valores={{}} />)
+        const input = screen.getByLabelText(/compra en \$ a futuro/i) as HTMLInputElement
+        fireEvent.change(input, { target: { value: '1..2' } })
+        expect(input.value).not.toBe('NaN')
+    })
 })
 
 describe('No trabaja la marca', () => {
