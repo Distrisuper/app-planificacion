@@ -73,7 +73,6 @@ beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
     ;(api.eliminarOfrecimiento as any).mockResolvedValue(undefined)
-    ;(api.getAcciones as any).mockResolvedValue([])
 })
 
 it('muestra la posición y el ofrecimiento actual', () => {
@@ -182,30 +181,14 @@ it('sin acción ni marca cargada, no ofrece ningún check de aplicar a restantes
     expect(screen.queryByText('Aplicar a restantes')).not.toBeInTheDocument()
 })
 
-it('con acción cargada, ofrece SOLO el check de la acción (no el de marca)', () => {
+it('con acción cargada pero sin marca, no ofrece ningún check (ya no hay UI de acción)', () => {
     setup({ detalles: { 7: { accion: 'CUPO', marca: null } } })
-    expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(1)
+    expect(screen.queryByText('Aplicar a restantes')).not.toBeInTheDocument()
 })
 
-it('con acción y marca cargadas, ofrece un check en cada chip', () => {
+it('con acción y marca cargadas, ofrece un único check (el de Marca)', () => {
     setup({ detalles: { 7: { accion: 'CUPO', marca: 'AG' } } })
-    expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(2)
-})
-
-it('tildar el check de Acción copia solo la acción, sin tocar la marca ya cargada del otro rubro', () => {
-    const onCambiarBorrador = vi.fn()
-    const onCambiarAccion = vi.fn()
-    setup({
-        borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] },
-        detalles: { 7: { accion: 'CUPO', marca: 'AG' }, 8: { accion: null, marca: 'Fric-Rot' } },
-        onCambiarBorrador,
-        onCambiarAccion,
-    })
-
-    fireEvent.click(screen.getAllByRole('checkbox')[0])
-
-    expect(onCambiarAccion).toHaveBeenCalledWith(8, { accion: 'CUPO', marca: 'Fric-Rot' })
-    expect(onCambiarBorrador).not.toHaveBeenCalled()
+    expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(1)
 })
 
 it('tildar el check de Marca copia solo la marca, sin tocar la acción ya cargada del otro rubro', () => {
@@ -215,7 +198,7 @@ it('tildar el check de Marca copia solo la marca, sin tocar la acción ya cargad
         onCambiarAccion,
     })
 
-    fireEvent.click(screen.getAllByRole('checkbox')[1])
+    fireEvent.click(screen.getAllByRole('checkbox')[0])
 
     expect(onCambiarAccion).toHaveBeenCalledWith(8, { accion: 'DESCUENTO', marca: 'AG' })
 })

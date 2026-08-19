@@ -3,7 +3,6 @@ import { ChevronLeft, Eraser, Loader2, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import ResolucionOfrecimiento from './ResolucionOfrecimiento'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
-import { useAcciones } from '@/hooks/useAcciones'
 import { useEliminarOfrecimiento } from '@/hooks/useOfrecimientos'
 import type { IAccionComercial, IMotivo, IOfrecimiento, IOfrecimientoMotivo } from '@/types/planificacion'
 
@@ -38,7 +37,6 @@ export default function ResolucionWizard({
     onVolver,
 }: ResolucionWizardProps) {
     const ofrecimiento = ofrecimientos[index]
-    const { data: acciones = [] } = useAcciones()
     const accion = detalles[ofrecimiento.id] ?? null
 
     // Sentido del último movimiento, para que la entrada acompañe a la navegación. Se lee
@@ -68,17 +66,6 @@ export default function ResolucionWizard({
     // tocar el otro que ya tuviera cargado ese rubro — es una copia de una sola vez, no
     // un vínculo: cada rubro sigue editable después.
     const restantes = ofrecimientos.filter((_, i) => i !== index)
-
-    function aplicarAccion() {
-        for (const r of restantes) {
-            const actual = detalles[r.id] ?? null
-            onCambiarAccion(r.id, {
-                accion: accion?.accion ?? null,
-                marca: actual?.marca ?? null,
-                params: accion?.params,
-            })
-        }
-    }
 
     function aplicarMarca() {
         for (const r of restantes) {
@@ -187,13 +174,11 @@ export default function ResolucionWizard({
                     motivos={motivos}
                     marcas={marcas}
                     marcasLoading={marcasLoading}
-                    acciones={acciones.map(a => ({ code: a.codigo, description: a.descripcion }))}
                     accion={accion}
                     onChangeAccion={a => onCambiarAccion(ofrecimiento.id, a)}
                     value={borradores[ofrecimiento.id] ?? []}
                     onChange={m => onCambiarBorrador(ofrecimiento.id, m)}
                     rubrosRestantes={restantes.length}
-                    onAplicarAccion={aplicarAccion}
                     onAplicarMarca={aplicarMarca}
                 />
             </div>

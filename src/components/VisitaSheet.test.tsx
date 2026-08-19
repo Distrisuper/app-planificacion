@@ -428,14 +428,24 @@ it('dentro del wizard de resolución no aparecen las apps externas', async () =>
     expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
 })
 
-it('la acción comercial cargada viaja en el batch de cierre', async () => {
-    ;(api.getAcciones as any).mockResolvedValue([{ codigo: 'DESCUENTO', descripcion: 'Descuento' }])
-
+// Acción Comercial se sacó del formulario de resolución (spec 2026-08-19), y con ella
+// se fue el único código de acción que el backend exige para persistir `detalle`
+// (ver api-vendedores/ofrecimientoValidation.ts: `validarDetalleAccion` rechaza con 400
+// cualquier detalle sin `accion`). Hoy la marca elegida SOLA queda como borrador en
+// pantalla, pero no viaja al batch de cierre — es una limitación conocida del backend,
+// no de este componente. VisitaSheet ya la contempla (línea ~314) y no manda `detalle`
+// cuando `accion` es null.
+it('marca sin acción no viaja en el batch de cierre (el backend exige un código de acción)', async () => {
     const { onCerrarVisita } = renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Descuento' }))
-    fireEvent.change(screen.getByLabelText(/% de descuento/i), { target: { value: '5' } })
+    // El catálogo de marcas recién se pide cuando algo lo necesita — tildar "Precio"
+    // (requiereDetalle) lo dispara. Se destilda después.
+    fireEvent.click(await screen.findByText('Precio'))
+    await waitFor(() => expect(api.getBrandCatalog).toHaveBeenCalled())
+
+    fireEvent.click(await screen.findByLabelText('Marca'))
+    fireEvent.click(await screen.findByText('Fric-Rot'))
     fireEvent.click(await screen.findByText('Saqué pedido'))
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
@@ -445,7 +455,7 @@ it('la acción comercial cargada viaja en el batch de cierre', async () => {
     await waitFor(() =>
         expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
             motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
-            detalle: { accion: 'DESCUENTO', marca: null, params: { pct: 5 } },
+            detalle: null,
         }),
     )
     expect(onCerrarVisita).toHaveBeenCalled()
