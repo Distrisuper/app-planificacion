@@ -37,9 +37,9 @@ export default function HelpPopover({ label, children, align = 'right' }: HelpPo
                 aria-label={label}
                 aria-expanded={abierto}
                 onClick={() => setAbierto(a => !a)}
-                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-slate-300 text-slate-400 hover:border-slate-400 hover:text-slate-600"
+                className="flex shrink-0 items-center justify-center text-slate-400 hover:text-slate-600"
             >
-                <HelpCircle className="h-3 w-3" aria-hidden="true" />
+                <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
             {abierto && (
                 <div
