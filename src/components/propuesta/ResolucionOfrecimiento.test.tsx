@@ -6,11 +6,11 @@ import type { ICatalogoItem, IMotivo, IOfrecimientoMotivo } from '@/types/planif
 // Nombres alineados al catálogo real (Objeción/Cierre/Pendientes) — el componente no
 // hardcodea ninguno, así que estos IDs y descripciones son arbitrarios a propósito.
 const motivos: IMotivo[] = [
-    { motivoId: 20, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
-    { motivoId: 21, nivel: 'ofrecimiento', descripcion: 'DS 100%', resultado: 'perdido', requiereDetalle: false },
-    { motivoId: 22, nivel: 'ofrecimiento', descripcion: 'Dto', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 23, nivel: 'ofrecimiento', descripcion: 'Plazo', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 24, nivel: 'ofrecimiento', descripcion: 'Cupo', resultado: 'diferido', requiereDetalle: false },
+    { motivoId: 20, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', codigo: 'PRECIO' },
+    { motivoId: 21, nivel: 'ofrecimiento', descripcion: 'DS 100%', resultado: 'perdido', codigo: null },
+    { motivoId: 22, nivel: 'ofrecimiento', descripcion: 'Dto', resultado: 'ganado', codigo: null },
+    { motivoId: 23, nivel: 'ofrecimiento', descripcion: 'Plazo', resultado: 'ganado', codigo: null },
+    { motivoId: 24, nivel: 'ofrecimiento', descripcion: 'Cupo', resultado: 'diferido', codigo: null },
 ]
 
 const marcas: ICatalogoItem[] = [
@@ -51,7 +51,7 @@ it('no muestra el bloque de Acción Comercial', () => {
 
 it('Marca aparece antes que Resolución', () => {
     setup()
-    const marca = screen.getByLabelText('Marca')
+    const marca = screen.getByLabelText('Marca del ofrecimiento')
     const objecion = screen.getByText('Objeción')
     // compareDocumentPosition: Node.DOCUMENT_POSITION_FOLLOWING (4) = marca va antes.
     expect(marca.compareDocumentPosition(objecion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -60,51 +60,60 @@ it('Marca aparece antes que Resolución', () => {
 it('tildar un motivo lo agrega con los detalles en null', () => {
     const { onChange } = setup()
     fireEvent.click(screen.getByText('Precio'))
-    expect(onChange).toHaveBeenCalledWith([
-        { motivoId: 20, marca: null, competidor: null, pctDiferencia: null },
-    ])
+    expect(onChange).toHaveBeenCalledWith([{ motivoId: 20, valores: {} }])
 })
 
 it('destildar un motivo lo saca', () => {
-    const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
+    const { onChange } = setup([{ motivoId: 20, valores: {} }])
     fireEvent.click(screen.getByText('Precio'))
     expect(onChange).toHaveBeenCalledWith([])
 })
 
-it('el detalle aparece por requiereDetalle, no por el nombre del motivo', () => {
-    setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
-    expect(screen.getByLabelText('Marca del motivo')).toBeInTheDocument()
-    expect(screen.getByLabelText(/competidor/i)).toBeInTheDocument()
-})
-
-it('la marca del motivo se elige del catálogo, no se escribe', () => {
-    setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
-    fireEvent.click(screen.getByLabelText('Marca del motivo'))
-    expect(screen.getByText('Fric-Rot')).toBeInTheDocument()
-})
-
-it('elegir una marca la guarda por su descripción', () => {
-    const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
-    fireEvent.click(screen.getByLabelText('Marca del motivo'))
-    fireEvent.click(screen.getByText('Fric-Rot'))
-    expect(onChange).toHaveBeenCalledWith([
-        { motivoId: 20, marca: 'Fric-Rot', competidor: null, pctDiferencia: null },
-    ])
-})
-
-it('competidor sigue siendo texto libre', () => {
-    const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
-    fireEvent.change(screen.getByLabelText(/competidor/i), { target: { value: 'Corven' } })
-    expect(onChange).toHaveBeenCalledWith([
-        { motivoId: 20, marca: null, competidor: 'Corven', pctDiferencia: null },
-    ])
-})
-
 it('ofrece cargar una marca', () => {
     const { onChangeAccion } = setup()
-    fireEvent.click(screen.getByLabelText('Marca'))
+    fireEvent.click(screen.getByLabelText('Marca del ofrecimiento'))
     fireEvent.click(screen.getByText('Fric-Rot'))
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
+})
+
+describe('el detalle lo dibuja el módulo del motivo', () => {
+    it('sin el motivo tildado no se dibuja nada', () => {
+        setup()
+        expect(screen.queryByLabelText('Marca')).not.toBeInTheDocument()
+    })
+
+    it('tildar Precio dibuja su módulo', () => {
+        setup([{ motivoId: 20, valores: {} }])
+        expect(screen.getByLabelText('Marca')).toBeInTheDocument()
+        expect(screen.getByLabelText(/nombre del competidor/i)).toBeInTheDocument()
+    })
+
+    // Un motivo sin codigo no tiene formulario: el checkbox es todo lo que hay.
+    it('un motivo sin codigo no dibuja detalle', () => {
+        setup([{ motivoId: 21, valores: {} }])
+        expect(screen.queryByLabelText(/nombre del competidor/i)).not.toBeInTheDocument()
+    })
+
+    // El catálogo puede tener un codigo cuyo módulo todavía no se deployó. No puede romper la
+    // pantalla: se dibuja el motivo sin su detalle.
+    it('un codigo sin módulo registrado no rompe: dibuja el motivo sin detalle', () => {
+        const raros = motivos.map(m =>
+            m.motivoId === 20 ? { ...m, codigo: 'TODAVIA_NO_EXISTE' } : m,
+        )
+        setup([{ motivoId: 20, valores: {} }], { motivos: raros })
+        expect(screen.getByText('Precio')).toBeInTheDocument()
+        expect(screen.queryByLabelText('Marca')).not.toBeInTheDocument()
+    })
+
+    it('lo que carga el módulo viaja mergeado con lo que ya había', () => {
+        const { onChange } = setup([{ motivoId: 20, valores: { marca: 'Fric-Rot' } }])
+        fireEvent.change(screen.getByLabelText(/nombre del competidor/i), {
+            target: { value: 'Corven' },
+        })
+        expect(onChange).toHaveBeenCalledWith([
+            { motivoId: 20, valores: { marca: 'Fric-Rot', competidor: 'Corven' } },
+        ])
+    })
 })
 
 // Objeción y Cierre comparten el mismo espacio a ancho completo, alternados por un
@@ -143,7 +152,7 @@ describe('segmentado Objeción / Cierre', () => {
     // Cambiar de segmento es cambiar de VISTA, no resetear: si limpiara lo tildado, el
     // vendedor perdería la carga por tocar una pestaña.
     it('cambiar de segmento no borra lo tildado', () => {
-        const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
+        const { onChange } = setup([{ motivoId: 20, valores: {} }])
         fireEvent.click(segmento('Cierre'))
         expect(onChange).not.toHaveBeenCalled()
     })
@@ -152,8 +161,8 @@ describe('segmentado Objeción / Cierre', () => {
     // en el segmento es lo que evita que se pierda de vista.
     it('el segmento cuenta lo tildado del otro lado', () => {
         setup([
-            { motivoId: 20, marca: null, competidor: null, pctDiferencia: null },
-            { motivoId: 21, marca: null, competidor: null, pctDiferencia: null },
+            { motivoId: 20, valores: {} },
+            { motivoId: 21, valores: {} },
         ])
         fireEvent.click(segmento('Cierre'))
         expect(segmento('Objeción')).toHaveTextContent('2')
@@ -163,8 +172,8 @@ describe('segmentado Objeción / Cierre', () => {
     // quedaría invisible Y sin contar al pasar a Cierre.
     it('el contador de Objeción incluye los pendientes tildados', () => {
         setup([
-            { motivoId: 20, marca: null, competidor: null, pctDiferencia: null }, // Precio
-            { motivoId: 24, marca: null, competidor: null, pctDiferencia: null }, // Cupo
+            { motivoId: 20, valores: {} }, // Precio
+            { motivoId: 24, valores: {} }, // Cupo
         ])
         fireEvent.click(segmento('Cierre'))
         expect(segmento('Objeción')).toHaveTextContent('2')
@@ -172,7 +181,7 @@ describe('segmentado Objeción / Cierre', () => {
 
     // Al retomar un borrador, abre donde está la carga en vez de obligar a buscarla.
     it('con un Cierre ya tildado, abre en Cierre', () => {
-        setup([{ motivoId: 22, marca: null, competidor: null, pctDiferencia: null }])
+        setup([{ motivoId: 22, valores: {} }])
         expect(screen.getByText('Dto')).toBeInTheDocument()
         expect(screen.queryByText('Precio')).not.toBeInTheDocument()
     })
@@ -218,19 +227,19 @@ describe('color por resultado', () => {
     })
 
     it('ganado se tilda en verde', () => {
-        setup([{ motivoId: 22, marca: null, competidor: null, pctDiferencia: null }])
+        setup([{ motivoId: 22, valores: {} }])
         const boton = screen.getByText('Dto').closest('button') as HTMLElement
         expect(boton).toHaveStyle({ borderColor: '#9BE3B4', background: '#EAFBF1' })
     })
 
     it('diferido se tilda en amarillo', () => {
-        setup([{ motivoId: 24, marca: null, competidor: null, pctDiferencia: null }])
+        setup([{ motivoId: 24, valores: {} }])
         const boton = screen.getByText('Cupo').closest('button') as HTMLElement
         expect(boton).toHaveStyle({ borderColor: '#F7DD8F', background: '#FEF9E8' })
     })
 
     it('perdido se tilda en naranja', () => {
-        setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
+        setup([{ motivoId: 20, valores: {} }])
         const boton = screen.getByText('Precio').closest('button') as HTMLElement
         expect(boton).toHaveStyle({ borderColor: '#F3C8A0', background: '#FDF2E9' })
     })
@@ -240,10 +249,10 @@ describe('color por resultado', () => {
 // por precio, pero le queda el cupo"), así que perdido + diferido conviven. Un cierre
 // no: si cerró, no quedó nada pendiente ni objetado.
 describe('qué resoluciones conviven', () => {
-    const PRECIO = { motivoId: 20, marca: null, competidor: null, pctDiferencia: null }
-    const DS100 = { motivoId: 21, marca: null, competidor: null, pctDiferencia: null }
-    const DTO = { motivoId: 22, marca: null, competidor: null, pctDiferencia: null }
-    const CUPO = { motivoId: 24, marca: null, competidor: null, pctDiferencia: null }
+    const PRECIO = { motivoId: 20, valores: {} }
+    const DS100 = { motivoId: 21, valores: {} }
+    const DTO = { motivoId: 22, valores: {} }
+    const CUPO = { motivoId: 24, valores: {} }
 
     it('dos motivos "perdido" conviven', () => {
         const { onChange } = setup([PRECIO])
