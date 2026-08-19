@@ -1,5 +1,27 @@
+import { Info } from 'lucide-react'
 import { formatHoras, formatNumero, formatPctEscalado } from '@/lib/analiticaFormat'
 import type { IVendedorMetricas } from '@/types/analitica'
+
+const INFO_COLUMNA: Record<string, string> = {
+    'Efectividad operativa':
+        'Qué tan cerca estuvo del objetivo mensual de actividad: promedio entre % de la meta de clientes distintos visitados y % de la meta de horas trabajadas, cada uno topeado a 100%. No mide resultado comercial, sino actividad.',
+    'Visitas (mensual)':
+        'Visitas del mes con GPS confirmado (dentro de 300 m del cliente). Las que no pasan esa validación no cuentan acá.',
+    'Horas (mensual)': 'Horas totales dedicadas a esas mismas visitas válidas.',
+}
+
+/** Encabezado con tooltip nativo (title) sobre un ícono de ayuda, marcado
+ *  aria-hidden para no alterar el nombre accesible de la columna. */
+function EncabezadoConInfo({ titulo }: { titulo: string }) {
+    return (
+        <span className="inline-flex items-center justify-end gap-1">
+            {titulo}
+            <span title={INFO_COLUMNA[titulo]}>
+                <Info className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
+            </span>
+        </span>
+    )
+}
 
 interface TablaEfectividadOperativaProps {
     vendedores: IVendedorMetricas[]
@@ -38,9 +60,15 @@ export default function TablaEfectividadOperativa({
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
                         <th className="px-3 py-2 text-left">Vendedor</th>
-                        <th className="px-3 py-2 text-right">Efectividad operativa</th>
-                        <th className="px-3 py-2 text-right">Visitas (mensual)</th>
-                        <th className="px-3 py-2 text-right">Horas (mensual)</th>
+                        <th className="px-3 py-2 text-right">
+                            <EncabezadoConInfo titulo="Efectividad operativa" />
+                        </th>
+                        <th className="px-3 py-2 text-right">
+                            <EncabezadoConInfo titulo="Visitas (mensual)" />
+                        </th>
+                        <th className="px-3 py-2 text-right">
+                            <EncabezadoConInfo titulo="Horas (mensual)" />
+                        </th>
                     </tr>
                 </thead>
                 <tbody>

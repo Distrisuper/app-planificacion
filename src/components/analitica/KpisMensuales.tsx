@@ -13,9 +13,21 @@ interface KpisMensualesProps {
 export default function KpisMensuales({ promedios }: KpisMensualesProps) {
     return (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <KpiTile titulo="Efectividad operativa" valor={formatPctEscalado(promedios.efectividadOperativa)} />
-            <KpiTile titulo="Visitas (mensual)" valor={formatNumero(promedios.visitasValidas)} />
-            <KpiTile titulo="Horas (mensual)" valor={formatHoras(promedios.minutosTotales)} />
+            <KpiTile
+                titulo="Efectividad operativa"
+                valor={formatPctEscalado(promedios.efectividadOperativa)}
+                info="Qué tan cerca estuvo del objetivo mensual de actividad: promedio entre % de la meta de clientes distintos visitados y % de la meta de horas trabajadas, cada uno topeado a 100%. No mide resultado comercial, sino actividad."
+            />
+            <KpiTile
+                titulo="Visitas (mensual)"
+                valor={formatNumero(promedios.visitasValidas)}
+                info="Visitas del mes con GPS confirmado (dentro de 300 m del cliente). Las que no pasan esa validación no cuentan acá."
+            />
+            <KpiTile
+                titulo="Horas (mensual)"
+                valor={formatHoras(promedios.minutosTotales)}
+                info="Horas totales dedicadas a esas mismas visitas válidas."
+            />
         </div>
     )
 }
