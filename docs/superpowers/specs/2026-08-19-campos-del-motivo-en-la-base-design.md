@@ -1,4 +1,4 @@
-# Campos dinámicos por motivo: el schema es dato, el tipo es código
+# Los campos del motivo, definidos en la base
 
 **Fecha:** 2026-08-19
 **Estado:** diseño aprobado, pendiente de plan de implementación
@@ -26,6 +26,39 @@ Eso alcanzaba mientras el único motivo con detalle era "Precio". Ya no:
 
 **El objetivo es que agregar, quitar o renombrar un campo sea un `UPDATE`, no un deploy** — sin
 perder la capacidad de analizar esos campos después.
+
+## El esquema, y de qué es extensión cada parte
+
+```
+pl_motivo                            ← el catálogo: qué motivos existen
+   motivo_id, descripcion, resultado
+   campos JSON ─────────────┐          QUÉ PREGUNTA este motivo
+                            │
+                            │ define la forma de
+                            ▼
+pl_ofrecimiento_motivo               ← el hecho: este rubro se resolvió con este motivo
+   PK (ofrecimiento_id, motivo_id)
+              │
+              │ 1 a N
+              ▼
+pl_ofrecimiento_motivo_campo         ← QUÉ SE RESPONDIÓ
+   PK (ofrecimiento_id, motivo_id, campo)
+   valor_texto | valor_num
+```
+
+Son **dos cosas distintas**, y confundirlas es lo que hace que el diseño no se entienda:
+
+- **El schema es una extensión del motivo.** "Precio pide marca, competidor y %" es una propiedad
+  del motivo, igual que su `resultado`. Por eso es una columna de `pl_motivo`, no una tabla.
+- **Los valores no pueden extender ni al motivo ni a la resolución.** Del motivo no pueden colgar:
+  dos visitas que eligen "Precio" tienen competidores distintos, así que el valor no es del motivo
+  sino de *este uso* del motivo. De `pl_resolucion` tampoco: esa es de la visita entera, y el dato
+  es de un rubro puntual con un motivo puntual. El único ancla correcto es el par
+  `(ofrecimiento, motivo)` — y por eso la tabla hereda esa PK y le suma `campo`.
+
+**No es una entidad nueva.** `pl_ofrecimiento_motivo` ya tiene este concepto: `marca`, `competidor`
+y `pct_diferencia` son literalmente esto, solo que hoy son columnas fijas. El cambio es moverlas de
+columnas a filas para que puedan variar por motivo.
 
 ## La decisión: flexibilizar el schema, nunca el tipo del valor
 
@@ -127,12 +160,59 @@ CREATE TABLE IF NOT EXISTS pl_ofrecimiento_motivo_campo (
 );
 ```
 
-Con eso, `SELECT AVG(valor_num) FROM pl_ofrecimiento_motivo_campo WHERE campo = 'dias'` funciona el
-día que se quiera, indexado. **Ese es el requisito que este diseño protege**: el análisis no es
-urgente, pero tiene que seguir siendo posible.
+### Por qué una tabla y no un `valores JSON` en la fila
 
-**Costo asumido:** un reporte que cruce varios campos a la vez necesita pivotear. Es un costo
-conocido, acotado, y se paga cuando se escriba ese reporte — no ahora.
+Se evaluó guardar los valores como una columna JSON en `pl_ofrecimiento_motivo`, que es bastante
+menos maquinaria (una columna en vez de otro delete+insert y otro join en el mapper).
+
+**El argumento de performance no aplica y no se usa.** El volumen es ~14 vendedores × ~200 clientes
+× ~12 vueltas × ~5 rubros ≈ 50-100k filas por año. A esa escala un scan sobre JSON es milisegundos.
+Y la higiene del dato tampoco decide: validando por tipo al escribir se consigue igual sobre JSON.
+
+La razón real es **descubribilidad**. El análisis "tiene que poder hacerse en el futuro", y ese
+futuro probablemente lo escribe alguien con acceso SQL que no participó de esta decisión:
+
+```sql
+-- Con la tabla: te asomás y ves qué campos existen.
+SELECT DISTINCT campo FROM pl_ofrecimiento_motivo_campo;
+SELECT AVG(valor_num) FROM pl_ofrecimiento_motivo_campo WHERE campo = 'dias';
+
+-- Con JSON: hay que saber de antemano que la clave 'dias' existe y qué forma tiene.
+SELECT AVG(valores->>'$.dias') FROM pl_ofrecimiento_motivo WHERE ...;
+```
+
+Un valor huérfano (de un campo que se sacó del schema) también queda visible con un `SELECT` en vez
+de enterrado en un blob.
+
+**Costo asumido:** un reporte que cruce varios campos a la vez necesita pivotear. Es conocido,
+acotado, y se paga cuando se escriba ese reporte — no ahora.
+
+## Qué pasa cuando se saca un campo del schema
+
+Va a pasar seguido: el sistema es nuevo y se va a iterar sobre qué pedir. A nivel base **no rompe
+nada** —no hay FK del `campo` al schema, porque es un array JSON— y las filas históricas quedan.
+Pero eso solo es seguro con tres reglas, que son parte del diseño y no detalles de implementación:
+
+**1. Lo histórico se dibuja desde las filas guardadas, nunca desde el schema vigente.**
+Si el panel de detalle de visita itera el schema actual, un valor que sí se recolectó se vuelve
+invisible. El schema es *qué preguntar hoy*; las filas son *qué pasó*. Ya hay precedente exacto en el
+repo: `AnaliticaService` lee el catálogo de motivos con `incluirInactivos: true` justamente para que
+un motivo dado de baja no borre la historia que lo referencia.
+
+**2. Un valor de un `campo` que ya no está en el schema se descarta al escribir; no se rechaza.**
+Rechazar con 400 dejaría al vendedor sin poder cerrar la visita si su borrador en localStorage tiene
+el campo viejo. Es el mismo bug que se arregló el 2026-08-19 con los motivos dados de baja
+(`MOTIVO_INEXISTENTE`): se poda, no se explota. Aplica en los dos lados — el front poda el borrador
+al leerlo, el back ignora campos desconocidos al persistir.
+
+**3. Un `campo` no se reusa con otro significado.**
+Volver a declarar `"pct"` para otra cosa fusiona en silencio dos series distintas. El `label` se
+cambia libremente (es presentación); el `campo` es la identidad del dato y se trata como
+inmutable una vez que hay filas cargadas.
+
+Con esas tres, sacar un campo es seguro: desaparece del formulario y las consultas históricas sobre
+él siguen funcionando. **Que la serie sobreviva al cambio de formulario es el objetivo, no un
+efecto secundario.**
 
 ### El tipo en el front
 
