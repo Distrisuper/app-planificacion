@@ -436,35 +436,55 @@ it('dentro del wizard de resolución no aparecen las apps externas', async () =>
     expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
 })
 
-// Acción Comercial se sacó del formulario de resolución (spec 2026-08-19), y con ella
-// se fue el único código de acción que el backend exige para persistir `detalle`
-// (ver api-vendedores/ofrecimientoValidation.ts: `validarDetalleAccion` rechaza con 400
-// cualquier detalle sin `accion`). Hoy la marca elegida SOLA queda como borrador en
-// pantalla, pero no viaja al batch de cierre — es una limitación conocida del backend,
-// no de este componente. VisitaSheet ya la contempla (línea ~314) y no manda `detalle`
-// cuando `accion` es null.
-it('marca sin acción no viaja en el batch de cierre (el backend exige un código de acción)', async () => {
-    const { onCerrarVisita } = renderSheet()
-    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+// Acción Comercial se sacó del formulario de resolución (spec 2026-08-19), y con ella el
+// único código de acción que el backend exige para persistir `detalle`
+// (api-vendedores/ofrecimientoValidation.ts: `validarDetalleAccion` rechaza con 400 todo
+// detalle sin `accion`). Como el formulario ya no administra `detalle`, tampoco lo manda:
+// ni con valor ni como null. `undefined` = "no toques lo guardado" en el DTO.
+describe('el formulario ya no administra `detalle`', () => {
+    it('con marca cargada, el batch manda solo los motivos: ningún detalle', async () => {
+        const { onCerrarVisita } = renderSheet()
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
 
-    // El catálogo de marcas recién se pide cuando algo lo necesita — tildar "Precio"
-    // (requiereDetalle) lo dispara. Se destilda después.
-    fireEvent.click(await screen.findByText('Precio'))
-    await waitFor(() => expect(api.getBrandCatalog).toHaveBeenCalled())
+        fireEvent.click(await screen.findByLabelText('Marca'))
+        fireEvent.click(await screen.findByText('Fric-Rot'))
+        await tildarSaquePedido()
+        fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
+        fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
-    fireEvent.click(await screen.findByLabelText('Marca'))
-    fireEvent.click(await screen.findByText('Fric-Rot'))
-    await tildarSaquePedido()
-    fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
+        fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
 
-    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+        await waitFor(() =>
+            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
+                motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+            }),
+        )
+        expect(onCerrarVisita).toHaveBeenCalled()
+    })
 
-    await waitFor(() =>
-        expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
-            motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
-            detalle: null,
-        }),
-    )
-    expect(onCerrarVisita).toHaveBeenCalled()
+    // Sin esto, elegir una marca ensucia el rubro y le gasta un PUT que no persiste nada:
+    // el detalle no se puede mandar y los motivos no cambiaron. Con 5 rubros son 5
+    // requests de más con datos móviles.
+    it('tocar SOLO la marca no genera request para ese rubro', async () => {
+        renderSheet()
+
+        // Filtros (id 8) ya viene resuelto con motivoId 10: su borrador arranca igual a lo
+        // guardado, así que solo se le cambia la marca.
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Filtros' }))
+        fireEvent.click(await screen.findByLabelText('Marca'))
+        fireEvent.click(await screen.findByText('Fric-Rot'))
+        fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
+
+        // Amortiguadores (id 7) sí se resuelve, para poder cerrar la visita. Es el primero
+        // de dos, así que su salida es el ⌄, no "Ver resumen" (ese es del último).
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+        await tildarSaquePedido()
+        fireEvent.click(await screen.findByRole('button', { name: /minimizar/i }))
+
+        fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+
+        await waitFor(() => expect(api.resolverOfrecimiento).toHaveBeenCalled())
+        const rubrosEnviados = (api.resolverOfrecimiento as any).mock.calls.map((c: unknown[]) => c[1])
+        expect(rubrosEnviados).toEqual([7])
+    })
 })

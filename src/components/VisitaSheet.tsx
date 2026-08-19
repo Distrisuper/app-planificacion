@@ -293,6 +293,26 @@ export default function VisitaSheet({
     )
     const rubrosCatalogo = rubroStatus.map(s => ({ code: s.rubroCode, description: s.nombre }))
 
+    /**
+     * Si el `detalle` de este ofrecimiento se puede guardar. Solo lo es con un código de
+     * acción: `validarDetalleAccion` (api-vendedores) rechaza con 400 DETALLE_INVALIDO todo
+     * `detalle` sin `accion`, y la marca viaja adentro de ese mismo objeto.
+     *
+     * Desde que se sacó Acción Comercial del formulario (spec 2026-08-19) no hay forma de
+     * cargar ese código, así que en la práctica esto es siempre false. Se conserva la
+     * pregunta en vez de borrar el campo porque el objeto sigue vivo en el resto del código.
+     *
+     * Importa para DOS cosas, y por eso es una sola función:
+     *  1. No ensuciar el ofrecimiento. Elegir una marca no puede hacer que un rubro cuyos
+     *     motivos no cambiaron entre al batch: sería un PUT que no persiste nada (cinco
+     *     rubros con marca = cinco requests de más con datos móviles).
+     *  2. No mandar `detalle: null`. `undefined` es "no toques lo guardado" en el DTO;
+     *     `null` es "borralo", y borraría un detalle viejo que este formulario ni muestra.
+     */
+    function esPersistible(ofrecimientoId: number): boolean {
+        return !!detalles[ofrecimientoId]?.accion
+    }
+
     // Único punto de guardado contra el backend: junta todo lo que cambió contra lo
     // que ya tiene el servidor, lo manda en un solo batch y, si sale bien, recién ahí
     // limpia el borrador y dispara el cierre real (geolocalización + endpoint), que
@@ -300,20 +320,11 @@ export default function VisitaSheet({
     async function cerrarConBorrador() {
         setErrorGuardado(null)
         const cambios = ofrecimientos
-            .filter(
-                r =>
-                    !motivosIguales(borradores[r.id] ?? [], r.motivos) ||
-                    detalles[r.id] !== undefined,
-            )
+            .filter(r => !motivosIguales(borradores[r.id] ?? [], r.motivos) || esPersistible(r.id))
             .map(r => ({
                 ofrecimientoId: r.id,
                 motivos: borradores[r.id] ?? [],
-                // Marca sin acción es válida como borrador en pantalla, pero el backend
-                // exige un código de acción en todo `detalle` no nulo — sin eso, esa
-                // marca no tiene dónde persistir hoy.
-                ...(detalles[r.id] !== undefined
-                    ? { detalle: detalles[r.id]?.accion ? detalles[r.id] : null }
-                    : {}),
+                ...(esPersistible(r.id) ? { detalle: detalles[r.id] } : {}),
             }))
 
         if (cambios.length > 0) {
