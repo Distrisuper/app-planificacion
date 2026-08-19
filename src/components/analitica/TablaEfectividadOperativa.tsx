@@ -2,8 +2,6 @@ import {
     AYUDA_EFECTIVIDAD_OPERATIVA,
     AYUDA_HORAS_MENSUAL,
     AYUDA_VISITAS_MENSUAL,
-    META_HORAS_TEXTO,
-    META_VISITAS_TEXTO,
 } from './ayudaEfectividadOperativa'
 import HelpPopover from './HelpPopover'
 import { formatHoras, formatNumero, formatPctEscalado } from '@/lib/analiticaFormat'
@@ -15,23 +13,14 @@ interface TablaEfectividadOperativaProps {
     onElegirVendedor: (codigo: string) => void
 }
 
-interface EncabezadoProps {
-    titulo: string
-    ayuda: React.ReactNode
-    meta?: string
-}
-
-/** Encabezado con el nombre de la columna, su meta mensual (si aplica) visible
- *  debajo, y un botón de ayuda con la explicación completa. */
-function Encabezado({ titulo, ayuda, meta }: EncabezadoProps) {
+/** Título de columna + botón de ayuda. La meta mensual ya se muestra arriba, en
+ *  KpisMensuales — repetirla acá sería redundante. */
+function Encabezado({ titulo, ayuda }: { titulo: string; ayuda: React.ReactNode }) {
     return (
-        <div className="flex flex-col items-end gap-0.5">
-            <span className="inline-flex items-center gap-1.5">
-                {titulo}
-                <HelpPopover label={`Qué significa ${titulo}`}>{ayuda}</HelpPopover>
-            </span>
-            {meta && <span className="text-[10px] normal-case tracking-normal text-slate-400">{meta}</span>}
-        </div>
+        <span className="inline-flex items-center gap-1.5">
+            {titulo}
+            <HelpPopover label={`Qué significa ${titulo}`}>{ayuda}</HelpPopover>
+        </span>
     )
 }
 
@@ -61,7 +50,9 @@ export default function TablaEfectividadOperativa({
     )
 
     return (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        // overflow-y visible (no "auto"): con solo overflow-x-auto, la fila con el
+        // popover abierto ganaba un scrollbar vertical propio que le recortaba el panel.
+        <div className="overflow-x-auto overflow-y-visible rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
@@ -70,18 +61,10 @@ export default function TablaEfectividadOperativa({
                             <Encabezado titulo="Efectividad operativa" ayuda={AYUDA_EFECTIVIDAD_OPERATIVA} />
                         </th>
                         <th className="px-3 py-2 text-right">
-                            <Encabezado
-                                titulo="Visitas (mensual)"
-                                ayuda={AYUDA_VISITAS_MENSUAL}
-                                meta={META_VISITAS_TEXTO}
-                            />
+                            <Encabezado titulo="Visitas (mensual)" ayuda={AYUDA_VISITAS_MENSUAL} />
                         </th>
                         <th className="px-3 py-2 text-right">
-                            <Encabezado
-                                titulo="Horas (mensual)"
-                                ayuda={AYUDA_HORAS_MENSUAL}
-                                meta={META_HORAS_TEXTO}
-                            />
+                            <Encabezado titulo="Horas (mensual)" ayuda={AYUDA_HORAS_MENSUAL} />
                         </th>
                     </tr>
                 </thead>

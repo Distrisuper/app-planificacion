@@ -26,10 +26,9 @@ it('muestra las tres columnas acordadas, nada de cobertura ni efectividad comerc
     expect(screen.queryByRole('columnheader', { name: /efectividad comercial/i })).not.toBeInTheDocument()
 })
 
-it('cada columna muestra su meta mensual y una ayuda con la explicación completa', async () => {
+it('cada columna tiene un botón de ayuda con la explicación completa (la meta ya se ve arriba, en los KPIs)', async () => {
     render(<TablaEfectividadOperativa {...props} />)
-    expect(screen.getByText('Meta: 160 clientes/mes')).toBeInTheDocument()
-    expect(screen.getByText('Meta: 100 hs/mes')).toBeInTheDocument()
+    expect(screen.queryByText(/Meta:/)).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Qué significa Horas (mensual)' }))
     expect(
