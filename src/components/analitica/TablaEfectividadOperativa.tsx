@@ -50,9 +50,7 @@ export default function TablaEfectividadOperativa({
     )
 
     return (
-        // overflow-y visible (no "auto"): con solo overflow-x-auto, la fila con el
-        // popover abierto ganaba un scrollbar vertical propio que le recortaba el panel.
-        <div className="overflow-x-auto overflow-y-visible rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
