@@ -6,6 +6,7 @@ import { vi } from 'vitest'
 import AnaliticaPage from './AnaliticaPage'
 import { MOCK_RESUMEN, MOCK_VENDEDORES } from '@/mocks/analiticaMock'
 import * as api from '@/api/analitica'
+import type { IAnaliticaFiltro, IAnaliticaResumen } from '@/types/analitica'
 
 vi.mock('@/api/analitica')
 vi.mock('@/context/AuthContext', () => ({
@@ -23,6 +24,25 @@ function montar(ruta = '/analitica?desde=2026-07-20&hasta=2026-07-24') {
     )
 }
 
+/** El resumen "completo" (con MOCK_RESUMEN.vendedores) solo se devuelve para el
+ *  filtro de la página bajo prueba. Cualquier otro filtro —el que arma
+ *  EfectividadOperativaSection con el mes en curso, que no se puede predecir en un
+ *  test— recibe un resumen vacío. Así ningún nombre de vendedor queda duplicado en
+ *  pantalla y los `getByText` existentes no se rompen. */
+function mockResumenSoloParaFiltroPrincipal(
+    resultado: IAnaliticaResumen,
+    desde = '2026-07-20',
+    hasta = '2026-07-24',
+) {
+    ;(api.getResumen as any).mockImplementation((filtro: IAnaliticaFiltro) =>
+        Promise.resolve(
+            filtro.desde === desde && filtro.hasta === hasta
+                ? resultado
+                : { desde: filtro.desde, hasta: filtro.hasta, diasHabiles: 0, promedios: MOCK_RESUMEN.promedios, vendedores: [] },
+        ),
+    )
+}
+
 beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getObjeciones as any).mockResolvedValue({ total: 0, motivos: [] })
@@ -30,7 +50,7 @@ beforeEach(() => {
 })
 
 it('muestra la tabla con los vendedores del resumen', async () => {
-    ;(api.getResumen as any).mockResolvedValue(MOCK_RESUMEN)
+    mockResumenSoloParaFiltroPrincipal(MOCK_RESUMEN)
     montar()
     await waitFor(() => expect(screen.getByText('ACOSTA MARIANO')).toBeInTheDocument())
     expect(screen.getByText('PROMEDIOS')).toBeInTheDocument()
@@ -54,11 +74,11 @@ it('sin ciclos en el rango muestra un vacío explícito, no un 0%', async () => 
 it('muestra el error si el resumen falla', async () => {
     ;(api.getResumen as any).mockRejectedValue(new Error('boom'))
     montar()
-    await waitFor(() => expect(screen.getByText(/no se pudo cargar/i)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getAllByText(/no se pudo cargar/i).length).toBeGreaterThan(0))
 })
 
 it('el dropdown muestra el roster completo, incluido un vendedor sin actividad', async () => {
-    ;(api.getResumen as any).mockResolvedValue({
+    mockResumenSoloParaFiltroPrincipal({
         ...MOCK_RESUMEN,
         vendedores: MOCK_RESUMEN.vendedores.filter(v => v.codigoParticularVendedor === 'V1'),
     })
@@ -69,4 +89,12 @@ it('el dropdown muestra el roster completo, incluido un vendedor sin actividad',
     for (const v of MOCK_VENDEDORES) {
         expect(screen.getByLabelText(v.nombreVendedor)).toBeInTheDocument()
     }
+})
+
+it('muestra la sección de efectividad operativa con su propio selector de mes', async () => {
+    mockResumenSoloParaFiltroPrincipal(MOCK_RESUMEN)
+    montar()
+    await waitFor(() => expect(screen.getByText('ACOSTA MARIANO')).toBeInTheDocument())
+    expect(screen.getByRole('heading', { name: 'Efectividad operativa' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Mes anterior' })).toBeInTheDocument()
 })

@@ -70,3 +70,11 @@ export const alertasAbsolutas = (v: {
     }
     return alertas
 }
+
+/** efectividadOperativa ya viene en escala 0..100 (no 0..1 como el resto de los %
+ *  de esta pantalla) — puede superar 100 cuando el vendedor supera la meta. */
+export const formatPctEscalado = (valor: number | null): string =>
+    valor === null ? 's/d' : `${Math.round(valor)}%`
+
+export const formatHoras = (minutos: number | null): string =>
+    minutos === null ? 's/d' : `${formatNumero(minutos / 60)} hs`
