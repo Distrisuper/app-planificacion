@@ -3,20 +3,20 @@ import { vi } from 'vitest'
 import ResolucionOfrecimiento from './ResolucionOfrecimiento'
 import type { ICatalogoItem, IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
 
+// Nombres alineados al catálogo real (Objeción/Cierre/Pendientes) — el componente no
+// hardcodea ninguno, así que estos IDs y descripciones son arbitrarios a propósito.
 const motivos: IMotivo[] = [
-    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 11, nivel: 'ofrecimiento', descripcion: 'Pasa pedido mañana', resultado: 'diferido', requiereDetalle: false },
-    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
-    { motivoId: 15, nivel: 'ofrecimiento', descripcion: 'DS', resultado: 'perdido', requiereDetalle: false },
-    { motivoId: 16, nivel: 'ofrecimiento', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
+    { motivoId: 20, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
+    { motivoId: 21, nivel: 'ofrecimiento', descripcion: 'DS 100%', resultado: 'perdido', requiereDetalle: false },
+    { motivoId: 22, nivel: 'ofrecimiento', descripcion: 'Dto', resultado: 'ganado', requiereDetalle: false },
+    { motivoId: 23, nivel: 'ofrecimiento', descripcion: 'Plazo', resultado: 'ganado', requiereDetalle: false },
+    { motivoId: 24, nivel: 'ofrecimiento', descripcion: 'Cupo', resultado: 'diferido', requiereDetalle: false },
 ]
 
 const marcas: ICatalogoItem[] = [
     { code: 'FR', description: 'Fric-Rot' },
     { code: 'FX', description: 'Fremax' },
 ]
-
-const acciones: ICatalogoItem[] = [{ code: 'CUPO', description: 'Plan cupo' }]
 
 function setup(value: IOfrecimientoMotivo[] = [], over: Record<string, unknown> = {}) {
     const onChange = vi.fn()
@@ -25,7 +25,6 @@ function setup(value: IOfrecimientoMotivo[] = [], over: Record<string, unknown> 
         <ResolucionOfrecimiento
             motivos={motivos}
             marcas={marcas}
-            acciones={acciones}
             accion={null}
             onChangeAccion={onChangeAccion}
             value={value}
@@ -38,231 +37,275 @@ function setup(value: IOfrecimientoMotivo[] = [], over: Record<string, unknown> 
 
 it('renderiza el catálogo recibido, sin nombres hardcodeados', () => {
     setup()
-    expect(screen.getByText('Saqué pedido')).toBeInTheDocument()
-    expect(screen.getByText('No lo ofrecí')).toBeInTheDocument()
+    expect(screen.getByText('Precio')).toBeInTheDocument()
+    expect(screen.getByText('Cupo')).toBeInTheDocument()
     // "Poco trabajo" / "Estoy completo" eran del prototipo y NO están en el catálogo.
     expect(screen.queryByText('Poco trabajo')).not.toBeInTheDocument()
 })
 
+it('no muestra el bloque de Acción Comercial', () => {
+    setup()
+    expect(screen.queryByText(/acción comercial/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /sin acción/i })).not.toBeInTheDocument()
+})
+
+it('Marca aparece antes que Resolución', () => {
+    setup()
+    const marca = screen.getByLabelText('Marca')
+    const objecion = screen.getByText('Objeción')
+    // compareDocumentPosition: Node.DOCUMENT_POSITION_FOLLOWING (4) = marca va antes.
+    expect(marca.compareDocumentPosition(objecion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+})
+
 it('tildar un motivo lo agrega con los detalles en null', () => {
     const { onChange } = setup()
-    fireEvent.click(screen.getByText('Saqué pedido'))
+    fireEvent.click(screen.getByText('Precio'))
     expect(onChange).toHaveBeenCalledWith([
-        { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
+        { motivoId: 20, marca: null, competidor: null, pctDiferencia: null },
     ])
 })
 
 it('destildar un motivo lo saca', () => {
-    const { onChange } = setup([{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])
-    fireEvent.click(screen.getByText('Saqué pedido'))
+    const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
+    fireEvent.click(screen.getByText('Precio'))
     expect(onChange).toHaveBeenCalledWith([])
 })
 
 it('el detalle aparece por requiereDetalle, no por el nombre del motivo', () => {
-    setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
+    setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
     expect(screen.getByLabelText('Marca del motivo')).toBeInTheDocument()
     expect(screen.getByLabelText(/competidor/i)).toBeInTheDocument()
 })
 
-it('la marca se elige del catálogo, no se escribe', () => {
-    setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
+it('la marca del motivo se elige del catálogo, no se escribe', () => {
+    setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
     fireEvent.click(screen.getByLabelText('Marca del motivo'))
     expect(screen.getByText('Fric-Rot')).toBeInTheDocument()
 })
 
 it('elegir una marca la guarda por su descripción', () => {
-    const { onChange } = setup([
-        { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
-    ])
+    const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
     fireEvent.click(screen.getByLabelText('Marca del motivo'))
     fireEvent.click(screen.getByText('Fric-Rot'))
     expect(onChange).toHaveBeenCalledWith([
-        { motivoId: 13, marca: 'Fric-Rot', competidor: null, pctDiferencia: null },
+        { motivoId: 20, marca: 'Fric-Rot', competidor: null, pctDiferencia: null },
     ])
 })
 
-// Es una marca de afuera: no está en fct_sales, así que no hay catálogo que ofrecer.
 it('competidor sigue siendo texto libre', () => {
-    const { onChange } = setup([
-        { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
-    ])
+    const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
     fireEvent.change(screen.getByLabelText(/competidor/i), { target: { value: 'Corven' } })
     expect(onChange).toHaveBeenCalledWith([
-        { motivoId: 13, marca: null, competidor: 'Corven', pctDiferencia: null },
+        { motivoId: 20, marca: null, competidor: 'Corven', pctDiferencia: null },
     ])
 })
 
-// El caso simple no cambió: sin acción, la pantalla es la de siempre.
-it('sin acción comercial, el checklist es el de motivos de ofrecimiento', () => {
-    setup()
-    expect(screen.getByText('Saqué pedido')).toBeInTheDocument()
-    expect(screen.getByText(/acción comercial/i)).toBeInTheDocument()
-})
-
-it('ofrece cargar una acción comercial arriba del checklist', () => {
-    const { onChangeAccion } = setup()
-    fireEvent.click(screen.getByRole('button', { name: 'Plan cupo' }))
-    expect(onChangeAccion).toHaveBeenCalledWith({ accion: 'CUPO', marca: null })
-})
-
-// El checklist NO cambia con la acción: es siempre el catálogo de nivel
-// 'ofrecimiento', que el backend completa con los motivos que faltaban.
-it('con acción comercial cargada, el checklist sigue siendo el mismo', () => {
-    setup([], { accion: { accion: 'CUPO', marca: null } })
-
-    expect(screen.getByText('Saqué pedido')).toBeInTheDocument()
-    expect(screen.getByText('No lo ofrecí')).toBeInTheDocument()
-})
-
-// La marca es un chip aparte, independiente de si hay acción: se puede cargar sola.
-it('ofrece cargar una marca sin acción comercial', () => {
+it('ofrece cargar una marca', () => {
     const { onChangeAccion } = setup()
     fireEvent.click(screen.getByLabelText('Marca'))
     fireEvent.click(screen.getByText('Fric-Rot'))
-
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
 })
 
-// La marca de la acción y la del chip Marca son EL MISMO dato — nunca se duplican.
-it('con acción y marca ya cargadas, el chip Marca muestra esa misma marca', () => {
-    setup([], { accion: { accion: 'CUPO', marca: 'Fric-Rot' } })
+// Objeción y Cierre comparten el mismo espacio a ancho completo, alternados por un
+// segmentado: en un teléfono, dos columnas de ~165px no dejan lugar a los paneles de
+// detalle (marca/competidor/% de Precio, y los que vengan). Pendientes queda siempre
+// visible abajo porque acompaña a una objeción.
+describe('segmentado Objeción / Cierre', () => {
+    const segmento = (nombre: string) => screen.getByRole('button', { name: new RegExp(nombre, 'i') })
 
-    expect(screen.getByLabelText('Marca')).toHaveTextContent('Fric-Rot')
+    it('arranca en Objeción y no muestra los motivos de Cierre', () => {
+        setup()
+        expect(screen.getByText('Precio')).toBeInTheDocument()
+        expect(screen.getByText('DS 100%')).toBeInTheDocument()
+        expect(screen.queryByText('Dto')).not.toBeInTheDocument()
+    })
+
+    it('tocar Cierre muestra sus motivos y esconde los de Objeción', () => {
+        setup()
+        fireEvent.click(segmento('Cierre'))
+        expect(screen.getByText('Dto')).toBeInTheDocument()
+        expect(screen.queryByText('Precio')).not.toBeInTheDocument()
+    })
+
+    // Pendientes acompaña a una objeción y no convive con un cierre: mostrarlo en el
+    // segmento Cierre sería ofrecer un tilde que borra lo que el vendedor acaba de cargar.
+    it('Pendientes aparece solo en el segmento Objeción', () => {
+        setup()
+        expect(screen.getByText('Cupo')).toBeInTheDocument()
+        expect(screen.getByText('Pendientes')).toBeInTheDocument()
+
+        fireEvent.click(segmento('Cierre'))
+        expect(screen.queryByText('Cupo')).not.toBeInTheDocument()
+        expect(screen.queryByText('Pendientes')).not.toBeInTheDocument()
+    })
+
+    // Cambiar de segmento es cambiar de VISTA, no resetear: si limpiara lo tildado, el
+    // vendedor perdería la carga por tocar una pestaña.
+    it('cambiar de segmento no borra lo tildado', () => {
+        const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
+        fireEvent.click(segmento('Cierre'))
+        expect(onChange).not.toHaveBeenCalled()
+    })
+
+    // Corolario de lo anterior: lo tildado del otro lado quedaría invisible. El contador
+    // en el segmento es lo que evita que se pierda de vista.
+    it('el segmento cuenta lo tildado del otro lado', () => {
+        setup([
+            { motivoId: 20, marca: null, competidor: null, pctDiferencia: null },
+            { motivoId: 21, marca: null, competidor: null, pctDiferencia: null },
+        ])
+        fireEvent.click(segmento('Cierre'))
+        expect(segmento('Objeción')).toHaveTextContent('2')
+    })
+
+    // Los pendientes se esconden junto con Objeción, así que sin esto un Cupo tildado
+    // quedaría invisible Y sin contar al pasar a Cierre.
+    it('el contador de Objeción incluye los pendientes tildados', () => {
+        setup([
+            { motivoId: 20, marca: null, competidor: null, pctDiferencia: null }, // Precio
+            { motivoId: 24, marca: null, competidor: null, pctDiferencia: null }, // Cupo
+        ])
+        fireEvent.click(segmento('Cierre'))
+        expect(segmento('Objeción')).toHaveTextContent('2')
+    })
+
+    // Al retomar un borrador, abre donde está la carga en vez de obligar a buscarla.
+    it('con un Cierre ya tildado, abre en Cierre', () => {
+        setup([{ motivoId: 22, marca: null, competidor: null, pctDiferencia: null }])
+        expect(screen.getByText('Dto')).toBeInTheDocument()
+        expect(screen.queryByText('Precio')).not.toBeInTheDocument()
+    })
+
+    it('un motivo sin bucket reconocido (no_ofrecido o null) cae en Otros, sin perderse', () => {
+        setup([], {
+            motivos: [
+                ...motivos,
+                { motivoId: 30, nivel: 'ofrecimiento', descripcion: 'Fuera de catálogo', resultado: 'no_ofrecido', requiereDetalle: false },
+            ],
+        })
+        expect(screen.getByText('Otros')).toBeInTheDocument()
+        expect(screen.getByText('Fuera de catálogo')).toBeInTheDocument()
+    })
+
+    it('sin motivos de un bucket, no muestra su título', () => {
+        setup([], { motivos: motivos.filter(m => m.resultado !== 'diferido') })
+        expect(screen.queryByText('Pendientes')).not.toBeInTheDocument()
+    })
+
+    // Catálogo a medio migrar: sin ningún 'perdido', el único bloque es Cierre. Pendientes
+    // no puede colarse ahí — no convive con un cierre.
+    it('con Cierre como único bloque, no muestra Pendientes', () => {
+        setup([], { motivos: motivos.filter(m => m.resultado !== 'perdido') })
+        expect(screen.getByText('Dto')).toBeInTheDocument()
+        expect(screen.queryByText('Cupo')).not.toBeInTheDocument()
+    })
+
+    // Y al revés: si NO hay nada con qué entrar en conflicto, los pendientes se muestran.
+    it('con Pendientes como único grupo del catálogo, se muestran igual', () => {
+        setup([], { motivos: motivos.filter(m => m.resultado === 'diferido') })
+        expect(screen.getByText('Pendientes')).toBeInTheDocument()
+        expect(screen.getByText('Cupo')).toBeInTheDocument()
+    })
 })
 
-it('sacar la acción con una marca ya cargada conserva la marca', () => {
-    const { onChangeAccion } = setup([], { accion: { accion: 'CUPO', marca: 'Fric-Rot' } })
-    fireEvent.click(screen.getByRole('button', { name: /sin acción/i }))
-
-    expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
-})
-
-// El color no depende del nombre del motivo, sino de `resultado` — así un motivo
-// nuevo con `resultado: 'ganado'` sale verde sin tocar este componente.
+// El color no depende del nombre del motivo, sino de `resultado`.
 describe('color por resultado', () => {
     it('un motivo sin tildar no tiene color propio', () => {
         setup()
-        const boton = screen.getByText('Saqué pedido').closest('button') as HTMLElement
+        const boton = screen.getByText('Precio').closest('button') as HTMLElement
         expect(boton).toHaveStyle({ borderColor: '#E4E8F0', background: '#fff' })
     })
 
     it('ganado se tilda en verde', () => {
-        setup([{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])
-        const boton = screen.getByText('Saqué pedido').closest('button') as HTMLElement
+        setup([{ motivoId: 22, marca: null, competidor: null, pctDiferencia: null }])
+        const boton = screen.getByText('Dto').closest('button') as HTMLElement
         expect(boton).toHaveStyle({ borderColor: '#9BE3B4', background: '#EAFBF1' })
     })
 
     it('diferido se tilda en amarillo', () => {
-        setup([{ motivoId: 11, marca: null, competidor: null, pctDiferencia: null }])
-        const boton = screen.getByText('Pasa pedido mañana').closest('button') as HTMLElement
+        setup([{ motivoId: 24, marca: null, competidor: null, pctDiferencia: null }])
+        const boton = screen.getByText('Cupo').closest('button') as HTMLElement
         expect(boton).toHaveStyle({ borderColor: '#F7DD8F', background: '#FEF9E8' })
     })
 
     it('perdido se tilda en naranja', () => {
-        setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
+        setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
         const boton = screen.getByText('Precio').closest('button') as HTMLElement
         expect(boton).toHaveStyle({ borderColor: '#F3C8A0', background: '#FDF2E9' })
     })
-
-    it('no_ofrecido se tilda en rojo', () => {
-        setup([{ motivoId: 16, marca: null, competidor: null, pctDiferencia: null }])
-        const boton = screen.getByText('No lo ofrecí').closest('button') as HTMLElement
-        expect(boton).toHaveStyle({ borderColor: '#F1B3AC', background: '#FDECEB' })
-    })
 })
 
-// Varios motivos del mismo bucket conviven (dos razones de una misma pérdida); un
-// motivo de OTRO bucket reemplaza, nunca convive con uno contradictorio.
-describe('un solo bucket de resultado a la vez', () => {
+// Qué puede convivir con qué. Una objeción puede dejar algo pendiente ("no me compró
+// por precio, pero le queda el cupo"), así que perdido + diferido conviven. Un cierre
+// no: si cerró, no quedó nada pendiente ni objetado.
+describe('qué resoluciones conviven', () => {
+    const PRECIO = { motivoId: 20, marca: null, competidor: null, pctDiferencia: null }
+    const DS100 = { motivoId: 21, marca: null, competidor: null, pctDiferencia: null }
+    const DTO = { motivoId: 22, marca: null, competidor: null, pctDiferencia: null }
+    const CUPO = { motivoId: 24, marca: null, competidor: null, pctDiferencia: null }
+
     it('dos motivos "perdido" conviven', () => {
-        const { onChange } = setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
-        fireEvent.click(screen.getByText('DS'))
-
-        expect(onChange).toHaveBeenCalledWith([
-            { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
-            { motivoId: 15, marca: null, competidor: null, pctDiferencia: null },
-        ])
+        const { onChange } = setup([PRECIO])
+        fireEvent.click(screen.getByText('DS 100%'))
+        expect(onChange).toHaveBeenCalledWith([PRECIO, DS100])
     })
 
-    it('tildar un motivo "ganado" reemplaza uno "perdido" ya tildado', () => {
-        const { onChange } = setup([{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])
-        fireEvent.click(screen.getByText('Saqué pedido'))
-
-        expect(onChange).toHaveBeenCalledWith([
-            { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
-        ])
+    it('una Objeción convive con un Pendiente', () => {
+        const { onChange } = setup([PRECIO])
+        fireEvent.click(screen.getByText('Cupo'))
+        expect(onChange).toHaveBeenCalledWith([PRECIO, CUPO])
     })
 
-    it('destildar sigue funcionando igual, sin importar el bucket de los demás', () => {
-        const { onChange } = setup([
-            { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
-            { motivoId: 15, marca: null, competidor: null, pctDiferencia: null },
-        ])
-        fireEvent.click(screen.getByText('DS'))
+    it('y al revés: tildar una Objeción no borra el Pendiente ya tildado', () => {
+        const { onChange } = setup([CUPO])
+        fireEvent.click(screen.getByText('Precio'))
+        expect(onChange).toHaveBeenCalledWith([CUPO, PRECIO])
+    })
 
-        expect(onChange).toHaveBeenCalledWith([
-            { motivoId: 13, marca: null, competidor: null, pctDiferencia: null },
-        ])
+    it('un Cierre borra la Objeción ya tildada', () => {
+        const { onChange } = setup([PRECIO])
+        fireEvent.click(screen.getByRole('button', { name: /cierre/i }))
+        fireEvent.click(screen.getByText('Dto'))
+        expect(onChange).toHaveBeenCalledWith([DTO])
+    })
+
+    // La regla que pidió el usuario: pendientes NO convive con cierre.
+    it('un Cierre borra también el Pendiente ya tildado', () => {
+        const { onChange } = setup([PRECIO, CUPO])
+        fireEvent.click(screen.getByRole('button', { name: /cierre/i }))
+        fireEvent.click(screen.getByText('Dto'))
+        expect(onChange).toHaveBeenCalledWith([DTO])
+    })
+
+    // Con un Cierre tildado el formulario abre en Cierre, donde Pendientes no se ofrece:
+    // llegar al Cupo exige volver a Objeción. La regla se verifica igual — es la red que
+    // sostiene el invariante aunque el layout ya lo haga difícil de romper.
+    it('y al revés: tildar un Pendiente borra el Cierre ya tildado', () => {
+        const { onChange } = setup([DTO])
+        fireEvent.click(screen.getByRole('button', { name: /objeción/i }))
+        fireEvent.click(screen.getByText('Cupo'))
+        expect(onChange).toHaveBeenCalledWith([CUPO])
     })
 })
 
-// Cada chip tiene SU propio check ("Aplicar a restantes"), compacto en su header —
-// uno para acción, otro para marca. Nunca la resolución, que es de cada rubro.
-describe('aplicar a restantes: un check por chip', () => {
-    it('sin acción ni marca, no se ofrece ningún check aunque haya rubros restantes', () => {
+// El check "Aplicar a restantes" de Marca sigue siendo el único que ofrece este
+// componente ahora que Acción Comercial no está.
+describe('aplicar a restantes: check de Marca', () => {
+    it('sin marca, no se ofrece el check aunque haya rubros restantes', () => {
         setup([], { rubrosRestantes: 3 })
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     })
 
-    it('sin rubros restantes, no se ofrece el check aunque haya acción cargada', () => {
-        setup([], { accion: { accion: 'CUPO', marca: null }, rubrosRestantes: 0 })
+    it('sin rubros restantes, no se ofrece el check aunque haya marca cargada', () => {
+        setup([], { accion: { accion: null, marca: 'Fric-Rot' }, rubrosRestantes: 0 })
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     })
 
-    it('con solo acción cargada, ofrece un único check (el de Acción)', () => {
-        setup([], { accion: { accion: 'CUPO', marca: null }, rubrosRestantes: 4 })
-        expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(1)
-    })
-
-    it('con acción y marca cargadas, ofrece un check en cada chip', () => {
-        setup([], { accion: { accion: 'CUPO', marca: 'AG' }, rubrosRestantes: 4 })
-        expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(2)
-    })
-
-    it('tildar el check de Acción dispara onAplicarAccion, no onAplicarMarca', () => {
-        const onAplicarAccion = vi.fn()
+    it('con marca y rubros restantes, ofrece el check y dispara onAplicarMarca', () => {
         const onAplicarMarca = vi.fn()
-        setup([], {
-            accion: { accion: 'CUPO', marca: 'AG' },
-            rubrosRestantes: 2,
-            onAplicarAccion,
-            onAplicarMarca,
-        })
-
-        fireEvent.click(screen.getAllByRole('checkbox')[0])
-
-        expect(onAplicarAccion).toHaveBeenCalledTimes(1)
-        expect(onAplicarMarca).not.toHaveBeenCalled()
-    })
-
-    it('tildar el check de Marca dispara onAplicarMarca, no onAplicarAccion', () => {
-        const onAplicarAccion = vi.fn()
-        const onAplicarMarca = vi.fn()
-        setup([], {
-            accion: { accion: 'CUPO', marca: 'AG' },
-            rubrosRestantes: 2,
-            onAplicarAccion,
-            onAplicarMarca,
-        })
-
-        fireEvent.click(screen.getAllByRole('checkbox')[1])
-
+        setup([], { accion: { accion: null, marca: 'Fric-Rot' }, rubrosRestantes: 2, onAplicarMarca })
+        fireEvent.click(screen.getByRole('checkbox'))
         expect(onAplicarMarca).toHaveBeenCalledTimes(1)
-        expect(onAplicarAccion).not.toHaveBeenCalled()
-    })
-
-    it('con solo marca (sin acción) también se ofrece su check', () => {
-        setup([], { accion: { accion: null, marca: 'Fric-Rot' }, rubrosRestantes: 1 })
-        expect(screen.getByRole('checkbox')).toBeInTheDocument()
     })
 })

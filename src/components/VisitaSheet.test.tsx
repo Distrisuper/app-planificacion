@@ -50,6 +50,14 @@ function renderSheet(over: Record<string, unknown> = {}) {
     return { onCerrarVisita }
 }
 
+/** "Saqué pedido" es `ganado`, así que vive detrás del segmento Cierre del formulario
+ *  de resolución — Objeción es el que abre por defecto. Estos tests son sobre el wizard
+ *  y el borrador, no sobre el segmentado, así que el paso va en un helper. */
+async function tildarSaquePedido() {
+    fireEvent.click(await screen.findByRole('button', { name: /cierre/i }))
+    fireEvent.click(await screen.findByText('Saqué pedido'))
+}
+
 beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -83,13 +91,13 @@ it('el botón Resolución abre el wizard de resolución', async () => {
     expect(await screen.findByText('1 de 2')).toBeInTheDocument()
 })
 
-it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borrador', async () => {
+it('ver resumen cierra el wizard sin llamar al backend: el cambio queda en el borrador', async () => {
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /^finalizar$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /ver resumen/i }))
 
     // Volvió a la lista (el wizard ya no está) y el rubro quedó marcado como completo.
     expect(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' })).toBeInTheDocument()
@@ -101,7 +109,7 @@ it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borr
 it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async () => {
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /atrás/i }))
@@ -115,7 +123,7 @@ it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async
 it('el cambio tildado en el wizard se persiste en localStorage al instante', async () => {
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
 
     await waitFor(() => {
         const borrador = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
@@ -154,6 +162,32 @@ it('con la visita cerrada, un rubro ya resuelto no ofrece borrarlo (no hay wizar
     expect(screen.queryByRole('button', { name: /quitar/i })).not.toBeInTheDocument()
 })
 
+// La poda de motivos dados de baja existe para que el vendedor pueda CERRAR una visita cuyo
+// borrador quedó apuntando a un motivo que ya no está en el catálogo. En una visita cerrada no
+// hay nada que cerrar ni nada que mandar — sus motivos son historia. Podarlos ahí solo
+// mentiría: un rubro que se resolvió con un motivo hoy inactivo se mostraría sin resolver.
+it('con la visita cerrada NO poda los motivos: un rubro resuelto con un motivo dado de baja sigue resuelto', async () => {
+    // motivoId 99 no está en el catálogo: se resolvió con un motivo que después se dio de baja.
+    ;(api.getOfrecimientos as any).mockResolvedValue([
+        {
+            id: 7, resolucionId: 42, tipo: 'rubro', codigo: 'AMORT', descripcion: 'Amortiguadores',
+            gapUnits: 12, esPropuesto: true, resuelto: true,
+            motivos: [{ motivoId: 99, marca: null, competidor: null, pctDiferencia: null }],
+            alcance: [],
+        },
+    ])
+
+    renderSheet({ visitaCerrada: true })
+    await screen.findByText('Amortiguadores')
+
+    // El chip de estado del rubro sale de estadosResolucion, que lee el borrador: si la poda
+    // corriera, quedaría en 0 motivos y la fila se mostraría pendiente.
+    await waitFor(() => {
+        const guardado = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
+        expect(guardado[7]).toHaveLength(1)
+    })
+})
+
 it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos faltan', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
@@ -165,9 +199,9 @@ it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos
 it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo batch y dispara el cierre', async () => {
     const { onCerrarVisita } = renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
     const cerrarBtn = await screen.findByRole('button', { name: /cerrar visita/i })
     expect(cerrarBtn).toBeEnabled()
@@ -187,9 +221,9 @@ it('si el batch de cierre falla, no limpia el borrador ni dispara el cierre', as
     ;(api.resolverOfrecimiento as any).mockRejectedValue(new Error('Network Error'))
     const { onCerrarVisita } = renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
 
@@ -355,8 +389,8 @@ it('un rubro agregado se mantiene arriba aunque se resuelva (no se reordena por 
     fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
     // Agregar abre el wizard del rubro nuevo directamente: se resuelve ahí mismo, sin
     // volver a la lista a buscarlo.
-    fireEvent.click(await screen.findByText('Saqué pedido'))
-    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
     const botones = await screen.findAllByRole('button', { name: /^resolución de /i })
     expect(botones[0]).toHaveAttribute('aria-label', 'Resolución de Baterías')
@@ -428,25 +462,89 @@ it('dentro del wizard de resolución no aparecen las apps externas', async () =>
     expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
 })
 
-it('la acción comercial cargada viaja en el batch de cierre', async () => {
-    ;(api.getAcciones as any).mockResolvedValue([{ codigo: 'DESCUENTO', descripcion: 'Descuento' }])
+// Un borrador guardado puede referenciar un motivo que se dio de baja en el catálogo
+// después (pl_motivo.activo = 0, que es cómo se itera el formulario). El backend lo rechaza
+// con 400 MOTIVO_INEXISTENTE — imposible cerrar la visita — y el checklist tampoco lo dibuja,
+// así que el vendedor no tiene forma de destildarlo. Se poda en cuanto llega el catálogo.
+it('poda del borrador los motivos que ya no están en el catálogo', async () => {
+    // motivoId 99 no está en `motivos`: quedó de un catálogo anterior.
+    localStorage.setItem(
+        'visita-borrador-42',
+        JSON.stringify({
+            7: [
+                { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
+                { motivoId: 99, marca: null, competidor: null, pctDiferencia: null },
+            ],
+            8: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+        }),
+    )
 
-    const { onCerrarVisita } = renderSheet()
-    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+    renderSheet()
+    // Se espera la poda antes de cerrar: es lo que este test verifica que ocurra, y sin
+    // esperarla el cierre podría salir con el motivo muerto todavía adentro.
+    await waitFor(() => {
+        const guardado = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
+        expect(guardado[7]).toEqual([{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])
+    })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Descuento' }))
-    fireEvent.change(screen.getByLabelText(/% de descuento/i), { target: { value: '5' } })
-    fireEvent.click(await screen.findByText('Saqué pedido'))
-    fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
-
-    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /^cerrar visita$/i }))
 
     await waitFor(() =>
         expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
             motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
-            detalle: { accion: 'DESCUENTO', marca: null, params: { pct: 5 } },
         }),
     )
-    expect(onCerrarVisita).toHaveBeenCalled()
+})
+
+// Acción Comercial se sacó del formulario de resolución (spec 2026-08-19), y con ella el
+// único código de acción que el backend exige para persistir `detalle`
+// (api-vendedores/ofrecimientoValidation.ts: `validarDetalleAccion` rechaza con 400 todo
+// detalle sin `accion`). Como el formulario ya no administra `detalle`, tampoco lo manda:
+// ni con valor ni como null. `undefined` = "no toques lo guardado" en el DTO.
+describe('el formulario ya no administra `detalle`', () => {
+    it('con marca cargada, el batch manda solo los motivos: ningún detalle', async () => {
+        const { onCerrarVisita } = renderSheet()
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+
+        fireEvent.click(await screen.findByLabelText('Marca'))
+        fireEvent.click(await screen.findByText('Fric-Rot'))
+        await tildarSaquePedido()
+        fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
+        fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
+
+        fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+
+        await waitFor(() =>
+            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
+                motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+            }),
+        )
+        expect(onCerrarVisita).toHaveBeenCalled()
+    })
+
+    // Sin esto, elegir una marca ensucia el rubro y le gasta un PUT que no persiste nada:
+    // el detalle no se puede mandar y los motivos no cambiaron. Con 5 rubros son 5
+    // requests de más con datos móviles.
+    it('tocar SOLO la marca no genera request para ese rubro', async () => {
+        renderSheet()
+
+        // Filtros (id 8) ya viene resuelto con motivoId 10: su borrador arranca igual a lo
+        // guardado, así que solo se le cambia la marca.
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Filtros' }))
+        fireEvent.click(await screen.findByLabelText('Marca'))
+        fireEvent.click(await screen.findByText('Fric-Rot'))
+        fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
+
+        // Amortiguadores (id 7) sí se resuelve, para poder cerrar la visita. Es el primero
+        // de dos, así que su salida es el ⌄, no "Ver resumen" (ese es del último).
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+        await tildarSaquePedido()
+        fireEvent.click(await screen.findByRole('button', { name: /minimizar/i }))
+
+        fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+
+        await waitFor(() => expect(api.resolverOfrecimiento).toHaveBeenCalled())
+        const rubrosEnviados = (api.resolverOfrecimiento as any).mock.calls.map((c: unknown[]) => c[1])
+        expect(rubrosEnviados).toEqual([7])
+    })
 })

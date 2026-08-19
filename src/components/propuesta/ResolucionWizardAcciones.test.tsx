@@ -19,6 +19,10 @@ const ofrecimientos: IOfrecimiento[] = [
     },
 ]
 
+/** Precio (requiereDetalle) tildado sin marca/competidor/%: el detalle a medias. */
+const PRECIO_A_MEDIAS = [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }]
+const PRECIO_COMPLETO = [{ motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 }]
+
 function setup(over: Record<string, unknown> = {}) {
     const onIndexChange = vi.fn()
     const onFinalizar = vi.fn()
@@ -36,10 +40,10 @@ function setup(over: Record<string, unknown> = {}) {
     return { onIndexChange, onFinalizar }
 }
 
-it('en un ofrecimiento que no es el último, muestra Siguiente en vez de Finalizar', () => {
+it('en un ofrecimiento que no es el último, muestra Siguiente', () => {
     setup()
     expect(screen.getByRole('button', { name: /siguiente/i })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /finalizar/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /ver resumen/i })).not.toBeInTheDocument()
 })
 
 it('Atrás está deshabilitado en el primer ofrecimiento', () => {
@@ -53,6 +57,12 @@ it('Siguiente avanza el índice', () => {
     expect(onIndexChange).toHaveBeenCalledWith(1)
 })
 
+it('Atrás retrocede el índice', () => {
+    const { onIndexChange } = setup({ index: 1 })
+    fireEvent.click(screen.getByRole('button', { name: /atrás/i }))
+    expect(onIndexChange).toHaveBeenCalledWith(0)
+})
+
 it('minimizar sale del wizard sin tocar el índice', () => {
     const { onFinalizar, onIndexChange } = setup()
     fireEvent.click(screen.getByRole('button', { name: /minimizar/i }))
@@ -60,44 +70,66 @@ it('minimizar sale del wizard sin tocar el índice', () => {
     expect(onIndexChange).not.toHaveBeenCalled()
 })
 
-it('en el último rubro no hay botón de minimizar: Finalizar ya es la salida', () => {
-    setup({ index: 1 })
-    expect(screen.getByRole('button', { name: /finalizar/i })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /minimizar/i })).not.toBeInTheDocument()
-})
-
-it('minimizar sigue habilitado con un detalle a medias, aunque Finalizar se bloquee', () => {
-    // Precio (requiereDetalle) tildado sin detalle: es lo que bloquea Finalizar.
-    const { onFinalizar } = setup({
-        borradores: { 7: [{ motivoId: 13, detalle: null }], 8: [] },
+// El botón del último paso NO cierra la visita ni completa nada: vuelve a la lista, igual
+// que el ⌄ de los pasos anteriores. Se llama "Ver resumen" y no "Finalizar" porque eso
+// prometía un cierre que no hace — el único que termina la visita es el naranja de la lista.
+describe('el último paso vuelve al resumen, no finaliza', () => {
+    it('muestra "Ver resumen" en vez de Siguiente', () => {
+        setup({ index: 1 })
+        expect(screen.queryByRole('button', { name: /siguiente/i })).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /ver resumen/i })).toBeEnabled()
     })
-    fireEvent.click(screen.getByRole('button', { name: /minimizar/i }))
-    expect(onFinalizar).toHaveBeenCalled()
-})
 
-it('Atrás retrocede el índice', () => {
-    const { onIndexChange } = setup({ index: 1 })
-    fireEvent.click(screen.getByRole('button', { name: /atrás/i }))
-    expect(onIndexChange).toHaveBeenCalledWith(0)
-})
-
-it('en el último ofrecimiento, muestra Finalizar en vez de Siguiente, habilitado sin nada bloqueante', () => {
-    setup({ index: 1 })
-    expect(screen.queryByRole('button', { name: /siguiente/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^finalizar$/i })).toBeEnabled()
-})
-
-it('Finalizar dispara onFinalizar', () => {
-    const { onFinalizar } = setup({ index: 1 })
-    fireEvent.click(screen.getByRole('button', { name: /^finalizar$/i }))
-    expect(onFinalizar).toHaveBeenCalled()
-})
-
-it('con el detalle de Precio incompleto en cualquier ofrecimiento, avisa cuál falta y bloquea Finalizar', () => {
-    setup({
-        index: 1,
-        borradores: { 7: [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }], 8: [] },
+    it('no duplica la salida: en el último paso no hay además un botón de minimizar', () => {
+        setup({ index: 1 })
+        expect(screen.queryByRole('button', { name: /minimizar/i })).not.toBeInTheDocument()
     })
-    expect(screen.getByText(/completá el detalle de precio en amortiguadores/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^finalizar$/i })).toBeDisabled()
+
+    it('"Ver resumen" dispara onFinalizar', () => {
+        const { onFinalizar } = setup({ index: 1 })
+        fireEvent.click(screen.getByRole('button', { name: /ver resumen/i }))
+        expect(onFinalizar).toHaveBeenCalled()
+    })
+})
+
+// El detalle a medias se ataja EN EL RUBRO donde está, no al final del wizard: así el
+// vendedor nunca queda con un cartel que lo manda a arreglar algo tres rubros atrás.
+describe('un detalle a medias bloquea la navegación del rubro actual', () => {
+    it('Siguiente se bloquea y dice qué falta', () => {
+        setup({ borradores: { 7: PRECIO_A_MEDIAS, 8: [] } })
+        expect(screen.getByRole('button', { name: /siguiente/i })).toBeDisabled()
+        expect(screen.getByText(/completá el detalle de precio/i)).toBeInTheDocument()
+    })
+
+    it('Atrás también se bloquea', () => {
+        setup({ index: 1, borradores: { 7: [], 8: PRECIO_A_MEDIAS } })
+        expect(screen.getByRole('button', { name: /atrás/i })).toBeDisabled()
+    })
+
+    it('el detalle a medias de OTRO rubro no bloquea la navegación de este', () => {
+        setup({ index: 1, borradores: { 7: PRECIO_A_MEDIAS, 8: [] } })
+        expect(screen.getByRole('button', { name: /atrás/i })).toBeEnabled()
+        expect(screen.queryByText(/completá el detalle/i)).not.toBeInTheDocument()
+    })
+
+    it('con el detalle completo, la navegación queda libre', () => {
+        setup({ borradores: { 7: PRECIO_COMPLETO, 8: [] } })
+        expect(screen.getByRole('button', { name: /siguiente/i })).toBeEnabled()
+        expect(screen.queryByText(/completá el detalle/i)).not.toBeInTheDocument()
+    })
+
+    // La salida NUNCA se deshabilita: es la vía de escape de quien entró por error y no
+    // quiere cargar nada. Y salir no pierde nada — el rubro queda marcado como incompleto
+    // en la lista y "Cerrar visita" sigue bloqueado hasta completarlo.
+    it('minimizar sigue habilitado', () => {
+        const { onFinalizar } = setup({ borradores: { 7: PRECIO_A_MEDIAS, 8: [] } })
+        fireEvent.click(screen.getByRole('button', { name: /minimizar/i }))
+        expect(onFinalizar).toHaveBeenCalled()
+    })
+
+    it('"Ver resumen" del último paso también sigue habilitado', () => {
+        const { onFinalizar } = setup({ index: 1, borradores: { 7: [], 8: PRECIO_A_MEDIAS } })
+        fireEvent.click(screen.getByRole('button', { name: /ver resumen/i }))
+        expect(onFinalizar).toHaveBeenCalled()
+    })
 })

@@ -140,6 +140,37 @@ export default function VisitaSheet({
         setBorradorListo(true)
     }, [open, ofrecimientosCargados, visitaId, ofrecimientos])
 
+    // El catálogo se itera dando de baja motivos (`pl_motivo.activo = 0`), y un borrador
+    // guardado antes de esa baja sigue apuntando al motivo viejo. Eso no se puede dejar
+    // pasar: el backend rechaza el cierre con 400 MOTIVO_INEXISTENTE (el catálogo que valida
+    // filtra por activo), y el checklist tampoco dibuja ese motivo, así que el vendedor no
+    // tiene forma de destildarlo — queda sin poder cerrar la visita.
+    //
+    // Va en su propio efecto y no en la inicialización de arriba porque el catálogo puede
+    // llegar después que los ofrecimientos. Con `motivos` vacío no poda nada: filtrar contra
+    // un catálogo que todavía no cargó vaciaría el borrador entero.
+    //
+    // Y NO se poda una visita cerrada: sus motivos son historia, no un borrador. No hay nada
+    // que mandar (el botón de cerrar no existe), así que no hay 400 del que protegerse —
+    // podarlos solo mostraría como pendiente un rubro que se resolvió con un motivo que
+    // después se dio de baja. Mismo criterio que `incluirInactivos` en la analítica: lo
+    // histórico se lee como se guardó.
+    useEffect(() => {
+        if (!open || visitaCerrada || !borradorListo || motivos.length === 0) return
+        const vivos = new Set(motivos.map(m => m.motivoId))
+        setBorradores(prev => {
+            let podado = false
+            const next: Record<number, IOfrecimientoMotivo[]> = {}
+            for (const [id, lista] of Object.entries(prev)) {
+                const vigentes = lista.filter(m => vivos.has(m.motivoId))
+                if (vigentes.length !== lista.length) podado = true
+                next[Number(id)] = vigentes
+            }
+            // Devolver `prev` cuando no hubo poda es lo que corta el re-render en loop.
+            return podado ? next : prev
+        })
+    }, [open, visitaCerrada, borradorListo, motivos])
+
     // Recién después de inicializar (ver arriba): si esto corriera antes, un objeto
     // vacío pisaría un borrador ya guardado de una sesión anterior.
     useEffect(() => {
@@ -293,6 +324,26 @@ export default function VisitaSheet({
     )
     const rubrosCatalogo = rubroStatus.map(s => ({ code: s.rubroCode, description: s.nombre }))
 
+    /**
+     * Si el `detalle` de este ofrecimiento se puede guardar. Solo lo es con un código de
+     * acción: `validarDetalleAccion` (api-vendedores) rechaza con 400 DETALLE_INVALIDO todo
+     * `detalle` sin `accion`, y la marca viaja adentro de ese mismo objeto.
+     *
+     * Desde que se sacó Acción Comercial del formulario (spec 2026-08-19) no hay forma de
+     * cargar ese código, así que en la práctica esto es siempre false. Se conserva la
+     * pregunta en vez de borrar el campo porque el objeto sigue vivo en el resto del código.
+     *
+     * Importa para DOS cosas, y por eso es una sola función:
+     *  1. No ensuciar el ofrecimiento. Elegir una marca no puede hacer que un rubro cuyos
+     *     motivos no cambiaron entre al batch: sería un PUT que no persiste nada (cinco
+     *     rubros con marca = cinco requests de más con datos móviles).
+     *  2. No mandar `detalle: null`. `undefined` es "no toques lo guardado" en el DTO;
+     *     `null` es "borralo", y borraría un detalle viejo que este formulario ni muestra.
+     */
+    function esPersistible(ofrecimientoId: number): boolean {
+        return !!detalles[ofrecimientoId]?.accion
+    }
+
     // Único punto de guardado contra el backend: junta todo lo que cambió contra lo
     // que ya tiene el servidor, lo manda en un solo batch y, si sale bien, recién ahí
     // limpia el borrador y dispara el cierre real (geolocalización + endpoint), que
@@ -300,20 +351,11 @@ export default function VisitaSheet({
     async function cerrarConBorrador() {
         setErrorGuardado(null)
         const cambios = ofrecimientos
-            .filter(
-                r =>
-                    !motivosIguales(borradores[r.id] ?? [], r.motivos) ||
-                    detalles[r.id] !== undefined,
-            )
+            .filter(r => !motivosIguales(borradores[r.id] ?? [], r.motivos) || esPersistible(r.id))
             .map(r => ({
                 ofrecimientoId: r.id,
                 motivos: borradores[r.id] ?? [],
-                // Marca sin acción es válida como borrador en pantalla, pero el backend
-                // exige un código de acción en todo `detalle` no nulo — sin eso, esa
-                // marca no tiene dónde persistir hoy.
-                ...(detalles[r.id] !== undefined
-                    ? { detalle: detalles[r.id]?.accion ? detalles[r.id] : null }
-                    : {}),
+                ...(esPersistible(r.id) ? { detalle: detalles[r.id] } : {}),
             }))
 
         if (cambios.length > 0) {
