@@ -23,8 +23,9 @@ export interface IMotivo {
     nivel: NivelMotivo
     descripcion: string
     resultado: ResultadoMotivo | null
-    /** Si es true, resolver un ofrecimiento con este motivo exige marca/competidor/pctDiferencia. */
-    requiereDetalle: boolean
+    /** Llave estable del módulo de detalle (PRECIO, PLAZO, FLETE, NO_TRABAJA). `null` = este
+     *  motivo no pide nada. NO se usa motivoId: los ids difieren entre ambientes. */
+    codigo: string | null
 }
 
 export interface IBrandDiscount {
@@ -172,13 +173,11 @@ export interface IAlcance {
     descripcion: string
 }
 
-/** Un motivo aplicado a un ofrecimiento. marca/competidor/pctDiferencia solo se usan cuando el
- *  motivo tiene requiereDetalle; en el resto van null. */
+/** Un motivo aplicado a un ofrecimiento, con lo que pidió su módulo de detalle. Las claves
+ *  son los `campo` que ese módulo declara; sin entrada = sin cargar. */
 export interface IOfrecimientoMotivo {
     motivoId: number
-    marca: string | null
-    competidor: string | null
-    pctDiferencia: number | null
+    valores: Record<string, string | number | null>
 }
 
 /** Un ofrecimiento de la propuesta congelada. `resuelto` lo deriva el backend de motivos.length. */
