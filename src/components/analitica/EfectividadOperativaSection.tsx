@@ -1,23 +1,32 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import KpisMensuales from './KpisMensuales'
-import SelectorMes from './SelectorMes'
+import ObjecionesMercado from './ObjecionesMercado'
+import SelectorPeriodo, { type ModoPeriodo } from './SelectorPeriodo'
 import TablaEfectividadOperativa from './TablaEfectividadOperativa'
 import { useResumen } from '@/hooks/useAnalitica'
-import { rangoMes } from '@/lib/fechas'
+import { rangoMes, rangoSemana } from '@/lib/fechas'
 
-/** Bloque de KPIs de actividad mensual (Efectividad operativa, Visitas, Horas).
- *  Tiene su propio selector de mes, independiente del filtro desde/hasta del resto
- *  de /analitica — ver docs/superpowers/specs/2026-08-18-efectividad-operativa-kpi-design.md. */
+/** Único bloque de /analitica: KPIs + tabla + objeciones, todos sobre el mismo rango
+ *  elegido acá (semana o mes) — ver
+ *  docs/superpowers/specs/2026-08-19-unificar-efectividad-operativa-design.md. */
 export default function EfectividadOperativaSection() {
-    const [mes, setMes] = useState(() => new Date())
-    const filtro = rangoMes(mes)
+    const navigate = useNavigate()
+    const [modo, setModo] = useState<ModoPeriodo>('mes')
+    const [fecha, setFecha] = useState(() => new Date())
+    const filtro = modo === 'mes' ? rangoMes(fecha) : rangoSemana(fecha)
     const { data, isLoading, isError } = useResumen(filtro)
+
+    const irAVendedor = (codigo: string) => {
+        const params = new URLSearchParams({ desde: filtro.desde, hasta: filtro.hasta })
+        navigate(`/analitica/vendedor/${codigo}?${params}`)
+    }
 
     return (
         <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-slate-900">Efectividad operativa</h2>
-                <SelectorMes mes={mes} onCambiarMes={setMes} />
+                <SelectorPeriodo modo={modo} fecha={fecha} onCambiarModo={setModo} onCambiarFecha={setFecha} />
             </div>
 
             {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
@@ -29,13 +38,20 @@ export default function EfectividadOperativaSection() {
             )}
 
             {data && data.vendedores.length === 0 && (
-                <p className="text-sm text-slate-500">Sin datos para este mes.</p>
+                <p className="text-sm text-slate-500">
+                    Sin datos para {modo === 'mes' ? 'este mes' : 'esta semana'}.
+                </p>
             )}
 
             {data && data.vendedores.length > 0 && (
                 <>
                     <KpisMensuales promedios={data.promedios} />
-                    <TablaEfectividadOperativa vendedores={data.vendedores} promedios={data.promedios} />
+                    <TablaEfectividadOperativa
+                        vendedores={data.vendedores}
+                        promedios={data.promedios}
+                        onElegirVendedor={irAVendedor}
+                    />
+                    <ObjecionesMercado desde={filtro.desde} hasta={filtro.hasta} />
                 </>
             )}
         </section>

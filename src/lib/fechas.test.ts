@@ -1,5 +1,15 @@
 import { afterEach, vi } from 'vitest'
-import { fechaHoraNegocio, horaNegocio, incluyeHoy, isoLocal, nombreMes, rangoHoy, rangoMes } from './fechas'
+import {
+    fechaHoraNegocio,
+    horaNegocio,
+    incluyeHoy,
+    isoLocal,
+    nombreMes,
+    nombreSemana,
+    rangoHoy,
+    rangoMes,
+    rangoSemana,
+} from './fechas'
 
 afterEach(() => vi.useRealTimers())
 
@@ -89,5 +99,26 @@ describe('nombreMes', () => {
     it('devuelve el nombre del mes capitalizado seguido del año', () => {
         expect(nombreMes(new Date(2026, 7, 18))).toBe('Agosto 2026')
         expect(nombreMes(new Date(2026, 0, 1))).toBe('Enero 2026')
+    })
+})
+
+describe('rangoSemana', () => {
+    it('devuelve el lunes y el viernes de la semana que contiene la fecha', () => {
+        expect(rangoSemana(new Date(2026, 7, 18))).toEqual({ desde: '2026-08-17', hasta: '2026-08-21' })
+    })
+
+    it('un domingo pertenece a la semana que termina ese día, no a la siguiente', () => {
+        // 23/08/2026 es domingo: cae en la semana del 17 al 21 de agosto.
+        expect(rangoSemana(new Date(2026, 7, 23))).toEqual({ desde: '2026-08-17', hasta: '2026-08-21' })
+    })
+
+    it('cruza el fin de año correctamente', () => {
+        expect(rangoSemana(new Date(2026, 0, 1))).toEqual({ desde: '2025-12-29', hasta: '2026-01-02' })
+    })
+})
+
+describe('nombreSemana', () => {
+    it('devuelve "DD/MM al DD/MM" de la semana que contiene la fecha', () => {
+        expect(nombreSemana(new Date(2026, 7, 18))).toBe('17/08 al 21/08')
     })
 })
