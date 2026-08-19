@@ -162,6 +162,32 @@ it('con la visita cerrada, un rubro ya resuelto no ofrece borrarlo (no hay wizar
     expect(screen.queryByRole('button', { name: /quitar/i })).not.toBeInTheDocument()
 })
 
+// La poda de motivos dados de baja existe para que el vendedor pueda CERRAR una visita cuyo
+// borrador quedó apuntando a un motivo que ya no está en el catálogo. En una visita cerrada no
+// hay nada que cerrar ni nada que mandar — sus motivos son historia. Podarlos ahí solo
+// mentiría: un rubro que se resolvió con un motivo hoy inactivo se mostraría sin resolver.
+it('con la visita cerrada NO poda los motivos: un rubro resuelto con un motivo dado de baja sigue resuelto', async () => {
+    // motivoId 99 no está en el catálogo: se resolvió con un motivo que después se dio de baja.
+    ;(api.getOfrecimientos as any).mockResolvedValue([
+        {
+            id: 7, resolucionId: 42, tipo: 'rubro', codigo: 'AMORT', descripcion: 'Amortiguadores',
+            gapUnits: 12, esPropuesto: true, resuelto: true,
+            motivos: [{ motivoId: 99, marca: null, competidor: null, pctDiferencia: null }],
+            alcance: [],
+        },
+    ])
+
+    renderSheet({ visitaCerrada: true })
+    await screen.findByText('Amortiguadores')
+
+    // El chip de estado del rubro sale de estadosResolucion, que lee el borrador: si la poda
+    // corriera, quedaría en 0 motivos y la fila se mostraría pendiente.
+    await waitFor(() => {
+        const guardado = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
+        expect(guardado[7]).toHaveLength(1)
+    })
+})
+
 it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos faltan', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')

@@ -149,8 +149,14 @@ export default function VisitaSheet({
     // Va en su propio efecto y no en la inicialización de arriba porque el catálogo puede
     // llegar después que los ofrecimientos. Con `motivos` vacío no poda nada: filtrar contra
     // un catálogo que todavía no cargó vaciaría el borrador entero.
+    //
+    // Y NO se poda una visita cerrada: sus motivos son historia, no un borrador. No hay nada
+    // que mandar (el botón de cerrar no existe), así que no hay 400 del que protegerse —
+    // podarlos solo mostraría como pendiente un rubro que se resolvió con un motivo que
+    // después se dio de baja. Mismo criterio que `incluirInactivos` en la analítica: lo
+    // histórico se lee como se guardó.
     useEffect(() => {
-        if (!open || !borradorListo || motivos.length === 0) return
+        if (!open || visitaCerrada || !borradorListo || motivos.length === 0) return
         const vivos = new Set(motivos.map(m => m.motivoId))
         setBorradores(prev => {
             let podado = false
@@ -163,7 +169,7 @@ export default function VisitaSheet({
             // Devolver `prev` cuando no hubo poda es lo que corta el re-render en loop.
             return podado ? next : prev
         })
-    }, [open, borradorListo, motivos])
+    }, [open, visitaCerrada, borradorListo, motivos])
 
     // Recién después de inicializar (ver arriba): si esto corriera antes, un objeto
     // vacío pisaría un borrador ya guardado de una sesión anterior.
