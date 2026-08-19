@@ -76,8 +76,12 @@ El layout final alterna Objeción y Cierre en el mismo espacio, a ancho completo
 - **Que Objeción y Cierre sean excluyentes no es una decisión de layout**: `ganado` y `perdido`
   ya no podían convivir en el dato. El segmentado hace visible esa regla en vez de que el vendedor
   la descubra viendo cómo se le destilda algo solo.
-- **Pendientes queda siempre visible**, en su propia fila abajo, porque acompaña a una objeción
-  (ver la regla de convivencia más abajo).
+- **Pendientes se muestra SOLO en el segmento Objeción.** Acompaña a una objeción y no convive con
+  un cierre (ver la regla de convivencia): ofrecerlo del lado de Cierre sería poner a la vista un
+  tilde que borra lo que el vendedor acaba de cargar. La regla igual vive en `conviven()` — el
+  layout la hace difícil de alcanzar, no innecesaria.
+- Como los pendientes se esconden junto con Objeción, **el contador del segmento Objeción los
+  suma**. Sin eso, un Cupo tildado quedaría invisible *y* sin contar al pasar a Cierre.
 - **Cambiar de segmento no borra nada.** Es una vista, no un reset: limpiar lo tildado al tocar
   una pestaña sería pérdida silenciosa. Solo tildar descarta lo incompatible.
 - **El segmento muestra un contador** de lo tildado de su lado. Es el corolario obligatorio de lo
@@ -131,6 +135,23 @@ empujando hacia abajo el resto de esa columna; no afecta al bloque Cierre.
 - El panel de detalle de "Plazo" (días) y cualquier otro campo nuevo por motivo. El layout deja
   lugar para eso, pero `requiereDetalle` hoy solo modela marca/competidor/%: sumar un campo
   distinto es otra tarea.
+
+## El catálogo tarda hasta 35 minutos en reflejar un cambio en la base
+
+No es un bug, pero cuesta media hora de confusión cada vez que se descubre de nuevo. Dar de baja
+un motivo (`activo = 0`) no se ve al instante porque hay **dos caches en serie**:
+
+| capa | dónde | TTL |
+|---|---|---|
+| backend | `MotivosService.ts` — variable de módulo, no se invalida al escribir en la base | 5 min |
+| frontend | `useMotivos.ts` — `staleTime` de React Query, en memoria | 30 min |
+
+El del frontend es el que más engaña: navegar dentro de la SPA no refetchea, así que el catálogo
+viejo sobrevive hasta que se recargue la página. Para forzar el refresco: reiniciar `api-vendedores`
+y hacer un hard reload del browser.
+
+Los dos TTL se dejan como están — el catálogo es dato que casi no cambia, y el vendedor está en la
+calle con datos móviles.
 
 ## Limitación conocida (no la arregla este cambio)
 

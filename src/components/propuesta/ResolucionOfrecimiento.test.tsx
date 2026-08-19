@@ -128,11 +128,16 @@ describe('segmentado Objeción / Cierre', () => {
         expect(screen.queryByText('Precio')).not.toBeInTheDocument()
     })
 
-    it('Pendientes queda visible en los dos segmentos', () => {
+    // Pendientes acompaña a una objeción y no convive con un cierre: mostrarlo en el
+    // segmento Cierre sería ofrecer un tilde que borra lo que el vendedor acaba de cargar.
+    it('Pendientes aparece solo en el segmento Objeción', () => {
         setup()
         expect(screen.getByText('Cupo')).toBeInTheDocument()
+        expect(screen.getByText('Pendientes')).toBeInTheDocument()
+
         fireEvent.click(segmento('Cierre'))
-        expect(screen.getByText('Cupo')).toBeInTheDocument()
+        expect(screen.queryByText('Cupo')).not.toBeInTheDocument()
+        expect(screen.queryByText('Pendientes')).not.toBeInTheDocument()
     })
 
     // Cambiar de segmento es cambiar de VISTA, no resetear: si limpiara lo tildado, el
@@ -149,6 +154,17 @@ describe('segmentado Objeción / Cierre', () => {
         setup([
             { motivoId: 20, marca: null, competidor: null, pctDiferencia: null },
             { motivoId: 21, marca: null, competidor: null, pctDiferencia: null },
+        ])
+        fireEvent.click(segmento('Cierre'))
+        expect(segmento('Objeción')).toHaveTextContent('2')
+    })
+
+    // Los pendientes se esconden junto con Objeción, así que sin esto un Cupo tildado
+    // quedaría invisible Y sin contar al pasar a Cierre.
+    it('el contador de Objeción incluye los pendientes tildados', () => {
+        setup([
+            { motivoId: 20, marca: null, competidor: null, pctDiferencia: null }, // Precio
+            { motivoId: 24, marca: null, competidor: null, pctDiferencia: null }, // Cupo
         ])
         fireEvent.click(segmento('Cierre'))
         expect(segmento('Objeción')).toHaveTextContent('2')
@@ -175,6 +191,21 @@ describe('segmentado Objeción / Cierre', () => {
     it('sin motivos de un bucket, no muestra su título', () => {
         setup([], { motivos: motivos.filter(m => m.resultado !== 'diferido') })
         expect(screen.queryByText('Pendientes')).not.toBeInTheDocument()
+    })
+
+    // Catálogo a medio migrar: sin ningún 'perdido', el único bloque es Cierre. Pendientes
+    // no puede colarse ahí — no convive con un cierre.
+    it('con Cierre como único bloque, no muestra Pendientes', () => {
+        setup([], { motivos: motivos.filter(m => m.resultado !== 'perdido') })
+        expect(screen.getByText('Dto')).toBeInTheDocument()
+        expect(screen.queryByText('Cupo')).not.toBeInTheDocument()
+    })
+
+    // Y al revés: si NO hay nada con qué entrar en conflicto, los pendientes se muestran.
+    it('con Pendientes como único grupo del catálogo, se muestran igual', () => {
+        setup([], { motivos: motivos.filter(m => m.resultado === 'diferido') })
+        expect(screen.getByText('Pendientes')).toBeInTheDocument()
+        expect(screen.getByText('Cupo')).toBeInTheDocument()
     })
 })
 
@@ -247,8 +278,12 @@ describe('qué resoluciones conviven', () => {
         expect(onChange).toHaveBeenCalledWith([DTO])
     })
 
+    // Con un Cierre tildado el formulario abre en Cierre, donde Pendientes no se ofrece:
+    // llegar al Cupo exige volver a Objeción. La regla se verifica igual — es la red que
+    // sostiene el invariante aunque el layout ya lo haga difícil de romper.
     it('y al revés: tildar un Pendiente borra el Cierre ya tildado', () => {
         const { onChange } = setup([DTO])
+        fireEvent.click(screen.getByRole('button', { name: /objeción/i }))
         fireEvent.click(screen.getByText('Cupo'))
         expect(onChange).toHaveBeenCalledWith([CUPO])
     })

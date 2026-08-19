@@ -298,6 +298,18 @@ export default function ResolucionOfrecimiento({
         items: motivos.filter(m => m.resultado === b.resultado),
     })).filter(b => b.items.length > 0)
 
+    // El bloque que se está viendo. `segmento` es la INTENCIÓN del vendedor; esto es lo
+    // que efectivamente se dibuja, que puede diferir si ese bloque quedó vacío (catálogo
+    // a medio migrar). Derivarlo una sola vez evita que el cuerpo y los Pendientes
+    // discrepen sobre cuál está activo.
+    const bloqueActivo = bloques.find(b => b.resultado === segmento) ?? bloques[0]
+
+    // Los pendientes acompañan a la objeción, así que se muestran con ella. Sin ningún
+    // bloque (un catálogo que solo tiene diferidos) no hay nada con qué entrar en
+    // conflicto: se muestran solos.
+    const muestraPendientes =
+        pendientes.length > 0 && (bloques.length === 0 || bloqueActivo?.resultado === 'perdido')
+
     return (
         <div>
             <MarcaOfrecimientoPicker
@@ -316,11 +328,14 @@ export default function ResolucionOfrecimiento({
                     {bloques.length > 1 && (
                         <div className="mb-2 flex gap-1 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-[#F6F8FC] p-1">
                             {bloques.map(({ titulo, resultado, items }) => {
-                                const activo = resultado === segmento
+                                const activo = resultado === bloqueActivo?.resultado
                                 // Lo tildado del otro lado queda invisible al cambiar de
                                 // pestaña; el contador es lo que evita que se pierda de
-                                // vista (cambiar de segmento no borra nada).
-                                const tildados = items.filter(m => porId.has(m.motivoId)).length
+                                // vista (cambiar de segmento no borra nada). Objeción
+                                // suma los pendientes porque se esconden con ella — si no,
+                                // un Cupo tildado quedaría invisible Y sin contar.
+                                const propios = resultado === 'perdido' ? [...items, ...pendientes] : items
+                                const tildados = propios.filter(m => porId.has(m.motivoId)).length
                                 return (
                                     <button
                                         key={titulo}
@@ -359,15 +374,17 @@ export default function ResolucionOfrecimiento({
                             </span>
                         )}
                         <div className="flex flex-col gap-2">
-                            {(bloques.find(b => b.resultado === segmento) ?? bloques[0]).items.map(
-                                renderMotivo,
-                            )}
+                            {bloqueActivo.items.map(renderMotivo)}
                         </div>
                     </div>
                 </div>
             )}
 
-            {pendientes.length > 0 && (
+            {/* Solo con Objeción: un pendiente acompaña a una objeción y NO convive con
+             *  un cierre. Ofrecerlo en el segmento Cierre sería un tilde que borra lo que
+             *  el vendedor acaba de cargar. La regla igual vive en `conviven` — esto la
+             *  hace difícil de alcanzar, no innecesaria. */}
+            {muestraPendientes && (
                 <div className="mb-2 flex flex-col gap-2 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-white p-2.5">
                     <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
                         {TITULO_PENDIENTES}
