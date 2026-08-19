@@ -4,8 +4,8 @@ import ResolucionWizardAcciones from './ResolucionWizardAcciones'
 import type { IMotivo, IOfrecimiento } from '@/types/planificacion'
 
 const motivos: IMotivo[] = [
-    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
+    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', codigo: null },
+    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', codigo: 'PRECIO' },
 ]
 
 const ofrecimientos: IOfrecimiento[] = [
@@ -19,9 +19,11 @@ const ofrecimientos: IOfrecimiento[] = [
     },
 ]
 
-/** Precio (requiereDetalle) tildado sin marca/competidor/%: el detalle a medias. */
-const PRECIO_A_MEDIAS = [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }]
-const PRECIO_COMPLETO = [{ motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 }]
+/** Precio (codigo: 'PRECIO') tildado sin sus cuatro campos: el detalle a medias. */
+const PRECIO_A_MEDIAS = [{ motivoId: 13, valores: {} }]
+const PRECIO_COMPLETO = [
+    { motivoId: 13, valores: { marca: 'Fric-Rot', competidor: 'Corven', precio_competidor: 150, mi_precio: 132 } },
+]
 
 function setup(over: Record<string, unknown> = {}) {
     const onIndexChange = vi.fn()

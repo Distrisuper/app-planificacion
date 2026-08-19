@@ -30,6 +30,16 @@ const hora = horaNegocio
 
 const etiqueta = (r: ResultadoMotivo | null) => (r ? ETIQUETA_RESULTADO[r] : '—')
 
+/** Los valores guardados, en una línea. Se listan tal cual vinieron y NO se piden al módulo
+ *  del motivo: el módulo dice qué preguntar hoy, y esto es historia — un campo que se sacó
+ *  después tiene que seguir viéndose. Mismo criterio que `incluirInactivos` en el backend. */
+function resumenValores(valores: Record<string, string | number | null>): string {
+    return Object.entries(valores)
+        .filter(([, v]) => v !== null && v !== '')
+        .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`)
+        .join(' · ')
+}
+
 export default function DetalleVisitaPanel({ visitaId, onCerrar }: DetalleVisitaPanelProps) {
     const { data, isLoading, isError } = useVisitaDetalle(visitaId)
 
@@ -130,9 +140,7 @@ export default function DetalleVisitaPanel({ visitaId, onCerrar }: DetalleVisita
                                     {r.motivos.map((m, i) => (
                                         <p key={i} className="mt-1 text-xs text-slate-600">
                                             {m.descripcion} · {etiqueta(m.resultado)}
-                                            {m.marca && ` · ${m.marca}`}
-                                            {m.competidor && ` vs. ${m.competidor}`}
-                                            {m.pctDiferencia !== null && ` (${m.pctDiferencia}%)`}
+                                            {resumenValores(m.valores) && ` · ${resumenValores(m.valores)}`}
                                         </p>
                                     ))}
                                 </li>

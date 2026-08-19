@@ -8,9 +8,9 @@ import type { IVisitClientCard } from '@/types/planificacion'
 vi.mock('@/api/planificacion')
 
 const motivos = [
-    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
-    { motivoId: 16, nivel: 'ofrecimiento', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', requiereDetalle: false },
+    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', codigo: null },
+    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', codigo: 'PRECIO' },
+    { motivoId: 16, nivel: 'ofrecimiento', descripcion: 'No lo ofrecí', resultado: 'no_ofrecido', codigo: null },
 ]
 
 const CLIENTE: IVisitClientCard = {
@@ -27,7 +27,7 @@ const ofrecimientos = [
     {
         id: 8, resolucionId: 42, tipo: 'rubro', codigo: 'FILT', descripcion: 'Filtros',
         gapUnits: null, esPropuesto: false, resuelto: true,
-        motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], alcance: [],
+        motivos: [{ motivoId: 10, valores: {} }], alcance: [],
     },
 ]
 
@@ -127,7 +127,7 @@ it('el cambio tildado en el wizard se persiste en localStorage al instante', asy
 
     await waitFor(() => {
         const borrador = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
-        expect(borrador[7]).toEqual([{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])
+        expect(borrador[7]).toEqual([{ motivoId: 10, valores: {} }])
     })
 })
 
@@ -172,7 +172,7 @@ it('con la visita cerrada NO poda los motivos: un rubro resuelto con un motivo d
         {
             id: 7, resolucionId: 42, tipo: 'rubro', codigo: 'AMORT', descripcion: 'Amortiguadores',
             gapUnits: 12, esPropuesto: true, resuelto: true,
-            motivos: [{ motivoId: 99, marca: null, competidor: null, pctDiferencia: null }],
+            motivos: [{ motivoId: 99, valores: {} }],
             alcance: [],
         },
     ])
@@ -209,7 +209,7 @@ it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo 
 
     await waitFor(() =>
         expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
-            motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+            motivos: [{ motivoId: 10, valores: {} }],
         }),
     )
     expect(api.resolverOfrecimiento).toHaveBeenCalledTimes(1)
@@ -472,10 +472,10 @@ it('poda del borrador los motivos que ya no están en el catálogo', async () =>
         'visita-borrador-42',
         JSON.stringify({
             7: [
-                { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
-                { motivoId: 99, marca: null, competidor: null, pctDiferencia: null },
+                { motivoId: 10, valores: {} },
+                { motivoId: 99, valores: {} },
             ],
-            8: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+            8: [{ motivoId: 10, valores: {} }],
         }),
     )
 
@@ -484,14 +484,14 @@ it('poda del borrador los motivos que ya no están en el catálogo', async () =>
     // esperarla el cierre podría salir con el motivo muerto todavía adentro.
     await waitFor(() => {
         const guardado = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
-        expect(guardado[7]).toEqual([{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])
+        expect(guardado[7]).toEqual([{ motivoId: 10, valores: {} }])
     })
 
     fireEvent.click(await screen.findByRole('button', { name: /^cerrar visita$/i }))
 
     await waitFor(() =>
         expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
-            motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+            motivos: [{ motivoId: 10, valores: {} }],
         }),
     )
 })
@@ -506,7 +506,7 @@ describe('el formulario ya no administra `detalle`', () => {
         const { onCerrarVisita } = renderSheet()
         fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
 
-        fireEvent.click(await screen.findByLabelText('Marca'))
+        fireEvent.click(await screen.findByLabelText('Marca del ofrecimiento'))
         fireEvent.click(await screen.findByText('Fric-Rot'))
         await tildarSaquePedido()
         fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
@@ -516,7 +516,7 @@ describe('el formulario ya no administra `detalle`', () => {
 
         await waitFor(() =>
             expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
-                motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }],
+                motivos: [{ motivoId: 10, valores: {} }],
             }),
         )
         expect(onCerrarVisita).toHaveBeenCalled()
@@ -531,7 +531,7 @@ describe('el formulario ya no administra `detalle`', () => {
         // Filtros (id 8) ya viene resuelto con motivoId 10: su borrador arranca igual a lo
         // guardado, así que solo se le cambia la marca.
         fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Filtros' }))
-        fireEvent.click(await screen.findByLabelText('Marca'))
+        fireEvent.click(await screen.findByLabelText('Marca del ofrecimiento'))
         fireEvent.click(await screen.findByText('Fric-Rot'))
         fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 

@@ -497,9 +497,10 @@ function detalleDe(fila: IVisitaFila, indice: number): IVisitaDetalle {
                               {
                                   descripcion: fila.motivos[0],
                                   resultado: fila.resultado,
-                                  marca: fila.resultado === 'perdido' ? 'YPF' : null,
-                                  competidor: fila.resultado === 'perdido' ? 'Shell' : null,
-                                  pctDiferencia: fila.resultado === 'perdido' ? 12 : null,
+                                  valores:
+                                      fila.resultado === 'perdido'
+                                          ? { marca: 'YPF', competidor: 'Shell', precio_competidor: 150, mi_precio: 130 }
+                                          : {},
                               },
                           ],
             },
@@ -525,9 +526,7 @@ function detalleDe(fila: IVisitaFila, indice: number): IVisitaDetalle {
                     {
                         descripcion: 'Saqué pedido',
                         resultado: 'ganado',
-                        marca: null,
-                        competidor: null,
-                        pctDiferencia: null,
+                        valores: {},
                     },
                 ],
             },

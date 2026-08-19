@@ -204,7 +204,7 @@ describe('ofrecimientos de la visita', () => {
     it('resolverOfrecimiento manda los motivos y devuelve los pendientes', async () => {
         ;(apiClient.put as any).mockResolvedValue(ok({ ofrecimientosPendientes: 1 }))
         const motivos = [
-            { motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 },
+            { motivoId: 13, valores: { marca: 'Fric-Rot', competidor: 'Corven', precio_competidor: 150, mi_precio: 132 } },
         ]
         const res = await resolverOfrecimiento(42, 7, { motivos })
         expect(apiClient.put).toHaveBeenCalledWith('/planificacion/visitas/42/ofrecimientos/7', {
