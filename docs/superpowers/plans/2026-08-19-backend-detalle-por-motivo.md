@@ -17,10 +17,22 @@ hija de ofrecimiento y se copia su forma.
 
 **Spec:** `app-planificacion/docs/superpowers/specs/2026-08-19-detalle-por-motivo-design.md`
 
+## Prerrequisitos
+
+**Antes de empezar este plan tienen que estar hechas dos cosas**, en este orden:
+
+1. **PR #17 de app-planificacion mergeado** (resolución en bloques Objeción/Cierre/Pendientes). No es
+   una dependencia técnica del backend, pero sí del frontend que viene después: ese PR reordenó
+   `ResolucionOfrecimiento.tsx` y dejó el panel de detalle aislado en `renderMotivo()`, que es el
+   seam donde entra el renderer nuevo. Hacerlo al revés obliga a rebasear un PR ya terminado.
+2. **El script declarativo del catálogo aplicado** (los 11 motivos con su `resultado`). La Task 1
+   siembra `pl_motivo.codigo` ubicando los motivos por `descripcion` + `resultado` + `activo = 1`, y
+   sin ese script no existen las filas que busca.
+
 ## Global Constraints
 
-- **Este plan va primero.** El plan de frontend consume el contrato que se define acá y no se puede
-  integrar hasta que esto esté mergeado.
+- **Este plan va primero que el de frontend.** El plan de frontend consume el contrato que se define
+  acá y no se puede integrar hasta que esto esté mergeado.
 - **Un `campo` desconocido se descarta al persistir, nunca se rechaza.** Rechazar con 400 dejaría al
   vendedor sin poder cerrar la visita si su borrador tiene un campo viejo. Es el bug
   `MOTIVO_INEXISTENTE` que ya se pagó una vez.
@@ -62,15 +74,26 @@ ALTER TABLE pl_motivo ADD UNIQUE INDEX uq_motivo_codigo (codigo);
 
 -- 2) Sembrar el código de los cuatro motivos con detalle. Se ubica por descripcion+resultado
 --    y no por id, justamente porque el id no es estable entre ambientes.
+--
+--    ⚠️ `activo = 1` NO es opcional. Después del script del catálogo nuevo conviven el
+--    "Precio" viejo (dado de baja, activo = 0) y el nuevo, los dos con
+--    descripcion = 'Precio' y resultado = 'perdido'. Sin este filtro el UPDATE matchea las
+--    dos filas y muere con duplicate key contra uq_motivo_codigo. Pasa igual con 'Flete'.
+--
+--    Requisito: el script del catálogo Objeción/Cierre/Pendientes ya tiene que estar
+--    aplicado. Si no, esto etiquetaría los motivos viejos.
 UPDATE pl_motivo SET codigo = 'PRECIO'
- WHERE nivel = 'ofrecimiento' AND resultado = 'perdido' AND descripcion = 'Precio';
+ WHERE nivel = 'ofrecimiento' AND activo = 1
+   AND resultado = 'perdido' AND descripcion = 'Precio';
 UPDATE pl_motivo SET codigo = 'PLAZO'
- WHERE nivel = 'ofrecimiento' AND resultado = 'perdido' AND descripcion = 'Plazo';
+ WHERE nivel = 'ofrecimiento' AND activo = 1
+   AND resultado = 'perdido' AND descripcion = 'Plazo';
 UPDATE pl_motivo SET codigo = 'FLETE'
- WHERE nivel = 'ofrecimiento' AND resultado = 'perdido' AND descripcion = 'Flete';
+ WHERE nivel = 'ofrecimiento' AND activo = 1
+   AND resultado = 'perdido' AND descripcion = 'Flete';
 UPDATE pl_motivo SET codigo = 'NO_TRABAJA'
- WHERE nivel = 'ofrecimiento' AND resultado = 'perdido'
-   AND descripcion = 'No trabaja la marca o cambio';
+ WHERE nivel = 'ofrecimiento' AND activo = 1
+   AND resultado = 'perdido' AND descripcion = 'No trabaja la marca o cambio';
 
 -- 3) Verificar: tienen que salir las cuatro filas con su código.
 SELECT motivo_id, descripcion, resultado, codigo
