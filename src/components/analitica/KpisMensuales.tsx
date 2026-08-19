@@ -1,3 +1,10 @@
+import {
+    AYUDA_EFECTIVIDAD_OPERATIVA,
+    AYUDA_HORAS_MENSUAL,
+    AYUDA_VISITAS_MENSUAL,
+    META_HORAS_TEXTO,
+    META_VISITAS_TEXTO,
+} from './ayudaEfectividadOperativa'
 import KpiTile from './KpiTile'
 import { formatHoras, formatNumero, formatPctEscalado } from '@/lib/analiticaFormat'
 import type { IVendedorMetricas } from '@/types/analitica'
@@ -16,17 +23,19 @@ export default function KpisMensuales({ promedios }: KpisMensualesProps) {
             <KpiTile
                 titulo="Efectividad operativa"
                 valor={formatPctEscalado(promedios.efectividadOperativa)}
-                info="Qué tan cerca estuvo del objetivo mensual de actividad: promedio entre % de la meta de clientes distintos visitados y % de la meta de horas trabajadas, cada uno topeado a 100%. No mide resultado comercial, sino actividad."
+                ayuda={AYUDA_EFECTIVIDAD_OPERATIVA}
             />
             <KpiTile
                 titulo="Visitas (mensual)"
                 valor={formatNumero(promedios.visitasValidas)}
-                info="Visitas del mes con GPS confirmado (dentro de 300 m del cliente). Las que no pasan esa validación no cuentan acá."
+                meta={META_VISITAS_TEXTO}
+                ayuda={AYUDA_VISITAS_MENSUAL}
             />
             <KpiTile
                 titulo="Horas (mensual)"
                 valor={formatHoras(promedios.minutosTotales)}
-                info="Horas totales dedicadas a esas mismas visitas válidas."
+                meta={META_HORAS_TEXTO}
+                ayuda={AYUDA_HORAS_MENSUAL}
             />
         </div>
     )

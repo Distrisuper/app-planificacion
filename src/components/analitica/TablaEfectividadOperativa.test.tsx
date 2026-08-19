@@ -19,11 +19,22 @@ it('muestra una fila por vendedor más la de promedios', () => {
 
 it('muestra las tres columnas acordadas, nada de cobertura ni efectividad comercial', () => {
     render(<TablaEfectividadOperativa {...props} />)
-    expect(screen.getByRole('columnheader', { name: 'Efectividad operativa' })).toBeInTheDocument()
-    expect(screen.getByRole('columnheader', { name: 'Visitas (mensual)' })).toBeInTheDocument()
-    expect(screen.getByRole('columnheader', { name: 'Horas (mensual)' })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /^Efectividad operativa/ })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /^Visitas \(mensual\)/ })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /^Horas \(mensual\)/ })).toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: /cobertura/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('columnheader', { name: /efectividad comercial/i })).not.toBeInTheDocument()
+})
+
+it('cada columna muestra su meta mensual y una ayuda con la explicación completa', async () => {
+    render(<TablaEfectividadOperativa {...props} />)
+    expect(screen.getByText('Meta: 160 clientes/mes')).toBeInTheDocument()
+    expect(screen.getByText('Meta: 100 hs/mes')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Qué significa Horas (mensual)' }))
+    expect(
+        screen.getByText(/Horas totales dedicadas a esas mismas visitas válidas/),
+    ).toBeInTheDocument()
 })
 
 it('muestra s/d, nunca 0%, cuando el vendedor no tiene objetivo vigente', () => {

@@ -1,32 +1,38 @@
-import { Info } from 'lucide-react'
+import {
+    AYUDA_EFECTIVIDAD_OPERATIVA,
+    AYUDA_HORAS_MENSUAL,
+    AYUDA_VISITAS_MENSUAL,
+    META_HORAS_TEXTO,
+    META_VISITAS_TEXTO,
+} from './ayudaEfectividadOperativa'
+import HelpPopover from './HelpPopover'
 import { formatHoras, formatNumero, formatPctEscalado } from '@/lib/analiticaFormat'
 import type { IVendedorMetricas } from '@/types/analitica'
-
-const INFO_COLUMNA: Record<string, string> = {
-    'Efectividad operativa':
-        'Qué tan cerca estuvo del objetivo mensual de actividad: promedio entre % de la meta de clientes distintos visitados y % de la meta de horas trabajadas, cada uno topeado a 100%. No mide resultado comercial, sino actividad.',
-    'Visitas (mensual)':
-        'Visitas del mes con GPS confirmado (dentro de 300 m del cliente). Las que no pasan esa validación no cuentan acá.',
-    'Horas (mensual)': 'Horas totales dedicadas a esas mismas visitas válidas.',
-}
-
-/** Encabezado con tooltip nativo (title) sobre un ícono de ayuda, marcado
- *  aria-hidden para no alterar el nombre accesible de la columna. */
-function EncabezadoConInfo({ titulo }: { titulo: string }) {
-    return (
-        <span className="inline-flex items-center justify-end gap-1">
-            {titulo}
-            <span title={INFO_COLUMNA[titulo]}>
-                <Info className="h-3 w-3 shrink-0 text-slate-400" aria-hidden="true" />
-            </span>
-        </span>
-    )
-}
 
 interface TablaEfectividadOperativaProps {
     vendedores: IVendedorMetricas[]
     promedios: IVendedorMetricas
     onElegirVendedor: (codigo: string) => void
+}
+
+interface EncabezadoProps {
+    titulo: string
+    ayuda: React.ReactNode
+    meta?: string
+}
+
+/** Encabezado con el nombre de la columna, su meta mensual (si aplica) visible
+ *  debajo, y un botón de ayuda con la explicación completa. */
+function Encabezado({ titulo, ayuda, meta }: EncabezadoProps) {
+    return (
+        <div className="flex flex-col items-end gap-0.5">
+            <span className="inline-flex items-center gap-1.5">
+                {titulo}
+                <HelpPopover label={`Qué significa ${titulo}`}>{ayuda}</HelpPopover>
+            </span>
+            {meta && <span className="text-[10px] normal-case tracking-normal text-slate-400">{meta}</span>}
+        </div>
+    )
 }
 
 /** Las tres columnas acordadas con gerencia — ver
@@ -61,13 +67,21 @@ export default function TablaEfectividadOperativa({
                     <tr>
                         <th className="px-3 py-2 text-left">Vendedor</th>
                         <th className="px-3 py-2 text-right">
-                            <EncabezadoConInfo titulo="Efectividad operativa" />
+                            <Encabezado titulo="Efectividad operativa" ayuda={AYUDA_EFECTIVIDAD_OPERATIVA} />
                         </th>
                         <th className="px-3 py-2 text-right">
-                            <EncabezadoConInfo titulo="Visitas (mensual)" />
+                            <Encabezado
+                                titulo="Visitas (mensual)"
+                                ayuda={AYUDA_VISITAS_MENSUAL}
+                                meta={META_VISITAS_TEXTO}
+                            />
                         </th>
                         <th className="px-3 py-2 text-right">
-                            <EncabezadoConInfo titulo="Horas (mensual)" />
+                            <Encabezado
+                                titulo="Horas (mensual)"
+                                ayuda={AYUDA_HORAS_MENSUAL}
+                                meta={META_HORAS_TEXTO}
+                            />
                         </th>
                     </tr>
                 </thead>
