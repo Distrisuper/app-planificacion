@@ -93,6 +93,24 @@ export function rangoMes(fecha: Date): { desde: string; hasta: string } {
     }
 }
 
+/** Lunes y viernes de la semana calendario que contiene `fecha`, en formato YYYY-MM-DD.
+ *  Es el otro rango que ofrece el selector de Efectividad operativa, alternativo a `rangoMes`. */
+export function rangoSemana(fecha: Date): { desde: string; hasta: string } {
+    const diaSemana = fecha.getDay() === 0 ? 7 : fecha.getDay()
+    const lunes = new Date(fecha)
+    lunes.setDate(fecha.getDate() - (diaSemana - 1))
+    const viernes = new Date(lunes)
+    viernes.setDate(lunes.getDate() + 4)
+    return { desde: isoLocal(lunes), hasta: isoLocal(viernes) }
+}
+
+/** "18/08 al 22/08". Mismo criterio manual que `nombreMes`: no depender del locale del runtime. */
+export function nombreSemana(fecha: Date): string {
+    const { desde, hasta } = rangoSemana(fecha)
+    const corto = (iso: string) => iso.slice(8, 10) + '/' + iso.slice(5, 7)
+    return `${corto(desde)} al ${corto(hasta)}`
+}
+
 const NOMBRES_MES = [
     'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
     'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
