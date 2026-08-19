@@ -108,7 +108,9 @@ it('con acción cargada (sin motivos), también ofrece limpiar', () => {
 
 it('avanzar de ofrecimiento entra desde la derecha, y volver desde la izquierda', () => {
     const irA = setupNavegable()
-    const cuerpo = () => screen.getByText('Saqué pedido').closest('[class*="animate-rubro"]')
+    // "Precio" solo como ancla para llegar al contenedor animado: es el motivo que el
+    // formulario muestra por defecto (Objeción es el segmento inicial).
+    const cuerpo = () => screen.getByText('Precio').closest('[class*="animate-rubro"]')
     expect(cuerpo()?.className).toContain('animate-rubro-adelante')
 
     irA(1)
@@ -120,6 +122,8 @@ it('avanzar de ofrecimiento entra desde la derecha, y volver desde la izquierda'
 
 it('tildar un motivo avisa con el ofrecimiento actual', () => {
     const { onCambiarBorrador } = setup()
+    // "Saqué pedido" es `ganado`: vive detrás del segmento Cierre.
+    fireEvent.click(screen.getByRole('button', { name: /cierre/i }))
     fireEvent.click(screen.getByText('Saqué pedido'))
     expect(onCambiarBorrador).toHaveBeenCalledWith(7, [
         { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },

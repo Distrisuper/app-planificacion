@@ -39,36 +39,74 @@ en otros componentes simplemente nunca lo va a ver seteado desde este formulario
 `<MarcaOfrecimientoPicker>` se renderiza primero (antes iba segundo). Su comportamiento no cambia:
 elegir del catálogo de marcas, chip "Aplicar a restantes" propio.
 
-### 3. "Resolución" pasa de grid plano a 3 bloques agrupados por `resultado`
+### 3. "Resolución" pasa de grid plano a un segmentado Objeción/Cierre + Pendientes
 
-En vez de un `grid-cols-2` con todos los motivos mezclados, se arma:
+Se probó primero con Objeción y Cierre **lado a lado** en dos columnas. En un teléfono de 360px
+cada columna queda en ~165px: las etiquetas largas ("No trabaja la marca o cambio") desbordaban
+generando scroll horizontal, y sobre todo **no queda lugar para los paneles de detalle** — el de
+Precio (marca/competidor/%) ya vive apretado, y hay más por venir (Plazo va a pedir días). Se
+descartó por eso.
+
+El layout final alterna Objeción y Cierre en el mismo espacio, a ancho completo:
 
 ```
-┌─ OBJECIÓN ──────┐ ┌─ CIERRE ────────┐
-│ ☐ Precio        │ │ ☐ Dto           │
-│ ☐ DS 100%       │ │ ☐ Plazo         │
-│ ☐ Plazo         │ │ ☐ Flete         │
-│ ☐ Flete         │ │ ☐ DS            │
-│ ☐ No trabaja... │ │                 │
-└─────────────────┘ └─────────────────┘
-┌─ PENDIENTES ───────────────────────────┐
-│ ☐ Cupo              ☐ Suscriptor       │
-└─────────────────────────────────────────┘
+┌────────────────────────────────┐
+│ MARCA (opcional)               │
+│ AG                          ✓ ⌄│
+└────────────────────────────────┘
+┌───────────────┬────────────────┐
+│ ◤ OBJECIÓN    │     CIERRE     │  ← segmentado
+└───────────────┴────────────────┘
+┌────────────────────────────────┐
+│ ☐ Precio                       │
+│ ☐ DS 100%                      │
+│ ☐ Plazo                        │
+│    └─ días: [____]             │
+│ ☐ Flete                        │
+│ ☐ No trabaja la marca o cambio │
+└────────────────────────────────┘
+┌────────────────────────────────┐
+│ PENDIENTES                     │
+│ ☐ Cupo         ☐ Suscriptor    │
+└────────────────────────────────┘
 ```
 
-- **Objeción** = motivos con `resultado: 'perdido'`.
-- **Cierre** = motivos con `resultado: 'ganado'`.
-- Objeción y Cierre van en la misma fila (2 columnas, mitad y mitad) porque son conceptos
-  simétricos — uno negativo, uno positivo — y se leen mejor comparados a la misma altura.
-- **Pendientes** = motivos con `resultado: 'diferido'`, en su propia fila debajo, ancho completo.
-- Dentro de cada bloque, los motivos van en **una sola columna** (no 2, como hoy), porque los
-  bloques ya son más angostos que el grid completo anterior.
-- El color de cada checkbox sigue saliendo de `colorDeResultado(resultado)` — no cambia esa función,
-  solo dónde se posiciona cada motivo.
-- **Fallback defensivo:** si algún motivo llega con `resultado: 'no_ofrecido'` o `null` (no debería
-  pasar con el catálogo nuevo, pero el componente no puede asumir que el backend nunca lo mande),
-  se agrupa en una sección "Otros" al final, sin título destacado. Esto evita que un motivo se
-  pierda silenciosamente si el catálogo real todavía no está migrado del todo.
+- **Objeción** = `resultado: 'perdido'`; **Cierre** = `resultado: 'ganado'`; **Pendientes** =
+  `resultado: 'diferido'`.
+- **Que Objeción y Cierre sean excluyentes no es una decisión de layout**: `ganado` y `perdido`
+  ya no podían convivir en el dato. El segmentado hace visible esa regla en vez de que el vendedor
+  la descubra viendo cómo se le destilda algo solo.
+- **Pendientes queda siempre visible**, en su propia fila abajo, porque acompaña a una objeción
+  (ver la regla de convivencia más abajo).
+- **Cambiar de segmento no borra nada.** Es una vista, no un reset: limpiar lo tildado al tocar
+  una pestaña sería pérdida silenciosa. Solo tildar descarta lo incompatible.
+- **El segmento muestra un contador** de lo tildado de su lado. Es el corolario obligatorio de lo
+  anterior: sin él, lo cargado del otro lado quedaría seleccionado pero invisible.
+- **El segmento inicial es Objeción**, salvo que el borrador ya traiga un motivo de Cierre tildado
+  — ahí abre en Cierre, para no obligar a buscar la carga propia.
+- Con **un solo bloque con motivos** (catálogo a medio migrar) no se dibuja el segmentado: ese
+  bloque se muestra con su título, como Pendientes. Un segmentado con una pestaña muerta invita
+  a tocarla.
+- El color de cada checkbox sigue saliendo de `colorDeResultado(resultado)` — esa función no cambia.
+- **Fallback defensivo:** si algún motivo llega con `resultado: 'no_ofrecido'` o `null`, se agrupa
+  en una sección "Otros" al final. Evita que un motivo se pierda en silencio si el catálogo real
+  todavía no está migrado del todo.
+
+### 3b. Qué resoluciones conviven
+
+La regla de "un solo bucket a la vez" se afina — antes los tres buckets eran mutuamente
+excluyentes, y eso contradecía el negocio:
+
+| combinación | ¿convive? | por qué |
+|---|---|---|
+| dos del mismo `resultado` | sí | dos razones de una misma pérdida |
+| Objeción + Pendiente | **sí** | "no compró por precio, pero le queda el cupo" |
+| Cierre + Pendiente | **no** | si cerró, no quedó nada pendiente |
+| Objeción + Cierre | no | contradicción directa |
+
+Se implementa con un helper `conviven(a, b)` y un `filter` en `toggle()` (conservar lo compatible)
+en vez del `every` + vaciado anterior. Filtrar en vez de vaciar es lo que hace que el resultado no
+dependa del orden en que se tildan.
 
 ### 4. El detalle expandible no cambia de lógica
 
@@ -90,5 +128,19 @@ empujando hacia abajo el resto de esa columna; no afecta al bloque Cierre.
 - Sembrar los motivos nuevos en la base — lo hace el usuario directamente.
 - Purgar `IAccionComercial`/`accion` del resto del código (`OfrecimientoTable`, `useOfrecimientos`,
   backend) — Marca sigue dependiendo de ese contrato.
-- Cambiar la lógica de "un solo bucket de resultado a la vez" (motivos del mismo bucket conviven,
-  de otro bucket reemplazan) — no se toca, solo se reagrupa visualmente.
+- El panel de detalle de "Plazo" (días) y cualquier otro campo nuevo por motivo. El layout deja
+  lugar para eso, pero `requiereDetalle` hoy solo modela marca/competidor/%: sumar un campo
+  distinto es otra tarea.
+
+## Limitación conocida (no la arregla este cambio)
+
+**La marca elegida no se persiste.** `marca` viaja dentro del mismo campo `detalle` que `accion`
+(un JSON en `pl_ofrecimiento.detalle`), y `validarDetalleAccion` en
+`api-vendedores/src/services/planificacion/ofrecimientoValidation.ts` **rechaza con 400
+(`DETALLE_INVALIDO`) todo `detalle` cuyo `accion` no sea un string no vacío**. Al sacar Acción
+Comercial del formulario ya no queda forma de setear ese código, así que `VisitaSheet` (que ya
+contemplaba el caso) manda `detalle: null` y la marca queda solo como borrador en pantalla.
+
+Esto ya pasaba antes si el vendedor cargaba marca sin elegir acción; lo que cambia es que ahora es
+el único camino posible. Arreglarlo requiere relajar esa validación en `api-vendedores` — otro
+repo, fuera del alcance de este cambio front-only. Queda anotado acá para no re-descubrirlo.

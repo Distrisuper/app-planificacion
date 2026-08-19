@@ -50,6 +50,14 @@ function renderSheet(over: Record<string, unknown> = {}) {
     return { onCerrarVisita }
 }
 
+/** "Saqué pedido" es `ganado`, así que vive detrás del segmento Cierre del formulario
+ *  de resolución — Objeción es el que abre por defecto. Estos tests son sobre el wizard
+ *  y el borrador, no sobre el segmentado, así que el paso va en un helper. */
+async function tildarSaquePedido() {
+    fireEvent.click(await screen.findByRole('button', { name: /cierre/i }))
+    fireEvent.click(await screen.findByText('Saqué pedido'))
+}
+
 beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
@@ -86,7 +94,7 @@ it('el botón Resolución abre el wizard de resolución', async () => {
 it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borrador', async () => {
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^finalizar$/i }))
@@ -101,7 +109,7 @@ it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borr
 it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async () => {
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /atrás/i }))
@@ -115,7 +123,7 @@ it('el wizard conserva lo tildado en un rubro al navegar a otro y volver', async
 it('el cambio tildado en el wizard se persiste en localStorage al instante', async () => {
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
 
     await waitFor(() => {
         const borrador = JSON.parse(localStorage.getItem('visita-borrador-42') ?? '{}')
@@ -165,7 +173,7 @@ it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos
 it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo batch y dispara el cierre', async () => {
     const { onCerrarVisita } = renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
 
@@ -187,7 +195,7 @@ it('si el batch de cierre falla, no limpia el borrador ni dispara el cierre', as
     ;(api.resolverOfrecimiento as any).mockRejectedValue(new Error('Network Error'))
     const { onCerrarVisita } = renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
 
@@ -355,7 +363,7 @@ it('un rubro agregado se mantiene arriba aunque se resuelva (no se reordena por 
     fireEvent.click(await screen.findByRole('button', { name: /agregar baterías/i }))
     // Agregar abre el wizard del rubro nuevo directamente: se resuelve ahí mismo, sin
     // volver a la lista a buscarlo.
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
 
     const botones = await screen.findAllByRole('button', { name: /^resolución de /i })
@@ -446,7 +454,7 @@ it('marca sin acción no viaja en el batch de cierre (el backend exige un códig
 
     fireEvent.click(await screen.findByLabelText('Marca'))
     fireEvent.click(await screen.findByText('Fric-Rot'))
-    fireEvent.click(await screen.findByText('Saqué pedido'))
+    await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
 

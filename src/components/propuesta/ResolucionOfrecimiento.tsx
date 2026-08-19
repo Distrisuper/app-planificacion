@@ -47,17 +47,34 @@ function colorDeResultado(resultado: ResultadoMotivo | null): { border: string; 
     }
 }
 
-/** Los 2 bloques que van lado a lado, en el orden en que se dibujan. `diferido` (los
- *  Pendientes) va en su propia fila abajo — ver el JSX — porque no es simétrico con
- *  Objeción/Cierre, es "todavía no se sabe". `no_ofrecido` y `null` no tienen bloque
- *  propio: son el fallback "Otros", para que un motivo del catálogo que todavía no se
- *  re-clasificó no desaparezca en silencio. */
-const BLOQUES: { titulo: string; resultado: ResultadoMotivo | null }[] = [
+/** Los 2 bloques que comparten espacio, alternados por el segmentado. Se dibujan a
+ *  ancho completo de a uno: en un teléfono, dos columnas de ~165px no dejan lugar a los
+ *  paneles de detalle (el de Precio ya vive apretado, y hay más por venir). Que sean
+ *  excluyentes no es una decisión de layout: `ganado` y `perdido` ya no podían convivir
+ *  en el dato — el segmentado lo hace visible en vez de sorpresivo.
+ *
+ *  `diferido` (Pendientes) NO entra acá: queda siempre abajo, porque acompaña a una
+ *  objeción. `no_ofrecido` y `null` tampoco: son el fallback "Otros", para que un motivo
+ *  del catálogo que todavía no se re-clasificó no desaparezca en silencio. */
+const BLOQUES: { titulo: string; resultado: ResultadoMotivo }[] = [
     { titulo: 'Objeción', resultado: 'perdido' },
     { titulo: 'Cierre', resultado: 'ganado' },
 ]
 const TITULO_PENDIENTES = 'Pendientes'
 const TITULO_OTROS = 'Otros'
+
+/** Si dos resoluciones pueden estar tildadas a la vez.
+ *
+ *  Una objeción puede dejar algo pendiente ("no compró por precio, pero le queda el
+ *  cupo"), así que `perdido` + `diferido` conviven. Un cierre no convive con nada más:
+ *  si cerró, no quedó nada pendiente ni objetado. Y `ganado` con `perdido` es una
+ *  contradicción directa. */
+function conviven(a: ResultadoMotivo | null, b: ResultadoMotivo | null): boolean {
+    if (a === b) return true
+    return (
+        (a === 'perdido' && b === 'diferido') || (a === 'diferido' && b === 'perdido')
+    )
+}
 
 /** Checklist + detalle de un ofrecimiento. Sin header, nombre ni botón de guardar
  *  propios: eso lo aporta ResolucionWizard, que envuelve a este componente en su header
@@ -88,6 +105,14 @@ export default function ResolucionOfrecimiento({
     const [marcaAbierta, setMarcaAbierta] = useState<number | null>(null)
     const panelRef = useRef<HTMLDivElement>(null)
 
+    // Qué lado del segmentado se está viendo. Arranca donde ya hay carga (al retomar un
+    // borrador, abrir en Objeción cuando lo tildado es un Cierre obligaría a buscarlo);
+    // si no hay nada tildado, en Objeción. Es estado inicial y no un efecto: cambiar de
+    // segmento después es del vendedor, no algo que se recalcule solo.
+    const [segmento, setSegmento] = useState<ResultadoMotivo>(() =>
+        value.some(m => resultadoPorId.get(m.motivoId) === 'ganado') ? 'ganado' : 'perdido',
+    )
+
     // Sin esto el teclado virtual tapa la lista justo cuando aparece.
     useEffect(() => {
         const el = panelRef.current
@@ -96,17 +121,19 @@ export default function ResolucionOfrecimiento({
         }
     }, [marcaAbierta])
 
-    // Varios motivos del MISMO bucket conviven (dos razones de un "perdido": Precio +
-    // Trabaja con otro). Pero "ganado" y "perdido" a la vez no tienen sentido — tildar
-    // uno de otro bucket reemplaza lo que había, no lo acumula.
+    // Tildar conserva lo que puede convivir con el motivo nuevo y descarta el resto —
+    // ver `conviven`. Filtrar en vez de vaciar es lo que permite que una objeción y un
+    // pendiente coexistan sin que el orden en que se tildan cambie el resultado.
     function toggle(motivoId: number) {
         if (porId.has(motivoId)) {
             onChange(value.filter(m => m.motivoId !== motivoId))
             return
         }
         const resultadoNuevo = resultadoPorId.get(motivoId) ?? null
-        const mismoBucket = value.every(m => (resultadoPorId.get(m.motivoId) ?? null) === resultadoNuevo)
-        onChange(mismoBucket ? [...value, { motivoId, ...VACIO }] : [{ motivoId, ...VACIO }])
+        const compatibles = value.filter(m =>
+            conviven(resultadoPorId.get(m.motivoId) ?? null, resultadoNuevo),
+        )
+        onChange([...compatibles, { motivoId, ...VACIO }])
     }
 
     // El detalle vive en la fila (ofrecimiento_id, motivo_id), así que se edita POR
@@ -264,6 +291,12 @@ export default function ResolucionOfrecimiento({
 
     const pendientes = motivos.filter(m => m.resultado === 'diferido')
     const otros = motivos.filter(m => m.resultado === null || m.resultado === 'no_ofrecido')
+    // Un catálogo a medio migrar puede no tener ninguno de un bucket. Los bloques vacíos
+    // no se ofrecen: un segmentado con una pestaña muerta invita a tocarla.
+    const bloques = BLOQUES.map(b => ({
+        ...b,
+        items: motivos.filter(m => m.resultado === b.resultado),
+    })).filter(b => b.items.length > 0)
 
     return (
         <div>
@@ -276,25 +309,63 @@ export default function ResolucionOfrecimiento({
                 onAplicarATodos={onAplicarMarca}
             />
 
-            {/* Objeción y Cierre van en la misma fila: son conceptos simétricos (uno
-             *  negativo, uno positivo) que se leen mejor comparados a la misma altura. */}
-            <div className="mb-2 flex gap-2">
-                {BLOQUES.map(({ titulo, resultado }) => {
-                    const items = motivos.filter(m => m.resultado === resultado)
-                    if (items.length === 0) return null
-                    return (
-                        <div
-                            key={titulo}
-                            className="flex flex-1 flex-col gap-2 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-white p-2.5"
-                        >
-                            <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
-                                {titulo}
-                            </span>
-                            <div className="flex flex-col gap-2">{items.map(renderMotivo)}</div>
+            {bloques.length > 0 && (
+                <div className="mb-2">
+                    {/* Con un solo bloque no hay nada que alternar: se dibuja con su
+                     *  título, como Pendientes. */}
+                    {bloques.length > 1 && (
+                        <div className="mb-2 flex gap-1 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-[#F6F8FC] p-1">
+                            {bloques.map(({ titulo, resultado, items }) => {
+                                const activo = resultado === segmento
+                                // Lo tildado del otro lado queda invisible al cambiar de
+                                // pestaña; el contador es lo que evita que se pierda de
+                                // vista (cambiar de segmento no borra nada).
+                                const tildados = items.filter(m => porId.has(m.motivoId)).length
+                                return (
+                                    <button
+                                        key={titulo}
+                                        type="button"
+                                        aria-pressed={activo}
+                                        onClick={() => setSegmento(resultado)}
+                                        className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 font-sans ${
+                                            activo ? 'bg-white shadow-[0_1px_2px_rgba(16,24,40,.08)]' : ''
+                                        }`}
+                                    >
+                                        <span
+                                            className={`min-w-0 truncate text-[11px] font-bold uppercase tracking-wide ${
+                                                activo ? 'text-[#182645]' : 'text-[#8A93A6]'
+                                            }`}
+                                        >
+                                            {titulo}
+                                        </span>
+                                        {tildados > 0 && (
+                                            <span
+                                                className="grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full px-1 text-[10px] font-extrabold text-white"
+                                                style={{ background: colorDeResultado(resultado).check }}
+                                            >
+                                                {tildados}
+                                            </span>
+                                        )}
+                                    </button>
+                                )
+                            })}
                         </div>
-                    )
-                })}
-            </div>
+                    )}
+
+                    <div className="flex flex-col gap-2 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-white p-2.5">
+                        {bloques.length === 1 && (
+                            <span className="text-[11px] font-bold uppercase tracking-wide text-[#8A93A6]">
+                                {bloques[0].titulo}
+                            </span>
+                        )}
+                        <div className="flex flex-col gap-2">
+                            {(bloques.find(b => b.resultado === segmento) ?? bloques[0]).items.map(
+                                renderMotivo,
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {pendientes.length > 0 && (
                 <div className="mb-2 flex flex-col gap-2 rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-white p-2.5">

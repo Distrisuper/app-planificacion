@@ -107,27 +107,58 @@ it('ofrece cargar una marca', () => {
     expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
 })
 
-// Agrupación: cada motivo aparece bajo el título de bloque que le corresponde según
-// `resultado`, sin que el componente conozca los nombres de los motivos.
-describe('agrupación en 3 bloques', () => {
-    it('perdido cae bajo Objeción', () => {
+// Objeción y Cierre comparten el mismo espacio a ancho completo, alternados por un
+// segmentado: en un teléfono, dos columnas de ~165px no dejan lugar a los paneles de
+// detalle (marca/competidor/% de Precio, y los que vengan). Pendientes queda siempre
+// visible abajo porque acompaña a una objeción.
+describe('segmentado Objeción / Cierre', () => {
+    const segmento = (nombre: string) => screen.getByRole('button', { name: new RegExp(nombre, 'i') })
+
+    it('arranca en Objeción y no muestra los motivos de Cierre', () => {
         setup()
-        const bloque = screen.getByText('Objeción').closest('div')!.parentElement!
-        expect(bloque).toHaveTextContent('Precio')
-        expect(bloque).toHaveTextContent('DS 100%')
+        expect(screen.getByText('Precio')).toBeInTheDocument()
+        expect(screen.getByText('DS 100%')).toBeInTheDocument()
+        expect(screen.queryByText('Dto')).not.toBeInTheDocument()
     })
 
-    it('ganado cae bajo Cierre', () => {
+    it('tocar Cierre muestra sus motivos y esconde los de Objeción', () => {
         setup()
-        const bloque = screen.getByText('Cierre').closest('div')!.parentElement!
-        expect(bloque).toHaveTextContent('Dto')
-        expect(bloque).toHaveTextContent('Plazo')
+        fireEvent.click(segmento('Cierre'))
+        expect(screen.getByText('Dto')).toBeInTheDocument()
+        expect(screen.queryByText('Precio')).not.toBeInTheDocument()
     })
 
-    it('diferido cae bajo Pendientes', () => {
+    it('Pendientes queda visible en los dos segmentos', () => {
         setup()
-        const bloque = screen.getByText('Pendientes').closest('div')!.parentElement!
-        expect(bloque).toHaveTextContent('Cupo')
+        expect(screen.getByText('Cupo')).toBeInTheDocument()
+        fireEvent.click(segmento('Cierre'))
+        expect(screen.getByText('Cupo')).toBeInTheDocument()
+    })
+
+    // Cambiar de segmento es cambiar de VISTA, no resetear: si limpiara lo tildado, el
+    // vendedor perdería la carga por tocar una pestaña.
+    it('cambiar de segmento no borra lo tildado', () => {
+        const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
+        fireEvent.click(segmento('Cierre'))
+        expect(onChange).not.toHaveBeenCalled()
+    })
+
+    // Corolario de lo anterior: lo tildado del otro lado quedaría invisible. El contador
+    // en el segmento es lo que evita que se pierda de vista.
+    it('el segmento cuenta lo tildado del otro lado', () => {
+        setup([
+            { motivoId: 20, marca: null, competidor: null, pctDiferencia: null },
+            { motivoId: 21, marca: null, competidor: null, pctDiferencia: null },
+        ])
+        fireEvent.click(segmento('Cierre'))
+        expect(segmento('Objeción')).toHaveTextContent('2')
+    })
+
+    // Al retomar un borrador, abre donde está la carga en vez de obligar a buscarla.
+    it('con un Cierre ya tildado, abre en Cierre', () => {
+        setup([{ motivoId: 22, marca: null, competidor: null, pctDiferencia: null }])
+        expect(screen.getByText('Dto')).toBeInTheDocument()
+        expect(screen.queryByText('Precio')).not.toBeInTheDocument()
     })
 
     it('un motivo sin bucket reconocido (no_ofrecido o null) cae en Otros, sin perderse', () => {
@@ -174,23 +205,52 @@ describe('color por resultado', () => {
     })
 })
 
-// Varios motivos del mismo bucket conviven; uno de otro bucket reemplaza.
-describe('un solo bucket de resultado a la vez', () => {
+// Qué puede convivir con qué. Una objeción puede dejar algo pendiente ("no me compró
+// por precio, pero le queda el cupo"), así que perdido + diferido conviven. Un cierre
+// no: si cerró, no quedó nada pendiente ni objetado.
+describe('qué resoluciones conviven', () => {
+    const PRECIO = { motivoId: 20, marca: null, competidor: null, pctDiferencia: null }
+    const DS100 = { motivoId: 21, marca: null, competidor: null, pctDiferencia: null }
+    const DTO = { motivoId: 22, marca: null, competidor: null, pctDiferencia: null }
+    const CUPO = { motivoId: 24, marca: null, competidor: null, pctDiferencia: null }
+
     it('dos motivos "perdido" conviven', () => {
-        const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
+        const { onChange } = setup([PRECIO])
         fireEvent.click(screen.getByText('DS 100%'))
-        expect(onChange).toHaveBeenCalledWith([
-            { motivoId: 20, marca: null, competidor: null, pctDiferencia: null },
-            { motivoId: 21, marca: null, competidor: null, pctDiferencia: null },
-        ])
+        expect(onChange).toHaveBeenCalledWith([PRECIO, DS100])
     })
 
-    it('tildar un motivo "ganado" reemplaza uno "perdido" ya tildado', () => {
-        const { onChange } = setup([{ motivoId: 20, marca: null, competidor: null, pctDiferencia: null }])
+    it('una Objeción convive con un Pendiente', () => {
+        const { onChange } = setup([PRECIO])
+        fireEvent.click(screen.getByText('Cupo'))
+        expect(onChange).toHaveBeenCalledWith([PRECIO, CUPO])
+    })
+
+    it('y al revés: tildar una Objeción no borra el Pendiente ya tildado', () => {
+        const { onChange } = setup([CUPO])
+        fireEvent.click(screen.getByText('Precio'))
+        expect(onChange).toHaveBeenCalledWith([CUPO, PRECIO])
+    })
+
+    it('un Cierre borra la Objeción ya tildada', () => {
+        const { onChange } = setup([PRECIO])
+        fireEvent.click(screen.getByRole('button', { name: /cierre/i }))
         fireEvent.click(screen.getByText('Dto'))
-        expect(onChange).toHaveBeenCalledWith([
-            { motivoId: 22, marca: null, competidor: null, pctDiferencia: null },
-        ])
+        expect(onChange).toHaveBeenCalledWith([DTO])
+    })
+
+    // La regla que pidió el usuario: pendientes NO convive con cierre.
+    it('un Cierre borra también el Pendiente ya tildado', () => {
+        const { onChange } = setup([PRECIO, CUPO])
+        fireEvent.click(screen.getByRole('button', { name: /cierre/i }))
+        fireEvent.click(screen.getByText('Dto'))
+        expect(onChange).toHaveBeenCalledWith([DTO])
+    })
+
+    it('y al revés: tildar un Pendiente borra el Cierre ya tildado', () => {
+        const { onChange } = setup([DTO])
+        fireEvent.click(screen.getByText('Cupo'))
+        expect(onChange).toHaveBeenCalledWith([CUPO])
     })
 })
 
