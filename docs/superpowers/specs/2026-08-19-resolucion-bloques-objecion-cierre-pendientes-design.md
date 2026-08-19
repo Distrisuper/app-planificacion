@@ -136,6 +136,35 @@ empujando hacia abajo el resto de esa columna; no afecta al bloque Cierre.
   lugar para eso, pero `requiereDetalle` hoy solo modela marca/competidor/%: sumar un campo
   distinto es otra tarea.
 
+### 6. El pie del wizard: "Ver resumen" en vez de "Finalizar", y el detalle se ataja en su rubro
+
+**El botón verde "Finalizar" del último paso mentía.** Hacía `setWizard(null)` — exactamente lo
+mismo que el `⌄` de los pasos 1-4 — pero el verde y la palabra prometían terminar la visita. El
+final real es el botón **naranja del resumen**, que además es inmediato e irreversible: un tap
+encadena guardar el batch, capturar ubicación y escribir `pl_resolucion` (que no se reabre), sin
+diálogo de confirmación.
+
+- **Pasa a llamarse "Ver resumen"** y a ser neutro (outline), no verde. Dice lo que hace.
+- **No se ofrece "Cerrar visita" en el pie del wizard**, aunque estuviera todo completo. En los
+  pasos 1-4 el slot de la derecha es "Siguiente": el vendedor lo toca cuatro veces seguidas, y
+  poner ahí una acción irreversible al quinto tap es una trampa de misclick. El cambio de pantalla
+  y de color hacia el naranja del resumen es la fricción que protege ese cierre.
+- **Se descartó el "loop infinito" (5 → 1)**: no arregla que el botón mienta —igual hace falta una
+  salida— y encima destruye el "5 de 5" como señal de que se recorrió todo.
+
+**El detalle a medias ahora bloquea Atrás y Siguiente del rubro actual**, en vez de bloquear el
+botón del último paso mirando *todos* los rubros. Antes se podía tildar Precio sin marca/competidor/%,
+seguir, y descubrirlo recién al final con un cartel que mandaba a arreglar algo tres pasos atrás
+("Completá el detalle de Precio en Amortiguadores (ofrecimiento 2 de 5)") — con el campo faltante
+fuera de la pantalla. Ahora el aviso es sobre lo que se está viendo: *"Completá el detalle de Precio
+para seguir."*
+
+Esto además cierra una trampa que existía: en el último paso el `⌄` no se dibuja y `Finalizar` se
+deshabilitaba, así que con un detalle a medias **el pie no tenía ninguna salida** — justo cuando el
+cartel te mandaba a otro rubro. La salida (`⌄` / "Ver resumen") **nunca** se deshabilita: es la vía
+de escape de quien entró por error, y salir no rompe nada porque el rubro queda marcado incompleto
+y "Cerrar visita" sigue bloqueado.
+
 ## El catálogo tarda hasta 35 minutos en reflejar un cambio en la base
 
 No es un bug, pero cuesta media hora de confusión cada vez que se descubre de nuevo. Dar de baja

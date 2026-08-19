@@ -91,13 +91,13 @@ it('el botón Resolución abre el wizard de resolución', async () => {
     expect(await screen.findByText('1 de 2')).toBeInTheDocument()
 })
 
-it('finalizar cierra el wizard sin llamar al backend: el cambio queda en el borrador', async () => {
+it('ver resumen cierra el wizard sin llamar al backend: el cambio queda en el borrador', async () => {
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
     expect(await screen.findByText('2 de 2')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /^finalizar$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /ver resumen/i }))
 
     // Volvió a la lista (el wizard ya no está) y el rubro quedó marcado como completo.
     expect(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' })).toBeInTheDocument()
@@ -175,7 +175,7 @@ it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo 
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
     const cerrarBtn = await screen.findByRole('button', { name: /cerrar visita/i })
     expect(cerrarBtn).toBeEnabled()
@@ -197,7 +197,7 @@ it('si el batch de cierre falla, no limpia el borrador ni dispara el cierre', as
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
 
@@ -364,7 +364,7 @@ it('un rubro agregado se mantiene arriba aunque se resuelva (no se reordena por 
     // Agregar abre el wizard del rubro nuevo directamente: se resuelve ahí mismo, sin
     // volver a la lista a buscarlo.
     await tildarSaquePedido()
-    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
     const botones = await screen.findAllByRole('button', { name: /^resolución de /i })
     expect(botones[0]).toHaveAttribute('aria-label', 'Resolución de Baterías')
@@ -456,7 +456,7 @@ it('marca sin acción no viaja en el batch de cierre (el backend exige un códig
     fireEvent.click(await screen.findByText('Fric-Rot'))
     await tildarSaquePedido()
     fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
-    fireEvent.click(await screen.findByRole('button', { name: /^finalizar$/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
 
