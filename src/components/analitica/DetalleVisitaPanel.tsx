@@ -85,10 +85,22 @@ export default function DetalleVisitaPanel({ visitaId, onCerrar }: DetalleVisita
                     </dl>
 
                     <div>
+                        {/* claseDistancia toma las dos patas; acá se pinta cada una por separado
+                            pasando null en la que no corresponde. */}
                         <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">
-                            Ubicación —{' '}
-                            <span className={CLASE_DISTANCIA[claseDistancia(data.distanciaMetros)]}>
-                                {formatDistancia(data.distanciaMetros)}
+                            Ubicación — Inicio{' '}
+                            <span
+                                className={
+                                    CLASE_DISTANCIA[claseDistancia(data.distanciaInicioMetros, null)]
+                                }
+                            >
+                                {formatDistancia(data.distanciaInicioMetros)}
+                            </span>
+                            {' · '}Fin{' '}
+                            <span
+                                className={CLASE_DISTANCIA[claseDistancia(null, data.distanciaFinMetros)]}
+                            >
+                                {formatDistancia(data.distanciaFinMetros)}
                             </span>
                         </p>
                         {data.coordCliente ? (

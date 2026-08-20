@@ -1,4 +1,4 @@
-import { claseDistancia, formatDistancia, formatDuracion } from '@/lib/analiticaFormat'
+import { claseDistancia, formatDistancia, formatDuracion, peorDistancia } from '@/lib/analiticaFormat'
 import { horaNegocio } from '@/lib/fechas'
 import type { IVisitaFila } from '@/types/analitica'
 import type { ResultadoMotivo } from '@/types/planificacion'
@@ -87,9 +87,9 @@ export default function TablaActividad({ filas, onElegirVisita }: TablaActividad
                                 </td>
                                 <td
                                     data-testid={`distancia-${f.visitaId}`}
-                                    className={`px-3 py-2 text-right ${CLASE_DISTANCIA[claseDistancia(f.distanciaMetros)]}`}
+                                    className={`px-3 py-2 text-right ${CLASE_DISTANCIA[claseDistancia(f.distanciaInicioMetros, f.distanciaFinMetros)]}`}
                                 >
-                                    {formatDistancia(f.distanciaMetros)}
+                                    {formatDistancia(peorDistancia(f.distanciaInicioMetros, f.distanciaFinMetros))}
                                 </td>
                                 <td className="px-3 py-2 text-slate-600">
                                     {f.motivos.length > 0 ? f.motivos.join(', ') : '—'}

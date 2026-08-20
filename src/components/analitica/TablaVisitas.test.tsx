@@ -11,7 +11,8 @@ const VISITAS: IVisitaFila[] = [
         fechaInicio: '2026-07-20T12:13:00Z',
         fechaFin: '2026-07-20T12:58:00Z',
         duracionMin: 45,
-        distanciaMetros: 29,
+        distanciaInicioMetros: 29,
+        distanciaFinMetros: 22,
         codigoParticularCliente: 'C1',
         nombreCliente: 'OSANO ALDO MARIO',
         codigoParticularVendedor: 'V1',
@@ -26,7 +27,8 @@ const VISITAS: IVisitaFila[] = [
         fechaInicio: '2026-07-20T14:44:00Z',
         fechaFin: '2026-07-20T15:27:00Z',
         duracionMin: 43,
-        distanciaMetros: null,
+        distanciaInicioMetros: null,
+        distanciaFinMetros: null,
         codigoParticularCliente: 'C2',
         nombreCliente: 'REPUESTOS DEL SUR',
         codigoParticularVendedor: 'V1',
@@ -41,7 +43,8 @@ const VISITAS: IVisitaFila[] = [
         fechaInicio: '2026-07-21T13:02:00Z',
         fechaFin: '2026-07-21T13:20:00Z',
         duracionMin: 18,
-        distanciaMetros: 4300,
+        distanciaInicioMetros: 35,
+        distanciaFinMetros: 4300,
         codigoParticularCliente: 'C3',
         nombreCliente: 'TABORA EMANUEL',
         codigoParticularVendedor: 'V1',
@@ -57,7 +60,7 @@ it('muestra una fila por visita', () => {
     expect(screen.getAllByRole('row')).toHaveLength(VISITAS.length + 1)
 })
 
-it('pinta en verde la distancia dentro de los 300 m', () => {
+it('pinta en verde la distancia dentro de los 100 m', () => {
     render(<TablaVisitas visitas={VISITAS} onElegirVisita={vi.fn()} />)
     expect(screen.getByText('29 m')).toHaveClass('text-emerald-600')
 })

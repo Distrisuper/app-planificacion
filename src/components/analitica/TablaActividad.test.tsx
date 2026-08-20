@@ -10,7 +10,8 @@ const base: IVisitaFila = {
     fechaInicio: '2026-08-03T12:15:00Z',
     fechaFin: '2026-08-03T12:55:00Z',
     duracionMin: 40,
-    distanciaMetros: 80,
+    distanciaInicioMetros: 80,
+    distanciaFinMetros: 60,
     codigoParticularCliente: 'C1000',
     nombreCliente: 'CALDERON ALEJANDRO PABLO',
     codigoParticularVendedor: 'V1',
@@ -51,7 +52,8 @@ it('una no-visita muestra sus motivos', () => {
         tipo: 'no_visita',
         fechaFin: null,
         duracionMin: null,
-        distanciaMetros: null,
+        distanciaInicioMetros: null,
+        distanciaFinMetros: null,
         motivos: ['Cerrado'],
         resultado: null,
     }
@@ -61,7 +63,12 @@ it('una no-visita muestra sus motivos', () => {
 })
 
 it('sin coord del cliente la distancia va en s/d y en gris, no en rojo', () => {
-    const sinCoord: IVisitaFila = { ...base, visitaId: 5, distanciaMetros: null }
+    const sinCoord: IVisitaFila = {
+        ...base,
+        visitaId: 5,
+        distanciaInicioMetros: null,
+        distanciaFinMetros: null,
+    }
     render(<TablaActividad filas={[sinCoord]} onElegirVisita={vi.fn()} />)
     const celda = screen.getByTestId('distancia-5')
     expect(celda).toHaveTextContent('s/d')

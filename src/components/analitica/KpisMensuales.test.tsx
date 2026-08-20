@@ -4,7 +4,7 @@ import { MOCK_RESUMEN } from '@/mocks/analiticaMock'
 
 it('muestra los tres KPIs del equipo con sus valores', () => {
     render(<KpisMensuales promedios={MOCK_RESUMEN.promedios} />)
-    expect(screen.getByText('Efectividad operativa')).toBeInTheDocument()
+    expect(screen.getByText('Efectividad')).toBeInTheDocument()
     expect(screen.getByText('Visitas (mensual)')).toBeInTheDocument()
     expect(screen.getByText('Horas (mensual)')).toBeInTheDocument()
 })

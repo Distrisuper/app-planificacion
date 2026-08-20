@@ -1,4 +1,4 @@
-import { claseDistancia, formatDistancia, formatDuracion } from '@/lib/analiticaFormat'
+import { claseDistancia, formatDistancia, formatDuracion, peorDistancia } from '@/lib/analiticaFormat'
 import { horaNegocio } from '@/lib/fechas'
 import type { IVisitaFila } from '@/types/analitica'
 import type { ResultadoMotivo } from '@/types/planificacion'
@@ -61,8 +61,14 @@ export default function TablaVisitas({ visitas, onElegirVisita }: TablaVisitasPr
                                 {formatDuracion(v.duracionMin)}
                             </td>
                             <td className="px-3 py-2 text-right">
-                                <span className={CLASE_DISTANCIA[claseDistancia(v.distanciaMetros)]}>
-                                    {formatDistancia(v.distanciaMetros)}
+                                <span
+                                    className={
+                                        CLASE_DISTANCIA[
+                                            claseDistancia(v.distanciaInicioMetros, v.distanciaFinMetros)
+                                        ]
+                                    }
+                                >
+                                    {formatDistancia(peorDistancia(v.distanciaInicioMetros, v.distanciaFinMetros))}
                                 </span>
                             </td>
                             <td className="px-3 py-2 text-slate-900">{v.nombreCliente}</td>

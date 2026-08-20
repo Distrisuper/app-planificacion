@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { HelpCircle } from 'lucide-react'
 
 interface HelpPopoverProps {
-    /** Nombre accesible del botón, ej. "Qué significa Efectividad operativa". */
+    /** Nombre accesible del botón, ej. "Qué significa Efectividad". */
     label: string
     children: React.ReactNode
     align?: 'left' | 'right'

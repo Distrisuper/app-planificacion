@@ -27,11 +27,11 @@ beforeEach(() => {
     ;(api.getObjeciones as any).mockResolvedValue({ total: 0, motivos: [] })
 })
 
-it('monta un único bloque de Efectividad operativa, con su selector de período', async () => {
+it('monta un único bloque de Efectividad, con su selector de período', async () => {
     ;(api.getResumen as any).mockResolvedValue(MOCK_RESUMEN)
     montar()
     await waitFor(() => expect(screen.getByText('ACOSTA MARIANO')).toBeInTheDocument())
-    expect(screen.getByRole('heading', { name: 'Efectividad operativa' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Efectividad' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Mes anterior' })).toBeInTheDocument()
 })
 

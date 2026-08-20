@@ -43,12 +43,14 @@ it('incluye un vendedor sin objetivo vigente', () => {
 
 it('incluye visitas sin coord del cliente, con distancia null', () => {
     const todas = Object.values(MOCK_VISITAS).flat()
-    expect(todas.some(v => v.distanciaMetros === null)).toBe(true)
+    expect(todas.some(v => v.distanciaInicioMetros === null && v.distanciaFinMetros === null)).toBe(
+        true,
+    )
 })
 
-it('incluye una visita fuera de la tolerancia de 300 m', () => {
+it('incluye una visita fuera de la tolerancia de 100 m', () => {
     const todas = Object.values(MOCK_VISITAS).flat()
-    expect(todas.some(v => v.distanciaMetros !== null && v.distanciaMetros > 300)).toBe(true)
+    expect(todas.some(v => v.distanciaFinMetros !== null && v.distanciaFinMetros > 100)).toBe(true)
 })
 
 it('todo vendedor del resumen tiene visitas cargadas', () => {

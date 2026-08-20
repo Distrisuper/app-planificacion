@@ -1,7 +1,8 @@
 import {
-    AYUDA_EFECTIVIDAD_OPERATIVA,
+    AYUDA_EFECTIVIDAD_FORMULA,
     AYUDA_HORAS_MENSUAL,
     AYUDA_VISITAS_MENSUAL,
+    ayudaEfectividad,
 } from './ayudaEfectividadOperativa'
 import HelpPopover from './HelpPopover'
 import { formatHoras, formatNumero, formatPctEscalado } from '@/lib/analiticaFormat'
@@ -43,7 +44,19 @@ export default function TablaEfectividadOperativa({
             onClick={esPromedio ? undefined : () => onElegirVendedor(v.codigoParticularVendedor)}
         >
             <td className="px-3 py-2 text-left">{v.nombreVendedor}</td>
-            <td className="px-3 py-2 text-right">{formatPctEscalado(v.efectividadOperativa)}</td>
+            <td className="px-3 py-2 text-right">
+                {/* stopPropagation: la fila entera navega al vendedor con onClick;
+                    sin esto, abrir este popover también dispararía esa navegación. */}
+                <span
+                    className="inline-flex items-center justify-end gap-1.5"
+                    onClick={e => e.stopPropagation()}
+                >
+                    {formatPctEscalado(v.efectividadOperativa)}
+                    <HelpPopover label={`Por qué ${esPromedio ? 'el promedio' : v.nombreVendedor} tiene esta efectividad`}>
+                        {ayudaEfectividad(v)}
+                    </HelpPopover>
+                </span>
+            </td>
             <td className="px-3 py-2 text-right">{formatNumero(v.visitasValidas)}</td>
             <td className="px-3 py-2 text-right">{formatHoras(v.minutosTotales)}</td>
         </tr>
@@ -56,7 +69,7 @@ export default function TablaEfectividadOperativa({
                     <tr>
                         <th className="px-3 py-2 text-left">Vendedor</th>
                         <th className="px-3 py-2 text-right">
-                            <Encabezado titulo="Efectividad operativa" ayuda={AYUDA_EFECTIVIDAD_OPERATIVA} />
+                            <Encabezado titulo="Efectividad" ayuda={AYUDA_EFECTIVIDAD_FORMULA} />
                         </th>
                         <th className="px-3 py-2 text-right">
                             <Encabezado titulo="Visitas (mensual)" ayuda={AYUDA_VISITAS_MENSUAL} />

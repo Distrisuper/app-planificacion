@@ -81,7 +81,7 @@ export function fechaHoraNegocio(iso: string | null | undefined): string {
 }
 
 /** Primer y último día del mes calendario que contiene `fecha`, en formato YYYY-MM-DD.
- *  Es el filtro que usa el bloque de Efectividad operativa: siempre mes completo,
+ *  Es el filtro que usa el bloque de Efectividad: siempre mes completo,
  *  nunca un rango libre. */
 export function rangoMes(fecha: Date): { desde: string; hasta: string } {
     const anio = fecha.getFullYear()
@@ -94,7 +94,7 @@ export function rangoMes(fecha: Date): { desde: string; hasta: string } {
 }
 
 /** Lunes y viernes de la semana calendario que contiene `fecha`, en formato YYYY-MM-DD.
- *  Es el otro rango que ofrece el selector de Efectividad operativa, alternativo a `rangoMes`. */
+ *  Es el otro rango que ofrece el selector de Efectividad, alternativo a `rangoMes`. */
 export function rangoSemana(fecha: Date): { desde: string; hasta: string } {
     const diaSemana = fecha.getDay() === 0 ? 7 : fecha.getDay()
     const lunes = new Date(fecha)

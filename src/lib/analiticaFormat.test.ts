@@ -1,18 +1,22 @@
 import {
+    DURACION_MAX_VALIDA,
+    DURACION_MIN_VALIDA,
     TOLERANCIA_METROS,
     alertasAbsolutas,
     claseDistancia,
     esBajoPromedio,
+    esDuracionValida,
     formatDistancia,
     formatDuracion,
     formatHoras,
     formatNumero,
     formatPct,
     formatPctEscalado,
+    peorDistancia,
 } from './analiticaFormat'
 
-it('la tolerancia es de 300 m', () => {
-    expect(TOLERANCIA_METROS).toBe(300)
+it('la tolerancia es de 100 m', () => {
+    expect(TOLERANCIA_METROS).toBe(100)
 })
 
 it('formatPct muestra s/d cuando el dato falta, nunca 0%', () => {
@@ -39,13 +43,32 @@ it('formatDuracion redondea a minutos enteros', () => {
 })
 
 it('claseDistancia pinta verde dentro de la tolerancia, inclusive en el límite', () => {
-    expect(claseDistancia(299)).toBe('ok')
-    expect(claseDistancia(300)).toBe('ok')
-    expect(claseDistancia(301)).toBe('alerta')
+    expect(claseDistancia(99, 50)).toBe('ok')
+    expect(claseDistancia(100, 50)).toBe('ok')
+    expect(claseDistancia(101, 50)).toBe('alerta')
 })
 
-it('claseDistancia devuelve neutro cuando no hay dato: no es culpa del vendedor', () => {
-    expect(claseDistancia(null)).toBe('neutro')
+it('claseDistancia usa la peor de las dos patas', () => {
+    expect(claseDistancia(20, 150)).toBe('alerta')
+    expect(claseDistancia(150, 20)).toBe('alerta')
+})
+
+it('claseDistancia devuelve neutro cuando no hay ningún dato: no es culpa del vendedor', () => {
+    expect(claseDistancia(null, null)).toBe('neutro')
+})
+
+it('peorDistancia devuelve la mayor de las dos, o null si no hay ninguna', () => {
+    expect(peorDistancia(20, 150)).toBe(150)
+    expect(peorDistancia(80, null)).toBe(80)
+    expect(peorDistancia(null, null)).toBeNull()
+})
+
+it('esDuracionValida exige el rango 10-90 min inclusive', () => {
+    expect(esDuracionValida(DURACION_MIN_VALIDA)).toBe(true)
+    expect(esDuracionValida(DURACION_MAX_VALIDA)).toBe(true)
+    expect(esDuracionValida(9)).toBe(false)
+    expect(esDuracionValida(91)).toBe(false)
+    expect(esDuracionValida(null)).toBe(false)
 })
 
 it('esBajoPromedio marca por debajo del 70% del promedio del equipo', () => {
@@ -85,6 +108,11 @@ it('formatPctEscalado redondea un valor ya expresado en escala 0..100, nunca 0% 
     expect(formatPctEscalado(89.4)).toBe('89%')
     expect(formatPctEscalado(100)).toBe('100%')
     expect(formatPctEscalado(104)).toBe('104%')
+})
+
+it('formatPctEscalado nunca muestra NaN%: un campo que la API todavía no manda cae en s/d', () => {
+    expect(formatPctEscalado(undefined)).toBe('s/d')
+    expect(formatPctEscalado(NaN)).toBe('s/d')
 })
 
 it('formatHoras convierte minutos a horas con un decimal', () => {
