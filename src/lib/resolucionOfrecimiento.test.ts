@@ -23,7 +23,7 @@ const completo: IOfrecimientoMotivo = {
     valores: { marca: 'Fric-Rot', competidor: 'Corven', precio_competidor: 150, mi_precio: 130 },
 }
 
-it('un motivo sin codigo nunca está incompleto: no pide nada', () => {
+it('un motivo sin campos declarados nunca está incompleto: no pide nada', () => {
     expect(motivoIncompleto(motivos, [{ motivoId: 35, valores: {} }])).toBeNull()
 })
 
@@ -36,11 +36,11 @@ it('con el detalle completo no señala nada', () => {
     expect(motivoIncompleto(motivos, [completo])).toBeNull()
 })
 
-// Un motivo cuyo codigo no tiene módulo registrado (catálogo por delante del deploy) no
-// puede bloquear al vendedor: si no hay formulario que completar, no hay nada a medias.
-it('un codigo sin módulo registrado no bloquea', () => {
+// El codigo ya no gatilla la validación: es la declaración de campos la que decide, así que
+// un codigo desconocido con campos igual bloquea si le falta algo.
+it('un codigo desconocido no cambia la validación: la decide `campos`', () => {
     const raro: IMotivo[] = [{ ...motivos[0], codigo: 'TODAVIA_NO_EXISTE' }]
-    expect(motivoIncompleto(raro, [{ motivoId: 30, valores: {} }])).toBeNull()
+    expect(motivoIncompleto(raro, [{ motivoId: 30, valores: {} }])?.descripcion).toBe('Precio')
 })
 
 it('tieneDetalleIncompleto es el booleano de lo mismo', () => {

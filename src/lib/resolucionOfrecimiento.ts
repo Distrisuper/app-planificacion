@@ -1,11 +1,12 @@
-import { validadoresDetalleMotivo } from '@/components/propuesta/detalleMotivo/validadores'
+import { esValidoSegunDeclaracion } from '@/components/propuesta/detalleMotivo/validadores'
 import type { IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
 
-/** El motivo tildado cuyo módulo dice que le falta algo, o null. Se usa para señalar CUÁL
+/** El motivo tildado al que le falta algún campo requerido, o null. Se usa para señalar CUÁL
  *  falta completar, no solo que falta algo.
  *
- *  Un motivo sin `codigo`, o con un `codigo` que todavía no tiene módulo (el catálogo puede
- *  ir por delante del deploy), NUNCA bloquea: si no hay formulario, no hay nada a medias. */
+ *  Un motivo sin campos declarados NUNCA bloquea: si no hay formulario, no hay nada a medias.
+ *  Tampoco bloquea un campo cuyo `tipo` este deploy no sabe dibujar — ver
+ *  `esValidoSegunDeclaracion`. */
 export function motivoIncompleto(
     motivos: IMotivo[],
     value: IOfrecimientoMotivo[],
@@ -15,8 +16,7 @@ export function motivoIncompleto(
         motivos.find(cat => {
             const seleccionado = porId.get(cat.motivoId)
             if (!seleccionado) return false
-            const modulo = cat.codigo ? validadoresDetalleMotivo[cat.codigo] : undefined
-            return !!modulo && !modulo.esValido(seleccionado.valores)
+            return !esValidoSegunDeclaracion(cat.campos, seleccionado.valores)
         }) ?? null
     )
 }

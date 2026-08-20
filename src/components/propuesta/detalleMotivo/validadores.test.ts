@@ -1,72 +1,73 @@
-import { validadoresDetalleMotivo } from './validadores'
+import { esValidoSegunDeclaracion, pctVsCompetidor, pctFleteSobreCompra } from './validadores'
+import type { ICampoMotivo } from '@/types/planificacion'
 
-describe('PRECIO', () => {
-    const v = validadoresDetalleMotivo.PRECIO
-    const completo = { marca: 'Fric-Rot', competidor: 'Corven', precio_competidor: 150, mi_precio: 130 }
+function campo(over: Partial<ICampoMotivo> = {}): ICampoMotivo {
+    return {
+        campo: 'plazo_dias',
+        tipo: 'numero',
+        label: 'Plazo solicitado',
+        placeholder: null,
+        unidad: null,
+        requerido: true,
+        orden: 10,
+        ...over,
+    }
+}
 
-    it('declara sus cuatro campos', () => {
-        expect(v.campos).toEqual(['marca', 'competidor', 'precio_competidor', 'mi_precio'])
+describe('esValidoSegunDeclaracion', () => {
+    it('sin campos declarados siempre es válido: no hay formulario a medias', () => {
+        expect(esValidoSegunDeclaracion([], {})).toBe(true)
     })
 
-    it('es válido con los cuatro cargados', () => {
-        expect(v.esValido(completo)).toBe(true)
+    it('falta un requerido', () => {
+        expect(esValidoSegunDeclaracion([campo()], {})).toBe(false)
     })
 
-    it('no es válido si falta uno', () => {
-        expect(v.esValido({ ...completo, mi_precio: null })).toBe(false)
+    it('con el requerido cargado es válido', () => {
+        expect(esValidoSegunDeclaracion([campo()], { plazo_dias: 30 })).toBe(true)
     })
 
-    it('un texto en blanco no cuenta como cargado', () => {
-        expect(v.esValido({ ...completo, competidor: '   ' })).toBe(false)
+    it('un opcional vacío no invalida', () => {
+        const opcional = campo({ campo: 'por_que', tipo: 'textarea', requerido: false })
+
+        expect(esValidoSegunDeclaracion([opcional], {})).toBe(true)
     })
 
-    // El resumen es lo que ve gerencia en la tabla de ofrecimientos.
-    it('resume contra quién y por cuánto', () => {
-        expect(v.resumen(completo)).toBe('Fric-Rot vs. Corven · -13.3%')
-    })
-})
-
-describe('PLAZO', () => {
-    const v = validadoresDetalleMotivo.PLAZO
-
-    it('pide los días', () => {
-        expect(v.esValido({ plazo_dias: 30 })).toBe(true)
-        expect(v.esValido({ plazo_dias: null })).toBe(false)
+    // Un 0 en un precio o un plazo es "sin cargar", no un dato: mantiene el criterio que ya
+    // tenía `cargado`.
+    it('un número en 0 cuenta como no cargado', () => {
+        expect(esValidoSegunDeclaracion([campo()], { plazo_dias: 0 })).toBe(false)
     })
 
-    // Un plazo de 0 días no es un plazo: es no haber cargado nada.
-    it('cero no es un plazo válido', () => {
-        expect(v.esValido({ plazo_dias: 0 })).toBe(false)
+    it('un texto en blanco cuenta como no cargado', () => {
+        const texto = campo({ campo: 'competidor', tipo: 'texto' })
+
+        expect(esValidoSegunDeclaracion([texto], { competidor: '   ' })).toBe(false)
     })
 
-    it('resume con la unidad', () => {
-        expect(v.resumen({ plazo_dias: 30 })).toBe('30 días')
-    })
-})
+    // "Un campo que no se puede preguntar no se puede exigir": si un tipo nuevo bloqueara el
+    // wizard, el vendedor no tendría forma de completarlo con este deploy.
+    it('un tipo que el front no sabe dibujar no se exige', () => {
+        const raro = campo({ campo: 'fecha_promesa', tipo: 'fecha' as never })
 
-describe('FLETE', () => {
-    const v = validadoresDetalleMotivo.FLETE
-
-    it('pide los dos montos', () => {
-        expect(v.esValido({ valor_flete: 60000, compra_futuro: 3000000 })).toBe(true)
-        expect(v.esValido({ valor_flete: 60000 })).toBe(false)
-    })
-
-    it('resume con el peso del flete sobre la compra', () => {
-        expect(v.resumen({ valor_flete: 60000, compra_futuro: 3000000 })).toBe('Flete 2.0% de la compra')
+        expect(esValidoSegunDeclaracion([raro], {})).toBe(true)
     })
 })
 
-describe('NO_TRABAJA', () => {
-    const v = validadoresDetalleMotivo.NO_TRABAJA
-
-    it('pide la marca que trabaja', () => {
-        expect(v.esValido({ marca_trabaja: 'Corven' })).toBe(true)
-        expect(v.esValido({})).toBe(false)
+describe('derivados', () => {
+    it('pctVsCompetidor: negativo cuando soy más barato', () => {
+        expect(pctVsCompetidor({ precio_competidor: 150, mi_precio: 130 })).toBeCloseTo(-13.3, 1)
     })
 
-    // `por_que` es contexto para leer, no para agrupar: no se exige.
-    it('el porqué es opcional', () => {
-        expect(v.esValido({ marca_trabaja: 'Corven', por_que: null })).toBe(true)
+    it('pctVsCompetidor: null si falta un precio', () => {
+        expect(pctVsCompetidor({ precio_competidor: 150 })).toBeNull()
+    })
+
+    it('pctFleteSobreCompra: el flete sobre la compra', () => {
+        expect(pctFleteSobreCompra({ valor_flete: 60000, compra_futuro: 3000000 })).toBeCloseTo(2, 1)
+    })
+
+    it('pctFleteSobreCompra: null si la compra es 0', () => {
+        expect(pctFleteSobreCompra({ valor_flete: 60000, compra_futuro: 0 })).toBeNull()
     })
 })
