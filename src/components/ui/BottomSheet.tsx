@@ -20,7 +20,7 @@ interface BottomSheetProps {
      *   contenido de alto variable que a veces entra justo y a veces no (ej. el
      *   sheet de estado: cinco zonas o una sola, según el vendedor). Con altura
      *   fija, el caso corto deja un hueco blanco de ~200px sobre el pie.
-     * - 'completa': altura fija de 90dvh. Para listas largas de alto imprevisible
+     * - 'completa': altura fija de 96dvh. Para listas largas de alto imprevisible
      *   (la propuesta), donde un sheet que crece y se achica según cuántos rubros
      *   trajo el cliente hace saltar el pie de botones entre un cliente y otro.
      */
@@ -51,13 +51,13 @@ export default function BottomSheet({
             <div
                 className={`animate-sheet-up flex w-full flex-col rounded-t-[24px] bg-white shadow-[0_-10px_34px_rgba(10,15,30,.22)] ${
                     // En 'completa', el max-h no llega a aplicar nunca con dvh soportado
-                    // (90dvh <= 90vh): está para que, si no lo estuviera, el sheet quede
+                    // (96dvh <= 96vh): está para que, si no lo estuviera, el sheet quede
                     // acotado a la pantalla en vez de crecer con el contenido y empujar
                     // el pie fijo fuera de la vista — justo lo que este modo vino a
                     // evitar. En 'hasta-completa' el max-h es el mecanismo, no el
                     // respaldo, y por eso no lleva `h` fija.
                     altura === 'completa'
-                        ? 'h-[90dvh] max-h-[90vh]'
+                        ? 'h-[96dvh] max-h-[96vh]'
                         : altura === 'hasta-completa'
                           ? 'max-h-[90dvh]'
                           : 'max-h-[85vh]'

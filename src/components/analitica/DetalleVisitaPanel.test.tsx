@@ -34,9 +34,7 @@ const DETALLE: IVisitaDetalle = {
                 {
                     descripcion: 'Precio',
                     resultado: 'perdido',
-                    marca: 'YPF',
-                    competidor: 'Shell',
-                    pctDiferencia: 12,
+                    valores: { marca: 'YPF', competidor: 'Shell', precio_competidor: 150, mi_precio: 132 },
                 },
             ],
         },
@@ -57,7 +55,7 @@ const DETALLE: IVisitaDetalle = {
             resuelto: true,
             alcance: [{ tipo: 'marca', codigo: 'SKF', descripcion: 'SKF' }],
             motivos: [
-                { descripcion: 'Saqué pedido', resultado: 'ganado', marca: null, competidor: null, pctDiferencia: null },
+                { descripcion: 'Saqué pedido', resultado: 'ganado', valores: {} },
             ],
         },
     ],
@@ -89,7 +87,6 @@ it('muestra el detalle del motivo con marca, competidor y diferencia', async () 
     await waitFor(() => expect(screen.getByText('Lubricantes')).toBeInTheDocument())
     expect(screen.getByText(/YPF/)).toBeInTheDocument()
     expect(screen.getByText(/Shell/)).toBeInTheDocument()
-    expect(screen.getByText(/12%/)).toBeInTheDocument()
 })
 
 it('marca los rubros que quedaron sin resolver', async () => {

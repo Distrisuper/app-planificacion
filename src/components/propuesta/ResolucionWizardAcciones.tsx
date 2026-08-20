@@ -20,7 +20,12 @@ interface ResolucionWizardAccionesProps {
 
 /** Atrás / minimizar / Siguiente-o-"Ver resumen". Se renderiza en el pie FIJO del sheet (fuera
  *  del área de scroll) para que siga a la vista aunque el detalle de un motivo (ej. Precio)
- *  empuje el contenido hacia abajo — si viviera en el scroll, expandir el detalle lo tapa. */
+ *  empuje el contenido hacia abajo — si viviera en el scroll, expandir el detalle lo tapa.
+ *
+ *  El texto de "qué falta" NO vive acá: vivir en el pie fijo lo hacía crecer y encoger según
+ *  hubiera o no un motivo bloqueante, empujando estos mismos botones cada vez que aparecía o
+ *  desaparecía. Vive junto al campo que falta (ver ResolucionOfrecimiento), donde además es
+ *  más accionable: el vendedor ya está mirando ahí. */
 export default function ResolucionWizardAcciones({
     ofrecimientos,
     index,
@@ -42,77 +47,69 @@ export default function ResolucionWizardAcciones({
         : null
 
     return (
-        <div>
-            <div className="flex items-center gap-2">
-                {/* Atrás y Siguiente se bloquean con el detalle a medias: irse del rubro
-                 *  dejaría un motivo tildado sin los campos que el backend exige
-                 *  (MOTIVO_DETALLE_REQUERIDO), y el vendedor lo descubriría recién al
-                 *  querer cerrar la visita. La salida sí queda libre — ver más abajo. */}
+        <div className="flex items-center gap-2">
+            {/* Atrás y Siguiente se bloquean con el detalle a medias: irse del rubro
+             *  dejaría un motivo tildado sin los campos que el backend exige
+             *  (MOTIVO_DETALLE_REQUERIDO), y el vendedor lo descubriría recién al
+             *  querer cerrar la visita. La salida sí queda libre — ver más abajo. */}
+            <Button
+                variant="outline"
+                disabled={index === 0 || !!motivoBloqueante}
+                onClick={() => onIndexChange(index - 1)}
+                className="h-12 flex-1 text-[13.5px] font-bold"
+            >
+                <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                Atrás
+            </Button>
+            {/* Salida al alcance del pulgar: minimiza el wizard y vuelve a la lista.
+             *  Sin texto — la flecha hacia abajo ya se lee como "minimizar" (mismo
+             *  lenguaje que el botón del header del sheet). La misma salida que el ‹
+             *  del header, que queda arriba a la izquierda y se confunde con "Atrás"
+             *  (mismo ícono, distinto significado: uno sale a la lista, el otro va al
+             *  rubro anterior). En el último rubro no va: ahí "Finalizar" ya es esto
+             *  mismo.
+             *
+             *  NO se deshabilita con el detalle a medias, a diferencia de Atrás y
+             *  Siguiente: es la vía de escape de quien entró por error, y un escape
+             *  deshabilitado deja al vendedor encerrado en un rubro que no quería
+             *  abrir. Salir no rompe nada — el rubro queda con el chip en ámbar y
+             *  "Cerrar visita" sigue bloqueado hasta completarlo. */}
+            {!esUltimo && (
                 <Button
                     variant="outline"
-                    disabled={index === 0 || !!motivoBloqueante}
-                    onClick={() => onIndexChange(index - 1)}
+                    size="icon"
+                    onClick={onFinalizar}
+                    aria-label="Minimizar y ver lista"
+                    className="h-12 w-12 shrink-0 rounded-lg text-dsmuted"
+                >
+                    <ChevronDown className="h-5 w-5" strokeWidth={2.4} />
+                </Button>
+            )}
+            {/* En el último paso NO va un botón verde de cierre: esto vuelve al
+             *  resumen, igual que el ⌄ de los pasos anteriores. Se llamaba "Finalizar"
+             *  y era verde, lo que prometía terminar la visita y solo minimizaba el
+             *  wizard. El único que la termina es el naranja del resumen, y ese cierre
+             *  es inmediato e irreversible (captura ubicación y escribe pl_resolucion,
+             *  que no se reabre) — por eso no se duplica acá, donde caería justo en el
+             *  slot que el vendedor viene tocando cinco veces seguidas. */}
+            {esUltimo ? (
+                <Button
+                    variant="outline"
+                    onClick={onFinalizar}
                     className="h-12 flex-1 text-[13.5px] font-bold"
                 >
-                    <ChevronLeft className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                    Atrás
+                    Ver resumen
                 </Button>
-                {/* Salida al alcance del pulgar: minimiza el wizard y vuelve a la lista.
-                 *  Sin texto — la flecha hacia abajo ya se lee como "minimizar" (mismo
-                 *  lenguaje que el botón del header del sheet). La misma salida que el ‹
-                 *  del header, que queda arriba a la izquierda y se confunde con "Atrás"
-                 *  (mismo ícono, distinto significado: uno sale a la lista, el otro va al
-                 *  rubro anterior). En el último rubro no va: ahí "Finalizar" ya es esto
-                 *  mismo.
-                 *
-                 *  NO se deshabilita con el detalle a medias, a diferencia de Atrás y
-                 *  Siguiente: es la vía de escape de quien entró por error, y un escape
-                 *  deshabilitado deja al vendedor encerrado en un rubro que no quería
-                 *  abrir. Salir no rompe nada — el rubro queda con el chip en ámbar y
-                 *  "Cerrar visita" sigue bloqueado hasta completarlo. */}
-                {!esUltimo && (
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={onFinalizar}
-                        aria-label="Minimizar y ver lista"
-                        className="h-12 w-12 shrink-0 rounded-lg text-dsmuted"
-                    >
-                        <ChevronDown className="h-5 w-5" strokeWidth={2.4} />
-                    </Button>
-                )}
-                {/* En el último paso NO va un botón verde de cierre: esto vuelve al
-                 *  resumen, igual que el ⌄ de los pasos anteriores. Se llamaba "Finalizar"
-                 *  y era verde, lo que prometía terminar la visita y solo minimizaba el
-                 *  wizard. El único que la termina es el naranja del resumen, y ese cierre
-                 *  es inmediato e irreversible (captura ubicación y escribe pl_resolucion,
-                 *  que no se reabre) — por eso no se duplica acá, donde caería justo en el
-                 *  slot que el vendedor viene tocando cinco veces seguidas. */}
-                {esUltimo ? (
-                    <Button
-                        variant="outline"
-                        onClick={onFinalizar}
-                        className="h-12 flex-1 text-[13.5px] font-bold"
-                    >
-                        Ver resumen
-                    </Button>
-                ) : (
-                    <Button
-                        variant="outline"
-                        disabled={!!motivoBloqueante}
-                        onClick={() => onIndexChange(index + 1)}
-                        className="h-12 flex-1 text-[13.5px] font-bold"
-                    >
-                        Siguiente
-                        <ChevronRight className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                    </Button>
-                )}
-            </div>
-
-            {motivoBloqueante && (
-                <p className="mt-2 text-[12.5px] font-semibold text-[#B45309]">
-                    Completá el detalle de {motivoBloqueante.descripcion} para seguir.
-                </p>
+            ) : (
+                <Button
+                    variant="outline"
+                    disabled={!!motivoBloqueante}
+                    onClick={() => onIndexChange(index + 1)}
+                    className="h-12 flex-1 text-[13.5px] font-bold"
+                >
+                    Siguiente
+                    <ChevronRight className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                </Button>
             )}
         </div>
     )

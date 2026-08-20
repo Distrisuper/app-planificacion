@@ -7,14 +7,27 @@ function key(visitaId: number): string {
     return `visita-borrador-${visitaId}`
 }
 
-/** null si no hay borrador guardado, o si lo que hay no es JSON válido (dato
- *  corrupto o de una versión vieja): en ese caso se arranca en limpio desde los
- *  motivos que ya trae el servidor. */
+/** Un motivo de la forma nueva trae `valores`; el de la vieja traía marca/competidor/
+ *  pctDiferencia sueltos. Los dos son JSON válido, así que el try/catch no alcanza. */
+function esFormaNueva(borrador: unknown): boolean {
+    if (typeof borrador !== 'object' || borrador === null) return false
+    return Object.values(borrador as Record<string, unknown>).every(
+        lista =>
+            Array.isArray(lista) &&
+            lista.every(m => typeof m === 'object' && m !== null && 'valores' in m),
+    )
+}
+
+/** null si no hay borrador guardado, si lo que hay no es JSON válido, o si tiene la forma
+ *  anterior al detalle por motivo: en cualquiera de los tres casos se arranca en limpio desde
+ *  los motivos que ya trae el servidor. Descartar es correcto y no una pérdida: lo que estaba
+ *  guardado contra el servidor sigue estando. */
 export function leerBorrador(visitaId: number): Borrador | null {
     const raw = localStorage.getItem(key(visitaId))
     if (raw == null) return null
     try {
-        return JSON.parse(raw) as Borrador
+        const parsed = JSON.parse(raw) as Borrador
+        return esFormaNueva(parsed) ? parsed : null
     } catch {
         return null
     }

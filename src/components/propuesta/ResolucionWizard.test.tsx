@@ -8,8 +8,20 @@ import type { IMotivo, IOfrecimiento } from '@/types/planificacion'
 vi.mock('@/api/planificacion')
 
 const motivos: IMotivo[] = [
-    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
+    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', codigo: null, campos: [] },
+    {
+        motivoId: 13,
+        nivel: 'ofrecimiento',
+        descripcion: 'Precio',
+        resultado: 'perdido',
+        codigo: 'PRECIO',
+        campos: [
+            { campo: 'marca', tipo: 'catalogo_marca', label: 'Marca', placeholder: null, unidad: null, requerido: true, orden: 10 },
+            { campo: 'competidor', tipo: 'texto', label: 'Competidor', placeholder: 'Ej. Corven', unidad: null, requerido: true, orden: 20 },
+            { campo: 'precio_competidor', tipo: 'numero', label: 'Precio del competidor', placeholder: null, unidad: '$', requerido: true, orden: 30 },
+            { campo: 'mi_precio', tipo: 'numero', label: 'Mi precio', placeholder: null, unidad: '$', requerido: true, orden: 40 },
+        ],
+    },
 ]
 
 const ofrecimientos: IOfrecimiento[] = [
@@ -90,7 +102,7 @@ it('con motivos tildados, ofrece limpiar y lo vacía', () => {
     const onCambiarBorrador = vi.fn()
     const onCambiarAccion = vi.fn()
     setup({
-        borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] },
+        borradores: { 7: [{ motivoId: 10, valores: {} }], 8: [] },
         onCambiarBorrador,
         onCambiarAccion,
     })
@@ -126,7 +138,7 @@ it('tildar un motivo avisa con el ofrecimiento actual', () => {
     fireEvent.click(screen.getByRole('button', { name: /cierre/i }))
     fireEvent.click(screen.getByText('Saqué pedido'))
     expect(onCambiarBorrador).toHaveBeenCalledWith(7, [
-        { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
+        { motivoId: 10, valores: {} },
     ])
 })
 
@@ -146,7 +158,7 @@ it('no pide el catálogo de marcas si ningún motivo tildado lo necesita', () =>
 it('pide el catálogo de marcas cuando hay tildado un motivo con detalle', async () => {
     setup({
         borradores: {
-            7: [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }],
+            7: [{ motivoId: 13, valores: {} }],
             8: [],
         },
     })
@@ -181,7 +193,7 @@ it('si falla el borrado, muestra el error y no vuelve a la lista', async () => {
 it('sin acción ni marca cargada, no ofrece ningún check de aplicar a restantes', () => {
     // Con motivos tildados pero SIN acción/marca tampoco se ofrece: lo que se replica
     // es acción o marca, nunca la resolución.
-    setup({ borradores: { 7: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }], 8: [] } })
+    setup({ borradores: { 7: [{ motivoId: 10, valores: {} }], 8: [] } })
     expect(screen.queryByText('Aplicar a restantes')).not.toBeInTheDocument()
 })
 

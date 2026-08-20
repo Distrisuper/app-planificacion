@@ -18,13 +18,36 @@ export interface ICatalogoItem {
     description: string
 }
 
+/** Qué clase de input pide un campo. Es un enum de CÓDIGO, no de datos: sumar un `tipo`
+ *  implica un componente nuevo, y por lo tanto un deploy. Un `tipo` desconocido no se dibuja
+ *  ni se exige — ver la regla de degradación del spec. */
+export type TipoCampoMotivo = 'numero' | 'texto' | 'textarea' | 'catalogo_marca'
+
+/** La declaración de un campo del detalle, tal como la sirve el back desde pl_motivo_campo.
+ *  Reemplaza al registro que estaba hardcodeado en detalleMotivo/validadores.ts: agregar un
+ *  campo pasó a ser un INSERT. */
+export interface ICampoMotivo {
+    campo: string
+    tipo: TipoCampoMotivo
+    label: string
+    placeholder: string | null
+    /** Sufijo de presentación ("días", "$"). Se muestra junto al label. */
+    unidad: string | null
+    requerido: boolean
+    orden: number
+}
+
 export interface IMotivo {
     motivoId: number
     nivel: NivelMotivo
     descripcion: string
     resultado: ResultadoMotivo | null
-    /** Si es true, resolver un ofrecimiento con este motivo exige marca/competidor/pctDiferencia. */
-    requiereDetalle: boolean
+    /** Llave estable del módulo de DISPLAY (PRECIO, FLETE): identifica al motivo que deriva
+     *  un valor con fórmula. `null` = se dibuja genérico. NO significa "no pide detalle":
+     *  eso lo dice `campos`. NO se usa motivoId: los ids difieren entre ambientes. */
+    codigo: string | null
+    /** Qué campos pide este motivo, ya ordenados por el back. Vacío = no pide detalle. */
+    campos: ICampoMotivo[]
 }
 
 export interface IBrandDiscount {
@@ -172,13 +195,11 @@ export interface IAlcance {
     descripcion: string
 }
 
-/** Un motivo aplicado a un ofrecimiento. marca/competidor/pctDiferencia solo se usan cuando el
- *  motivo tiene requiereDetalle; en el resto van null. */
+/** Un motivo aplicado a un ofrecimiento, con lo que pidió su módulo de detalle. Las claves
+ *  son los `campo` que ese módulo declara; sin entrada = sin cargar. */
 export interface IOfrecimientoMotivo {
     motivoId: number
-    marca: string | null
-    competidor: string | null
-    pctDiferencia: number | null
+    valores: Record<string, string | number | null>
 }
 
 /** Un ofrecimiento de la propuesta congelada. `resuelto` lo deriva el backend de motivos.length. */

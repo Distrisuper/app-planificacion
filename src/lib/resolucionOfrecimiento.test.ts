@@ -1,63 +1,62 @@
-import { detalleCompleto, motivoIncompleto, tieneDetalleIncompleto, motivosIguales } from './resolucionOfrecimiento'
+import { motivoIncompleto, tieneDetalleIncompleto, motivosIguales } from './resolucionOfrecimiento'
 import type { IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
 
 const motivos: IMotivo[] = [
-    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
+    {
+        motivoId: 30,
+        nivel: 'ofrecimiento',
+        descripcion: 'Precio',
+        resultado: 'perdido',
+        codigo: 'PRECIO',
+        campos: [
+            { campo: 'marca', tipo: 'catalogo_marca', label: 'Marca', placeholder: null, unidad: null, requerido: true, orden: 10 },
+            { campo: 'competidor', tipo: 'texto', label: 'Competidor', placeholder: 'Ej. Corven', unidad: null, requerido: true, orden: 20 },
+            { campo: 'precio_competidor', tipo: 'numero', label: 'Precio del competidor', placeholder: null, unidad: '$', requerido: true, orden: 30 },
+            { campo: 'mi_precio', tipo: 'numero', label: 'Mi precio', placeholder: null, unidad: '$', requerido: true, orden: 40 },
+        ],
+    },
+    { motivoId: 35, nivel: 'ofrecimiento', descripcion: 'Dto', resultado: 'ganado', codigo: null, campos: [] },
 ]
 
-it('detalleCompleto es falso si falta cualquier campo', () => {
-    expect(detalleCompleto({ motivoId: 13, marca: null, competidor: null, pctDiferencia: null })).toBe(false)
-    expect(detalleCompleto({ motivoId: 13, marca: 'Fric-Rot', competidor: null, pctDiferencia: null })).toBe(false)
+const completo: IOfrecimientoMotivo = {
+    motivoId: 30,
+    valores: { marca: 'Fric-Rot', competidor: 'Corven', precio_competidor: 150, mi_precio: 130 },
+}
+
+it('un motivo sin campos declarados nunca está incompleto: no pide nada', () => {
+    expect(motivoIncompleto(motivos, [{ motivoId: 35, valores: {} }])).toBeNull()
 })
 
-it('detalleCompleto es true con los tres campos cargados', () => {
-    expect(detalleCompleto({ motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 })).toBe(true)
+it('señala CUÁL motivo tiene el detalle a medias', () => {
+    const incompleto = { motivoId: 30, valores: { marca: 'Fric-Rot' } }
+    expect(motivoIncompleto(motivos, [incompleto])?.descripcion).toBe('Precio')
 })
 
-it('motivoIncompleto devuelve null si no hay ningún motivo con requiereDetalle tildado', () => {
-    const value: IOfrecimientoMotivo[] = [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }]
-    expect(motivoIncompleto(motivos, value)).toBeNull()
+it('con el detalle completo no señala nada', () => {
+    expect(motivoIncompleto(motivos, [completo])).toBeNull()
 })
 
-it('motivoIncompleto devuelve el motivo si Precio está tildado sin el detalle completo', () => {
-    const value: IOfrecimientoMotivo[] = [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }]
-    expect(motivoIncompleto(motivos, value)?.descripcion).toBe('Precio')
+// El codigo ya no gatilla la validación: es la declaración de campos la que decide, así que
+// un codigo desconocido con campos igual bloquea si le falta algo.
+it('un codigo desconocido no cambia la validación: la decide `campos`', () => {
+    const raro: IMotivo[] = [{ ...motivos[0], codigo: 'TODAVIA_NO_EXISTE' }]
+    expect(motivoIncompleto(raro, [{ motivoId: 30, valores: {} }])?.descripcion).toBe('Precio')
 })
 
-it('motivoIncompleto devuelve null si Precio está tildado con el detalle completo', () => {
-    const value: IOfrecimientoMotivo[] = [{ motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 }]
-    expect(motivoIncompleto(motivos, value)).toBeNull()
+it('tieneDetalleIncompleto es el booleano de lo mismo', () => {
+    expect(tieneDetalleIncompleto(motivos, [{ motivoId: 30, valores: {} }])).toBe(true)
+    expect(tieneDetalleIncompleto(motivos, [completo])).toBe(false)
 })
 
-it('tieneDetalleIncompleto refleja motivoIncompleto como booleano', () => {
-    expect(tieneDetalleIncompleto(motivos, [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }])).toBe(true)
-    expect(tieneDetalleIncompleto(motivos, [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }])).toBe(false)
-})
+describe('motivosIguales', () => {
+    it('compara los valores, no solo los ids', () => {
+        const otro = { motivoId: 30, valores: { ...completo.valores, mi_precio: 999 } }
+        expect(motivosIguales([completo], [otro])).toBe(false)
+    })
 
-it('motivosIguales es true para dos listas vacías', () => {
-    expect(motivosIguales([], [])).toBe(true)
-})
-
-it('motivosIguales es false si difiere la cantidad', () => {
-    const a: IOfrecimientoMotivo[] = [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }]
-    expect(motivosIguales(a, [])).toBe(false)
-})
-
-it('motivosIguales es true sin importar el orden', () => {
-    const a: IOfrecimientoMotivo[] = [
-        { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
-        { motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 },
-    ]
-    const b: IOfrecimientoMotivo[] = [
-        { motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 },
-        { motivoId: 10, marca: null, competidor: null, pctDiferencia: null },
-    ]
-    expect(motivosIguales(a, b)).toBe(true)
-})
-
-it('motivosIguales es false si cambió un campo de detalle', () => {
-    const a: IOfrecimientoMotivo[] = [{ motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 }]
-    const b: IOfrecimientoMotivo[] = [{ motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 15 }]
-    expect(motivosIguales(a, b)).toBe(false)
+    it('no depende del orden', () => {
+        const a = [completo, { motivoId: 35, valores: {} }]
+        const b = [{ motivoId: 35, valores: {} }, completo]
+        expect(motivosIguales(a, b)).toBe(true)
+    })
 })

@@ -31,8 +31,8 @@ it('useResolverOfrecimientos manda un PUT por ofrecimiento y devuelve error null
     ;(api.resolverOfrecimiento as any).mockResolvedValue({ ofrecimientosPendientes: 0 })
     const { result } = renderHook(() => useResolverOfrecimientos(42), { wrapper })
     const items = [
-        { ofrecimientoId: 7, motivos: [{ motivoId: 10, marca: null, competidor: null, pctDiferencia: null }] },
-        { ofrecimientoId: 8, motivos: [{ motivoId: 16, marca: null, competidor: null, pctDiferencia: null }] },
+        { ofrecimientoId: 7, motivos: [{ motivoId: 10, valores: {} }] },
+        { ofrecimientoId: 8, motivos: [{ motivoId: 16, valores: {} }] },
     ]
     let out: any
     await waitFor(async () => {

@@ -86,7 +86,7 @@ export default function MarcaOfrecimientoPicker({
             ) : (
                 <button
                     type="button"
-                    aria-label="Marca"
+                    aria-label="Marca del ofrecimiento"
                     onClick={() => setBuscadorAbierto(true)}
                     className="flex w-full items-center gap-2 rounded-lg border border-[#E1E6F0] px-2.5 py-2 text-left"
                 >

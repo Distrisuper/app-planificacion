@@ -51,11 +51,12 @@ export default function ResolucionWizard({
     // El catálogo de marcas se pide desde acá y no desde ResolucionOfrecimiento: el wizard
     // es el ancestro más cercano que ve a la vez el catálogo de motivos y el borrador, así
     // que puede pedirlo SOLO cuando hace falta — y deja a ResolucionOfrecimiento
-    // presentacional puro, sin React Query en su test.
+    // presentacional puro, sin React Query en su test. Solo PRECIO usa el catálogo (su
+    // marca sale de ahí); los demás módulos de detalle no lo tocan.
     const necesitaMarcas =
         accion !== null ||
         (borradores[ofrecimiento.id] ?? []).some(
-            m => motivos.find(cat => cat.motivoId === m.motivoId)?.requiereDetalle,
+            m => motivos.find(cat => cat.motivoId === m.motivoId)?.codigo === 'PRECIO',
         )
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
 

@@ -119,9 +119,9 @@ export interface IVisitasArgs extends IAnaliticaFiltro {
 export interface IOfrecimientoMotivoDetalle {
     descripcion: string
     resultado: ResultadoMotivo | null
-    marca: string | null
-    competidor: string | null
-    pctDiferencia: number | null
+    /** Los valores tal como se guardaron. NO se filtran contra el módulo vigente: un campo
+     *  que se sacó después igual tiene que verse en una visita ya cerrada. */
+    valores: Record<string, string | number | null>
 }
 
 export interface IOfrecimientoDetalle {

@@ -4,8 +4,20 @@ import ResolucionWizardAcciones from './ResolucionWizardAcciones'
 import type { IMotivo, IOfrecimiento } from '@/types/planificacion'
 
 const motivos: IMotivo[] = [
-    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', requiereDetalle: false },
-    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', requiereDetalle: true },
+    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', codigo: null, campos: [] },
+    {
+        motivoId: 13,
+        nivel: 'ofrecimiento',
+        descripcion: 'Precio',
+        resultado: 'perdido',
+        codigo: 'PRECIO',
+        campos: [
+            { campo: 'marca', tipo: 'catalogo_marca', label: 'Marca', placeholder: null, unidad: null, requerido: true, orden: 10 },
+            { campo: 'competidor', tipo: 'texto', label: 'Competidor', placeholder: 'Ej. Corven', unidad: null, requerido: true, orden: 20 },
+            { campo: 'precio_competidor', tipo: 'numero', label: 'Precio del competidor', placeholder: null, unidad: '$', requerido: true, orden: 30 },
+            { campo: 'mi_precio', tipo: 'numero', label: 'Mi precio', placeholder: null, unidad: '$', requerido: true, orden: 40 },
+        ],
+    },
 ]
 
 const ofrecimientos: IOfrecimiento[] = [
@@ -19,9 +31,11 @@ const ofrecimientos: IOfrecimiento[] = [
     },
 ]
 
-/** Precio (requiereDetalle) tildado sin marca/competidor/%: el detalle a medias. */
-const PRECIO_A_MEDIAS = [{ motivoId: 13, marca: null, competidor: null, pctDiferencia: null }]
-const PRECIO_COMPLETO = [{ motivoId: 13, marca: 'Fric-Rot', competidor: 'Corven', pctDiferencia: 12 }]
+/** Precio (codigo: 'PRECIO') tildado sin sus cuatro campos: el detalle a medias. */
+const PRECIO_A_MEDIAS = [{ motivoId: 13, valores: {} }]
+const PRECIO_COMPLETO = [
+    { motivoId: 13, valores: { marca: 'Fric-Rot', competidor: 'Corven', precio_competidor: 150, mi_precio: 132 } },
+]
 
 function setup(over: Record<string, unknown> = {}) {
     const onIndexChange = vi.fn()
@@ -93,12 +107,13 @@ describe('el último paso vuelve al resumen, no finaliza', () => {
 })
 
 // El detalle a medias se ataja EN EL RUBRO donde está, no al final del wizard: así el
-// vendedor nunca queda con un cartel que lo manda a arreglar algo tres rubros atrás.
+// vendedor nunca queda con un cartel que lo manda a arreglar algo tres rubros atrás. El
+// texto de "qué falta" no vive acá (ver ResolucionOfrecimiento) — este componente solo
+// deshabilita, para no hacer crecer/encoger el pie fijo con cada tilde.
 describe('un detalle a medias bloquea la navegación del rubro actual', () => {
-    it('Siguiente se bloquea y dice qué falta', () => {
+    it('Siguiente se bloquea', () => {
         setup({ borradores: { 7: PRECIO_A_MEDIAS, 8: [] } })
         expect(screen.getByRole('button', { name: /siguiente/i })).toBeDisabled()
-        expect(screen.getByText(/completá el detalle de precio/i)).toBeInTheDocument()
     })
 
     it('Atrás también se bloquea', () => {
@@ -109,13 +124,11 @@ describe('un detalle a medias bloquea la navegación del rubro actual', () => {
     it('el detalle a medias de OTRO rubro no bloquea la navegación de este', () => {
         setup({ index: 1, borradores: { 7: PRECIO_A_MEDIAS, 8: [] } })
         expect(screen.getByRole('button', { name: /atrás/i })).toBeEnabled()
-        expect(screen.queryByText(/completá el detalle/i)).not.toBeInTheDocument()
     })
 
     it('con el detalle completo, la navegación queda libre', () => {
         setup({ borradores: { 7: PRECIO_COMPLETO, 8: [] } })
         expect(screen.getByRole('button', { name: /siguiente/i })).toBeEnabled()
-        expect(screen.queryByText(/completá el detalle/i)).not.toBeInTheDocument()
     })
 
     // La salida NUNCA se deshabilita: es la vía de escape de quien entró por error y no
