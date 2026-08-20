@@ -25,7 +25,7 @@ export default function EfectividadOperativaSection() {
     return (
         <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-900">Efectividad operativa</h2>
+                <h2 className="text-sm font-semibold text-slate-900">Efectividad</h2>
                 <SelectorPeriodo modo={modo} fecha={fecha} onCambiarModo={setModo} onCambiarFecha={setFecha} />
             </div>
 
@@ -33,7 +33,7 @@ export default function EfectividadOperativaSection() {
 
             {isError && (
                 <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                    No se pudo cargar la efectividad operativa. Probá de nuevo en un momento.
+                    No se pudo cargar la efectividad. Probá de nuevo en un momento.
                 </p>
             )}
 

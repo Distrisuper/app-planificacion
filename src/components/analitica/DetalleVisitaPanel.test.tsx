@@ -21,7 +21,8 @@ const DETALLE: IVisitaDetalle = {
     coordInicio: { lat: -32.9442, lng: -60.6505 },
     coordFinal: { lat: -32.9443, lng: -60.6506 },
     coordCliente: { lat: -32.9441, lng: -60.6504 },
-    distanciaMetros: 29,
+    distanciaInicioMetros: 29,
+    distanciaFinMetros: 22,
     ofrecimientos: [
         {
             tipo: 'rubro',
@@ -108,7 +109,8 @@ it('no dibuja el mapa si el cliente no tiene coords', async () => {
     ;(api.getVisitaDetalle as any).mockResolvedValue({
         ...DETALLE,
         coordCliente: null,
-        distanciaMetros: null,
+        distanciaInicioMetros: null,
+        distanciaFinMetros: null,
     })
     montar()
     await waitFor(() => expect(screen.getByText(/sin coordenadas del cliente/i)).toBeInTheDocument())

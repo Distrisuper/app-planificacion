@@ -12,7 +12,7 @@ interface SelectorPeriodoProps {
 
 const DIAS_POR_PASO: Record<ModoPeriodo, number> = { semana: 7, mes: 0 }
 
-/** Selector de rango para Efectividad operativa: alterna entre semana y mes.
+/** Selector de rango para Efectividad: alterna entre semana y mes.
  *  Cambiar de modo resetea la fecha a hoy — evita arrastrar, por ejemplo, un 31 de
  *  un mes largo a una semana que no existe en el mes corto. */
 export default function SelectorPeriodo({

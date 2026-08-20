@@ -1,7 +1,12 @@
 import type { TipoOfrecimiento } from '@/types/planificacion'
 
-/** Tolerancia heredada de api-mobiliza (TOLERANCIA_GEOLOCALIZACION). Inclusive. */
-export const TOLERANCIA_METROS = 300
+/** Radio máximo entre la coord capturada (inicio o fin) y la del cliente para que esa
+ *  pata de la visita cuente como verificada. Inclusive. */
+export const TOLERANCIA_METROS = 100
+
+/** Rango de duración de una visita válida. Inclusive en ambos extremos. */
+export const DURACION_MIN_VALIDA = 10
+export const DURACION_MAX_VALIDA = 90
 
 /** Etiqueta del chip de tipo en la analítica. Un solo lugar: DetalleVisitaPanel y
  *  TablaVisitas lo comparten para no divergir. 'rubro' no se usa como chip — es el
@@ -41,10 +46,28 @@ export const formatDuracion = (minutos: number | null): string =>
 export type ClaseDistancia = 'ok' | 'alerta' | 'neutro'
 
 /** Sin coord del cliente la visita no es verificable: se muestra neutra, no en rojo.
- *  Castigarla haría que el indicador mida la calidad de fct_clients, no el trabajo. */
-export const claseDistancia = (metros: number | null): ClaseDistancia => {
-    if (metros === null) return 'neutro'
-    return metros <= TOLERANCIA_METROS ? 'ok' : 'alerta'
+ *  Castigarla haría que el indicador mida la calidad de fct_clients, no el trabajo.
+ *  Con ambas patas presentes, la que decide es la peor: alcanza con que una se pase
+ *  de la tolerancia para que la visita no sea válida. */
+export const claseDistancia = (
+    inicioMetros: number | null,
+    finMetros: number | null,
+): ClaseDistancia => {
+    const valores = [inicioMetros, finMetros].filter((m): m is number => m !== null)
+    if (valores.length === 0) return 'neutro'
+    return valores.some(m => m > TOLERANCIA_METROS) ? 'alerta' : 'ok'
+}
+
+/** Una visita es válida cuando ambas patas están dentro de la tolerancia de distancia
+ *  y la duración cae en [DURACION_MIN_VALIDA, DURACION_MAX_VALIDA]. */
+export const esDuracionValida = (minutos: number | null): boolean =>
+    minutos !== null && minutos >= DURACION_MIN_VALIDA && minutos <= DURACION_MAX_VALIDA
+
+/** La pata que más se aleja del cliente, para mostrar un solo número en tablas que no
+ *  tienen lugar para las dos. null solo si ninguna de las dos tiene dato. */
+export const peorDistancia = (inicioMetros: number | null, finMetros: number | null): number | null => {
+    const valores = [inicioMetros, finMetros].filter((m): m is number => m !== null)
+    return valores.length === 0 ? null : Math.max(...valores)
 }
 
 export const esBajoPromedio = (valor: number | null, promedio: number | null): boolean => {
@@ -72,9 +95,12 @@ export const alertasAbsolutas = (v: {
 }
 
 /** efectividadOperativa ya viene en escala 0..100 (no 0..1 como el resto de los %
- *  de esta pantalla) — puede superar 100 cuando el vendedor supera la meta. */
-export const formatPctEscalado = (valor: number | null): string =>
-    valor === null ? 's/d' : `${Math.round(valor)}%`
+ *  de esta pantalla) — puede superar 100 cuando el vendedor supera la meta.
+ *  `!Number.isFinite` cubre además `undefined`/`NaN`: un campo que la API todavía no
+ *  manda (ej. pctCumplimientoVisitas antes de que exista en api-vendedores) no debe
+ *  mostrar "NaN%". */
+export const formatPctEscalado = (valor: number | null | undefined): string =>
+    valor === null || valor === undefined || !Number.isFinite(valor) ? 's/d' : `${Math.round(valor)}%`
 
 export const formatHoras = (minutos: number | null): string =>
     minutos === null ? 's/d' : `${formatNumero(minutos / 60)} hs`

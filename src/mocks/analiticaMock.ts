@@ -35,6 +35,7 @@ function vendedor(over: Partial<IVendedorMetricas> & {
         minutosTotales: 1216,
         visitasPorDia: 6.8,
         clientesDistintos: 32,
+        pctCumplimientoVisitas: 88,
         pctCumplimientoClientes: 88,
         pctCumplimientoMinutos: 91,
         efectividadOperativa: 89,
@@ -69,6 +70,7 @@ const VENDEDORES: IVendedorMetricas[] = [
         minutosTotales: 1886,
         visitasPorDia: 8.2,
         clientesDistintos: 40,
+        pctCumplimientoVisitas: 104,
         pctCumplimientoClientes: 104,
         pctCumplimientoMinutos: 108,
         efectividadOperativa: 100,
@@ -110,6 +112,7 @@ const VENDEDORES: IVendedorMetricas[] = [
         minutosTotales: 615,
         visitasPorDia: 7.5,
         clientesDistintos: 15,
+        pctCumplimientoVisitas: 46,
         pctCumplimientoClientes: 46,
         pctCumplimientoMinutos: 44,
         efectividadOperativa: 45,
@@ -121,7 +124,7 @@ const VENDEDORES: IVendedorMetricas[] = [
         pctNoOfrecidos: 0.1,
         ofrecimientosSinResolver: 4,
     }),
-    // CASO BORDE: más de la mitad de las visitas fuera de los 300 m.
+    // CASO BORDE: más de la mitad de las visitas fuera de los 100 m.
     vendedor({
         codigoParticularVendedor: 'V5',
         nombreVendedor: 'ESQUIVEL RAMON',
@@ -140,9 +143,10 @@ const VENDEDORES: IVendedorMetricas[] = [
         minutosTotales: 990,
         visitasPorDia: 6,
         clientesDistintos: 28,
+        pctCumplimientoVisitas: 31,
         pctCumplimientoClientes: 72,
         pctCumplimientoMinutos: 70,
-        efectividadOperativa: 71,
+        efectividadOperativa: 58,
         ofrecimientosTotales: 48,
         ofrecimientosGanados: 12,
         ofrecimientosDiferidos: 14,
@@ -151,7 +155,8 @@ const VENDEDORES: IVendedorMetricas[] = [
         pctNoOfrecidos: 0.31,
         ofrecimientosSinResolver: 6,
     }),
-    // CASO BORDE: visitas demasiado cortas (piso absoluto de 20 min).
+    // CASO BORDE: visitas demasiado cortas — bajo el piso de 10 min, ya no solo
+    // informativo: la mayoría queda fuera de visitasValidas.
     vendedor({
         codigoParticularVendedor: 'V6',
         nombreVendedor: 'FERREYRA GUSTAVO',
@@ -162,17 +167,18 @@ const VENDEDORES: IVendedorMetricas[] = [
         pendientes: 1,
         cobertura: 0.886,
         visitasTotales: 39,
-        visitasValidas: 37,
-        visitasNoValidadas: 2,
+        visitasValidas: 9,
+        visitasNoValidadas: 30,
         visitasSinCoord: 0,
         visitasCortas: 28,
         duracionPromedioMin: 14,
         minutosTotales: 546,
         visitasPorDia: 7.8,
         clientesDistintos: 37,
+        pctCumplimientoVisitas: 25,
         pctCumplimientoClientes: 96,
         pctCumplimientoMinutos: 38,
-        efectividadOperativa: 67,
+        efectividadOperativa: 53,
         ofrecimientosTotales: 40,
         ofrecimientosGanados: 9,
         ofrecimientosDiferidos: 11,
@@ -200,6 +206,7 @@ const VENDEDORES: IVendedorMetricas[] = [
         minutosTotales: 980,
         visitasPorDia: 5.6,
         clientesDistintos: 27,
+        pctCumplimientoVisitas: 70,
         pctCumplimientoClientes: 70,
         pctCumplimientoMinutos: 69,
         efectividadOperativa: 70,
@@ -230,6 +237,7 @@ const VENDEDORES: IVendedorMetricas[] = [
         minutosTotales: 1100,
         visitasPorDia: 5.2,
         clientesDistintos: 25,
+        pctCumplimientoVisitas: null,
         pctCumplimientoClientes: null,
         pctCumplimientoMinutos: null,
         efectividadOperativa: null,
@@ -289,6 +297,7 @@ const PROMEDIOS: IVendedorMetricas = {
     minutosTotales: promediar('minutosTotales')!,
     visitasPorDia: promediar('visitasPorDia')!,
     clientesDistintos: promediar('clientesDistintos')!,
+    pctCumplimientoVisitas: promediar('pctCumplimientoVisitas'),
     pctCumplimientoClientes: promediar('pctCumplimientoClientes'),
     pctCumplimientoMinutos: promediar('pctCumplimientoMinutos'),
     efectividadOperativa: promediar('efectividadOperativa'),
@@ -353,17 +362,23 @@ const instante = (fecha: string, hora: number, minuto: number): string =>
     ).toISOString()
 
 /** Genera visitas deterministas para un vendedor. Los índices elegidos fuerzan los
- *  casos borde: la 3ra visita de cada vendedor va sin coord del cliente, y la 5ta
- *  cae fuera de la tolerancia de 300 m. */
+ *  casos borde: la 3ra visita de cada vendedor va sin coord del cliente, la 5ta cae
+ *  fuera de la tolerancia de 100 m en el fin, y (para V6) hay visitas con duración
+ *  fuera de 10-90 min. */
 function visitasDe(codigo: string, nombreVendedor: string, cantidad: number): IVisitaFila[] {
     const filas: IVisitaFila[] = []
     for (let i = 0; i < cantidad; i++) {
         const dia = 20 + (i % 5)
         const hora = 9 + (i % 8)
-        const duracion = codigo === 'V6' ? 12 + (i % 6) : 25 + ((i * 7) % 45)
-        let distancia: number | null = 15 + ((i * 23) % 120)
-        if (i % 7 === 2) distancia = null
-        else if (i % 5 === 4) distancia = 4200 + i * 130
+        const duracion = codigo === 'V6' ? 6 + (i % 6) : 25 + ((i * 7) % 45)
+        let distanciaInicioMetros: number | null = 15 + ((i * 23) % 80)
+        let distanciaFinMetros: number | null = 18 + ((i * 19) % 80)
+        if (i % 7 === 2) {
+            distanciaInicioMetros = null
+            distanciaFinMetros = null
+        } else if (i % 5 === 4) {
+            distanciaFinMetros = 4200 + i * 130
+        }
         const motivo = MOTIVOS_RUBRO[i % MOTIVOS_RUBRO.length]
         const fecha = `2026-07-${String(dia).padStart(2, '0')}`
         filas.push({
@@ -372,7 +387,8 @@ function visitasDe(codigo: string, nombreVendedor: string, cantidad: number): IV
             fechaInicio: instante(fecha, hora, (i * 13) % 60),
             fechaFin: instante(fecha, hora + 1, 0),
             duracionMin: duracion,
-            distanciaMetros: distancia,
+            distanciaInicioMetros,
+            distanciaFinMetros,
             codigoParticularCliente: `C${1000 + i}`,
             nombreCliente: CLIENTES[i % CLIENTES.length],
             codigoParticularVendedor: codigo,
@@ -408,7 +424,8 @@ function resolucionNoVisita(
         fechaInicio: instante(fecha, 9 + (i % 8), (i * 17) % 60),
         fechaFin: null,
         duracionMin: null,
-        distanciaMetros: null,
+        distanciaInicioMetros: null,
+        distanciaFinMetros: null,
         codigoParticularCliente: `C${2000 + i}`,
         nombreCliente: CLIENTES[i % CLIENTES.length],
         codigoParticularVendedor: v.codigoParticularVendedor,
@@ -460,8 +477,8 @@ export const MOCK_VISITAS_HOY: IVisitaFila[] = (() => {
 const BASE: ICoord = { lat: -32.9442, lng: -60.6505 }
 
 function detalleDe(fila: IVisitaFila, indice: number): IVisitaDetalle {
-    const sinCoordCliente = fila.distanciaMetros === null
-    const desvio = fila.distanciaMetros === null ? 0 : fila.distanciaMetros / 111_000
+    const sinCoordCliente = fila.distanciaInicioMetros === null
+    const desvio = fila.distanciaInicioMetros === null ? 0 : fila.distanciaInicioMetros / 111_000
     return {
         visitaId: fila.visitaId,
         codigoParticularCliente: fila.codigoParticularCliente,
@@ -481,7 +498,8 @@ function detalleDe(fila: IVisitaFila, indice: number): IVisitaDetalle {
         coordCliente: sinCoordCliente
             ? null
             : { lat: BASE.lat + indice * 0.002, lng: BASE.lng + indice * 0.002 },
-        distanciaMetros: fila.distanciaMetros,
+        distanciaInicioMetros: fila.distanciaInicioMetros,
+        distanciaFinMetros: fila.distanciaFinMetros,
         ofrecimientos: [
             {
                 tipo: 'rubro',

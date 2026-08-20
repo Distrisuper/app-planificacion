@@ -40,7 +40,7 @@ export interface IVendedorMetricas {
     visitasNoValidadas: number
     /** Cliente sin coords en fct_clients: no se puede verificar, NO cuenta como inválida. */
     visitasSinCoord: number
-    /** Duración < 20 min. Informativo: no se resta de visitasValidas. */
+    /** Duración fuera de 10-90 min: ya resta de visitasValidas (criterio de validez, no solo informativo). */
     visitasCortas: number
     /** Promedio solo sobre visitas válidas. null si no hay ninguna. */
     duracionPromedioMin: number | null
@@ -49,8 +49,10 @@ export interface IVendedorMetricas {
     clientesDistintos: number
 
     // Objetivos (pl_objetivo). null = sin objetivo vigente → la UI muestra s/d.
+    pctCumplimientoVisitas: number | null
     pctCumplimientoClientes: number | null
     pctCumplimientoMinutos: number | null
+    /** Promedio de los tres cumplimientos de arriba, cada uno topeado a 100% antes de promediar. */
     efectividadOperativa: number | null
 
     // Efectividad comercial
@@ -86,8 +88,10 @@ export interface IVisitaFila {
     /** null = visita en curso. */
     fechaFin: string | null
     duracionMin: number | null
-    /** null = cliente sin coords → se muestra 's/d', nunca un número absurdo. */
-    distanciaMetros: number | null
+    /** null = cliente sin coords → se muestra 's/d', nunca un número absurdo. Ambas
+     *  tienen que estar dentro de la tolerancia para que la visita sea válida. */
+    distanciaInicioMetros: number | null
+    distanciaFinMetros: number | null
     codigoParticularCliente: string
     nombreCliente: string
     codigoParticularVendedor: string
@@ -146,7 +150,8 @@ export interface IVisitaDetalle {
     coordInicio: ICoord | null
     coordFinal: ICoord | null
     coordCliente: ICoord | null
-    distanciaMetros: number | null
+    distanciaInicioMetros: number | null
+    distanciaFinMetros: number | null
     ofrecimientos: IOfrecimientoDetalle[]
 }
 
