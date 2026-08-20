@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Check } from 'lucide-react'
 import MarcaOfrecimientoPicker from './MarcaOfrecimientoPicker'
-import { registroDetalleMotivo } from './detalleMotivo/registro'
+import DetalleMotivo from './detalleMotivo/DetalleMotivo'
 import type { ICatalogoItem, IAccionComercial, IMotivo, IOfrecimientoMotivo, ResultadoMotivo } from '@/types/planificacion'
 
 interface ResolucionOfrecimientoProps {
@@ -136,13 +136,13 @@ export default function ResolucionOfrecimiento({
         const seleccionado = porId.get(cat.motivoId)
         const on = !!seleccionado
         const color = colorDeResultado(cat.resultado)
-        // Un codigo sin módulo registrado (catálogo por delante del deploy) dibuja el motivo
-        // sin detalle en vez de romper la pantalla.
-        const Editor = cat.codigo ? registroDetalleMotivo[cat.codigo] : undefined
+        // "Pide detalle" es "tiene campos declarados", no "tiene codigo": un motivo nuevo con
+        // campos y sin codigo pide detalle igual y se dibuja genérico.
+        const pideDetalle = cat.campos.length > 0
         return (
             <div
                 key={cat.motivoId}
-                className={`flex flex-col gap-0 ${Editor && on ? 'col-span-2' : ''}`}
+                className={`flex flex-col gap-0 ${pideDetalle && on ? 'col-span-2' : ''}`}
             >
                 <button
                     onClick={() => toggle(cat.motivoId)}
@@ -169,12 +169,13 @@ export default function ResolucionOfrecimiento({
                     </span>
                 </button>
 
-                {on && Editor && (
+                {on && pideDetalle && (
                     <div
                         className="animate-panel-in ml-8 mt-2 mb-0.5 rounded-[10px] border-[1.5px] bg-white p-2.5"
                         style={{ borderColor: color.border }}
                     >
-                        <Editor
+                        <DetalleMotivo
+                            motivo={cat}
                             valores={seleccionado!.valores}
                             onChange={parcial => setValores(cat.motivoId, parcial)}
                             marcas={marcas}

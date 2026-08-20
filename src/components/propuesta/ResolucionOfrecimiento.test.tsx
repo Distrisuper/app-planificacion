@@ -94,32 +94,32 @@ describe('el detalle lo dibuja el módulo del motivo', () => {
         expect(screen.queryByLabelText('Marca')).not.toBeInTheDocument()
     })
 
-    it('tildar Precio dibuja su módulo', () => {
+    it('tildar Precio dibuja su detalle', () => {
         setup([{ motivoId: 20, valores: {} }])
         expect(screen.getByLabelText('Marca')).toBeInTheDocument()
-        expect(screen.getByLabelText(/nombre del competidor/i)).toBeInTheDocument()
+        expect(screen.getByLabelText('Competidor')).toBeInTheDocument()
     })
 
-    // Un motivo sin codigo no tiene formulario: el checkbox es todo lo que hay.
-    it('un motivo sin codigo no dibuja detalle', () => {
+    // Un motivo sin campos declarados no tiene formulario: el checkbox es todo lo que hay.
+    it('un motivo sin campos declarados no dibuja detalle', () => {
         setup([{ motivoId: 21, valores: {} }])
-        expect(screen.queryByLabelText(/nombre del competidor/i)).not.toBeInTheDocument()
+        expect(screen.queryByLabelText('Competidor')).not.toBeInTheDocument()
     })
 
-    // El catálogo puede tener un codigo cuyo módulo todavía no se deployó. No puede romper la
-    // pantalla: se dibuja el motivo sin su detalle.
-    it('un codigo sin módulo registrado no rompe: dibuja el motivo sin detalle', () => {
+    // El codigo solo decide la línea derivada — no si el detalle se dibuja. Un codigo cuyo
+    // cálculo todavía no se deployó dibuja los campos igual, sin esa línea.
+    it('un codigo sin derivado registrado no rompe: dibuja el detalle igual', () => {
         const raros = motivos.map(m =>
             m.motivoId === 20 ? { ...m, codigo: 'TODAVIA_NO_EXISTE' } : m,
         )
         setup([{ motivoId: 20, valores: {} }], { motivos: raros })
         expect(screen.getByText('Precio')).toBeInTheDocument()
-        expect(screen.queryByLabelText('Marca')).not.toBeInTheDocument()
+        expect(screen.getByLabelText('Marca')).toBeInTheDocument()
     })
 
-    it('lo que carga el módulo viaja mergeado con lo que ya había', () => {
+    it('lo que carga el detalle viaja mergeado con lo que ya había', () => {
         const { onChange } = setup([{ motivoId: 20, valores: { marca: 'Fric-Rot' } }])
-        fireEvent.change(screen.getByLabelText(/nombre del competidor/i), {
+        fireEvent.change(screen.getByLabelText('Competidor'), {
             target: { value: 'Corven' },
         })
         expect(onChange).toHaveBeenCalledWith([
@@ -202,7 +202,7 @@ describe('segmentado Objeción / Cierre', () => {
         setup([], {
             motivos: [
                 ...motivos,
-                { motivoId: 30, nivel: 'ofrecimiento', descripcion: 'Fuera de catálogo', resultado: 'no_ofrecido', requiereDetalle: false },
+                { motivoId: 30, nivel: 'ofrecimiento', descripcion: 'Fuera de catálogo', resultado: 'no_ofrecido', codigo: null, campos: [] },
             ],
         })
         expect(screen.getByText('Otros')).toBeInTheDocument()
@@ -329,4 +329,20 @@ describe('aplicar a restantes: check de Marca', () => {
         fireEvent.click(screen.getByRole('checkbox'))
         expect(onAplicarMarca).toHaveBeenCalledTimes(1)
     })
+})
+
+it('un motivo con campos declarados dibuja su detalle al tildarlo', () => {
+    setup([{ motivoId: 20, valores: {} }])
+
+    // "Mi precio ($)" con la unidad entre paréntesis solo lo produce el renderizador
+    // genérico: el Editor viejo rotulaba "Mi precio" a secas. Es lo que hace que este test
+    // distinga una implementación de la otra y no pase por accidente.
+    expect(screen.getByLabelText('Mi precio ($)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Precio del competidor ($)')).toBeInTheDocument()
+})
+
+it('un motivo sin campos declarados no dibuja detalle', () => {
+    setup([{ motivoId: 21, valores: {} }])
+
+    expect(screen.queryByLabelText(/mi precio/i)).not.toBeInTheDocument()
 })

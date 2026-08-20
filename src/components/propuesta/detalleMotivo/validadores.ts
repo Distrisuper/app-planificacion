@@ -46,11 +46,3 @@ export function pctFleteSobreCompra(valores: ValoresMotivo): number | null {
     if (!Number.isFinite(flete) || !Number.isFinite(compra) || compra === 0) return null
     return (flete / compra) * 100
 }
-
-/** TRANSITORIO: lo usan los Editors viejos, que se borran en la Task 4 de este plan. */
-export interface IPropsEditorMotivo {
-    valores: ValoresMotivo
-    onChange: (parcial: ValoresMotivo) => void
-    marcas: import('@/types/planificacion').ICatalogoItem[]
-    marcasLoading?: boolean
-}
