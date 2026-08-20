@@ -15,7 +15,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 it('useMotivos returns the motivos catalog', async () => {
     ;(api.getMotivos as any).mockResolvedValue([
-        { motivoId: 1, descripcion: 'Saqué pedido' },
+        { motivoId: 1, descripcion: 'Saqué pedido', campos: [] },
     ])
     const { result } = renderHook(() => useMotivos(), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
@@ -25,7 +25,7 @@ it('useMotivos returns the motivos catalog', async () => {
 
 it('useMotivos manda el nivel a la API y lo incluye en la key', async () => {
     ;(api.getMotivos as any).mockResolvedValue([
-        { motivoId: 2, descripcion: 'Precio', nivel: 'ofrecimiento' },
+        { motivoId: 2, descripcion: 'Precio', nivel: 'ofrecimiento', campos: [] },
     ])
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const { result } = renderHook(() => useMotivos('ofrecimiento'), {

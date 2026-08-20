@@ -5,8 +5,8 @@ import ResolucionSheet from './ResolucionSheet'
 import type { ComponentProps } from 'react'
 
 const motivos = [
-    { motivoId: 1, nivel: 'visita' as const, descripcion: 'Saqué pedido', resultado: 'ganado' as const, codigo: null },
-    { motivoId: 4, nivel: 'visita' as const, descripcion: 'Precio', resultado: 'perdido' as const, codigo: null },
+    { motivoId: 1, nivel: 'visita' as const, descripcion: 'Saqué pedido', resultado: 'ganado' as const, codigo: null, campos: [] },
+    { motivoId: 4, nivel: 'visita' as const, descripcion: 'Precio', resultado: 'perdido' as const, codigo: null, campos: [] },
 ]
 
 it('toggles motivos and submits the selected ids', async () => {

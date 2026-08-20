@@ -18,14 +18,36 @@ export interface ICatalogoItem {
     description: string
 }
 
+/** Qué clase de input pide un campo. Es un enum de CÓDIGO, no de datos: sumar un `tipo`
+ *  implica un componente nuevo, y por lo tanto un deploy. Un `tipo` desconocido no se dibuja
+ *  ni se exige — ver la regla de degradación del spec. */
+export type TipoCampoMotivo = 'numero' | 'texto' | 'textarea' | 'catalogo_marca'
+
+/** La declaración de un campo del detalle, tal como la sirve el back desde pl_motivo_campo.
+ *  Reemplaza al registro que estaba hardcodeado en detalleMotivo/validadores.ts: agregar un
+ *  campo pasó a ser un INSERT. */
+export interface ICampoMotivo {
+    campo: string
+    tipo: TipoCampoMotivo
+    label: string
+    placeholder: string | null
+    /** Sufijo de presentación ("días", "$"). Se muestra junto al label. */
+    unidad: string | null
+    requerido: boolean
+    orden: number
+}
+
 export interface IMotivo {
     motivoId: number
     nivel: NivelMotivo
     descripcion: string
     resultado: ResultadoMotivo | null
-    /** Llave estable del módulo de detalle (PRECIO, PLAZO, FLETE, NO_TRABAJA). `null` = este
-     *  motivo no pide nada. NO se usa motivoId: los ids difieren entre ambientes. */
+    /** Llave estable del módulo de DISPLAY (PRECIO, FLETE): identifica al motivo que deriva
+     *  un valor con fórmula. `null` = se dibuja genérico. NO significa "no pide detalle":
+     *  eso lo dice `campos`. NO se usa motivoId: los ids difieren entre ambientes. */
     codigo: string | null
+    /** Qué campos pide este motivo, ya ordenados por el back. Vacío = no pide detalle. */
+    campos: ICampoMotivo[]
 }
 
 export interface IBrandDiscount {

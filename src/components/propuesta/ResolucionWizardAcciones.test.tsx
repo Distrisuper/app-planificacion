@@ -4,8 +4,20 @@ import ResolucionWizardAcciones from './ResolucionWizardAcciones'
 import type { IMotivo, IOfrecimiento } from '@/types/planificacion'
 
 const motivos: IMotivo[] = [
-    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', codigo: null },
-    { motivoId: 13, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', codigo: 'PRECIO' },
+    { motivoId: 10, nivel: 'ofrecimiento', descripcion: 'Saqué pedido', resultado: 'ganado', codigo: null, campos: [] },
+    {
+        motivoId: 13,
+        nivel: 'ofrecimiento',
+        descripcion: 'Precio',
+        resultado: 'perdido',
+        codigo: 'PRECIO',
+        campos: [
+            { campo: 'marca', tipo: 'catalogo_marca', label: 'Marca', placeholder: null, unidad: null, requerido: true, orden: 10 },
+            { campo: 'competidor', tipo: 'texto', label: 'Competidor', placeholder: 'Ej. Corven', unidad: null, requerido: true, orden: 20 },
+            { campo: 'precio_competidor', tipo: 'numero', label: 'Precio del competidor', placeholder: null, unidad: '$', requerido: true, orden: 30 },
+            { campo: 'mi_precio', tipo: 'numero', label: 'Mi precio', placeholder: null, unidad: '$', requerido: true, orden: 40 },
+        ],
+    },
 ]
 
 const ofrecimientos: IOfrecimiento[] = [

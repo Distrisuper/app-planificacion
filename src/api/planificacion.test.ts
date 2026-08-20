@@ -1,4 +1,4 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { apiClient } from './apiClient'
 import {
     getCicloActual,
@@ -137,6 +137,58 @@ describe('motivos', () => {
         expect(apiClient.get).toHaveBeenCalledWith('/planificacion/motivos', {
             params: { nivel: 'ofrecimiento' },
         })
+    })
+
+    it('normaliza campos a [] cuando el back no lo manda', async () => {
+        ;(apiClient.get as Mock).mockResolvedValue({
+            data: {
+                data: [
+                    {
+                        motivoId: 13,
+                        nivel: 'ofrecimiento',
+                        descripcion: 'Precio',
+                        resultado: 'perdido',
+                        codigo: 'PRECIO',
+                    },
+                ],
+            },
+        })
+
+        const motivos = await getMotivos('ofrecimiento')
+
+        expect(motivos[0].campos).toEqual([])
+    })
+
+    it('deja pasar los campos declarados tal cual', async () => {
+        const campos = [
+            {
+                campo: 'plazo_dias',
+                tipo: 'numero',
+                label: 'Plazo solicitado',
+                placeholder: 'Ej. 30',
+                unidad: 'días',
+                requerido: true,
+                orden: 10,
+            },
+        ]
+        ;(apiClient.get as Mock).mockResolvedValue({
+            data: {
+                data: [
+                    {
+                        motivoId: 14,
+                        nivel: 'ofrecimiento',
+                        descripcion: 'Plazo',
+                        resultado: 'perdido',
+                        codigo: 'PLAZO',
+                        campos,
+                    },
+                ],
+            },
+        })
+
+        const motivos = await getMotivos('ofrecimiento')
+
+        expect(motivos[0].campos).toEqual(campos)
     })
 })
 

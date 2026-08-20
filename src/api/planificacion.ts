@@ -87,7 +87,10 @@ export const getMotivos = async (nivel?: NivelMotivo): Promise<IMotivo[]> => {
     const res = await apiClient.get('/planificacion/motivos', {
         params: nivel === undefined ? undefined : { nivel },
     })
-    return res.data.data
+    // `campos ?? []` en el borde y en un solo lugar: un back sin desplegar todavía, o una
+    // respuesta que quedó cacheada de antes, no traen el campo — y `cat.campos.length` en
+    // el render sería una pantalla en blanco en el teléfono del vendedor.
+    return (res.data.data as IMotivo[]).map(m => ({ ...m, campos: m.campos ?? [] }))
 }
 
 // ── Visitas ────────────────────────────────────────────────────────────────────

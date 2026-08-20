@@ -2,8 +2,20 @@ import { motivoIncompleto, tieneDetalleIncompleto, motivosIguales } from './reso
 import type { IMotivo, IOfrecimientoMotivo } from '@/types/planificacion'
 
 const motivos: IMotivo[] = [
-    { motivoId: 30, nivel: 'ofrecimiento', descripcion: 'Precio', resultado: 'perdido', codigo: 'PRECIO' },
-    { motivoId: 35, nivel: 'ofrecimiento', descripcion: 'Dto', resultado: 'ganado', codigo: null },
+    {
+        motivoId: 30,
+        nivel: 'ofrecimiento',
+        descripcion: 'Precio',
+        resultado: 'perdido',
+        codigo: 'PRECIO',
+        campos: [
+            { campo: 'marca', tipo: 'catalogo_marca', label: 'Marca', placeholder: null, unidad: null, requerido: true, orden: 10 },
+            { campo: 'competidor', tipo: 'texto', label: 'Competidor', placeholder: 'Ej. Corven', unidad: null, requerido: true, orden: 20 },
+            { campo: 'precio_competidor', tipo: 'numero', label: 'Precio del competidor', placeholder: null, unidad: '$', requerido: true, orden: 30 },
+            { campo: 'mi_precio', tipo: 'numero', label: 'Mi precio', placeholder: null, unidad: '$', requerido: true, orden: 40 },
+        ],
+    },
+    { motivoId: 35, nivel: 'ofrecimiento', descripcion: 'Dto', resultado: 'ganado', codigo: null, campos: [] },
 ]
 
 const completo: IOfrecimientoMotivo = {
