@@ -107,12 +107,13 @@ describe('el último paso vuelve al resumen, no finaliza', () => {
 })
 
 // El detalle a medias se ataja EN EL RUBRO donde está, no al final del wizard: así el
-// vendedor nunca queda con un cartel que lo manda a arreglar algo tres rubros atrás.
+// vendedor nunca queda con un cartel que lo manda a arreglar algo tres rubros atrás. El
+// texto de "qué falta" no vive acá (ver ResolucionOfrecimiento) — este componente solo
+// deshabilita, para no hacer crecer/encoger el pie fijo con cada tilde.
 describe('un detalle a medias bloquea la navegación del rubro actual', () => {
-    it('Siguiente se bloquea y dice qué falta', () => {
+    it('Siguiente se bloquea', () => {
         setup({ borradores: { 7: PRECIO_A_MEDIAS, 8: [] } })
         expect(screen.getByRole('button', { name: /siguiente/i })).toBeDisabled()
-        expect(screen.getByText(/completá el detalle de precio/i)).toBeInTheDocument()
     })
 
     it('Atrás también se bloquea', () => {
@@ -123,13 +124,11 @@ describe('un detalle a medias bloquea la navegación del rubro actual', () => {
     it('el detalle a medias de OTRO rubro no bloquea la navegación de este', () => {
         setup({ index: 1, borradores: { 7: PRECIO_A_MEDIAS, 8: [] } })
         expect(screen.getByRole('button', { name: /atrás/i })).toBeEnabled()
-        expect(screen.queryByText(/completá el detalle/i)).not.toBeInTheDocument()
     })
 
     it('con el detalle completo, la navegación queda libre', () => {
         setup({ borradores: { 7: PRECIO_COMPLETO, 8: [] } })
         expect(screen.getByRole('button', { name: /siguiente/i })).toBeEnabled()
-        expect(screen.queryByText(/completá el detalle/i)).not.toBeInTheDocument()
     })
 
     // La salida NUNCA se deshabilita: es la vía de escape de quien entró por error y no

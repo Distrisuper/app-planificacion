@@ -126,6 +126,23 @@ describe('el detalle lo dibuja el módulo del motivo', () => {
             { motivoId: 20, valores: { marca: 'Fric-Rot', competidor: 'Corven' } },
         ])
     })
+
+    // El aviso de "falta esto" vive junto al campo, no en el pie fijo del wizard (ver
+    // ResolucionWizardAcciones): así no empuja los botones de Atrás/Siguiente al aparecer.
+    it('con el detalle a medias, avisa junto al propio panel del motivo', () => {
+        setup([{ motivoId: 20, valores: {} }])
+        expect(screen.getByText(/completá esto para poder avanzar/i)).toBeInTheDocument()
+    })
+
+    it('con el detalle completo, no muestra el aviso', () => {
+        setup([
+            {
+                motivoId: 20,
+                valores: { marca: 'Fric-Rot', competidor: 'Corven', precio_competidor: 150, mi_precio: 130 },
+            },
+        ])
+        expect(screen.queryByText(/completá esto para poder avanzar/i)).not.toBeInTheDocument()
+    })
 })
 
 // Objeción y Cierre comparten el mismo espacio a ancho completo, alternados por un

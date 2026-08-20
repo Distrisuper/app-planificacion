@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check } from 'lucide-react'
 import MarcaOfrecimientoPicker from './MarcaOfrecimientoPicker'
 import DetalleMotivo from './detalleMotivo/DetalleMotivo'
+import { esValidoSegunDeclaracion } from './detalleMotivo/validadores'
 import type { ICatalogoItem, IAccionComercial, IMotivo, IOfrecimientoMotivo, ResultadoMotivo } from '@/types/planificacion'
 
 interface ResolucionOfrecimientoProps {
@@ -139,6 +140,10 @@ export default function ResolucionOfrecimiento({
         // "Pide detalle" es "tiene campos declarados", no "tiene codigo": un motivo nuevo con
         // campos y sin codigo pide detalle igual y se dibuja genérico.
         const pideDetalle = cat.campos.length > 0
+        // El aviso de "falta esto" vive JUNTO al campo que falta, no en el pie fijo del
+        // wizard (ResolucionWizardAcciones): ahí crecía y encogía el pie con cada tilde,
+        // empujando los botones de navegación. Acá el campo ya está a la vista.
+        const detalleIncompleto = on && pideDetalle && !esValidoSegunDeclaracion(cat.campos, seleccionado!.valores)
         return (
             <div
                 key={cat.motivoId}
@@ -181,6 +186,11 @@ export default function ResolucionOfrecimiento({
                             marcas={marcas}
                             marcasLoading={marcasLoading}
                         />
+                        {detalleIncompleto && (
+                            <p className="mt-2 text-[12px] font-semibold text-[#B45309]">
+                                Completá esto para poder avanzar.
+                            </p>
+                        )}
                     </div>
                 )}
             </div>
