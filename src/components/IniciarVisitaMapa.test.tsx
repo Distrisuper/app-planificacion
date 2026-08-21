@@ -23,11 +23,12 @@ vi.mock('leaflet', () => {
     }
 })
 
-function mockGeolocation(impl: any) {
-    const watchPosition = vi.fn(impl)
+function mockGeolocation(watchImpl: any, getCurrentImpl: any = () => {}) {
+    const watchPosition = vi.fn(watchImpl)
+    const getCurrentPosition = vi.fn(getCurrentImpl)
     const clearWatch = vi.fn()
-    vi.stubGlobal('navigator', { geolocation: { watchPosition, clearWatch } })
-    return { watchPosition, clearWatch }
+    vi.stubGlobal('navigator', { geolocation: { watchPosition, getCurrentPosition, clearWatch } })
+    return { watchPosition, getCurrentPosition, clearWatch }
 }
 
 beforeEach(() => vi.unstubAllGlobals())
@@ -155,6 +156,34 @@ it('no bloquea con un fix impreciso aunque marque lejos', () => {
         />,
     )
     expect(screen.getByRole('button', { name: /iniciar visita/i })).not.toBeDisabled()
+})
+
+it('si falla el recálculo pero ya había una posición conocida, no muestra el aviso contradictorio de "podés iniciar igual"', async () => {
+    const { getCurrentPosition } = mockGeolocation(
+        (ok: any) => ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
+        (_ok: any, fail: any) => fail(),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    // Ya hay una posición conocida (lejos): el botón queda bloqueado con el aviso de distancia.
+    expect(await screen.findByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /recalcular posición/i }))
+
+    expect(getCurrentPosition).toHaveBeenCalled()
+    // "No pudimos ubicarte, podés iniciar igual" es CONTRADICTORIO acá: ya sabemos que está
+    // lejos (el botón sigue bloqueado), así que no debe convivir con ese aviso.
+    expect(screen.queryByText(/no pudimos ubicarte/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
 })
 
 it('limpia el watch de geolocalización al desmontar', () => {

@@ -234,8 +234,16 @@ Hay **tres capas separadas**, y una operación toca una sola:
   habilitado como si ya se hubiera confirmado la cercanía, cuando en realidad no se sabe nada
   todavía (puede tardar varios segundos con mala señal). Es distinto de `sinUbicacion`, que sí
   deja iniciar a propósito, pero solo después de que el GPS realmente falló, no mientras sigue
-  resolviendo. `VisitaFlow.onIniciar` repite el chequeo con la
-  coordenada definitiva para que tocar el botón en el instante en que el watch marcó "cerca" no
+  resolviendo. Y una vez que hubo un fix bueno, un fallo posterior (el watch pierde señal, o
+  "Recalcular posición" falla) NO reactiva `sinUbicacion` — sería contradictorio mostrar "podés
+  iniciar igual" al lado de la distancia ya conocida, con el botón todavía bloqueado por ese fix
+  anterior. Ese caso usa un aviso distinto ("No pudimos actualizar tu posición. Mostrando la
+  última conocida.") vía `errorActualizando`, gobernado por `marcarFixFallido()`/
+  `marcarFixExitoso()` y un `posicionRef` (el `watchPosition` vive todo el ciclo del mapa y sus
+  callbacks no se redefinen en cada fix, así que necesitan un ref para ver el último `posicion`
+  real y no el del render en que se armaron).
+- **`VisitaFlow.onIniciar` repite el chequeo con la
+  coordenada definitiva**, para que tocar el botón en el instante en que el watch marcó "cerca" no
   lo saltee. El cierre no bloquea a propósito: para esa altura ya se puede haber ido del local
   por cualquier motivo, y bloquearlo dejaría visitas abiertas para siempre. No confundir
   `RADIO_INICIO_METROS` con `TOLERANCIA_METROS` de `analiticaFormat.ts` — hoy coinciden en 100 m
