@@ -14,10 +14,10 @@ function wrapper({ children }: { children: React.ReactNode }) {
 }
 
 // El catálogo sale de fct_sales.brand_name, que además de marcas reales trae códigos
-// administrativos del ERP (ACC, 120, 108, 121 — ver docs/superpowers) que no son una marca
-// que el vendedor pueda elegir. Se excluyen acá, en el único lugar que arma este catálogo
-// para el picker — de última, hasta que el warehouse tenga de dónde distinguirlos sin
-// hardcodear nombres.
+// administrativos del ERP (ACC, 120, 108, 121, -1 — ver docs/superpowers) que no son una
+// marca que el vendedor pueda elegir. Se excluyen acá, en el único lugar que arma este
+// catálogo para el picker — de última, hasta que el warehouse tenga de dónde distinguirlos
+// sin hardcodear nombres.
 it('excluye del catálogo de marcas los códigos administrativos que no son una marca real', async () => {
     ;(api.getBrandCatalog as any).mockResolvedValue([
         { code: '1', description: 'ACEITES' },
@@ -25,6 +25,7 @@ it('excluye del catálogo de marcas los códigos administrativos que no son una 
         { code: '120', description: 'FEE POR SUSCRIPCION' },
         { code: '121', description: 'OP UNICA' },
         { code: '108', description: 'OPERACION ESPECIAL' },
+        { code: '-1', description: 'Z OPERACION ESPECIAL' },
         { code: '096', description: 'SKF' },
     ])
     const { result } = renderHook(() => useBrandCatalog(), { wrapper })
