@@ -3,6 +3,8 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Navigation, RotateCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { distanciaMetros, estaFueraDeRango, RADIO_INICIO_METROS } from '@/lib/distancia'
+import { formatDistancia } from '@/lib/analiticaFormat'
 
 interface IniciarVisitaMapaProps {
     open: boolean
@@ -52,17 +54,29 @@ export default function IniciarVisitaMapa({
     const vendedorMarker = useRef<L.Marker | null>(null)
     const [sinUbicacion, setSinUbicacion] = useState(false)
     const [recalculando, setRecalculando] = useState(false)
+    // null = todavía no hay fix propio: no se sabe la distancia, así que no se bloquea.
+    const [posicion, setPosicion] = useState<{ distanciaM: number; fueraDeRango: boolean } | null>(
+        null,
+    )
+    const fueraDeRango = posicion?.fueraDeRango ?? false
 
     useEffect(() => {
         if (!open || !mapRef.current) return
 
         setSinUbicacion(false)
+        setPosicion(null)
         const map = L.map(mapRef.current, { zoomControl: false }).setView([latitud, longitud], 15)
         mapInstance.current = map
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap',
         }).addTo(map)
         L.marker([latitud, longitud], { icon: ICONO_CLIENTE }).addTo(map)
+        L.circle([latitud, longitud], {
+            radius: RADIO_INICIO_METROS,
+            color: '#F97316',
+            weight: 1,
+            fillOpacity: 0.08,
+        }).addTo(map)
 
         let watchId: number | null = null
         let yaCentrado = false
@@ -70,7 +84,9 @@ export default function IniciarVisitaMapa({
         if (navigator.geolocation) {
             watchId = navigator.geolocation.watchPosition(
                 pos => {
-                    const { latitude, longitude } = pos.coords
+                    const { latitude, longitude, accuracy } = pos.coords
+                    const distanciaM = distanciaMetros(latitud, longitud, latitude, longitude)
+                    setPosicion({ distanciaM, fueraDeRango: estaFueraDeRango(distanciaM, accuracy) })
                     if (!vendedorMarker.current) {
                         vendedorMarker.current = L.marker([latitude, longitude], {
                             icon: ICONO_VENDEDOR,
@@ -113,7 +129,9 @@ export default function IniciarVisitaMapa({
         navigator.geolocation.getCurrentPosition(
             pos => {
                 setRecalculando(false)
-                const { latitude, longitude } = pos.coords
+                const { latitude, longitude, accuracy } = pos.coords
+                const distanciaM = distanciaMetros(latitud, longitud, latitude, longitude)
+                setPosicion({ distanciaM, fueraDeRango: estaFueraDeRango(distanciaM, accuracy) })
                 const map = mapInstance.current
                 if (!map) return
                 if (!vendedorMarker.current) {
@@ -170,6 +188,17 @@ export default function IniciarVisitaMapa({
 
             <div className="border-t border-dsline px-4 py-4">
                 {direccion && <p className="mb-3 truncate text-[13px] text-dsmuted">{direccion}</p>}
+                {posicion && posicion.fueraDeRango && (
+                    <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
+                        Estás a {formatDistancia(posicion.distanciaM)} del cliente — acercate a menos
+                        de {RADIO_INICIO_METROS} m para iniciar.
+                    </p>
+                )}
+                {posicion && !posicion.fueraDeRango && (
+                    <p className="mb-3 text-[12.5px] font-semibold text-dsgreen">
+                        Estás a {formatDistancia(posicion.distanciaM)} del cliente.
+                    </p>
+                )}
                 {sinUbicacion && (
                     <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
                         No pudimos ubicarte, pero podés iniciar igual.
@@ -198,9 +227,10 @@ export default function IniciarVisitaMapa({
                 <Button
                     onClick={onIniciar}
                     loading={iniciando}
+                    disabled={fueraDeRango}
                     className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
                 >
-                    {iniciando ? 'Iniciando…' : 'Iniciar visita'}
+                    {iniciando ? 'Iniciando…' : fueraDeRango ? 'Acercate al cliente' : 'Iniciar visita'}
                 </Button>
             </div>
         </div>

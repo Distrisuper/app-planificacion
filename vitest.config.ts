@@ -25,11 +25,11 @@ export default defineConfig({
         // nunca aparece lo reporta el findBy con su mensaje útil ("Unable to find…") y
         // no este timeout, que no dice qué se estaba esperando.
         testTimeout: 15000,
-        // .worktrees/ son copias sueltas de tareas en paralelo (ver skill de git
-        // worktrees) con su propio node_modules: si vitest las recorre, carga una
-        // segunda copia de React y los hooks explotan con "Cannot read properties
+        // .worktrees/ y .claude/worktrees/ son copias sueltas de tareas en paralelo (ver
+        // skill de git worktrees) con su propio node_modules: si vitest las recorre, carga
+        // una segunda copia de React y los hooks explotan con "Cannot read properties
         // of null" en cualquier componente de la copia principal.
-        exclude: ['**/node_modules/**', '**/.worktrees/**', '**/e2e/**'],
+        exclude: ['**/node_modules/**', '**/.worktrees/**', '**/.claude/worktrees/**', '**/e2e/**'],
         // El bug que este helper arregla solo se manifiesta en timezones al oeste de
         // Greenwich. Fijarla acá hace que el test falle en CI si alguien vuelve a
         // introducir toISOString() para fechas locales.

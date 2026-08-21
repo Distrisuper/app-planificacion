@@ -223,6 +223,18 @@ Hay **tres capas separadas**, y una operación toca una sola:
   porque el negocio solo necesita confirmar presencia + duración. Por eso la app se queda web/PWA
   (sin Capacitor). Si algún día se pide el trazo continuo, el camino documentado es Capacitor +
   plugin background-geolocation + OTA (Capgo).
+- **Iniciar visita exige estar a ≤100 m del cliente; cerrar NO tiene ese gate.** La regla vive
+  entera en el front (`src/lib/distancia.ts`, `RADIO_INICIO_METROS`), no en api-vendedores: es
+  una guía operativa, no un candado infalseable. Bloquea por evidencia positiva de lejanía —
+  `distancia − precisión del fix > 100 m` — así que un fix grueso de wifi/antena (la segunda
+  etapa de `capturarUbicacion()`, que puede errar cientos de metros) no bloquea a un vendedor
+  parado en el local. El mapa de `IniciarVisitaMapa` muestra la distancia en vivo y deshabilita
+  el botón mientras esté fuera de rango; `VisitaFlow.onIniciar` repite el chequeo con la
+  coordenada definitiva para que tocar el botón en el instante en que el watch marcó "cerca" no
+  lo saltee. El cierre no bloquea a propósito: para esa altura ya se puede haber ido del local
+  por cualquier motivo, y bloquearlo dejaría visitas abiertas para siempre. No confundir
+  `RADIO_INICIO_METROS` con `TOLERANCIA_METROS` de `analiticaFormat.ts` — hoy coinciden en 100 m
+  pero son conceptos distintos (gate operativo vs. umbral de medición post-hoc).
 - **Al cerrar visita se genera un seguimiento en Cromo automáticamente** (`POST /crm/events`),
   reemplazando el redirect manual a Cromo que existe hoy en el flujo de Lupa.
 - **La vista semanal SÍ muestra el estado de cada cliente**, y es gratis: sale del `LEFT JOIN` con la

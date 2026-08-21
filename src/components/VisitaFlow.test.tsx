@@ -14,11 +14,13 @@ vi.mock('leaflet', () => {
     const map = { setView: vi.fn().mockReturnThis(), remove: vi.fn(), fitBounds: vi.fn() }
     const marker = { addTo: vi.fn().mockReturnThis(), setLatLng: vi.fn() }
     const tileLayer = { addTo: vi.fn() }
+    const circle = { addTo: vi.fn().mockReturnThis() }
     return {
         default: {
             map: vi.fn(() => map),
             tileLayer: vi.fn(() => tileLayer),
             marker: vi.fn(() => marker),
+            circle: vi.fn(() => circle),
             divIcon: vi.fn(() => ({})),
         },
     }

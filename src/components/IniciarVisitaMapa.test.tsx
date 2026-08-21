@@ -11,11 +11,13 @@ vi.mock('leaflet', () => {
     }
     const marker = { addTo: vi.fn().mockReturnThis(), setLatLng: vi.fn() }
     const tileLayer = { addTo: vi.fn() }
+    const circle = { addTo: vi.fn().mockReturnThis() }
     return {
         default: {
             map: vi.fn(() => map),
             tileLayer: vi.fn(() => tileLayer),
             marker: vi.fn(() => marker),
+            circle: vi.fn(() => circle),
             divIcon: vi.fn(() => ({})),
         },
     }
@@ -100,6 +102,41 @@ it('si falla la ubicación en vivo, avisa que igual se puede iniciar', () => {
         />,
     )
     expect(screen.getByText(/no pudimos ubicarte/i)).toBeInTheDocument()
+})
+
+it('deshabilita el botón y avisa cuando el fix propio está lejos y es preciso', () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(screen.getByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /acercate al cliente/i })).toBeDisabled()
+})
+
+it('no bloquea con un fix impreciso aunque marque lejos', () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 500 } }),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(screen.getByRole('button', { name: /iniciar visita/i })).not.toBeDisabled()
 })
 
 it('limpia el watch de geolocalización al desmontar', () => {
