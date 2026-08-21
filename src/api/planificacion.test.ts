@@ -12,6 +12,7 @@ import {
     iniciarVisita,
     cerrarVisita,
     registrarNoVisita,
+    reintentarSeguimiento,
     getOfrecimientos,
     agregarOfrecimiento,
     resolverOfrecimiento,
@@ -227,6 +228,13 @@ describe('visitas', () => {
             rotacionClienteId: 11,
             motivoIds: [1, 3],
         })
+    })
+
+    it('reintentarSeguimiento postea sin body sobre la resolución', async () => {
+        ;(apiClient.post as any).mockResolvedValue(ok({ enviado: true, mensaje: null }))
+        const res = await reintentarSeguimiento(5)
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/visitas/5/seguimiento')
+        expect(res).toEqual({ enviado: true, mensaje: null })
     })
 })
 

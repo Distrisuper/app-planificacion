@@ -33,6 +33,7 @@ const cliente: IAgendaClient = {
     estado: 'pendiente',
     visitaId: null,
     ofrecimientosPendientes: 0,
+    seguimiento: { estado: 'no_corresponde', motivo: null, mensaje: null },
     esExtra: false,
 }
 
@@ -496,6 +497,7 @@ const otroCliente: IAgendaClient = {
     estado: 'pendiente',
     visitaId: null,
     ofrecimientosPendientes: 0,
+    seguimiento: { estado: 'no_corresponde', motivo: null, mensaje: null },
     esExtra: false,
 }
 

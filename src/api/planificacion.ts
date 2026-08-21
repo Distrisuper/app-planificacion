@@ -121,6 +121,16 @@ export const registrarNoVisita = async (dto: INoVisitaDTO): Promise<INoVisitaRes
     return res.data.data
 }
 
+/** Reintento manual del aviso a Cromo. `resolucionId` es `IAgendaClient.visitaId` — el
+ *  mismo endpoint ya trae todos sus guards del lado del backend (pertenencia, 409 si ya
+ *  se envió, resolución completa); acá no se valida nada más. */
+export const reintentarSeguimiento = async (
+    resolucionId: number,
+): Promise<{ enviado: boolean; motivo?: string; mensaje: string | null }> => {
+    const res = await apiClient.post(`/planificacion/visitas/${resolucionId}/seguimiento`)
+    return res.data.data
+}
+
 // ── Ofrecimientos de la visita ───────────────────────────────────────────────────
 
 /** La propuesta CONGELADA al iniciar la visita (más los agregados a mano). */

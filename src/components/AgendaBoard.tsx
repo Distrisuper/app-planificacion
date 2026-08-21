@@ -16,6 +16,8 @@ interface AgendaBoardProps {
     /** Hay una visita en curso en algún cliente de la semana: bloquea "Iniciar visita"
      *  en el resto de las cards pendientes (el vendedor no puede estar en dos a la vez). */
     hayVisitaEnCurso?: boolean
+    /** `visitaId` del cliente cuyo reintento del aviso a Cromo está en vuelo. */
+    reintentandoId?: number | null
     onActivoChange: (dia: Dia) => void
     /** Si se pasa, cada encabezado de día muestra un "+" que abre el buscador con ESE
      *  día como destino. Sin la prop no se pinta: en preview de otra zona no hay dónde
@@ -25,6 +27,7 @@ interface AgendaBoardProps {
     onEstadoVisita: (cliente: IAgendaClient) => void
     onIniciarVisita: (cliente: IAgendaClient) => void
     onAbrirAppExterna: (app: AppExterna, cliente: IVisitClientCard) => void
+    onReintentarSeguimiento: (cliente: IAgendaClient) => void
 }
 
 export default function AgendaBoard({
@@ -32,12 +35,14 @@ export default function AgendaBoard({
     activo,
     modo,
     hayVisitaEnCurso = false,
+    reintentandoId = null,
     onActivoChange,
     onAgregarCliente,
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
     onAbrirAppExterna,
+    onReintentarSeguimiento,
 }: AgendaBoardProps) {
     const boardRef = useRef<HTMLDivElement>(null)
     const columnRefs = useRef<Partial<Record<Dia, HTMLDivElement>>>({})
@@ -183,10 +188,12 @@ export default function AgendaBoard({
                                         cliente={c}
                                         modo={modo}
                                         otraVisitaEnCurso={hayVisitaEnCurso && c.estado !== 'en_curso'}
+                                        reintentandoId={reintentandoId}
                                         onAbrir={onAbrir}
                                         onEstadoVisita={onEstadoVisita}
                                         onIniciarVisita={onIniciarVisita}
                                         onAbrirAppExterna={onAbrirAppExterna}
+                                        onReintentarSeguimiento={onReintentarSeguimiento}
                                     />
                                 ))}
                                 {clientes.length === 0 && (

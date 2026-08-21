@@ -1,4 +1,4 @@
-import { Ban, Calendar, Check, ChevronRight, Lock, MapPin, Phone, Play, Zap } from 'lucide-react'
+import { Ban, Calendar, Check, ChevronRight, Lock, MapPin, Phone, Play, RefreshCw, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import AccionesExternas from './AccionesExternas'
 import { titleCaseNombre } from '@/lib/textFormat'
@@ -16,12 +16,19 @@ interface ClienteCardProps {
      *  visitas abiertas a la vez, así que acá "Iniciar visita" se muestra bloqueado
      *  en vez de dejar que el vendedor lo intente y recién se entere en el sheet. */
     otraVisitaEnCurso?: boolean
+    /** `visitaId` del cliente cuyo reintento está en vuelo — deshabilita SU botón nada
+     *  más, no todos: el vendedor puede tener varias filas pendientes a la vez. */
+    reintentandoId?: number | null
     onAbrir: (cliente: IAgendaClient) => void
     onEstadoVisita: (cliente: IAgendaClient) => void
     /** Arranca la visita derecho, sin pasar por la propuesta: va directo al mapa
      *  de confirmación (o inicia sin más si el cliente no tiene coordenadas). */
     onIniciarVisita: (cliente: IAgendaClient) => void
     onAbrirAppExterna: (app: AppExterna, cliente: IVisitClientCard) => void
+    /** Reintento manual del aviso a Cromo (spec 2026-08-21 §6.3). Se ofrece exactamente
+     *  cuando `seguimiento.estado === 'pendiente'` — es la única condición, sin que la
+     *  card sepa nada del ciclo de vida de la visita. */
+    onReintentarSeguimiento: (cliente: IAgendaClient) => void
 }
 
 // Utilidades (llamar/reagendar). Viven en el header, no en el área de acciones: son
@@ -46,14 +53,21 @@ const TELEFONO_LIMPIO = /^[\d\s()+-]+$/
 export default function ClienteCard({
     cliente,
     otraVisitaEnCurso = false,
+    reintentandoId = null,
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
     onAbrirAppExterna,
+    onReintentarSeguimiento,
 }: ClienteCardProps) {
     const resuelto = estaResuelto(cliente.estado)
     const enCurso = cliente.estado === 'en_curso'
     const noVisitado = cliente.estado === 'no_visita'
+    // `visitaId` es lo único que identifica la resolución sobre la que reintentar (es el
+    // id que pide POST /visitas/:id/seguimiento). Un `no_visita` no lo trae — hoy no puede
+    // ofrecer este botón aunque su aviso también pueda fallar.
+    const puedeReintentar = cliente.visitaId !== null && cliente.seguimiento.estado === 'pendiente'
+    const reintentando = puedeReintentar && reintentandoId === cliente.visitaId
     // Solo se puede arrancar de cero un cliente que todavía no tiene visita: una vez
     // iniciada (en_curso) o resuelta, "Iniciar visita" ya no aplica. Tampoco aplica con
     // otra visita ya abierta — el backend la rechazaría igual (VISITA_ACTIVA_EXISTENTE),
@@ -184,7 +198,23 @@ export default function ClienteCard({
                 que tenga sentido — llamar o reagendar a alguien ya resuelto no aplica. Queda
                 solo el pill de estado de más arriba. */}
             {resuelto && cliente.visitaId === null ? null : resuelto ? (
-                <div className="mt-2.5 border-t border-[#EDEFF4] pt-2.5">
+                <div className="mt-2.5 flex flex-col gap-1.5 border-t border-[#EDEFF4] pt-2.5">
+                    {/* El aviso a Cromo falló (o nunca se intentó) y la visita ya está
+                        completa: acá es donde el vendedor vuelve a pasar, así que es el
+                        único lugar donde puede enterarse y reintentar (spec 2026-08-21
+                        §6.3). */}
+                    {puedeReintentar && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            loading={reintentando}
+                            onClick={() => onReintentarSeguimiento(cliente)}
+                            className="h-11 w-full border-[#F0D8A8] text-[13px] text-[#B45309]"
+                        >
+                            <RefreshCw className="h-[14px] w-[14px]" strokeWidth={2} />
+                            Reintentar sincronización
+                        </Button>
+                    )}
                     <Button
                         variant="outline"
                         size="sm"

@@ -58,6 +58,7 @@ const clienteLunes = {
     estado: 'pendiente' as const,
     visitaId: null,
     ofrecimientosPendientes: 0,
+    seguimiento: { estado: 'no_corresponde' as const, motivo: null, mensaje: null },
 }
 
 /** `url` permite arrancar en una posición concreta (?dia=/?semana=), que es de donde la
@@ -406,6 +407,66 @@ it('abre pagos-lupa en una pestaña nueva con el contexto del cliente, sin monta
     expect(screen.queryByTitle('Pagos')).not.toBeInTheDocument()
     expect(screen.queryByTestId('app-externa-contenedor')).not.toBeInTheDocument()
     open.mockRestore()
+})
+
+// spec 2026-08-21 §6.3: el botón vive en el listado de clientes a visitar y la
+// notificación de fallo sale del mismo `mensaje` que trae la respuesta del reintento.
+it('reintentar la sincronización con Cromo avisa éxito y refresca la agenda', async () => {
+    fijarLunes()
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [
+            {
+                ...clienteLunes,
+                estado: 'visitada',
+                visitaId: 7,
+                seguimiento: { estado: 'pendiente', motivo: 'CRM_ERROR', mensaje: 'genérico' },
+            },
+        ],
+    })
+    ;(api.reintentarSeguimiento as any).mockResolvedValue({ enviado: true, mensaje: null })
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /reintentar sincronización/i }))
+
+    await waitFor(() => expect(api.reintentarSeguimiento).toHaveBeenCalledWith(7))
+    expect(await screen.findByText(/sincronizado con cromo/i)).toBeInTheDocument()
+    // Un reintento exitoso invalida la agenda: sin esto la fila seguiría marcada
+    // pendiente y el botón no desaparecería nunca.
+    await waitFor(() => expect((api.getAgendaSemana as any).mock.calls.length).toBeGreaterThan(1))
+})
+
+it('un reintento fallido muestra el mensaje que trae la respuesta, no uno armado en el front', async () => {
+    fijarLunes()
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [
+            {
+                ...clienteLunes,
+                estado: 'visitada',
+                visitaId: 7,
+                seguimiento: {
+                    estado: 'pendiente',
+                    motivo: 'VENDEDOR_SIN_MAPEO',
+                    mensaje: 'Tu usuario todavía no está vinculado al CRM. Avisá a sistemas.',
+                },
+            },
+        ],
+    })
+    ;(api.reintentarSeguimiento as any).mockResolvedValue({
+        enviado: false,
+        motivo: 'VENDEDOR_SIN_MAPEO',
+        mensaje: 'Tu usuario todavía no está vinculado al CRM. Avisá a sistemas.',
+    })
+    renderPage()
+
+    fireEvent.click(await screen.findByRole('button', { name: /reintentar sincronización/i }))
+
+    expect(
+        await screen.findByText('Tu usuario todavía no está vinculado al CRM. Avisá a sistemas.'),
+    ).toBeInTheDocument()
 })
 
 it('volver a la semana abierta devuelve el modo operable', async () => {

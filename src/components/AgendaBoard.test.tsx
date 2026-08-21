@@ -12,6 +12,7 @@ function cliente(over: Partial<IAgendaClient> = {}): IAgendaClient {
         estado: 'pendiente',
         visitaId: null,
         ofrecimientosPendientes: 0,
+        seguimiento: { estado: 'no_corresponde', motivo: null, mensaje: null },
         esExtra: false,
         ...over,
     }
@@ -41,6 +42,7 @@ it('los clientes resueltos se listan al final, en su orden relativo original', (
             onEstadoVisita={noop}
             onIniciarVisita={noop}
             onAbrirAppExterna={noop}
+            onReintentarSeguimiento={noop}
         />,
     )
 
@@ -70,6 +72,7 @@ it('en_curso no se considera resuelto: se queda arriba con los pendientes', () =
             onEstadoVisita={noop}
             onIniciarVisita={noop}
             onAbrirAppExterna={noop}
+            onReintentarSeguimiento={noop}
         />,
     )
 

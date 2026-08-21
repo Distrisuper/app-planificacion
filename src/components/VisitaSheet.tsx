@@ -325,23 +325,25 @@ export default function VisitaSheet({
     const rubrosCatalogo = rubroStatus.map(s => ({ code: s.rubroCode, description: s.nombre }))
 
     /**
-     * Si el `detalle` de este ofrecimiento se puede guardar. Solo lo es con un código de
-     * acción: `validarDetalleAccion` (api-vendedores) rechaza con 400 DETALLE_INVALIDO todo
-     * `detalle` sin `accion`, y la marca viaja adentro de ese mismo objeto.
+     * Si el `detalle` de este ofrecimiento se puede guardar. `validarDetalleAccion`
+     * (api-vendedores, desde el fix de 2026-08-21) acepta `{ accion: null, marca }`: la
+     * acción sigue siendo opcional, pero la marca ya no depende de que haya una cargada.
      *
-     * Desde que se sacó Acción Comercial del formulario (spec 2026-08-19) no hay forma de
-     * cargar ese código, así que en la práctica esto es siempre false. Se conserva la
-     * pregunta en vez de borrar el campo porque el objeto sigue vivo en el resto del código.
+     * Acción Comercial se sacó del formulario (spec 2026-08-19), así que en la práctica
+     * `accion` siempre es null y lo único que puede hacer persistible el detalle es la
+     * marca — se conserva la comprobación de `accion` porque el objeto sigue vivo en el
+     * resto del código y un futuro que reponga Acción Comercial no debería tener que
+     * volver a tocar esto.
      *
      * Importa para DOS cosas, y por eso es una sola función:
-     *  1. No ensuciar el ofrecimiento. Elegir una marca no puede hacer que un rubro cuyos
-     *     motivos no cambiaron entre al batch: sería un PUT que no persiste nada (cinco
-     *     rubros con marca = cinco requests de más con datos móviles).
+     *  1. No ensuciar el ofrecimiento. Un rubro cuyos motivos no cambiaron Y sin marca ni
+     *     acción no entra al batch: sería un PUT que no persiste nada (cinco rubros sin
+     *     tocar son cinco requests de más con datos móviles).
      *  2. No mandar `detalle: null`. `undefined` es "no toques lo guardado" en el DTO;
      *     `null` es "borralo", y borraría un detalle viejo que este formulario ni muestra.
      */
     function esPersistible(ofrecimientoId: number): boolean {
-        return !!detalles[ofrecimientoId]?.accion
+        return !!detalles[ofrecimientoId]?.accion || !!detalles[ofrecimientoId]?.marca
     }
 
     // Único punto de guardado contra el backend: junta todo lo que cambió contra lo
