@@ -122,6 +122,24 @@ it('deshabilita el botón y avisa cuando el fix propio está lejos y es preciso'
     expect(screen.getByRole('button', { name: /acercate al cliente/i })).toBeDisabled()
 })
 
+it('mientras no llegó el primer fix, el botón queda deshabilitado (no habilitado por defecto)', () => {
+    // watchPosition que nunca llama ni al éxito ni al error: simula la ventana real en la
+    // que el GPS todavía está resolviendo (puede durar varios segundos con mala señal).
+    mockGeolocation(() => {})
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(screen.getByText(/calculando tu posición/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /calculando/i })).toBeDisabled()
+})
+
 it('no bloquea con un fix impreciso aunque marque lejos', () => {
     mockGeolocation((ok: any) =>
         ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 500 } }),

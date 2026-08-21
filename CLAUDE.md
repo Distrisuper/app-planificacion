@@ -229,7 +229,12 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `distancia − precisión del fix > 100 m` — así que un fix grueso de wifi/antena (la segunda
   etapa de `capturarUbicacion()`, que puede errar cientos de metros) no bloquea a un vendedor
   parado en el local. El mapa de `IniciarVisitaMapa` muestra la distancia en vivo y deshabilita
-  el botón mientras esté fuera de rango; `VisitaFlow.onIniciar` repite el chequeo con la
+  el botón mientras esté fuera de rango — y también mientras el primer fix todavía no llegó
+  (`calculando`, "Calculando tu posición…"): sin ese estado transitorio el botón queda
+  habilitado como si ya se hubiera confirmado la cercanía, cuando en realidad no se sabe nada
+  todavía (puede tardar varios segundos con mala señal). Es distinto de `sinUbicacion`, que sí
+  deja iniciar a propósito, pero solo después de que el GPS realmente falló, no mientras sigue
+  resolviendo. `VisitaFlow.onIniciar` repite el chequeo con la
   coordenada definitiva para que tocar el botón en el instante en que el watch marcó "cerca" no
   lo saltee. El cierre no bloquea a propósito: para esa altura ya se puede haber ido del local
   por cualquier motivo, y bloquearlo dejaría visitas abiertas para siempre. No confundir

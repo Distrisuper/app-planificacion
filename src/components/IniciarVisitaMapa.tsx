@@ -58,6 +58,12 @@ export default function IniciarVisitaMapa({
     const [posicion, setPosicion] = useState<{ distanciaM: number; fueraDeRango: boolean } | null>(
         null,
     )
+    // true desde que se abre el mapa hasta que watchPosition responde por primera vez
+    // (éxito o error). Distinto de `sinUbicacion` (que sí deja iniciar, a propósito):
+    // esto es la ventana en que el GPS todavía está resolviendo — puede durar varios
+    // segundos con mala señal — y sin este estado el botón quedaba habilitado como si ya
+    // se hubiera confirmado la cercanía, cuando en realidad no se sabe nada todavía.
+    const [calculando, setCalculando] = useState(true)
     const fueraDeRango = posicion?.fueraDeRango ?? false
 
     useEffect(() => {
@@ -65,6 +71,7 @@ export default function IniciarVisitaMapa({
 
         setSinUbicacion(false)
         setPosicion(null)
+        setCalculando(true)
         const map = L.map(mapRef.current, { zoomControl: false }).setView([latitud, longitud], 15)
         mapInstance.current = map
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -84,6 +91,7 @@ export default function IniciarVisitaMapa({
         if (navigator.geolocation) {
             watchId = navigator.geolocation.watchPosition(
                 pos => {
+                    setCalculando(false)
                     const { latitude, longitude, accuracy } = pos.coords
                     const distanciaM = distanciaMetros(latitud, longitud, latitude, longitude)
                     setPosicion({ distanciaM, fueraDeRango: estaFueraDeRango(distanciaM, accuracy) })
@@ -105,10 +113,14 @@ export default function IniciarVisitaMapa({
                         )
                     }
                 },
-                () => setSinUbicacion(true),
+                () => {
+                    setCalculando(false)
+                    setSinUbicacion(true)
+                },
                 { enableHighAccuracy: true, maximumAge: 5000 },
             )
         } else {
+            setCalculando(false)
             setSinUbicacion(true)
         }
 
@@ -129,6 +141,7 @@ export default function IniciarVisitaMapa({
         navigator.geolocation.getCurrentPosition(
             pos => {
                 setRecalculando(false)
+                setCalculando(false)
                 const { latitude, longitude, accuracy } = pos.coords
                 const distanciaM = distanciaMetros(latitud, longitud, latitude, longitude)
                 setPosicion({ distanciaM, fueraDeRango: estaFueraDeRango(distanciaM, accuracy) })
@@ -149,6 +162,7 @@ export default function IniciarVisitaMapa({
             },
             () => {
                 setRecalculando(false)
+                setCalculando(false)
                 setSinUbicacion(true)
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
@@ -188,6 +202,11 @@ export default function IniciarVisitaMapa({
 
             <div className="border-t border-dsline px-4 py-4">
                 {direccion && <p className="mb-3 truncate text-[13px] text-dsmuted">{direccion}</p>}
+                {calculando && (
+                    <p className="mb-3 text-[12.5px] font-semibold text-dsmuted">
+                        Calculando tu posición…
+                    </p>
+                )}
                 {posicion && posicion.fueraDeRango && (
                     <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
                         Estás a {formatDistancia(posicion.distanciaM)} del cliente — acercate a menos
@@ -227,10 +246,16 @@ export default function IniciarVisitaMapa({
                 <Button
                     onClick={onIniciar}
                     loading={iniciando}
-                    disabled={fueraDeRango}
+                    disabled={calculando || fueraDeRango}
                     className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
                 >
-                    {iniciando ? 'Iniciando…' : fueraDeRango ? 'Acercate al cliente' : 'Iniciar visita'}
+                    {iniciando
+                        ? 'Iniciando…'
+                        : calculando
+                          ? 'Calculando…'
+                          : fueraDeRango
+                            ? 'Acercate al cliente'
+                            : 'Iniciar visita'}
                 </Button>
             </div>
         </div>
