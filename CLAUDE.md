@@ -235,6 +235,12 @@ Hay **tres capas separadas**, y una operación toca una sola:
   por cualquier motivo, y bloquearlo dejaría visitas abiertas para siempre. No confundir
   `RADIO_INICIO_METROS` con `TOLERANCIA_METROS` de `analiticaFormat.ts` — hoy coinciden en 100 m
   pero son conceptos distintos (gate operativo vs. umbral de medición post-hoc).
+- **Cerrar visita exige un mínimo de `min(2, total ofrecidos)` rubros completos, no todos.**
+  Vive en `VisitaSheet.tsx` (`minimoRequerido`/`faltanParaMinimo`). Revierte a propósito la
+  decisión del spec `2026-07-31-resolucion-en-lote-y-borrador-local-design.md`, que había
+  endurecido el gate a "todos completos". Los rubros que queden sin tocar siguen en ámbar en
+  la tabla y se pueden cargar después de cerrada (`ofrecimientosPendientes` en
+  `VisitaFlow.onCerrarVisita` ya avisa cuántos quedan).
 - **Al cerrar visita se genera un seguimiento en Cromo automáticamente** (`POST /crm/events`),
   reemplazando el redirect manual a Cromo que existe hoy en el flujo de Lupa.
 - **La vista semanal SÍ muestra el estado de cada cliente**, y es gratis: sale del `LEFT JOIN` con la

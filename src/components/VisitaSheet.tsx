@@ -303,7 +303,13 @@ export default function VisitaSheet({
         return motivosDelOfrecimiento.length > 0 && !tieneDetalleIncompleto(motivos, motivosDelOfrecimiento)
     }
 
-    const pendientes = ofrecimientos.filter(r => !ofrecimientoCompleto(r)).length
+    // Ya no exige TODOS los rubros ofrecidos: alcanza con un mínimo de 2 (o menos, si la
+    // propuesta trae menos de 2 en total — el mínimo nunca pide más de lo que hay). Los
+    // rubros que queden sin tocar siguen en ámbar en la tabla y se pueden cargar después
+    // de cerrada (ver `ofrecimientosPendientes` en VisitaFlow.onCerrarVisita).
+    const completos = ofrecimientos.filter(ofrecimientoCompleto).length
+    const minimoRequerido = Math.min(2, ofrecimientos.length)
+    const faltanParaMinimo = Math.max(0, minimoRequerido - completos)
 
     const estadosResolucion: Record<number, { motivosCargados: number; completo: boolean }> = {}
     for (const r of ofrecimientos) {
@@ -411,7 +417,7 @@ export default function VisitaSheet({
             {!visitaCerrada && (
                 <Button
                     onClick={cerrarConBorrador}
-                    disabled={pendientes > 0}
+                    disabled={faltanParaMinimo > 0}
                     loading={cerrando || guardandoBorrador}
                     className="h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90"
                 >
@@ -423,8 +429,8 @@ export default function VisitaSheet({
                         ? 'Guardando…'
                         : cerrando
                           ? 'Cerrando…'
-                          : pendientes > 0
-                            ? `Faltan ${pendientes} ${pendientes === 1 ? 'rubro' : 'rubros'}`
+                          : faltanParaMinimo > 0
+                            ? `Completá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
                             : 'Cerrar visita'}
                 </Button>
             )}
