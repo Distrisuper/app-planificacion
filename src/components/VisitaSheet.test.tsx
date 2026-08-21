@@ -496,13 +496,13 @@ it('poda del borrador los motivos que ya no están en el catálogo', async () =>
     )
 })
 
-// Acción Comercial se sacó del formulario de resolución (spec 2026-08-19), y con ella el
-// único código de acción que el backend exige para persistir `detalle`
-// (api-vendedores/ofrecimientoValidation.ts: `validarDetalleAccion` rechaza con 400 todo
-// detalle sin `accion`). Como el formulario ya no administra `detalle`, tampoco lo manda:
-// ni con valor ni como null. `undefined` = "no toques lo guardado" en el DTO.
-describe('el formulario ya no administra `detalle`', () => {
-    it('con marca cargada, el batch manda solo los motivos: ningún detalle', async () => {
+// Acción Comercial se sacó del formulario de resolución (spec 2026-08-19): en la práctica
+// `accion` siempre es null, así que `detalle` solo existe para llevar la marca. El backend
+// la acepta sin acción desde el fix de 2026-08-21 (validarDetalleAccion ya no exige
+// `accion`) — antes de ese fix la marca se descartaba en silencio porque este formulario
+// nunca la mandaba.
+describe('la marca se manda en `detalle`, sin acción comercial', () => {
+    it('con marca cargada, el batch manda motivos + detalle con la marca', async () => {
         const { onCerrarVisita } = renderSheet()
         fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
 
@@ -517,15 +517,17 @@ describe('el formulario ya no administra `detalle`', () => {
         await waitFor(() =>
             expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
                 motivos: [{ motivoId: 10, valores: {} }],
+                detalle: { accion: null, marca: 'Fric-Rot' },
             }),
         )
         expect(onCerrarVisita).toHaveBeenCalled()
     })
 
-    // Sin esto, elegir una marca ensucia el rubro y le gasta un PUT que no persiste nada:
-    // el detalle no se puede mandar y los motivos no cambiaron. Con 5 rubros son 5
-    // requests de más con datos móviles.
-    it('tocar SOLO la marca no genera request para ese rubro', async () => {
+    // Antes de este fix, tocar SOLO la marca no generaba ningún request para ese rubro
+    // (`esPersistible` exigía `accion`, que el formulario ya no administra) y la marca se
+    // perdía en silencio. Ahora sí entra al batch, con motivos vacíos si el rubro no tenía
+    // ninguno tildado.
+    it('tocar SOLO la marca sí genera un request con el detalle, aunque los motivos no cambien', async () => {
         renderSheet()
 
         // Filtros (id 8) ya viene resuelto con motivoId 10: su borrador arranca igual a lo
@@ -537,6 +539,27 @@ describe('el formulario ya no administra `detalle`', () => {
 
         // Amortiguadores (id 7) sí se resuelve, para poder cerrar la visita. Es el primero
         // de dos, así que su salida es el ⌄, no "Ver resumen" (ese es del último).
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+        await tildarSaquePedido()
+        fireEvent.click(await screen.findByRole('button', { name: /minimizar/i }))
+
+        fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+
+        await waitFor(() =>
+            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 8, {
+                motivos: [{ motivoId: 10, valores: {} }],
+                detalle: { accion: null, marca: 'Fric-Rot' },
+            }),
+        )
+        const rubrosEnviados = (api.resolverOfrecimiento as any).mock.calls.map((c: unknown[]) => c[1])
+        expect(rubrosEnviados.sort()).toEqual([7, 8])
+    })
+
+    // Un rubro sin marca ni motivos tocados no genera request: seguiría siendo un PUT
+    // que no persiste nada.
+    it('sin marca ni cambio de motivos, el rubro no entra al batch', async () => {
+        renderSheet()
+
         fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
         await tildarSaquePedido()
         fireEvent.click(await screen.findByRole('button', { name: /minimizar/i }))
