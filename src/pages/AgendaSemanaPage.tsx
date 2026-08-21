@@ -14,7 +14,7 @@ import { BuscadorGeneralPanel } from '@/components/buscador/BuscadorGeneralPanel
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
-import { useNoVisita } from '@/hooks/useVisitas'
+import { useNoVisita, useReintentarSeguimiento } from '@/hooks/useVisitas'
 import { useNotificacion } from '@/hooks/useNotificacion'
 import { useAppExterna } from '@/hooks/useAppExterna'
 import { abrirAppExternaEnPestana } from '@/lib/appsExternas'
@@ -69,6 +69,7 @@ export default function AgendaSemanaPage() {
     const sincronizar = useSincronizar()
     const reacomodar = useReacomodar()
     const noVisita = useNoVisita()
+    const reintentarSeguimiento = useReintentarSeguimiento()
     const { data: motivosVisita = [] } = useMotivos('visita')
     const { notificacion, mostrar, ocultar } = useNotificacion()
     const { desmontar: desmontarAppExterna, ...appExterna } = useAppExterna()
@@ -364,6 +365,21 @@ export default function AgendaSemanaPage() {
         }
     }
 
+    // El aviso a Cromo (visita/no_visita) es fire-and-forget del lado del backend: nunca
+    // bloquea al vendedor mientras trabaja, así que la primera vez que puede enterarse de
+    // que falló es acá, en el listado de clientes a visitar (spec 2026-08-21 §6.3). El
+    // mensaje sale del mismo `mensaje` que ya trae la respuesta — nunca se arma en el front,
+    // para no desincronizarse del vocabulario de motivos que vive en el backend.
+    async function onReintentarSincronizacion(cliente: IAgendaClient) {
+        if (cliente.visitaId === null) return
+        try {
+            const res = await reintentarSeguimiento.mutateAsync(cliente.visitaId)
+            mostrar(res.enviado ? 'exito' : 'error', res.enviado ? 'Sincronizado con Cromo' : (res.mensaje ?? 'No pudimos conectar con el CRM. Probá de nuevo.'))
+        } catch {
+            mostrar('error', 'No pudimos conectar con el CRM. Probá de nuevo.')
+        }
+    }
+
     if (mensajeCuenta) {
         return (
             <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
@@ -445,12 +461,14 @@ export default function AgendaSemanaPage() {
                         activo={diaActivo}
                         modo={operable && ciclo != null ? 'operable' : 'preview'}
                         hayVisitaEnCurso={visitaEnCurso !== null}
+                        reintentandoId={reintentarSeguimiento.isPending ? (reintentarSeguimiento.variables ?? null) : null}
                         onActivoChange={setDiaActivo}
                         onAgregarCliente={operable && ciclo != null ? setDiaAAgregar : undefined}
                         onAbrir={abrirPropuesta}
                         onEstadoVisita={setEstadoVisitaCliente}
                         onIniciarVisita={iniciarDirecto}
                         onAbrirAppExterna={abrirAppExternaEnPestana}
+                        onReintentarSeguimiento={onReintentarSincronizacion}
                     />
                 </>
             )}

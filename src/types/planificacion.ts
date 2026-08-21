@@ -83,6 +83,21 @@ export interface IVisitClientCard {
     paymentPlan?: number | null
 }
 
+/** Estado del aviso a Cromo de una resolución (api-vendedores,
+ *  docs/superpowers/specs/2026-08-21-etiquetas-cromo-configurables-design.md §6.1).
+ *  `no_corresponde` = la resolución todavía no está completa: no corresponde ofrecer el
+ *  botón de reintentar, porque fallaría con 409 VISITA_INCOMPLETA. */
+export type EstadoSeguimiento = 'enviado' | 'pendiente' | 'no_corresponde'
+
+export interface ISeguimiento {
+    estado: EstadoSeguimiento
+    /** Código corto del fallo (VENDEDOR_SIN_MAPEO, CRM_ERROR, ...). `null` si no falló o
+     *  si nunca se intentó. */
+    motivo: string | null
+    /** Texto listo para mostrarle al vendedor. `null` salvo en `pendiente`. */
+    mensaje: string | null
+}
+
 /** Card de la vuelta abierta O de una semana previsualizada — ver decisión de diseño en el
  *  plan de este dominio: ambas fuentes ya traen un rotacionClienteId real. Los cinco campos
  *  son requeridos a propósito: con rotacionClienteId opcional, iniciarVisita({
@@ -91,10 +106,15 @@ export interface IAgendaClient extends IVisitClientCard {
     rotacionClienteId: number
     dia: number
     estado: EstadoCicloCliente
-    /** Id de la resolución si es una visita (para retomar la carga de ofrecimientos). */
+    /** Id de la resolución si es una visita (para retomar la carga de ofrecimientos, y
+     *  para reintentar el aviso a Cromo — ver `seguimiento`). */
     visitaId: number | null
     /** Ofrecimientos de esa visita todavía sin motivos. 0 si no hay visita. */
     ofrecimientosPendientes: number
+    /** Estado del aviso a Cromo. El botón "Reintentar sincronización" se muestra
+     *  exactamente cuando `estado === 'pendiente'` — una sola condición, sin que el front
+     *  tenga que saber nada del ciclo de vida de la visita. */
+    seguimiento: ISeguimiento
     /** true = fila creada por el buscador (spec 2026-08-12), no por el template de la
      *  rotación. No cuenta en el denominador de cobertura — ver docs/dominio/modelo.md. */
     esExtra: boolean

@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
-import { useIniciarVisita, useCerrarVisita, useNoVisita } from './useVisitas'
+import { useIniciarVisita, useCerrarVisita, useNoVisita, useReintentarSeguimiento } from './useVisitas'
 import * as api from '@/api/planificacion'
 
 vi.mock('@/api/planificacion')
@@ -61,4 +61,19 @@ it('useNoVisita calls registrarNoVisita with rotacionClienteId and motivoIds', a
         motivoIds: [1, 4],
     })
     expect(out.rotacionClienteId).toBe(42)
+})
+
+it('useReintentarSeguimiento calls reintentarSeguimiento with the resolucionId and returns the result', async () => {
+    ;(api.reintentarSeguimiento as any).mockResolvedValue({ enviado: false, motivo: 'CRM_ERROR', mensaje: 'No pudimos conectar con el CRM. Probá de nuevo.' })
+    const { result } = renderHook(() => useReintentarSeguimiento(), { wrapper })
+    let out: any
+    await waitFor(async () => {
+        out = await result.current.mutateAsync(5)
+    })
+    expect(api.reintentarSeguimiento).toHaveBeenCalledWith(5)
+    expect(out).toEqual({
+        enviado: false,
+        motivo: 'CRM_ERROR',
+        mensaje: 'No pudimos conectar con el CRM. Probá de nuevo.',
+    })
 })

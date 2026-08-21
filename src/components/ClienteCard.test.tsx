@@ -14,6 +14,7 @@ function cliente(over: Partial<IAgendaClient> = {}): IAgendaClient {
         estado: 'pendiente',
         visitaId: null,
         ofrecimientosPendientes: 0,
+        seguimiento: { estado: 'no_corresponde', motivo: null, mensaje: null },
         esExtra: false,
         ...over,
     }
@@ -25,6 +26,7 @@ const handlers = {
     onEstadoVisita: noop,
     onIniciarVisita: noop,
     onAbrirAppExterna: noop,
+    onReintentarSeguimiento: noop,
 }
 
 it('un cliente pendiente muestra el código y las acciones', () => {
@@ -209,4 +211,97 @@ it('el header tiene exactamente dos utilidades: llamar y reagendar', () => {
     // Y las apps siguen existiendo, pero fuera de ese contenedor.
     expect(within(header).queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Pagos' })).toBeInTheDocument()
+})
+
+// docs/superpowers/specs/2026-08-21-etiquetas-cromo-configurables-design.md §6.3: el botón
+// vive en el listado de clientes a visitar, exactamente en las filas con
+// seguimiento.estado === 'pendiente' — es la única condición, sin que la card sepa nada
+// del ciclo de vida de la visita.
+describe('reintento del aviso a Cromo', () => {
+    it('un cliente pendiente (aviso no corresponde todavía) no ofrece reintentar', () => {
+        render(<ClienteCard cliente={cliente()} {...handlers} />)
+        expect(screen.queryByRole('button', { name: /reintentar sincronización/i })).not.toBeInTheDocument()
+    })
+
+    it('una visita enviada no ofrece reintentar', () => {
+        render(
+            <ClienteCard
+                cliente={cliente({
+                    estado: 'visitada',
+                    visitaId: 7,
+                    seguimiento: { estado: 'enviado', motivo: null, mensaje: null },
+                })}
+                {...handlers}
+            />,
+        )
+        expect(screen.queryByRole('button', { name: /reintentar sincronización/i })).not.toBeInTheDocument()
+    })
+
+    it('una visita con el aviso pendiente ofrece reintentar, junto a Ver resumen', () => {
+        render(
+            <ClienteCard
+                cliente={cliente({
+                    estado: 'visitada',
+                    visitaId: 7,
+                    seguimiento: {
+                        estado: 'pendiente',
+                        motivo: 'CRM_ERROR',
+                        mensaje: 'No pudimos conectar con el CRM. Probá de nuevo.',
+                    },
+                })}
+                {...handlers}
+            />,
+        )
+        expect(screen.getByRole('button', { name: /reintentar sincronización/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /ver resumen/i })).toBeInTheDocument()
+    })
+
+    it('tocar "Reintentar sincronización" llama al handler con el cliente completo', () => {
+        const onReintentarSeguimiento = vi.fn()
+        render(
+            <ClienteCard
+                cliente={cliente({
+                    estado: 'visitada',
+                    visitaId: 7,
+                    seguimiento: { estado: 'pendiente', motivo: null, mensaje: 'genérico' },
+                })}
+                {...handlers}
+                onReintentarSeguimiento={onReintentarSeguimiento}
+            />,
+        )
+        fireEvent.click(screen.getByRole('button', { name: /reintentar sincronización/i }))
+        expect(onReintentarSeguimiento).toHaveBeenCalledWith(
+            expect.objectContaining({ rotacionClienteId: 42, visitaId: 7 }),
+        )
+    })
+
+    it('mientras reintenta ESTE cliente, el botón queda deshabilitado', () => {
+        render(
+            <ClienteCard
+                cliente={cliente({
+                    estado: 'visitada',
+                    visitaId: 7,
+                    seguimiento: { estado: 'pendiente', motivo: null, mensaje: 'genérico' },
+                })}
+                {...handlers}
+                reintentandoId={7}
+            />,
+        )
+        expect(screen.getByRole('button', { name: /reintentar sincronización/i })).toBeDisabled()
+    })
+
+    it('reintentando OTRO cliente no deshabilita el botón de este', () => {
+        render(
+            <ClienteCard
+                cliente={cliente({
+                    estado: 'visitada',
+                    visitaId: 7,
+                    seguimiento: { estado: 'pendiente', motivo: null, mensaje: 'genérico' },
+                })}
+                {...handlers}
+                reintentandoId={99}
+            />,
+        )
+        expect(screen.getByRole('button', { name: /reintentar sincronización/i })).toBeEnabled()
+    })
 })

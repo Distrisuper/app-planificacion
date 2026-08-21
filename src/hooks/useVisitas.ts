@@ -4,6 +4,7 @@ import {
     getVisitaActiva,
     iniciarVisita,
     registrarNoVisita,
+    reintentarSeguimiento,
 } from '@/api/planificacion'
 import { agendaKeys } from './useAgenda'
 import { cicloKeys } from './useCiclo'
@@ -43,4 +44,12 @@ export function useCerrarVisita() {
 
 export function useNoVisita() {
     return useMutacionDeVisita((dto: INoVisitaDTO) => registrarNoVisita(dto))
+}
+
+/** Reintento manual del aviso a Cromo desde la agenda (botón "Reintentar sincronización",
+ *  visible cuando `seguimiento.estado === 'pendiente'`). Invalida la agenda igual que las
+ *  otras mutaciones de visita: un reintento exitoso saca a la fila de `pendiente`, y la
+ *  única forma de que el botón desaparezca es que la agenda se vuelva a leer. */
+export function useReintentarSeguimiento() {
+    return useMutacionDeVisita((resolucionId: number) => reintentarSeguimiento(resolucionId))
 }
