@@ -120,7 +120,7 @@ it('deshabilita el botón y avisa cuando el fix propio está lejos y es preciso'
         />,
     )
     expect(screen.getByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /acercate al cliente/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /iniciar visita/i })).toBeDisabled()
 })
 
 it('mientras no llegó el primer fix, el botón queda deshabilitado (no habilitado por defecto)', () => {

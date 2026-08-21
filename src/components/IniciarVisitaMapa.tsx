@@ -291,13 +291,7 @@ export default function IniciarVisitaMapa({
                     disabled={calculando || fueraDeRango}
                     className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
                 >
-                    {iniciando
-                        ? 'Iniciando…'
-                        : calculando
-                          ? 'Calculando…'
-                          : fueraDeRango
-                            ? 'Acercate al cliente'
-                            : 'Iniciar visita'}
+                    {iniciando ? 'Iniciando…' : calculando ? 'Calculando…' : 'Iniciar visita'}
                 </Button>
             </div>
         </div>
