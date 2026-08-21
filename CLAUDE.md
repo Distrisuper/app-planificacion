@@ -223,6 +223,37 @@ Hay **tres capas separadas**, y una operación toca una sola:
   porque el negocio solo necesita confirmar presencia + duración. Por eso la app se queda web/PWA
   (sin Capacitor). Si algún día se pide el trazo continuo, el camino documentado es Capacitor +
   plugin background-geolocation + OTA (Capgo).
+- **Iniciar visita exige estar a ≤100 m del cliente; cerrar NO tiene ese gate.** La regla vive
+  entera en el front (`src/lib/distancia.ts`, `RADIO_INICIO_METROS`), no en api-vendedores: es
+  una guía operativa, no un candado infalseable. Bloquea por evidencia positiva de lejanía —
+  `distancia − precisión del fix > 100 m` — así que un fix grueso de wifi/antena (la segunda
+  etapa de `capturarUbicacion()`, que puede errar cientos de metros) no bloquea a un vendedor
+  parado en el local. El mapa de `IniciarVisitaMapa` muestra la distancia en vivo y deshabilita
+  el botón mientras esté fuera de rango — y también mientras el primer fix todavía no llegó
+  (`calculando`, "Calculando tu posición…"): sin ese estado transitorio el botón queda
+  habilitado como si ya se hubiera confirmado la cercanía, cuando en realidad no se sabe nada
+  todavía (puede tardar varios segundos con mala señal). Es distinto de `sinUbicacion`, que sí
+  deja iniciar a propósito, pero solo después de que el GPS realmente falló, no mientras sigue
+  resolviendo. Y una vez que hubo un fix bueno, un fallo posterior (el watch pierde señal, o
+  "Recalcular posición" falla) NO reactiva `sinUbicacion` — sería contradictorio mostrar "podés
+  iniciar igual" al lado de la distancia ya conocida, con el botón todavía bloqueado por ese fix
+  anterior. Ese caso usa un aviso distinto ("No pudimos actualizar tu posición. Mostrando la
+  última conocida.") vía `errorActualizando`, gobernado por `marcarFixFallido()`/
+  `marcarFixExitoso()` y un `posicionRef` (el `watchPosition` vive todo el ciclo del mapa y sus
+  callbacks no se redefinen en cada fix, así que necesitan un ref para ver el último `posicion`
+  real y no el del render en que se armaron).
+- **`VisitaFlow.onIniciar` repite el chequeo con la
+  coordenada definitiva**, para que tocar el botón en el instante en que el watch marcó "cerca" no
+  lo saltee. El cierre no bloquea a propósito: para esa altura ya se puede haber ido del local
+  por cualquier motivo, y bloquearlo dejaría visitas abiertas para siempre. No confundir
+  `RADIO_INICIO_METROS` con `TOLERANCIA_METROS` de `analiticaFormat.ts` — hoy coinciden en 100 m
+  pero son conceptos distintos (gate operativo vs. umbral de medición post-hoc).
+- **Cerrar visita exige un mínimo de `min(2, total ofrecidos)` rubros completos, no todos.**
+  Vive en `VisitaSheet.tsx` (`minimoRequerido`/`faltanParaMinimo`). Revierte a propósito la
+  decisión del spec `2026-07-31-resolucion-en-lote-y-borrador-local-design.md`, que había
+  endurecido el gate a "todos completos". Los rubros que queden sin tocar siguen en ámbar en
+  la tabla y se pueden cargar después de cerrada (`ofrecimientosPendientes` en
+  `VisitaFlow.onCerrarVisita` ya avisa cuántos quedan).
 - **Al cerrar visita se genera un seguimiento en Cromo automáticamente** (`POST /crm/events`),
   reemplazando el redirect manual a Cromo que existe hoy en el flujo de Lupa.
 - **La vista semanal SÍ muestra el estado de cada cliente**, y es gratis: sale del `LEFT JOIN` con la

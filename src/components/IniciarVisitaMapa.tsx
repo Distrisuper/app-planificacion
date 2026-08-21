@@ -3,6 +3,8 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { Navigation, RotateCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { distanciaMetros, estaFueraDeRango, RADIO_INICIO_METROS } from '@/lib/distancia'
+import { formatDistancia } from '@/lib/analiticaFormat'
 
 interface IniciarVisitaMapaProps {
     open: boolean
@@ -52,17 +54,69 @@ export default function IniciarVisitaMapa({
     const vendedorMarker = useRef<L.Marker | null>(null)
     const [sinUbicacion, setSinUbicacion] = useState(false)
     const [recalculando, setRecalculando] = useState(false)
+    // Un intento (el watch en vivo o "Recalcular posición") falló DESPUÉS de que ya
+    // hubiera un fix conocido — a diferencia de `sinUbicacion`, no habilita "iniciar
+    // igual": seguimos sabiendo la distancia del último fix bueno, solo que no se pudo
+    // refrescar. Se limpia en el próximo fix exitoso o al reabrir el mapa.
+    const [errorActualizando, setErrorActualizando] = useState(false)
+    // null = todavía no hay fix propio: no se sabe la distancia, así que no se bloquea.
+    const [posicion, setPosicion] = useState<{ distanciaM: number; fueraDeRango: boolean } | null>(
+        null,
+    )
+    // Espejo de `posicion` en un ref: los callbacks de `watchPosition` se crean UNA sola
+    // vez por apertura del mapa y quedan vivos mientras dure (no se redefinen en cada
+    // fix), así que leer el estado `posicion` ahí adentro devolvería siempre el valor de
+    // aquel primer render — no el último fix real. Sin este ref, un error posterior a un
+    // fix exitoso no podía saber que ya había una posición conocida, y pisaba el aviso de
+    // distancia con "no pudimos ubicarte, podés iniciar igual" (contradictorio: el botón
+    // seguía bloqueado por el fix anterior).
+    const posicionRef = useRef<typeof posicion>(null)
+
+    /** Único punto donde un intento de fix (watch o recálculo) fracasa. Solo habilita
+     *  "iniciar igual" si nunca hubo un fix bueno — si ya lo hubo, el fracaso solo avisa
+     *  que no se pudo refrescar, sin tocar el bloqueo que ya está vigente. */
+    function marcarFixFallido() {
+        if (posicionRef.current === null) {
+            setSinUbicacion(true)
+        } else {
+            setErrorActualizando(true)
+        }
+    }
+
+    function marcarFixExitoso(distanciaM: number, fueraDeRango: boolean) {
+        posicionRef.current = { distanciaM, fueraDeRango }
+        setPosicion(posicionRef.current)
+        setSinUbicacion(false)
+        setErrorActualizando(false)
+    }
+    // true desde que se abre el mapa hasta que watchPosition responde por primera vez
+    // (éxito o error). Distinto de `sinUbicacion` (que sí deja iniciar, a propósito):
+    // esto es la ventana en que el GPS todavía está resolviendo — puede durar varios
+    // segundos con mala señal — y sin este estado el botón quedaba habilitado como si ya
+    // se hubiera confirmado la cercanía, cuando en realidad no se sabe nada todavía.
+    const [calculando, setCalculando] = useState(true)
+    const fueraDeRango = posicion?.fueraDeRango ?? false
 
     useEffect(() => {
         if (!open || !mapRef.current) return
 
         setSinUbicacion(false)
+        setErrorActualizando(false)
+        setPosicion(null)
+        posicionRef.current = null
+        setCalculando(true)
         const map = L.map(mapRef.current, { zoomControl: false }).setView([latitud, longitud], 15)
         mapInstance.current = map
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap',
         }).addTo(map)
         L.marker([latitud, longitud], { icon: ICONO_CLIENTE }).addTo(map)
+        L.circle([latitud, longitud], {
+            radius: RADIO_INICIO_METROS,
+            color: '#F97316',
+            weight: 1,
+            fillOpacity: 0.08,
+        }).addTo(map)
 
         let watchId: number | null = null
         let yaCentrado = false
@@ -70,7 +124,10 @@ export default function IniciarVisitaMapa({
         if (navigator.geolocation) {
             watchId = navigator.geolocation.watchPosition(
                 pos => {
-                    const { latitude, longitude } = pos.coords
+                    setCalculando(false)
+                    const { latitude, longitude, accuracy } = pos.coords
+                    const distanciaM = distanciaMetros(latitud, longitud, latitude, longitude)
+                    marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
                     if (!vendedorMarker.current) {
                         vendedorMarker.current = L.marker([latitude, longitude], {
                             icon: ICONO_VENDEDOR,
@@ -89,11 +146,15 @@ export default function IniciarVisitaMapa({
                         )
                     }
                 },
-                () => setSinUbicacion(true),
+                () => {
+                    setCalculando(false)
+                    marcarFixFallido()
+                },
                 { enableHighAccuracy: true, maximumAge: 5000 },
             )
         } else {
-            setSinUbicacion(true)
+            setCalculando(false)
+            marcarFixFallido()
         }
 
         return () => {
@@ -106,14 +167,17 @@ export default function IniciarVisitaMapa({
 
     function handleRecalcular() {
         if (!navigator.geolocation) {
-            setSinUbicacion(true)
+            marcarFixFallido()
             return
         }
         setRecalculando(true)
         navigator.geolocation.getCurrentPosition(
             pos => {
                 setRecalculando(false)
-                const { latitude, longitude } = pos.coords
+                setCalculando(false)
+                const { latitude, longitude, accuracy } = pos.coords
+                const distanciaM = distanciaMetros(latitud, longitud, latitude, longitude)
+                marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
                 const map = mapInstance.current
                 if (!map) return
                 if (!vendedorMarker.current) {
@@ -131,7 +195,8 @@ export default function IniciarVisitaMapa({
             },
             () => {
                 setRecalculando(false)
-                setSinUbicacion(true)
+                setCalculando(false)
+                marcarFixFallido()
             },
             { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
         )
@@ -170,9 +235,34 @@ export default function IniciarVisitaMapa({
 
             <div className="border-t border-dsline px-4 py-4">
                 {direccion && <p className="mb-3 truncate text-[13px] text-dsmuted">{direccion}</p>}
+                {calculando && (
+                    <p className="mb-3 text-[12.5px] font-semibold text-dsmuted">
+                        Calculando tu posición…
+                    </p>
+                )}
+                {posicion && posicion.fueraDeRango && (
+                    <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
+                        Estás a {formatDistancia(posicion.distanciaM)} del cliente — acercate a menos
+                        de {RADIO_INICIO_METROS} m para iniciar.
+                    </p>
+                )}
+                {posicion && !posicion.fueraDeRango && (
+                    <p className="mb-3 text-[12.5px] font-semibold text-dsgreen">
+                        Estás a {formatDistancia(posicion.distanciaM)} del cliente.
+                    </p>
+                )}
                 {sinUbicacion && (
                     <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
                         No pudimos ubicarte, pero podés iniciar igual.
+                    </p>
+                )}
+                {/* Distinto de `sinUbicacion`: acá SÍ hay una posición conocida (el aviso de
+                 *  arriba ya la muestra), solo que el último intento de refrescarla falló.
+                 *  No dice "podés iniciar igual" porque el bloqueo, si lo hay, sigue vigente
+                 *  con el último fix bueno. */}
+                {errorActualizando && (
+                    <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
+                        No pudimos actualizar tu posición. Mostrando la última conocida.
                     </p>
                 )}
                 {error && <p className="mb-3 text-[12.5px] font-semibold text-dsred">{error}</p>}
@@ -198,9 +288,16 @@ export default function IniciarVisitaMapa({
                 <Button
                     onClick={onIniciar}
                     loading={iniciando}
+                    disabled={calculando || fueraDeRango}
                     className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
                 >
-                    {iniciando ? 'Iniciando…' : 'Iniciar visita'}
+                    {iniciando
+                        ? 'Iniciando…'
+                        : calculando
+                          ? 'Calculando…'
+                          : fueraDeRango
+                            ? 'Acercate al cliente'
+                            : 'Iniciar visita'}
                 </Button>
             </div>
         </div>

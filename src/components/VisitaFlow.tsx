@@ -7,6 +7,7 @@ import IniciarVisitaMapa from './IniciarVisitaMapa'
 import { useCerrarVisita, useIniciarVisita } from '@/hooks/useVisitas'
 import { usePropuesta } from '@/hooks/usePropuesta'
 import { capturarUbicacion, type GeoResult } from '@/lib/geolocation'
+import { distanciaMetros, estaFueraDeRango } from '@/lib/distancia'
 import { errorCode } from '@/lib/apiError'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
 import type { NotificacionTipo } from '@/components/ui/Notification'
@@ -126,13 +127,13 @@ export default function VisitaFlow({
 
     if (!cliente) return null
 
-    async function conUbicacion(accion: (coord: string) => Promise<void>) {
+    async function conUbicacion(accion: (geo: Extract<GeoResult, { ok: true }>) => Promise<void>) {
         const geo = await capturarUbicacion()
         if (!geo.ok) {
             onGeoBloqueada(geo.motivo)
             return
         }
-        await accion(geo.coord)
+        await accion(geo)
     }
 
     // Solo con coordenadas del cliente vale la pena mostrar el mapa (confirmar cercanía);
@@ -155,11 +156,28 @@ export default function VisitaFlow({
         setErrorIniciar(null)
         setIniciandoFlujo(true)
         try {
-            await conUbicacion(async coord => {
+            await conUbicacion(async geo => {
+                // Segunda verificación, con la coordenada DEFINITIVA (la que se persiste). El
+                // mapa ya deshabilita el botón con el fix en vivo, pero eso solo evita el caso
+                // honesto — sin este chequeo alcanzaría con tocar "Iniciar visita" en el
+                // instante en que el watch marcó cerca para saltear el gate.
+                if (tieneCoords) {
+                    const [lat, lon] = geo.coord.split(',').map(Number)
+                    const distanciaM = distanciaMetros(
+                        lat,
+                        lon,
+                        cliente!.latitud as number,
+                        cliente!.longitud as number,
+                    )
+                    if (estaFueraDeRango(distanciaM, geo.precisionM)) {
+                        setErrorIniciar('Estás lejos del cliente. Acercate para iniciar la visita.')
+                        return
+                    }
+                }
                 try {
                     const { visitaId: id } = await iniciar.mutateAsync({
                         rotacionClienteId: cliente!.rotacionClienteId,
-                        coordInicio: coord,
+                        coordInicio: geo.coord,
                         propuesta,
                     })
                     setPropuestaPendiente(null)
@@ -187,9 +205,9 @@ export default function VisitaFlow({
         if (visitaId === null || cerrandoFlujo) return
         setCerrandoFlujo(true)
         try {
-            await conUbicacion(async coord => {
+            await conUbicacion(async geo => {
                 try {
-                    const res = await cerrar.mutateAsync({ visitaId, coordFinal: coord })
+                    const res = await cerrar.mutateAsync({ visitaId, coordFinal: geo.coord })
                     if (res.ofrecimientosPendientes > 0) {
                         onAviso?.(
                             'info',

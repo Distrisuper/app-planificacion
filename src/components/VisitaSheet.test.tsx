@@ -188,12 +188,34 @@ it('con la visita cerrada NO poda los motivos: un rubro resuelto con un motivo d
     })
 })
 
-it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos faltan', async () => {
+it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos faltan para el mínimo', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
     // El faltante lo dice el propio botón deshabilitado, no una línea aparte en el pie.
-    expect(screen.getByRole('button', { name: /faltan 1 rubro/i })).toBeDisabled()
+    // La propuesta trae 2 rubros en total, así que el mínimo (2) coincide con "todos".
+    expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeDisabled()
     expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
+})
+
+it('con 2 de 3 rubros completos ya alcanza el mínimo, sin exigir el tercero', async () => {
+    ;(api.getOfrecimientos as any).mockResolvedValue([
+        ...ofrecimientos,
+        {
+            id: 9, resolucionId: 42, tipo: 'rubro', codigo: 'FREN', descripcion: 'Frenos',
+            gapUnits: null, esPropuesto: false, resuelto: false, motivos: [], alcance: [],
+        },
+    ])
+    renderSheet()
+    await screen.findByText('Frenos')
+    // "Filtros" ya viene completo del servidor; falta 1 más para llegar al mínimo de 2.
+    expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    // "Frenos" sigue sin tocar y "Cerrar visita" ya está habilitado: el mínimo es 2, no 3.
+    expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
 })
 
 it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo batch y dispara el cierre', async () => {

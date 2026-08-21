@@ -11,21 +11,24 @@ vi.mock('leaflet', () => {
     }
     const marker = { addTo: vi.fn().mockReturnThis(), setLatLng: vi.fn() }
     const tileLayer = { addTo: vi.fn() }
+    const circle = { addTo: vi.fn().mockReturnThis() }
     return {
         default: {
             map: vi.fn(() => map),
             tileLayer: vi.fn(() => tileLayer),
             marker: vi.fn(() => marker),
+            circle: vi.fn(() => circle),
             divIcon: vi.fn(() => ({})),
         },
     }
 })
 
-function mockGeolocation(impl: any) {
-    const watchPosition = vi.fn(impl)
+function mockGeolocation(watchImpl: any, getCurrentImpl: any = () => {}) {
+    const watchPosition = vi.fn(watchImpl)
+    const getCurrentPosition = vi.fn(getCurrentImpl)
     const clearWatch = vi.fn()
-    vi.stubGlobal('navigator', { geolocation: { watchPosition, clearWatch } })
-    return { watchPosition, clearWatch }
+    vi.stubGlobal('navigator', { geolocation: { watchPosition, getCurrentPosition, clearWatch } })
+    return { watchPosition, getCurrentPosition, clearWatch }
 }
 
 beforeEach(() => vi.unstubAllGlobals())
@@ -100,6 +103,87 @@ it('si falla la ubicación en vivo, avisa que igual se puede iniciar', () => {
         />,
     )
     expect(screen.getByText(/no pudimos ubicarte/i)).toBeInTheDocument()
+})
+
+it('deshabilita el botón y avisa cuando el fix propio está lejos y es preciso', () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(screen.getByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /acercate al cliente/i })).toBeDisabled()
+})
+
+it('mientras no llegó el primer fix, el botón queda deshabilitado (no habilitado por defecto)', () => {
+    // watchPosition que nunca llama ni al éxito ni al error: simula la ventana real en la
+    // que el GPS todavía está resolviendo (puede durar varios segundos con mala señal).
+    mockGeolocation(() => {})
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(screen.getByText(/calculando tu posición/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /calculando/i })).toBeDisabled()
+})
+
+it('no bloquea con un fix impreciso aunque marque lejos', () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 500 } }),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(screen.getByRole('button', { name: /iniciar visita/i })).not.toBeDisabled()
+})
+
+it('si falla el recálculo pero ya había una posición conocida, no muestra el aviso contradictorio de "podés iniciar igual"', async () => {
+    const { getCurrentPosition } = mockGeolocation(
+        (ok: any) => ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
+        (_ok: any, fail: any) => fail(),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    // Ya hay una posición conocida (lejos): el botón queda bloqueado con el aviso de distancia.
+    expect(await screen.findByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /recalcular posición/i }))
+
+    expect(getCurrentPosition).toHaveBeenCalled()
+    // "No pudimos ubicarte, podés iniciar igual" es CONTRADICTORIO acá: ya sabemos que está
+    // lejos (el botón sigue bloqueado), así que no debe convivir con ese aviso.
+    expect(screen.queryByText(/no pudimos ubicarte/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
 })
 
 it('limpia el watch de geolocalización al desmontar', () => {
