@@ -40,6 +40,10 @@ export default defineConfig({
             // apagar el mock para probar contra el backend local los hacía salir a la
             // red y fallar con "Network Error", que no dice nada de lo que se rompió.
             VITE_ANALITICA_MOCK: '1',
+            // Igual criterio: sin fijarlo acá, un VITE_SALTAR_MINIMO_CIERRE=1 en el
+            // .env.local de una máquina (pensado para levantar `vite dev` sin esperar los
+            // 15 minutos) se cuela en los tests y rompe los que verifican ese gate.
+            VITE_SALTAR_MINIMO_CIERRE: '0',
         },
     },
 })

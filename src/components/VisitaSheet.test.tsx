@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { vi } from 'vitest'
+import { vi, afterEach } from 'vitest'
 import VisitaSheet from './VisitaSheet'
 import * as api from '@/api/planificacion'
 import type { IVisitClientCard } from '@/types/planificacion'
@@ -343,6 +343,29 @@ it('antes de los 15 minutos, Cerrar visita está deshabilitado aunque los rubros
 
 it('pasados los 15 minutos, con los rubros completos deja cerrar', async () => {
     // El mock del beforeEach ya pone la visita a 20 min de arrancada.
+    renderSheet()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
+})
+
+afterEach(() => {
+    vi.unstubAllEnvs()
+})
+
+// Solo para desarrollo local: probar el flujo de cierre completo sin esperar 15 minutos
+// reales cada vez. Nunca debe llegar prendida a un build de producción — por eso es una
+// env var explícita (VITE_SALTAR_MINIMO_CIERRE), no un `import.meta.env.DEV` automático:
+// alguien puede correr `vite dev` apuntando al backend de producción.
+it('con VITE_SALTAR_MINIMO_CIERRE activado, deja cerrar sin esperar los 15 minutos', async () => {
+    vi.stubEnv('VITE_SALTAR_MINIMO_CIERRE', '1')
+    ;(api.getVisitaActiva as any).mockResolvedValue({
+        id: 42, rotacionClienteId: 1, tipo: 'visita',
+        fechaInicio: new Date(Date.now() - 60_000).toISOString(), // arrancó hace 1 minuto
+        fechaFin: null, coordInicio: null, coordFinal: null, coordCliente: null,
+    })
     renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
     await tildarSaquePedido()

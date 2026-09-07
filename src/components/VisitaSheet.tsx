@@ -344,7 +344,11 @@ export default function VisitaSheet({
     const minimoRequerido = Math.min(2, ofrecimientos.length)
     const faltanParaMinimo = Math.max(0, minimoRequerido - completos)
 
-    const MINUTOS_MINIMOS_CIERRE = 15
+    // Apagado SOLO por env var explícita (nunca por `import.meta.env.DEV`: un `vite dev`
+    // puede apuntar a producción) — para poder probar el flujo de cierre en desarrollo
+    // local sin esperar 15 minutos reales cada vez.
+    const MINUTOS_MINIMOS_CIERRE =
+        import.meta.env.VITE_SALTAR_MINIMO_CIERRE === '1' ? 0 : 15
     const SEGUNDOS_MINIMOS_CIERRE = MINUTOS_MINIMOS_CIERRE * 60
     // La fuente es `IResolucion.fechaInicio` del SERVIDOR (GET /visitas/activa), no
     // `useVisitaTimer`/localStorage: ese timer es cosmético (alimenta el cronómetro del
