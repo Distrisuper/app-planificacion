@@ -93,6 +93,7 @@ export default function VisitaSheet({
     const {
         data: visitaActiva,
         isPending: visitaActivaCargando,
+        isFetching: visitaActivaRefrescando,
     } = useVisitaActiva(open && !visitaCerrada)
     const { data: motivos = [] } = useMotivos('ofrecimiento')
     const resolverTodos = useResolverOfrecimientos(visitaId)
@@ -350,16 +351,22 @@ export default function VisitaSheet({
     // eyebrow, donde un 00:00 equivocado no importa) y no sobrevive reinstalar la app ni
     // cambiar de dispositivo — quedaría en 0 para siempre y el botón nunca se habilitaría.
     //
-    // Fail-open cuando no se puede verificar (todavía no coincide, o no hay visita activa):
-    // esto es una guía operativa, no un candado infalseable — mismo criterio que
-    // RADIO_INICIO_METROS/`sinUbicacion`. Mientras el primer fetch está en vuelo sí se
-    // bloquea brevemente (mismo motivo que `ofrecimientosCargados`, pero acá el costo de
-    // esperar un instante es nulo, no hay pérdida de datos de por medio).
+    // Fail-open cuando no se puede verificar (settled: ya se le preguntó al servidor y
+    // sigue sin coincidir, o no hay visita activa) — esto es una guía operativa, no un
+    // candado infalseable, mismo criterio que RADIO_INICIO_METROS/`sinUbicacion`.
+    //
+    // Pero mientras hay un fetch EN VUELO no se puede confiar en un mismatch: React Query
+    // sirve el dato cacheado de inmediato (puede ser el de la visita ANTERIOR, si quedó
+    // invalidado sin que hubiera ningún VisitaSheet montado para refetchearlo) mientras
+    // pide el actual en el fondo. `visitaActivaRefrescando` (isFetching) cubre ese hueco:
+    // sin él, el mismatch temporal fallaba-abierto y dejaba cerrar una visita recién
+    // arrancada sin esperar nada — es el bug que se reportó en producción.
     const activaCoincide = visitaActiva?.id === visitaId
     const segundosDesdeInicio = activaCoincide ? segundosDesdeISO(visitaActiva.fechaInicio) : null
-    const tiempoMinimoCumplido = visitaActivaCargando
-        ? false
-        : !activaCoincide || segundosDesdeInicio! >= SEGUNDOS_MINIMOS_CIERRE
+    const tiempoMinimoCumplido =
+        visitaActivaCargando || (!activaCoincide && visitaActivaRefrescando)
+            ? false
+            : !activaCoincide || segundosDesdeInicio! >= SEGUNDOS_MINIMOS_CIERRE
     // `null` solo ocurre mientras el primer fetch está en vuelo (el fail-open de arriba
     // ya deja `tiempoMinimoCumplido` en `true` para el caso "no coincide", así que este
     // texto nunca llega a pintarse en ese caso). Mostrar el mínimo completo en vez de "0

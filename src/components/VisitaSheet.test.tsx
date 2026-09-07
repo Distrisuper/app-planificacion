@@ -364,6 +364,48 @@ it('si no se puede verificar cuándo arrancó (sin visita activa que coincida), 
     expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
 })
 
+// Regresión reportada en producción: se pudo cerrar una visita con 1 minuto transcurrido.
+// La app usa `refetchOnMount: false` (queryClient.ts) — el QueryClient por defecto de
+// `renderSheet` usa el default de la LIBRERÍA (true), que esconde este bug. Por eso este
+// test arma su propio QueryClient replicando esa config real.
+it('regresión: con la caché de una visita ANTERIOR todavía cargada, el gate de tiempo no falla-abierto', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false, refetchOnMount: false } } })
+    // Simula lo que deja una visita anterior ya cerrada, con otro id: exactamente lo que
+    // hay en caché bajo la clave ['visita-activa'] cuando arranca una visita nueva, si la
+    // invalidación de useIniciarVisita no fuerza el refetch (no había ningún VisitaSheet
+    // montado en el instante en que se invalidó — el nuevo todavía no había aparecido).
+    qc.setQueryData(['visita-activa'], {
+        id: 999, rotacionClienteId: 1, tipo: 'visita',
+        fechaInicio: new Date(Date.now() - 60 * 60_000).toISOString(),
+        fechaFin: new Date().toISOString(), coordInicio: null, coordFinal: null, coordCliente: null,
+    })
+    ;(api.getVisitaActiva as any).mockResolvedValue({
+        id: 42, rotacionClienteId: 2, tipo: 'visita',
+        fechaInicio: new Date(Date.now() - 60_000).toISOString(), // arrancó hace 1 minuto
+        fechaFin: null, coordInicio: null, coordFinal: null, coordCliente: null,
+    })
+    const onCerrarVisita = vi.fn()
+    render(
+        <QueryClientProvider client={qc}>
+            <VisitaSheet
+                open
+                visitaId={42}
+                nombreCliente="Suspensión El Flaco"
+                visitaCerrada={false}
+                onCerrarVisita={onCerrarVisita}
+                onClose={() => {}}
+            />
+        </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    // Con 1 de los 15 minutos exigidos, NO debería poder cerrar bajo ningún escenario.
+    expect(await screen.findByRole('button', { name: /podés cerrar en 14 min/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
+})
+
 it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo batch y dispara el cierre', async () => {
     const { onCerrarVisita } = renderSheet()
     fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))

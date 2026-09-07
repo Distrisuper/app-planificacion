@@ -260,6 +260,22 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `TOLERANCIA_METROS`: uno es gate en vivo del front, el otro es medición post-hoc del backend.
   Si se sube ese umbral a 15 también, hay que actualizar el texto de
   `ayudaEfectividadOperativa.tsx` a mano — el criterio no se expone por API.
+- **`useVisitaActiva` necesita `refetchOnMount: 'always'`, y su invalidación necesita
+  `refetchType: 'all'` — el default de ninguno de los dos alcanza.** `queryClient.ts` tiene
+  `refetchOnMount: false` de base. Sin el override: el vendedor cierra una visita (su
+  `VisitaSheet` se desmonta) y arranca otra; `useIniciarVisita` invalida `visita-activa`,
+  pero `invalidateQueries` por defecto (`refetchType: 'active'`) solo refresca queries con
+  observer montado — y en ese instante no hay ninguno. El `VisitaSheet` nuevo monta un
+  render después, `refetchOnMount: false` le sirve la caché VIEJA (la visita ya cerrada,
+  con otro id) sin pedir nada, y el mismatch de id dispara el fail-open del gate de
+  tiempo: deja cerrar la visita nueva sin esperar los 15 minutos. Reportado en producción
+  con una visita cerrada a los 00:17. El fix son dos mitades que se cubren entre sí:
+  `refetchType: 'all'` en el `onSuccess` de `useMutacionDeVisita` (repone la caché apenas
+  cambia la verdad del servidor, haya o no un sheet mirando) y `refetchOnMount: 'always'`
+  en la query (por si ese refetch en el fondo no llegó a tiempo). Y el gate de
+  `VisitaSheet` distingue "mismatch YA CONFIRMADO" (fail-open, correcto) de "mismatch
+  mientras hay un fetch en vuelo" (`isFetching`: bloquea y espera, no falla-abierto sobre
+  un dato que puede estar por corregirse solo).
 - **Cerrar visita exige un mínimo de `min(2, total ofrecidos)` rubros completos, no todos.**
   Vive en `VisitaSheet.tsx` (`minimoRequerido`/`faltanParaMinimo`). Con 5 rubros propuestos,
   resolver 2 habilita el cierre. Revierte a propósito la decisión del spec
