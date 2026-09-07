@@ -55,7 +55,7 @@ export const AYUDA_VISITAS_MENSUAL = (
     <div>
         <p className="text-sm font-semibold text-slate-900">Visitas (mensual)</p>
         <p className="mt-1">
-            Visitas con GPS confirmado (≤100 m del cliente, al inicio y al fin) y duración de 10 a
+            Visitas con GPS confirmado (≤100 m del cliente, al inicio y al fin) y duración de 15 a
             90 min. El resto no cuenta.
         </p>
         <Nota>Meta aparte por clientes distintos: {META_CLIENTES_DISTINTOS}/mes.</Nota>

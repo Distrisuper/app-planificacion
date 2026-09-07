@@ -63,11 +63,11 @@ it('peorDistancia devuelve la mayor de las dos, o null si no hay ninguna', () =>
     expect(peorDistancia(null, null)).toBeNull()
 })
 
-it('esDuracionValida exige el rango 10-90 min inclusive', () => {
+it('esDuracionValida exige el rango [DURACION_MIN_VALIDA, DURACION_MAX_VALIDA] inclusive', () => {
     expect(esDuracionValida(DURACION_MIN_VALIDA)).toBe(true)
     expect(esDuracionValida(DURACION_MAX_VALIDA)).toBe(true)
-    expect(esDuracionValida(9)).toBe(false)
-    expect(esDuracionValida(91)).toBe(false)
+    expect(esDuracionValida(DURACION_MIN_VALIDA - 1)).toBe(false)
+    expect(esDuracionValida(DURACION_MAX_VALIDA + 1)).toBe(false)
     expect(esDuracionValida(null)).toBe(false)
 })
 
