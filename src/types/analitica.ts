@@ -40,7 +40,8 @@ export interface IVendedorMetricas {
     visitasNoValidadas: number
     /** Cliente sin coords en fct_clients: no se puede verificar, NO cuenta como inválida. */
     visitasSinCoord: number
-    /** Duración fuera de 15-90 min: ya resta de visitasValidas (criterio de validez, no solo informativo). */
+    /** Duración menor a 15 min (sin techo, por ahora — ver CLAUDE.md): ya resta de
+     *  visitasValidas (criterio de validez, no solo informativo). */
     visitasCortas: number
     /** Promedio solo sobre visitas válidas. null si no hay ninguna. */
     duracionPromedioMin: number | null

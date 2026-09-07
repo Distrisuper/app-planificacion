@@ -4,16 +4,16 @@ import type { TipoOfrecimiento } from '@/types/planificacion'
  *  pata de la visita cuente como verificada. Inclusive. */
 export const TOLERANCIA_METROS = 100
 
-/** Rango de duración de una visita válida. Inclusive en ambos extremos.
+/** Piso de duración de una visita válida. Inclusive. SIN TECHO por ahora — se sacó el
+ *  máximo (antes 90 min) del criterio de validez.
  *
- *  Estas constantes NO alimentan ningún cálculo real: `visitasValidas`/`visitasCortas`/
+ *  Esta constante NO alimenta ningún cálculo real: `visitasValidas`/`visitasCortas`/
  *  `duracionPromedioMin` llegan ya calculados del backend, sobre el criterio real en
- *  `pl_criterio_visita` (api-vendedores). Son documentación — hay que mantenerlas
- *  sincronizadas a mano con la base cada vez que cambie el criterio, igual que el texto
+ *  `pl_criterio_visita` (api-vendedores). Es documentación — hay que mantenerla
+ *  sincronizada a mano con la base cada vez que cambie el criterio, igual que el texto
  *  de `ayudaEfectividadOperativa.tsx`. Es un concepto DISTINTO del gate de cierre de
  *  `VisitaSheet.tsx` (15 min, ahí sí en vivo) — ver CLAUDE.md. */
 export const DURACION_MIN_VALIDA = 15
-export const DURACION_MAX_VALIDA = 90
 
 /** Etiqueta del chip de tipo en la analítica. Un solo lugar: DetalleVisitaPanel y
  *  TablaVisitas lo comparten para no divergir. 'rubro' no se usa como chip — es el
@@ -66,9 +66,9 @@ export const claseDistancia = (
 }
 
 /** Una visita es válida cuando ambas patas están dentro de la tolerancia de distancia
- *  y la duración cae en [DURACION_MIN_VALIDA, DURACION_MAX_VALIDA]. */
+ *  y la duración es >= DURACION_MIN_VALIDA. Sin techo por ahora. */
 export const esDuracionValida = (minutos: number | null): boolean =>
-    minutos !== null && minutos >= DURACION_MIN_VALIDA && minutos <= DURACION_MAX_VALIDA
+    minutos !== null && minutos >= DURACION_MIN_VALIDA
 
 /** La pata que más se aleja del cliente, para mostrar un solo número en tablas que no
  *  tienen lugar para las dos. null solo si ninguna de las dos tiene dato. */
