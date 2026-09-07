@@ -4,8 +4,15 @@ import type { TipoOfrecimiento } from '@/types/planificacion'
  *  pata de la visita cuente como verificada. Inclusive. */
 export const TOLERANCIA_METROS = 100
 
-/** Rango de duración de una visita válida. Inclusive en ambos extremos. */
-export const DURACION_MIN_VALIDA = 10
+/** Rango de duración de una visita válida. Inclusive en ambos extremos.
+ *
+ *  Estas constantes NO alimentan ningún cálculo real: `visitasValidas`/`visitasCortas`/
+ *  `duracionPromedioMin` llegan ya calculados del backend, sobre el criterio real en
+ *  `pl_criterio_visita` (api-vendedores). Son documentación — hay que mantenerlas
+ *  sincronizadas a mano con la base cada vez que cambie el criterio, igual que el texto
+ *  de `ayudaEfectividadOperativa.tsx`. Es un concepto DISTINTO del gate de cierre de
+ *  `VisitaSheet.tsx` (15 min, ahí sí en vivo) — ver CLAUDE.md. */
+export const DURACION_MIN_VALIDA = 15
 export const DURACION_MAX_VALIDA = 90
 
 /** Etiqueta del chip de tipo en la analítica. Un solo lugar: DetalleVisitaPanel y
