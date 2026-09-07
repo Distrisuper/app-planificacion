@@ -249,11 +249,27 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `RADIO_INICIO_METROS` con `TOLERANCIA_METROS` de `analiticaFormat.ts` — hoy coinciden en 100 m
   pero son conceptos distintos (gate operativo vs. umbral de medición post-hoc).
 - **Cerrar visita exige un mínimo de `min(2, total ofrecidos)` rubros completos, no todos.**
-  Vive en `VisitaSheet.tsx` (`minimoRequerido`/`faltanParaMinimo`). Revierte a propósito la
-  decisión del spec `2026-07-31-resolucion-en-lote-y-borrador-local-design.md`, que había
-  endurecido el gate a "todos completos". Los rubros que queden sin tocar siguen en ámbar en
-  la tabla y se pueden cargar después de cerrada (`ofrecimientosPendientes` en
-  `VisitaFlow.onCerrarVisita` ya avisa cuántos quedan).
+  Vive en `VisitaSheet.tsx` (`minimoRequerido`/`faltanParaMinimo`). Con 5 rubros propuestos,
+  resolver 2 habilita el cierre. Revierte a propósito la decisión del spec
+  `2026-07-31-resolucion-en-lote-y-borrador-local-design.md`, que había endurecido el gate a
+  "todos completos".
+- **Los rubros se cargan DURANTE la visita: cerrada, ya no se pueden cargar.** El sheet de una
+  visita cerrada es de consulta (`esEditable` devuelve `!visitaCerrada`, y sin `editable` la
+  tabla no dibuja botón de Resolución). O sea que los rubros que el mínimo de 2 deja sin tocar
+  **se pierden**, y se acepta ese costo para no trabar al vendedor en el local. No busques la
+  pantalla de "completar después": no existe, y cualquier texto que la insinúe está mal (el
+  aviso de cierre decía "te quedan N por cargar" y por eso se cambió a "quedaron N sin cargar").
+- **El gate de cierre depende de que los ofrecimientos HAYAN CARGADO**, no solo de cuántos
+  faltan. `disabled={faltanParaMinimo > 0}` a secas no alcanza: con el GET en vuelo o fallado,
+  `ofrecimientos` es `[]`, `min(2, 0)` es 0 y el mínimo se auto-satisface — el botón se ofrece
+  habilitado y cierra con CERO resoluciones. Así se cerró la visita 923 con sus 5 rubros sin
+  resolver, mientras la pantalla afirmaba "esta visita no tiene rubros propuestos". El botón
+  solo se renderiza con `ofrecimientosCargados`, y mientras tanto el cuerpo del sheet muestra
+  spinner o error con "Volver a intentar" (mismo patrón que `fallóPropuestaDirecta` en
+  `VisitaFlow`). Es la misma trampa que el comentario de `VisitaFlow.tsx` ya advertía: mirando
+  solo `data`, un fallo la deja en `undefined` para siempre. **El gate es solo del front**;
+  `PUT /visitas/:id/cerrar` acepta cerrar con cero resoluciones, así que un bundle viejo
+  cacheado se lo saltea igual.
 - **Al cerrar visita se genera un seguimiento en Cromo automáticamente** (`POST /crm/events`),
   reemplazando el redirect manual a Cromo que existe hoy en el flujo de Lupa.
 - **La vista semanal SÍ muestra el estado de cada cliente**, y es gratis: sale del `LEFT JOIN` con la

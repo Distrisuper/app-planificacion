@@ -229,6 +229,23 @@ it('al cerrar sin rubros pendientes avisa con una notificación de éxito', asyn
     await waitFor(() => expect(onAviso).toHaveBeenCalledWith('exito', 'Visita cerrada'))
 })
 
+it('al cerrar con rubros pendientes no promete que se puedan cargar después', async () => {
+    // Cerrada la visita, el sheet queda read-only: esos rubros se perdieron. El aviso no
+    // puede invitar a cargarlos más tarde, porque no hay dónde.
+    ;(api.cerrarVisita as any).mockResolvedValue({
+        visitaId: 55,
+        ofrecimientosPendientes: 2,
+    })
+    const { onAviso } = renderFlow({ cliente: { ...cliente, estado: 'en_curso', visitaId: 55 } })
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith(
+            'info',
+            'Visita cerrada. Quedaron 2 rubros sin cargar.',
+        ),
+    )
+})
+
 it('cerrar visita también exige ubicación', async () => {
     ;(api.cerrarVisita as any).mockResolvedValue({
         visitaId: 55,

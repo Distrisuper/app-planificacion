@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Loader2, WifiOff } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -34,7 +35,9 @@ interface VisitaSheetProps {
     open: boolean
     visitaId: number
     nombreCliente: string
-    /** true = se entró solo a completar ofrecimientos de una visita ya cerrada. */
+    /** true = la visita ya está cerrada y el sheet es de CONSULTA: no se puede resolver
+     *  ni agregar nada (ver `esEditable`). Los rubros se cargan durante la visita; una vez
+     *  cerrada no hay forma de completar los que quedaron pendientes. */
     visitaCerrada: boolean
     /** true = la visita está en curso (no cerrada): pinta el eyebrow naranja + cronómetro. */
     enCurso?: boolean
@@ -67,7 +70,23 @@ export default function VisitaSheet({
     onAbrirAppExterna,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
-    const { data: ofrecimientos = [], isSuccess: ofrecimientosCargados } = useOfrecimientos(open ? visitaId : null)
+    // `isError`/`refetch` no son un extra: con `data` en undefined, un default `[]` hace que
+    // el gate de cierre calcule "0 rubros exigidos" y habilite "Cerrar visita" (así se
+    // cerró la visita 923 con sus 5 rubros sin resolver). Mismo criterio que
+    // `fallóPropuestaDirecta` en VisitaFlow.
+    const {
+        data: ofrecimientosData,
+        isError: fallóOfrecimientos,
+        refetch: reintentarOfrecimientos,
+    } = useOfrecimientos(open ? visitaId : null)
+    // Deliberadamente NO se usa `isSuccess` para esto. En React Query v5 un refetch fallido
+    // pone `status: 'error'` (isSuccess = false) pero CONSERVA `data`: con `isSuccess` como
+    // gate, perder señal a mitad de la visita — el refetch de `refetchOnWindowFocus` al
+    // volver a la app — borraba de pantalla rubros que seguían en memoria y escondía el
+    // botón de cerrar. La pregunta correcta es "¿tengo la lista?", no "¿anduvo el último
+    // fetch?": `undefined` es "todavía no sé", y `[]` es "sé que no tiene rubros".
+    const ofrecimientos = ofrecimientosData ?? []
+    const ofrecimientosCargados = ofrecimientosData !== undefined
     const { data: motivos = [] } = useMotivos('ofrecimiento')
     const resolverTodos = useResolverOfrecimientos(visitaId)
     const agregar = useAgregarOfrecimiento(visitaId)
@@ -303,10 +322,16 @@ export default function VisitaSheet({
         return motivosDelOfrecimiento.length > 0 && !tieneDetalleIncompleto(motivos, motivosDelOfrecimiento)
     }
 
-    // Ya no exige TODOS los rubros ofrecidos: alcanza con un mínimo de 2 (o menos, si la
-    // propuesta trae menos de 2 en total — el mínimo nunca pide más de lo que hay). Los
-    // rubros que queden sin tocar siguen en ámbar en la tabla y se pueden cargar después
-    // de cerrada (ver `ofrecimientosPendientes` en VisitaFlow.onCerrarVisita).
+    // Alcanza con un mínimo de 2 rubros completos (o menos, si la propuesta trae menos de 2
+    // en total — el mínimo nunca pide más de lo que hay). Es deliberado: con 5 rubros
+    // propuestos, resolver 2 habilita el cierre.
+    //
+    // Y es deliberado a pesar de que los rubros NO se pueden cargar después de cerrar la
+    // visita (el sheet pasa a read-only, ver `esEditable`): los que queden sin tocar se
+    // pierden. Se acepta ese costo para no trabar al vendedor en el local. Lo que NO se
+    // acepta es cerrar con CERO — de ahí el mínimo, y de ahí que el gate dependa también
+    // de `ofrecimientosCargados` (ver el pie): sobre una lista vacía, `min(2, 0)` es 0 y
+    // el mínimo se auto-satisface. Así se cerró la visita 923 con sus 5 rubros en cero.
     const completos = ofrecimientos.filter(ofrecimientoCompleto).length
     const minimoRequerido = Math.min(2, ofrecimientos.length)
     const faltanParaMinimo = Math.max(0, minimoRequerido - completos)
@@ -414,7 +439,11 @@ export default function VisitaSheet({
                     <AccionesExternas cliente={cliente} variante="fila" onAbrir={onAbrirAppExterna} />
                 </div>
             )}
-            {!visitaCerrada && (
+            {/* `ofrecimientosCargados` es parte del gate, no un detalle de carga: sin él,
+             *  mientras el GET está en vuelo (o si falló) `ofrecimientos` es `[]`, no falta
+             *  ningún rubro y el botón se ofrece habilitado. El cuerpo del sheet muestra
+             *  mientras tanto el spinner o el error con "Volver a intentar". */}
+            {!visitaCerrada && ofrecimientosCargados && (
                 <Button
                     onClick={cerrarConBorrador}
                     disabled={faltanParaMinimo > 0}
@@ -465,6 +494,36 @@ export default function VisitaSheet({
                         }
                         onVolver={() => setWizard(null)}
                     />
+                ) : !ofrecimientosCargados ? (
+                    /* Sin esto, la pantalla afirmaba "no tiene rubros propuestos" cuando en
+                     * realidad no había podido traerlos, y el pie ofrecía cerrar la visita. */
+                    <div className="flex flex-col items-center gap-3 py-10 text-center">
+                        {fallóOfrecimientos ? (
+                            <>
+                                <WifiOff className="h-7 w-7 text-dsmuted" strokeWidth={2} />
+                                <p className="text-[13.5px] font-semibold leading-snug text-[#182645]">
+                                    No pudimos traer los rubros de esta visita.
+                                </p>
+                                <p className="-mt-1 text-[12.5px] leading-snug text-dsmuted">
+                                    Fijate que tengas señal. Los rubros se cargan durante la visita:
+                                    después de cerrarla ya no se pueden cargar.
+                                </p>
+                                <Button
+                                    onClick={() => reintentarOfrecimientos()}
+                                    className="mt-1 h-11 w-full max-w-[240px] bg-dsgreen text-[13.5px] hover:bg-dsgreen/90"
+                                >
+                                    Volver a intentar
+                                </Button>
+                            </>
+                        ) : (
+                            <>
+                                <Loader2 className="h-7 w-7 animate-spin text-dsnavy" strokeWidth={2.4} />
+                                <p className="text-[12.5px] font-semibold text-dsmuted">
+                                    Buscando los rubros…
+                                </p>
+                            </>
+                        )}
+                    </div>
                 ) : (
                     <div>
                         <p className="mb-3 text-[13px] leading-snug text-dsmuted">
