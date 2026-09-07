@@ -255,11 +255,13 @@ Hay **tres capas separadas**, y una operación toca una sola:
   para siempre y el botón nunca se habilitaría. Es **fail-open** cuando no se puede verificar
   (la visita activa no coincide, o directamente no hay una): guía operativa, no candado
   infalseable — mismo criterio que `RADIO_INICIO_METROS`/`sinUbicacion`. El umbral de duración
-  válida para analítica (hoy 10-90 min, vive en `pl_criterio_visita` en api-vendedores) es un
-  concepto DISTINTO y no comparte constante — mismo patrón que `RADIO_INICIO_METROS` vs
-  `TOLERANCIA_METROS`: uno es gate en vivo del front, el otro es medición post-hoc del backend.
-  Si se sube ese umbral a 15 también, hay que actualizar el texto de
-  `ayudaEfectividadOperativa.tsx` a mano — el criterio no se expone por API.
+  válida para analítica (15-90 min, vive en `pl_criterio_visita` en api-vendedores —
+  `DURACION_MIN_VALIDA` en `analiticaFormat.ts` es solo documentación, no alimenta ningún
+  cálculo) es un concepto DISTINTO y no comparte constante — mismo patrón que
+  `RADIO_INICIO_METROS` vs `TOLERANCIA_METROS`: uno es gate en vivo del front, el otro es
+  medición post-hoc del backend. El día que ese umbral vuelva a cambiar, hay que actualizar
+  a mano el texto de `ayudaEfectividadOperativa.tsx` y esa constante — el criterio no se
+  expone por API, así que ninguno de los dos se sincroniza solo.
 - **`useVisitaActiva` necesita `refetchOnMount: 'always'`, y su invalidación necesita
   `refetchType: 'all'` — el default de ninguno de los dos alcanza.** `queryClient.ts` tiene
   `refetchOnMount: false` de base. Sin el override: el vendedor cierra una visita (su
