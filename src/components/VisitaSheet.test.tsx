@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import VisitaSheet from './VisitaSheet'
@@ -188,11 +188,10 @@ it('con la visita cerrada NO poda los motivos: un rubro resuelto con un motivo d
     })
 })
 
-it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos faltan para el mínimo', async () => {
+it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos faltan', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
     // El faltante lo dice el propio botón deshabilitado, no una línea aparte en el pie.
-    // La propuesta trae 2 rubros en total, así que el mínimo (2) coincide con "todos".
     expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeDisabled()
     expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
 })
@@ -216,6 +215,102 @@ it('con 2 de 3 rubros completos ya alcanza el mínimo, sin exigir el tercero', a
 
     // "Frenos" sigue sin tocar y "Cerrar visita" ya está habilitado: el mínimo es 2, no 3.
     expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
+})
+
+// La visita 923 se cerró con sus 5 rubros en cero. El mínimo de 2 la habría bloqueado:
+// lo que falló no fue el mínimo, sino que se calculaba sobre una lista vacía.
+it('con 5 rubros propuestos exige 2, y con 2 resueltos deja cerrar (visita 923)', async () => {
+    ;(api.getOfrecimientos as any).mockResolvedValue(
+        ['322', '323', '329', '362', '363'].map((codigo, i) => ({
+            id: 100 + i, resolucionId: 923, tipo: 'rubro', codigo,
+            descripcion: `RUBRO ${codigo}`, gapUnits: null,
+            esPropuesto: true, resuelto: false, motivos: [], alcance: [],
+        })),
+    )
+    renderSheet({ visitaId: 923 })
+    await screen.findByText('RUBRO 322')
+    expect(screen.getByRole('button', { name: /completá 2 rubros más/i })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de RUBRO 322' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /siguiente/i }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    // 2 de 5: los otros 3 quedan sin cargar y el cierre se habilita igual.
+    expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
+})
+
+// Estos dos cubren cómo se cerró la visita 923 con sus 5 rubros sin resolver: con
+// `ofrecimientos` vacío el gate calculaba un mínimo de 0 y habilitaba "Cerrar visita",
+// mientras la pantalla decía que la visita no tenía rubros. Ver docs/dominio/modelo.md.
+it('mientras los rubros no cargaron, no ofrece cerrar la visita', async () => {
+    ;(api.getOfrecimientos as any).mockReturnValue(new Promise(() => {}))
+    renderSheet()
+
+    expect(await screen.findByText(/buscando los rubros/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /cerrar visita/i })).not.toBeInTheDocument()
+    // No puede afirmar que no hay rubros: todavía no lo sabe.
+    expect(screen.queryByText('Esta visita no tiene rubros propuestos.')).not.toBeInTheDocument()
+})
+
+it('si falla el GET de rubros, ofrece reintentar en vez de dejar cerrar con cero resoluciones', async () => {
+    ;(api.getOfrecimientos as any).mockRejectedValueOnce(new Error('Network Error'))
+    const { onCerrarVisita } = renderSheet()
+
+    expect(await screen.findByText(/no pudimos traer los rubros/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /cerrar visita/i })).not.toBeInTheDocument()
+    expect(screen.queryByText('Esta visita no tiene rubros propuestos.')).not.toBeInTheDocument()
+
+    ;(api.getOfrecimientos as any).mockResolvedValue(ofrecimientos)
+    fireEvent.click(screen.getByRole('button', { name: /volver a intentar/i }))
+
+    expect(await screen.findByText('Amortiguadores')).toBeInTheDocument()
+    expect(onCerrarVisita).not.toHaveBeenCalled()
+})
+
+// El mínimo es `min(2, total)`, así que un cliente cuya propuesta viene vacía SÍ se puede
+// cerrar con cero resoluciones — y es correcto: no se puede exigir 2 de 0. Estas visitas
+// siguen figurando sin motivo en el panel, y no son el bug de la visita 923.
+it('un cliente sin rubros propuestos se puede cerrar sin resolver nada', async () => {
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
+    const { onCerrarVisita } = renderSheet()
+
+    const boton = await screen.findByRole('button', { name: /^cerrar visita$/i })
+    expect(boton).toBeEnabled()
+
+    fireEvent.click(boton)
+    await waitFor(() => expect(onCerrarVisita).toHaveBeenCalled())
+    expect(api.resolverOfrecimiento).not.toHaveBeenCalled()
+})
+
+// El estado de error NO puede tragarse los rubros ya cargados: si se va la señal a mitad
+// de la visita, el vendedor tiene que poder seguir resolviendo y cerrar con lo que tiene.
+it('un fallo de refetch después de haber cargado no esconde los rubros ni el gate', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+        <QueryClientProvider client={qc}>
+            <VisitaSheet
+                open
+                visitaId={42}
+                nombreCliente="Almacén Don José"
+                visitaCerrada={false}
+                onCerrarVisita={() => {}}
+                onClose={() => {}}
+            />
+        </QueryClientProvider>,
+    )
+    await screen.findByText('Amortiguadores')
+    expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeInTheDocument()
+
+    ;(api.getOfrecimientos as any).mockRejectedValue(new Error('Network Error'))
+    await act(async () => {
+        await qc.refetchQueries({ queryKey: ['ofrecimientos', 42] })
+    })
+
+    expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeInTheDocument()
+    expect(screen.queryByText(/no pudimos traer los rubros/i)).not.toBeInTheDocument()
 })
 
 it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo batch y dispara el cierre', async () => {

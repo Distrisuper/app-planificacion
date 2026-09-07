@@ -209,9 +209,15 @@ export default function VisitaFlow({
                 try {
                     const res = await cerrar.mutateAsync({ visitaId, coordFinal: geo.coord })
                     if (res.ofrecimientosPendientes > 0) {
+                        // Resultado normal, no un error: el gate pide un mínimo de 2 rubros,
+                        // así que cerrar con pendientes es esperable. Pero el aviso NO invita
+                        // a cargarlos después — el sheet de una visita cerrada es read-only
+                        // (`visitaCerrada` en VisitaSheet), así que esos rubros ya no se
+                        // pueden completar. Decir "te quedan por cargar" mandaba al vendedor
+                        // a buscar una pantalla que no existe.
                         onAviso?.(
                             'info',
-                            `Visita cerrada. Te quedan ${res.ofrecimientosPendientes} rubros por cargar.`,
+                            `Visita cerrada. Quedaron ${res.ofrecimientosPendientes} rubros sin cargar.`,
                         )
                     } else {
                         onAviso?.('exito', 'Visita cerrada')
