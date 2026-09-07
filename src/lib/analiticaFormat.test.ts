@@ -1,5 +1,4 @@
 import {
-    DURACION_MAX_VALIDA,
     DURACION_MIN_VALIDA,
     TOLERANCIA_METROS,
     alertasAbsolutas,
@@ -63,11 +62,12 @@ it('peorDistancia devuelve la mayor de las dos, o null si no hay ninguna', () =>
     expect(peorDistancia(null, null)).toBeNull()
 })
 
-it('esDuracionValida exige el rango [DURACION_MIN_VALIDA, DURACION_MAX_VALIDA] inclusive', () => {
+// Sin techo, por ahora: el criterio real (pl_criterio_visita, api-vendedores) dejó de
+// exigir un máximo. Una visita larga no deja de ser válida por serlo.
+it('esDuracionValida exige >= DURACION_MIN_VALIDA, sin techo', () => {
     expect(esDuracionValida(DURACION_MIN_VALIDA)).toBe(true)
-    expect(esDuracionValida(DURACION_MAX_VALIDA)).toBe(true)
     expect(esDuracionValida(DURACION_MIN_VALIDA - 1)).toBe(false)
-    expect(esDuracionValida(DURACION_MAX_VALIDA + 1)).toBe(false)
+    expect(esDuracionValida(10_000)).toBe(true)
     expect(esDuracionValida(null)).toBe(false)
 })
 

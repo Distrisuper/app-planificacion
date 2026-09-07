@@ -364,7 +364,7 @@ const instante = (fecha: string, hora: number, minuto: number): string =>
 /** Genera visitas deterministas para un vendedor. Los índices elegidos fuerzan los
  *  casos borde: la 3ra visita de cada vendedor va sin coord del cliente, la 5ta cae
  *  fuera de la tolerancia de 100 m en el fin, y (para V6) hay visitas con duración
- *  fuera de 15-90 min. */
+ *  por debajo de los 15 min. */
 function visitasDe(codigo: string, nombreVendedor: string, cantidad: number): IVisitaFila[] {
     const filas: IVisitaFila[] = []
     for (let i = 0; i < cantidad; i++) {
