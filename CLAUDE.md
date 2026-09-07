@@ -248,6 +248,18 @@ Hay **tres capas separadas**, y una operación toca una sola:
   por cualquier motivo, y bloquearlo dejaría visitas abiertas para siempre. No confundir
   `RADIO_INICIO_METROS` con `TOLERANCIA_METROS` de `analiticaFormat.ts` — hoy coinciden en 100 m
   pero son conceptos distintos (gate operativo vs. umbral de medición post-hoc).
+- **Cerrar visita exige, además, un mínimo de 15 minutos desde que arrancó.** El origen es
+  `IResolucion.fechaInicio` vía `GET /visitas/activa` (`useVisitaActiva` en `VisitaSheet.tsx`),
+  NO `useVisitaTimer`/localStorage: ese timer es cosmético (cronómetro del eyebrow) y no
+  sobrevive reinstalar la app ni cambiar de dispositivo — si fuera la fuente, quedaría en 0
+  para siempre y el botón nunca se habilitaría. Es **fail-open** cuando no se puede verificar
+  (la visita activa no coincide, o directamente no hay una): guía operativa, no candado
+  infalseable — mismo criterio que `RADIO_INICIO_METROS`/`sinUbicacion`. El umbral de duración
+  válida para analítica (hoy 10-90 min, vive en `pl_criterio_visita` en api-vendedores) es un
+  concepto DISTINTO y no comparte constante — mismo patrón que `RADIO_INICIO_METROS` vs
+  `TOLERANCIA_METROS`: uno es gate en vivo del front, el otro es medición post-hoc del backend.
+  Si se sube ese umbral a 15 también, hay que actualizar el texto de
+  `ayudaEfectividadOperativa.tsx` a mano — el criterio no se expone por API.
 - **Cerrar visita exige un mínimo de `min(2, total ofrecidos)` rubros completos, no todos.**
   Vive en `VisitaSheet.tsx` (`minimoRequerido`/`faltanParaMinimo`). Con 5 rubros propuestos,
   resolver 2 habilita el cierre. Revierte a propósito la decisión del spec

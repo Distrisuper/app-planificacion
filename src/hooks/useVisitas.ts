@@ -12,8 +12,11 @@ import type { ICerrarVisitaDTO, IIniciarVisitaDTO, INoVisitaDTO } from '@/types/
 
 export const visitaKeys = { activa: ['visita-activa'] as const }
 
-export function useVisitaActiva() {
-    return useQuery({ queryKey: visitaKeys.activa, queryFn: getVisitaActiva })
+/** `enabled` default true. VisitaSheet lo pide solo con el sheet abierto y la visita sin
+ *  cerrar (ver el gate de los 15 min): sin este control, cada card cerrada de la agenda
+ *  dispararía el mismo GET sin necesitarlo. */
+export function useVisitaActiva(enabled: boolean = true) {
+    return useQuery({ queryKey: visitaKeys.activa, queryFn: getVisitaActiva, enabled })
 }
 
 function useMutacionDeVisita<TVars, TData>(fn: (vars: TVars) => Promise<TData>) {

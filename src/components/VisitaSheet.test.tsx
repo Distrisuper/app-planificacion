@@ -71,6 +71,14 @@ beforeEach(() => {
     ;(api.eliminarOfrecimiento as any).mockResolvedValue(undefined)
     ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
     ;(api.getAcciones as any).mockResolvedValue([{ codigo: 'CUPO', descripcion: 'Plan cupo' }])
+    // Default: la visita activa coincide y arrancó hace 20 min — ya pasó el mínimo de 15,
+    // así que los tests existentes (min-2, etc.) no ven el gate de tiempo. Los tests que
+    // SÍ prueban ese gate lo pisan explícitamente.
+    ;(api.getVisitaActiva as any).mockResolvedValue({
+        id: 42, rotacionClienteId: 1, tipo: 'visita',
+        fechaInicio: new Date(Date.now() - 20 * 60_000).toISOString(),
+        fechaFin: null, coordInicio: null, coordFinal: null, coordCliente: null,
+    })
 })
 
 it('lista los rubros de la propuesta congelada', async () => {
@@ -311,6 +319,49 @@ it('un fallo de refetch después de haber cargado no esconde los rubros ni el ga
     expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeInTheDocument()
     expect(screen.queryByText(/no pudimos traer los rubros/i)).not.toBeInTheDocument()
+})
+
+// El botón de cerrar exige un mínimo de 15 minutos desde que arrancó la visita, además
+// del mínimo de rubros. La fuente es el servidor (GET /visitas/activa → fechaInicio), no
+// localStorage: sobrevive a reinstalar la app o cambiar de dispositivo.
+it('antes de los 15 minutos, Cerrar visita está deshabilitado aunque los rubros estén completos', async () => {
+    ;(api.getVisitaActiva as any).mockResolvedValue({
+        id: 42, rotacionClienteId: 1, tipo: 'visita',
+        fechaInicio: new Date(Date.now() - 5 * 60_000).toISOString(),
+        fechaFin: null, coordInicio: null, coordFinal: null, coordCliente: null,
+    })
+    renderSheet()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    // Los 2 rubros ya están completos ("Filtros" viene resuelto del servidor), pero
+    // recién pasaron 5 de los 15 minutos exigidos.
+    expect(await screen.findByRole('button', { name: /podés cerrar en 10 min/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
+})
+
+it('pasados los 15 minutos, con los rubros completos deja cerrar', async () => {
+    // El mock del beforeEach ya pone la visita a 20 min de arrancada.
+    renderSheet()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
+})
+
+it('si no se puede verificar cuándo arrancó (sin visita activa que coincida), no bloquea por tiempo', async () => {
+    // Fail-open a propósito, mismo criterio que el resto de los gates operativos del
+    // dominio (RADIO_INICIO_METROS, `sinUbicacion`): esto es una guía, no puede convertirse
+    // en un candado que deje al vendedor sin forma de cerrar por un dato que no cargó.
+    ;(api.getVisitaActiva as any).mockResolvedValue(null)
+    renderSheet()
+    fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
 })
 
 it('con todos los rubros completos, Cerrar visita guarda el borrador en un solo batch y dispara el cierre', async () => {
