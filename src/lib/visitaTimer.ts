@@ -28,6 +28,16 @@ export function segundosTranscurridos(visitaId: number): number | null {
     return Math.max(0, Math.floor((Date.now() - inicio) / 1000))
 }
 
+/** Segundos transcurridos contra un `fechaInicio` ISO del SERVIDOR (`IResolucion.fechaInicio`,
+ *  vía `GET /visitas/activa`), no contra `marcarInicioVisita`/localStorage. A diferencia del
+ *  cronómetro del eyebrow (cosmético, un 00:00 equivocado no bloquea nada), este valor
+ *  alimenta el gate de cierre: necesita sobrevivir a reinstalar la app o cambiar de
+ *  dispositivo, algo que el timestamp local no garantiza. `Math.max(0, …)` es contra el reloj
+ *  del celular atrasado respecto al del servidor — mismo criterio que `segundosTranscurridos`. */
+export function segundosDesdeISO(fechaInicioISO: string): number {
+    return Math.max(0, Math.floor((Date.now() - new Date(fechaInicioISO).getTime()) / 1000))
+}
+
 export function formatearDuracion(totalSegundos: number): string {
     const minutos = Math.floor(totalSegundos / 60)
     const segundos = totalSegundos % 60

@@ -17,8 +17,9 @@ import {
 } from '@/hooks/useOfrecimientos'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
+import { useVisitaActiva } from '@/hooks/useVisitas'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
-import { formatearDuracion } from '@/lib/visitaTimer'
+import { formatearDuracion, segundosDesdeISO } from '@/lib/visitaTimer'
 import { motivosIguales, tieneDetalleIncompleto } from '@/lib/resolucionOfrecimiento'
 import {
     leerBorrador,
@@ -87,6 +88,13 @@ export default function VisitaSheet({
     // fetch?": `undefined` es "todavía no sé", y `[]` es "sé que no tiene rubros".
     const ofrecimientos = ofrecimientosData ?? []
     const ofrecimientosCargados = ofrecimientosData !== undefined
+    // Solo se pide con el sheet abierto y la visita sin cerrar: una visita cerrada no
+    // tiene botón de cierre, así que no necesita saber cuánto lleva.
+    const {
+        data: visitaActiva,
+        isPending: visitaActivaCargando,
+        isFetching: visitaActivaRefrescando,
+    } = useVisitaActiva(open && !visitaCerrada)
     const { data: motivos = [] } = useMotivos('ofrecimiento')
     const resolverTodos = useResolverOfrecimientos(visitaId)
     const agregar = useAgregarOfrecimiento(visitaId)
@@ -336,6 +344,39 @@ export default function VisitaSheet({
     const minimoRequerido = Math.min(2, ofrecimientos.length)
     const faltanParaMinimo = Math.max(0, minimoRequerido - completos)
 
+    const MINUTOS_MINIMOS_CIERRE = 15
+    const SEGUNDOS_MINIMOS_CIERRE = MINUTOS_MINIMOS_CIERRE * 60
+    // La fuente es `IResolucion.fechaInicio` del SERVIDOR (GET /visitas/activa), no
+    // `useVisitaTimer`/localStorage: ese timer es cosmético (alimenta el cronómetro del
+    // eyebrow, donde un 00:00 equivocado no importa) y no sobrevive reinstalar la app ni
+    // cambiar de dispositivo — quedaría en 0 para siempre y el botón nunca se habilitaría.
+    //
+    // Fail-open cuando no se puede verificar (settled: ya se le preguntó al servidor y
+    // sigue sin coincidir, o no hay visita activa) — esto es una guía operativa, no un
+    // candado infalseable, mismo criterio que RADIO_INICIO_METROS/`sinUbicacion`.
+    //
+    // Pero mientras hay un fetch EN VUELO no se puede confiar en un mismatch: React Query
+    // sirve el dato cacheado de inmediato (puede ser el de la visita ANTERIOR, si quedó
+    // invalidado sin que hubiera ningún VisitaSheet montado para refetchearlo) mientras
+    // pide el actual en el fondo. `visitaActivaRefrescando` (isFetching) cubre ese hueco:
+    // sin él, el mismatch temporal fallaba-abierto y dejaba cerrar una visita recién
+    // arrancada sin esperar nada — es el bug que se reportó en producción.
+    const activaCoincide = visitaActiva?.id === visitaId
+    const segundosDesdeInicio = activaCoincide ? segundosDesdeISO(visitaActiva.fechaInicio) : null
+    const tiempoMinimoCumplido =
+        visitaActivaCargando || (!activaCoincide && visitaActivaRefrescando)
+            ? false
+            : !activaCoincide || segundosDesdeInicio! >= SEGUNDOS_MINIMOS_CIERRE
+    // `null` solo ocurre mientras el primer fetch está en vuelo (el fail-open de arriba
+    // ya deja `tiempoMinimoCumplido` en `true` para el caso "no coincide", así que este
+    // texto nunca llega a pintarse en ese caso). Mostrar el mínimo completo en vez de "0
+    // min" evita el mensaje contradictorio de "ya casi" sobre un botón que en realidad
+    // todavía no sabe nada.
+    const minutosParaCierre =
+        segundosDesdeInicio === null
+            ? MINUTOS_MINIMOS_CIERRE
+            : Math.ceil((SEGUNDOS_MINIMOS_CIERRE - segundosDesdeInicio) / 60)
+
     const estadosResolucion: Record<number, { motivosCargados: number; completo: boolean }> = {}
     for (const r of ofrecimientos) {
         estadosResolucion[r.id] = {
@@ -446,21 +487,28 @@ export default function VisitaSheet({
             {!visitaCerrada && ofrecimientosCargados && (
                 <Button
                     onClick={cerrarConBorrador}
-                    disabled={faltanParaMinimo > 0}
+                    disabled={faltanParaMinimo > 0 || !tiempoMinimoCumplido}
                     loading={cerrando || guardandoBorrador}
                     className="h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90"
                 >
                     {/* El faltante va DENTRO del botón deshabilitado, no en una línea
                      *  aparte arriba: dice lo mismo, en el único lugar donde el vendedor
                      *  ya está mirando (el botón que no lo deja avanzar), y no gasta una
-                     *  línea del pie fijo en cada render. */}
+                     *  línea del pie fijo en cada render.
+                     *
+                     *  Los rubros van primero: son accionables ahora mismo (el vendedor
+                     *  puede resolverlos mientras espera), el tiempo no lo es — no hay
+                     *  nada que hacer salvo esperar. Una vez completos, si todavía no
+                     *  pasaron los 15 minutos, el texto pasa a avisar cuánto falta. */}
                     {guardandoBorrador
                         ? 'Guardando…'
                         : cerrando
                           ? 'Cerrando…'
                           : faltanParaMinimo > 0
                             ? `Completá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
-                            : 'Cerrar visita'}
+                            : !tiempoMinimoCumplido
+                              ? `Podés cerrar en ${minutosParaCierre} min`
+                              : 'Cerrar visita'}
                 </Button>
             )}
         </>

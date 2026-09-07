@@ -248,6 +248,36 @@ Hay **tres capas separadas**, y una operación toca una sola:
   por cualquier motivo, y bloquearlo dejaría visitas abiertas para siempre. No confundir
   `RADIO_INICIO_METROS` con `TOLERANCIA_METROS` de `analiticaFormat.ts` — hoy coinciden en 100 m
   pero son conceptos distintos (gate operativo vs. umbral de medición post-hoc).
+- **Cerrar visita exige, además, un mínimo de 15 minutos desde que arrancó.** El origen es
+  `IResolucion.fechaInicio` vía `GET /visitas/activa` (`useVisitaActiva` en `VisitaSheet.tsx`),
+  NO `useVisitaTimer`/localStorage: ese timer es cosmético (cronómetro del eyebrow) y no
+  sobrevive reinstalar la app ni cambiar de dispositivo — si fuera la fuente, quedaría en 0
+  para siempre y el botón nunca se habilitaría. Es **fail-open** cuando no se puede verificar
+  (la visita activa no coincide, o directamente no hay una): guía operativa, no candado
+  infalseable — mismo criterio que `RADIO_INICIO_METROS`/`sinUbicacion`. El umbral de duración
+  válida para analítica (15-90 min, vive en `pl_criterio_visita` en api-vendedores —
+  `DURACION_MIN_VALIDA` en `analiticaFormat.ts` es solo documentación, no alimenta ningún
+  cálculo) es un concepto DISTINTO y no comparte constante — mismo patrón que
+  `RADIO_INICIO_METROS` vs `TOLERANCIA_METROS`: uno es gate en vivo del front, el otro es
+  medición post-hoc del backend. El día que ese umbral vuelva a cambiar, hay que actualizar
+  a mano el texto de `ayudaEfectividadOperativa.tsx` y esa constante — el criterio no se
+  expone por API, así que ninguno de los dos se sincroniza solo.
+- **`useVisitaActiva` necesita `refetchOnMount: 'always'`, y su invalidación necesita
+  `refetchType: 'all'` — el default de ninguno de los dos alcanza.** `queryClient.ts` tiene
+  `refetchOnMount: false` de base. Sin el override: el vendedor cierra una visita (su
+  `VisitaSheet` se desmonta) y arranca otra; `useIniciarVisita` invalida `visita-activa`,
+  pero `invalidateQueries` por defecto (`refetchType: 'active'`) solo refresca queries con
+  observer montado — y en ese instante no hay ninguno. El `VisitaSheet` nuevo monta un
+  render después, `refetchOnMount: false` le sirve la caché VIEJA (la visita ya cerrada,
+  con otro id) sin pedir nada, y el mismatch de id dispara el fail-open del gate de
+  tiempo: deja cerrar la visita nueva sin esperar los 15 minutos. Reportado en producción
+  con una visita cerrada a los 00:17. El fix son dos mitades que se cubren entre sí:
+  `refetchType: 'all'` en el `onSuccess` de `useMutacionDeVisita` (repone la caché apenas
+  cambia la verdad del servidor, haya o no un sheet mirando) y `refetchOnMount: 'always'`
+  en la query (por si ese refetch en el fondo no llegó a tiempo). Y el gate de
+  `VisitaSheet` distingue "mismatch YA CONFIRMADO" (fail-open, correcto) de "mismatch
+  mientras hay un fetch en vuelo" (`isFetching`: bloquea y espera, no falla-abierto sobre
+  un dato que puede estar por corregirse solo).
 - **Cerrar visita exige un mínimo de `min(2, total ofrecidos)` rubros completos, no todos.**
   Vive en `VisitaSheet.tsx` (`minimoRequerido`/`faltanParaMinimo`). Con 5 rubros propuestos,
   resolver 2 habilita el cierre. Revierte a propósito la decisión del spec

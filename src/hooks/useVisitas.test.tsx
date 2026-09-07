@@ -1,7 +1,13 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
-import { useIniciarVisita, useCerrarVisita, useNoVisita, useReintentarSeguimiento } from './useVisitas'
+import {
+    useIniciarVisita,
+    useCerrarVisita,
+    useNoVisita,
+    useReintentarSeguimiento,
+    useVisitaActiva,
+} from './useVisitas'
 import * as api from '@/api/planificacion'
 
 vi.mock('@/api/planificacion')
@@ -12,6 +18,13 @@ function wrapper({ children }: { children: React.ReactNode }) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     return <QueryClientProvider client={qc}>{children}</QueryClientProvider>
 }
+
+it('useVisitaActiva no llama a la API con enabled=false', async () => {
+    ;(api.getVisitaActiva as any).mockResolvedValue(null)
+    renderHook(() => useVisitaActiva(false), { wrapper })
+    await new Promise(r => setTimeout(r, 0))
+    expect(api.getVisitaActiva).not.toHaveBeenCalled()
+})
 
 it('useIniciarVisita calls the API with rotacionClienteId/coordInicio and returns the visitaId', async () => {
     ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 42, rubros: 3 })
