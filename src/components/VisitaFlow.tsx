@@ -6,7 +6,7 @@ import VisitaSheet from './VisitaSheet'
 import IniciarVisitaMapa from './IniciarVisitaMapa'
 import { useCerrarVisita, useIniciarVisita } from '@/hooks/useVisitas'
 import { usePropuesta } from '@/hooks/usePropuesta'
-import { capturarUbicacion, type GeoResult } from '@/lib/geolocation'
+import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geolocation'
 import { distanciaMetros, estaFueraDeRango } from '@/lib/distancia'
 import { errorCode } from '@/lib/apiError'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
@@ -184,7 +184,7 @@ export default function VisitaFlow({
                         rotacionClienteId: cliente!.rotacionClienteId,
                         coordInicio: geo.coord,
                         coordCliente: clienteOverride
-                            ? `${clienteOverride.lat},${clienteOverride.lng}`
+                            ? `${formatearCoord(clienteOverride.lat)},${formatearCoord(clienteOverride.lng)}`
                             : undefined,
                         propuesta,
                     })

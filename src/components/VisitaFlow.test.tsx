@@ -154,6 +154,9 @@ beforeEach(() => {
         coord: '-34.6,-58.4',
         precisionM: 10,
     })
+    // `vi.mock('@/lib/geolocation')` automockea TODO el módulo, así que sin esto
+    // formatearCoord queda como un stub que devuelve undefined.
+    ;(geo.formatearCoord as any).mockImplementation((v: number) => v.toFixed(8))
 })
 
 afterEach(() => vi.unstubAllGlobals())
@@ -607,7 +610,9 @@ it('reposicionar destraba el gate y manda coordCliente al iniciar', async () => 
         expect(api.iniciarVisita).toHaveBeenCalledWith({
             rotacionClienteId: 42,
             coordInicio: '-34.603,-58.4',
-            coordCliente: '-34.603,-58.4',
+            // Truncado a 8 decimales — mismo motivo que coordInicio (formatearCoord):
+            // el regex del backend rechaza los ~15-17 decimales crudos de e.latlng.
+            coordCliente: '-34.60300000,-58.40000000',
             propuesta: [],
         }),
     )
