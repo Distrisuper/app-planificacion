@@ -371,6 +371,16 @@ export default function IniciarVisitaMapa({
                         </button>
                     </div>
                 )}
+                {!modoReposicionar && (
+                    <Button
+                        variant="outline"
+                        onClick={handleArmarReposicionar}
+                        className="mb-2 h-11 w-full border-[#F3D9A4] bg-[#FFFBEB] text-[13px] text-[#92400E] hover:bg-[#FEF3C7]"
+                    >
+                        <MapPin className="h-4 w-4 shrink-0" strokeWidth={2.4} />
+                        {overrideCliente ? 'Reposicionar de nuevo' : 'Reposicionar cliente'}
+                    </Button>
+                )}
                 <div className="mb-3 flex gap-2">
                     <Button
                         variant="outline"
@@ -388,15 +398,6 @@ export default function IniciarVisitaMapa({
                     >
                         <Navigation className="h-4 w-4 shrink-0" strokeWidth={2.4} />
                         <span className="truncate">¿Cómo llegar?</span>
-                    </Button>
-                    <Button
-                        variant="outline"
-                        onClick={handleArmarReposicionar}
-                        disabled={modoReposicionar}
-                        className="h-11 min-w-0 flex-1 text-[13px]"
-                    >
-                        <MapPin className="h-4 w-4 shrink-0" strokeWidth={2.4} />
-                        <span className="truncate">Reposicionar cliente</span>
                     </Button>
                 </div>
                 <Button
