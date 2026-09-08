@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { Navigation, RotateCw, X } from 'lucide-react'
+import { MapPin, Navigation, RotateCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { distanciaMetros, estaFueraDeRango, RADIO_INICIO_METROS } from '@/lib/distancia'
 import { formatDistancia } from '@/lib/analiticaFormat'
@@ -17,6 +17,11 @@ interface IniciarVisitaMapaProps {
     error?: string | null
     onIniciar: () => void
     onCancel: () => void
+    /** El vendedor tocó el mapa con el modo de reposicionar armado. `null` = volvió a
+     *  la coordenada original ("Restablecer"). Efímero: quien lo reciba lo manda como
+     *  coordCliente al iniciar, y no necesita guardarlo en ningún otro lado — ver
+     *  docs/superpowers/specs/2026-09-07-reposicionar-cliente-al-iniciar-visita-design.md. */
+    onReposicionar?: (coords: { lat: number; lng: number } | null) => void
 }
 
 const ICONO_CLIENTE = L.divIcon({
@@ -48,10 +53,27 @@ export default function IniciarVisitaMapa({
     error,
     onIniciar,
     onCancel,
+    onReposicionar,
 }: IniciarVisitaMapaProps) {
     const mapRef = useRef<HTMLDivElement>(null)
     const mapInstance = useRef<L.Map | null>(null)
     const vendedorMarker = useRef<L.Marker | null>(null)
+    const clienteMarker = useRef<L.Marker | null>(null)
+    const circuloRango = useRef<L.Circle | null>(null)
+    // Espejo de `overrideCliente` en un ref, mismo motivo que `posicionRef`: los
+    // callbacks de watchPosition/recalcular se crean una sola vez por apertura del
+    // mapa y necesitan leer el override VIGENTE al momento del fix, no el de cuando
+    // se armaron.
+    const overrideRef = useRef<{ lat: number; lng: number } | null>(null)
+    // Último fix crudo del vendedor (no el derivado que guarda posicionRef): hace
+    // falta para recalcular distancia al instante cuando se reposiciona al cliente,
+    // sin esperar el próximo tick de watchPosition.
+    const vendedorFixRef = useRef<{ lat: number; lng: number; accuracy: number } | null>(null)
+    const modoReposicionarRef = useRef(false)
+    const [modoReposicionar, setModoReposicionar] = useState(false)
+    const [overrideCliente, setOverrideCliente] = useState<{ lat: number; lng: number } | null>(
+        null,
+    )
     const [sinUbicacion, setSinUbicacion] = useState(false)
     const [recalculando, setRecalculando] = useState(false)
     // Un intento (el watch en vivo o "Recalcular posición") falló DESPUÉS de que ya
@@ -105,18 +127,43 @@ export default function IniciarVisitaMapa({
         setPosicion(null)
         posicionRef.current = null
         setCalculando(true)
+        setModoReposicionar(false)
+        modoReposicionarRef.current = false
+        setOverrideCliente(null)
+        overrideRef.current = null
+        vendedorFixRef.current = null
         const map = L.map(mapRef.current, { zoomControl: false }).setView([latitud, longitud], 15)
         mapInstance.current = map
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap',
         }).addTo(map)
-        L.marker([latitud, longitud], { icon: ICONO_CLIENTE }).addTo(map)
-        L.circle([latitud, longitud], {
+        clienteMarker.current = L.marker([latitud, longitud], { icon: ICONO_CLIENTE }).addTo(map)
+        circuloRango.current = L.circle([latitud, longitud], {
             radius: RADIO_INICIO_METROS,
             color: '#F97316',
             weight: 1,
             fillOpacity: 0.08,
         }).addTo(map)
+
+        // Solo dispara si el modo está armado (botón "Reposicionar cliente"): un tap
+        // suelto para hacer zoom/pan no debe mover al cliente por accidente.
+        function handleClickMapa(e: L.LeafletMouseEvent) {
+            if (!modoReposicionarRef.current) return
+            const { lat, lng } = e.latlng
+            modoReposicionarRef.current = false
+            setModoReposicionar(false)
+            overrideRef.current = { lat, lng }
+            setOverrideCliente({ lat, lng })
+            clienteMarker.current?.setLatLng([lat, lng])
+            circuloRango.current?.setLatLng([lat, lng])
+            if (vendedorFixRef.current) {
+                const { lat: vLat, lng: vLng, accuracy } = vendedorFixRef.current
+                const distanciaM = distanciaMetros(lat, lng, vLat, vLng)
+                marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
+            }
+            onReposicionar?.({ lat, lng })
+        }
+        map.on('click', handleClickMapa)
 
         let watchId: number | null = null
         let yaCentrado = false
@@ -126,7 +173,9 @@ export default function IniciarVisitaMapa({
                 pos => {
                     setCalculando(false)
                     const { latitude, longitude, accuracy } = pos.coords
-                    const distanciaM = distanciaMetros(latitud, longitud, latitude, longitude)
+                    vendedorFixRef.current = { lat: latitude, lng: longitude, accuracy }
+                    const punto = overrideRef.current ?? { lat: latitud, lng: longitud }
+                    const distanciaM = distanciaMetros(punto.lat, punto.lng, latitude, longitude)
                     marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
                     if (!vendedorMarker.current) {
                         vendedorMarker.current = L.marker([latitude, longitude], {
@@ -176,7 +225,9 @@ export default function IniciarVisitaMapa({
                 setRecalculando(false)
                 setCalculando(false)
                 const { latitude, longitude, accuracy } = pos.coords
-                const distanciaM = distanciaMetros(latitud, longitud, latitude, longitude)
+                vendedorFixRef.current = { lat: latitude, lng: longitude, accuracy }
+                const punto = overrideRef.current ?? { lat: latitud, lng: longitud }
+                const distanciaM = distanciaMetros(punto.lat, punto.lng, latitude, longitude)
                 marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
                 const map = mapInstance.current
                 if (!map) return
@@ -203,10 +254,36 @@ export default function IniciarVisitaMapa({
     }
 
     function handleComoLlegar() {
+        // Mismo punto que ve el vendedor en el mapa: si reposicionó al cliente, "Cómo
+        // llegar" tiene que apuntar ahí, no a la coordenada original que ya se sabe mal.
+        const punto = overrideRef.current ?? { lat: latitud, lng: longitud }
         window.open(
-            `https://www.google.com/maps/dir/?api=1&destination=${latitud},${longitud}&travelmode=driving`,
+            `https://www.google.com/maps/dir/?api=1&destination=${punto.lat},${punto.lng}&travelmode=driving`,
             '_blank',
         )
+    }
+
+    function handleRestablecer() {
+        overrideRef.current = null
+        setOverrideCliente(null)
+        clienteMarker.current?.setLatLng([latitud, longitud])
+        circuloRango.current?.setLatLng([latitud, longitud])
+        if (vendedorFixRef.current) {
+            const { lat, lng, accuracy } = vendedorFixRef.current
+            const distanciaM = distanciaMetros(latitud, longitud, lat, lng)
+            marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
+        }
+        onReposicionar?.(null)
+    }
+
+    function handleArmarReposicionar() {
+        modoReposicionarRef.current = true
+        setModoReposicionar(true)
+    }
+
+    function handleCancelarReposicionar() {
+        modoReposicionarRef.current = false
+        setModoReposicionar(false)
     }
 
     if (!open) return null
@@ -266,6 +343,34 @@ export default function IniciarVisitaMapa({
                     </p>
                 )}
                 {error && <p className="mb-3 text-[12.5px] font-semibold text-dsred">{error}</p>}
+                {modoReposicionar && (
+                    <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-dashed border-[#F59E0B] bg-[#FFFBEB] px-3 py-2">
+                        <span className="text-[12.5px] font-semibold text-[#92400E]">
+                            Tocá el mapa para mover al cliente
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleCancelarReposicionar}
+                            className="shrink-0 text-[12.5px] font-semibold text-dsmuted underline"
+                        >
+                            Cancelar reposición
+                        </button>
+                    </div>
+                )}
+                {overrideCliente && !modoReposicionar && (
+                    <div className="mb-3 flex items-center justify-between gap-2">
+                        <span className="text-[12.5px] font-semibold text-dsmuted">
+                            Posición ajustada para esta visita
+                        </span>
+                        <button
+                            type="button"
+                            onClick={handleRestablecer}
+                            className="shrink-0 text-[12.5px] font-semibold underline text-[#213D82]"
+                        >
+                            Restablecer
+                        </button>
+                    </div>
+                )}
                 <div className="mb-3 flex gap-2">
                     <Button
                         variant="outline"
@@ -284,11 +389,20 @@ export default function IniciarVisitaMapa({
                         <Navigation className="h-4 w-4 shrink-0" strokeWidth={2.4} />
                         <span className="truncate">¿Cómo llegar?</span>
                     </Button>
+                    <Button
+                        variant="outline"
+                        onClick={handleArmarReposicionar}
+                        disabled={modoReposicionar}
+                        className="h-11 min-w-0 flex-1 text-[13px]"
+                    >
+                        <MapPin className="h-4 w-4 shrink-0" strokeWidth={2.4} />
+                        <span className="truncate">Reposicionar cliente</span>
+                    </Button>
                 </div>
                 <Button
                     onClick={onIniciar}
                     loading={iniciando}
-                    disabled={calculando || fueraDeRango}
+                    disabled={calculando || fueraDeRango || modoReposicionar}
                     className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
                 >
                     {iniciando ? 'Iniciando…' : calculando ? 'Calculando…' : 'Iniciar visita'}

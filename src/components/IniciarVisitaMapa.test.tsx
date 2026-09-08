@@ -8,10 +8,11 @@ vi.mock('leaflet', () => {
         setView: vi.fn().mockReturnThis(),
         remove: vi.fn(),
         fitBounds: vi.fn(),
+        on: vi.fn(),
     }
     const marker = { addTo: vi.fn().mockReturnThis(), setLatLng: vi.fn() }
     const tileLayer = { addTo: vi.fn() }
-    const circle = { addTo: vi.fn().mockReturnThis() }
+    const circle = { addTo: vi.fn().mockReturnThis(), setLatLng: vi.fn() }
     return {
         default: {
             map: vi.fn(() => map),
@@ -203,4 +204,130 @@ it('limpia el watch de geolocalización al desmontar', () => {
     )
     unmount()
     expect(clearWatch).toHaveBeenCalledWith(42)
+})
+
+/** Devuelve el handler registrado con map.on('click', ...) en el render más reciente. */
+async function getClickHandler() {
+    const L = await import('leaflet')
+    const mapMock = L.default.map as any
+    // `L.map` siempre devuelve el mismo objeto `map` mock (no uno nuevo por llamada), y
+    // los mocks no se resetean entre tests en este archivo: `map.on.mock.calls` acumula
+    // un registro de 'click' por cada render de cada test. El último es el vigente.
+    const map = mapMock.mock.results[mapMock.mock.results.length - 1].value
+    const calls = map.on.mock.calls.filter((c: any) => c[0] === 'click')
+    return calls[calls.length - 1][1] as (e: { latlng: { lat: number; lng: number } }) => void
+}
+
+it('arma el modo reposicionar, deshabilita Iniciar visita, y Cancelar lo desarma sin mover nada', async () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(await screen.findByRole('button', { name: /iniciar visita/i })).toBeEnabled()
+
+    await userEvent.click(screen.getByRole('button', { name: /reposicionar cliente/i }))
+    expect(screen.getByText(/tocá el mapa para mover al cliente/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^iniciar visita$/i })).toBeDisabled()
+
+    // "Cancelar reposición" (texto), no "Cancelar" (el aria-label del botón X del
+    // header, que cierra TODO el mapa) — ver nota de accesibilidad en el Step 9.
+    await userEvent.click(screen.getByRole('button', { name: /cancelar reposición/i }))
+    expect(screen.queryByText(/tocá el mapa para mover al cliente/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^iniciar visita$/i })).toBeEnabled()
+    expect(screen.queryByText(/posición ajustada/i)).not.toBeInTheDocument()
+})
+
+it('reposicionar mueve el pin, recalcula sin esperar un nuevo fix, y avisa el ajuste', async () => {
+    const onReposicionar = vi.fn()
+    // Fix del vendedor lejos del cliente original (mismo par usado en el test de
+    // "acercate a menos de 100 m" ya existente): bloquea al abrir.
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+            onReposicionar={onReposicionar}
+        />,
+    )
+    expect(await screen.findByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^iniciar visita$/i })).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('button', { name: /reposicionar cliente/i }))
+    const handleClick = await getClickHandler()
+    // Reposiciona EXACTO donde está el vendedor: distancia pasa a 0.
+    handleClick({ latlng: { lat: -34.603, lng: -58.4 } })
+
+    expect(onReposicionar).toHaveBeenCalledWith({ lat: -34.603, lng: -58.4 })
+    expect(await screen.findByText(/posición ajustada para esta visita/i)).toBeInTheDocument()
+    expect(screen.queryByText(/acercate a menos de 100 m/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^iniciar visita$/i })).toBeEnabled()
+})
+
+it('un click en el mapa SIN haber armado el modo no mueve nada', async () => {
+    const onReposicionar = vi.fn()
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+            onReposicionar={onReposicionar}
+        />,
+    )
+    await screen.findByRole('button', { name: /^iniciar visita$/i })
+    const handleClick = await getClickHandler()
+    handleClick({ latlng: { lat: -34.7, lng: -58.5 } })
+
+    expect(onReposicionar).not.toHaveBeenCalled()
+    expect(screen.queryByText(/posición ajustada/i)).not.toBeInTheDocument()
+})
+
+it('Restablecer vuelve a la coordenada original y avisa onReposicionar(null)', async () => {
+    const onReposicionar = vi.fn()
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <IniciarVisitaMapa
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+            onReposicionar={onReposicionar}
+        />,
+    )
+    await screen.findByText(/acercate a menos de 100 m/i)
+    await userEvent.click(screen.getByRole('button', { name: /reposicionar cliente/i }))
+    const handleClick = await getClickHandler()
+    handleClick({ latlng: { lat: -34.603, lng: -58.4 } })
+    await screen.findByText(/posición ajustada para esta visita/i)
+
+    await userEvent.click(screen.getByRole('button', { name: /restablecer/i }))
+
+    expect(onReposicionar).toHaveBeenLastCalledWith(null)
+    expect(screen.queryByText(/posición ajustada/i)).not.toBeInTheDocument()
+    // Vuelve a estar bloqueado: la coordenada original seguía lejos del vendedor.
+    expect(await screen.findByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
 })
