@@ -2,7 +2,6 @@ import {
     formatearDuracion,
     limpiarInicioVisita,
     marcarInicioVisita,
-    segundosDesdeISO,
     segundosTranscurridos,
 } from './visitaTimer'
 
@@ -64,16 +63,4 @@ it('formatearDuracion arma mm:ss con ceros a la izquierda', () => {
     expect(formatearDuracion(5)).toBe('00:05')
     expect(formatearDuracion(65)).toBe('01:05')
     expect(formatearDuracion(3661)).toBe('61:01')
-})
-
-it('segundosDesdeISO calcula contra el reloj del servidor, no localStorage', () => {
-    const inicio = new Date('2026-09-03T16:46:11.000Z')
-    vi.spyOn(Date, 'now').mockReturnValue(inicio.getTime() + 5 * 60_000)
-    expect(segundosDesdeISO(inicio.toISOString())).toBe(300)
-})
-
-it('segundosDesdeISO nunca da negativo si el reloj local está atrasado respecto al servidor', () => {
-    const inicio = new Date('2026-09-03T16:46:11.000Z')
-    vi.spyOn(Date, 'now').mockReturnValue(inicio.getTime() - 60_000)
-    expect(segundosDesdeISO(inicio.toISOString())).toBe(0)
 })

@@ -17,7 +17,6 @@ import type {
     IOfrecimiento,
     IPreviewCiclo,
     IReacomodarDTO,
-    IResolucion,
     IResolverOfrecimientoDTO,
     IResolverOfrecimientoResult,
     IResultadoBuscadorGeneral,
@@ -94,11 +93,6 @@ export const getMotivos = async (nivel?: NivelMotivo): Promise<IMotivo[]> => {
 }
 
 // ── Visitas ────────────────────────────────────────────────────────────────────
-
-export const getVisitaActiva = async (): Promise<IResolucion | null> => {
-    const res = await apiClient.get('/planificacion/visitas/activa')
-    return res.data.data
-}
 
 export const iniciarVisita = async (
     dto: IIniciarVisitaDTO,

@@ -191,18 +191,6 @@ export interface IIntercambiarDiasDTO {
     diaB: number
 }
 
-/** La visita activa: el backend devuelve la resolución cruda. */
-export interface IResolucion {
-    id: number
-    rotacionClienteId: number
-    tipo: TipoResolucion
-    fechaInicio: string
-    fechaFin: string | null
-    coordInicio: string | null
-    coordFinal: string | null
-    coordCliente: string | null
-}
-
 export type TipoOfrecimiento = 'rubro' | 'marca' | 'linea' | 'articulo' | 'accion'
 
 /** Los tipos que pueden ser DESTINO de una oferta. 'accion' no: una acción no se

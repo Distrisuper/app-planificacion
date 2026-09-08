@@ -84,7 +84,6 @@ function renderPage(url = '/') {
 beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getMotivos as any).mockResolvedValue([])
-    ;(api.getVisitaActiva as any).mockResolvedValue(null)
     ;(api.getAgendaSemana as any).mockResolvedValue(semanaVacia)
     ;(api.sincronizar as any).mockResolvedValue({
         semanaCerrada: null,
