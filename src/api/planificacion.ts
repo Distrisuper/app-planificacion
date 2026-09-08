@@ -102,7 +102,7 @@ export const getVisitaActiva = async (): Promise<IResolucion | null> => {
 
 export const iniciarVisita = async (
     dto: IIniciarVisitaDTO,
-): Promise<{ visitaId: number; ofrecimientos: number }> => {
+): Promise<{ visitaId: number; ofrecimientos: number; correccionPermanenteAplicada?: boolean }> => {
     const res = await apiClient.post('/planificacion/visitas', dto)
     return res.data.data
 }

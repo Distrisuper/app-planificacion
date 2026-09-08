@@ -350,6 +350,10 @@ export interface IIniciarVisitaDTO {
     rotacionClienteId: number
     /** Obligatoria: el backend rechaza null con COORD_REQUERIDA. */
     coordInicio: string
+    /** Solo si el vendedor reposicionó al cliente en el mapa (IniciarVisitaMapa) — la
+     *  posición que ÉL confirmó, no la del warehouse. Formato "lat,lng", igual que
+     *  coordInicio. */
+    coordCliente?: string
     /** La propuesta tal como se le mostró al vendedor. Si no viene, el backend la recalcula. */
     propuesta?: IPropuestaRubroDTO[]
 }
