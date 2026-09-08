@@ -191,18 +191,6 @@ export interface IIntercambiarDiasDTO {
     diaB: number
 }
 
-/** La visita activa: el backend devuelve la resolución cruda. */
-export interface IResolucion {
-    id: number
-    rotacionClienteId: number
-    tipo: TipoResolucion
-    fechaInicio: string
-    fechaFin: string | null
-    coordInicio: string | null
-    coordFinal: string | null
-    coordCliente: string | null
-}
-
 export type TipoOfrecimiento = 'rubro' | 'marca' | 'linea' | 'articulo' | 'accion'
 
 /** Los tipos que pueden ser DESTINO de una oferta. 'accion' no: una acción no se
@@ -350,6 +338,10 @@ export interface IIniciarVisitaDTO {
     rotacionClienteId: number
     /** Obligatoria: el backend rechaza null con COORD_REQUERIDA. */
     coordInicio: string
+    /** Solo si el vendedor reposicionó al cliente en el mapa (IniciarVisitaMapa) — la
+     *  posición que ÉL confirmó, no la del warehouse. Formato "lat,lng", igual que
+     *  coordInicio. */
+    coordCliente?: string
     /** La propuesta tal como se le mostró al vendedor. Si no viene, el backend la recalcula. */
     propuesta?: IPropuestaRubroDTO[]
 }

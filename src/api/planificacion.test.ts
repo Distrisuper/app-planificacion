@@ -8,7 +8,6 @@ import {
     getAgendaSemana,
     getAgendaDia,
     getMotivos,
-    getVisitaActiva,
     iniciarVisita,
     cerrarVisita,
     registrarNoVisita,
@@ -194,12 +193,6 @@ describe('motivos', () => {
 })
 
 describe('visitas', () => {
-    it('getVisitaActiva devuelve la resolución cruda o null', async () => {
-        ;(apiClient.get as any).mockResolvedValue(ok({ id: 5, rotacionClienteId: 11 }))
-        const res = await getVisitaActiva()
-        expect(res?.id).toBe(5)
-    })
-
     it('iniciarVisita manda rotacionClienteId, NO codigoParticularCliente', async () => {
         // Regresión del contrato viejo, que mandaba código + nombre del cliente.
         ;(apiClient.post as any).mockResolvedValue(ok({ visitaId: 42, ofrecimientos: 3 }))

@@ -6,7 +6,7 @@ import VisitaSheet from './VisitaSheet'
 import IniciarVisitaMapa from './IniciarVisitaMapa'
 import { useCerrarVisita, useIniciarVisita } from '@/hooks/useVisitas'
 import { usePropuesta } from '@/hooks/usePropuesta'
-import { capturarUbicacion, type GeoResult } from '@/lib/geolocation'
+import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geolocation'
 import { distanciaMetros, estaFueraDeRango } from '@/lib/distancia'
 import { errorCode } from '@/lib/apiError'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
@@ -79,12 +79,20 @@ export default function VisitaFlow({
     // volvería a tocar creyendo que no respondió, y se dispararían llamadas concurrentes.
     const [iniciandoFlujo, setIniciandoFlujo] = useState(false)
     const [cerrandoFlujo, setCerrandoFlujo] = useState(false)
+    // Ajuste efímero del pin del cliente (IniciarVisitaMapa.onReposicionar). Solo
+    // importa para ESTE intento de iniciar: viaja como coordCliente y se usa en la
+    // segunda verificación de distancia de acá abajo. Nunca se guarda en ningún otro
+    // lado — ver docs/superpowers/specs/2026-09-07-reposicionar-cliente-al-iniciar-visita-design.md.
+    const [clienteOverride, setClienteOverride] = useState<{ lat: number; lng: number } | null>(
+        null,
+    )
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
     useEffect(() => {
         setPropuestaPendiente(null)
         setErrorIniciar(null)
+        setClienteOverride(null)
     }, [cliente?.rotacionClienteId])
 
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
@@ -163,27 +171,39 @@ export default function VisitaFlow({
                 // instante en que el watch marcó cerca para saltear el gate.
                 if (tieneCoords) {
                     const [lat, lon] = geo.coord.split(',').map(Number)
-                    const distanciaM = distanciaMetros(
-                        lat,
-                        lon,
-                        cliente!.latitud as number,
-                        cliente!.longitud as number,
-                    )
+                    const clienteLat = clienteOverride?.lat ?? (cliente!.latitud as number)
+                    const clienteLng = clienteOverride?.lng ?? (cliente!.longitud as number)
+                    const distanciaM = distanciaMetros(lat, lon, clienteLat, clienteLng)
                     if (estaFueraDeRango(distanciaM, geo.precisionM)) {
                         setErrorIniciar('Estás lejos del cliente. Acercate para iniciar la visita.')
                         return
                     }
                 }
                 try {
-                    const { visitaId: id } = await iniciar.mutateAsync({
+                    const { visitaId: id, correccionPermanenteAplicada } = await iniciar.mutateAsync({
                         rotacionClienteId: cliente!.rotacionClienteId,
                         coordInicio: geo.coord,
+                        coordCliente: clienteOverride
+                            ? `${formatearCoord(clienteOverride.lat)},${formatearCoord(clienteOverride.lng)}`
+                            : undefined,
                         propuesta,
                     })
                     setPropuestaPendiente(null)
                     onVisitaIniciada(cliente!, id)
                     marcarInicioVisita(id)
                     onAviso?.('exito', 'Visita iniciada')
+                    // El gate ya se destrabó (efímero, arriba); esto es aparte: si
+                    // client-service ya tenía 3 correcciones permanentes de este
+                    // cliente, el backend no volvió a tocarlo — el vendedor sigue
+                    // pudiendo operar, pero alguien tiene que corregirlo por otro
+                    // medio.
+                    if (clienteOverride && correccionPermanenteAplicada === false) {
+                        onAviso?.(
+                            'info',
+                            'Esta corrección ya no se guarda de forma permanente (límite alcanzado).',
+                        )
+                    }
+                    setClienteOverride(null)
                 } catch (err) {
                     const code = errorCode(err)
                     if (code === 'VISITA_ACTIVA_EXISTENTE' || code === 'CICLO_CLIENTE_YA_RESUELTO') {
@@ -298,8 +318,10 @@ export default function VisitaFlow({
                     iniciando={iniciandoFlujo}
                     error={errorIniciar}
                     onIniciar={onConfirmarEnMapa}
+                    onReposicionar={setClienteOverride}
                     onCancel={() => {
                         setErrorIniciar(null)
+                        setClienteOverride(null)
                         // En modo directo se salteó la propuesta a propósito, así que atrás
                         // del mapa no hay nada: cancelar es volver a la agenda. Además es lo
                         // único que corta el ciclo — limpiar solo `propuestaPendiente` vuelve

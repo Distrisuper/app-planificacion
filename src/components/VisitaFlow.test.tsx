@@ -11,10 +11,10 @@ import type { IAgendaClient } from '@/types/planificacion'
 vi.mock('@/api/planificacion')
 vi.mock('@/lib/geolocation')
 vi.mock('leaflet', () => {
-    const map = { setView: vi.fn().mockReturnThis(), remove: vi.fn(), fitBounds: vi.fn() }
+    const map = { setView: vi.fn().mockReturnThis(), remove: vi.fn(), fitBounds: vi.fn(), on: vi.fn() }
     const marker = { addTo: vi.fn().mockReturnThis(), setLatLng: vi.fn() }
     const tileLayer = { addTo: vi.fn() }
-    const circle = { addTo: vi.fn().mockReturnThis() }
+    const circle = { addTo: vi.fn().mockReturnThis(), setLatLng: vi.fn() }
     return {
         default: {
             map: vi.fn(() => map),
@@ -154,7 +154,26 @@ beforeEach(() => {
         coord: '-34.6,-58.4',
         precisionM: 10,
     })
+    // `vi.mock('@/lib/geolocation')` automockea TODO el módulo, así que sin esto
+    // formatearCoord queda como un stub que devuelve undefined.
+    ;(geo.formatearCoord as any).mockImplementation((v: number) => v.toFixed(8))
 })
+
+afterEach(() => vi.unstubAllGlobals())
+
+/** jsdom no expone navigator.geolocation por defecto — a diferencia de
+ *  capturarUbicacion() (mockeado arriba), acá se necesita el watch EN VIVO que usa
+ *  IniciarVisitaMapa para el gate de distancia. Solo hace falta en los tests que
+ *  verifican ese gate contra la posición reposicionada. */
+function mockGeolocacionEnVivo(coords: { latitude: number; longitude: number; accuracy: number }) {
+    const watchPosition = vi.fn((ok: any) => {
+        ok({ coords })
+        return 1
+    })
+    const getCurrentPosition = vi.fn()
+    const clearWatch = vi.fn()
+    vi.stubGlobal('navigator', { geolocation: { watchPosition, getCurrentPosition, clearWatch } })
+}
 
 it('iniciar visita captura la ubicación y manda el rotacionClienteId', async () => {
     renderFlow()
@@ -553,4 +572,130 @@ it('con una visita en curso, iniciar en otro cliente queda bloqueado con aviso',
     // Ya se había llamado una vez para iniciar la visita de Don José: el tap sobre el
     // botón deshabilitado de Kiosco Sur no debe sumar una segunda llamada.
     expect(api.iniciarVisita).toHaveBeenCalledTimes(1)
+})
+
+/** Mismo helper que en IniciarVisitaMapa.test.tsx — necesario acá porque el mapa
+ *  real (no mockeado) es parte del árbol que VisitaFlow renderiza. */
+async function getClickHandler() {
+    const L = await import('leaflet')
+    const mapMock = L.default.map as any
+    const map = mapMock.mock.results[mapMock.mock.results.length - 1].value
+    const calls = map.on.mock.calls.filter((c: any) => c[0] === 'click')
+    return calls[calls.length - 1][1] as (e: { latlng: { lat: number; lng: number } }) => void
+}
+
+it('reposicionar destraba el gate y manda coordCliente al iniciar', async () => {
+    // El vendedor está lejos de la coordenada ORIGINAL del cliente.
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.603,-58.4',
+        precisionM: 10,
+    })
+    mockGeolocacionEnVivo({ latitude: -34.603, longitude: -58.4, accuracy: 10 })
+    renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+    expect(await screen.findByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /reposicionar cliente/i }))
+    const handleClick = await getClickHandler()
+    // Reposiciona exacto donde está el vendedor.
+    handleClick({ latlng: { lat: -34.603, lng: -58.4 } })
+
+    const boton = await screen.findByRole('button', { name: /^iniciar visita$/i })
+    expect(boton).toBeEnabled()
+    fireEvent.click(boton)
+
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith({
+            rotacionClienteId: 42,
+            coordInicio: '-34.603,-58.4',
+            // Truncado a 8 decimales — mismo motivo que coordInicio (formatearCoord):
+            // el regex del backend rechaza los ~15-17 decimales crudos de e.latlng.
+            coordCliente: '-34.60300000,-58.40000000',
+            propuesta: [],
+        }),
+    )
+})
+
+it('sin reposicionar, coordCliente no viaja en el payload', async () => {
+    renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+    fireEvent.click(screen.getByRole('button', { name: /^iniciar visita$/i }))
+
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith({
+            rotacionClienteId: 42,
+            coordInicio: '-34.6,-58.4',
+            propuesta: [],
+        }),
+    )
+})
+
+it('cancelar el mapa descarta el reposicionamiento', async () => {
+    renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+
+    fireEvent.click(screen.getByRole('button', { name: /reposicionar cliente/i }))
+    const handleClick = await getClickHandler()
+    handleClick({ latlng: { lat: -34.61, lng: -58.41 } })
+    await screen.findByText(/posición ajustada/i)
+
+    fireEvent.click(screen.getByLabelText('Cancelar'))
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+
+    // Reabre el flujo desde cero: si el override sobreviviera, se mandaría igual.
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+    fireEvent.click(screen.getByRole('button', { name: /^iniciar visita$/i }))
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith({
+            rotacionClienteId: 42,
+            coordInicio: '-34.6,-58.4',
+            propuesta: [],
+        }),
+    )
+})
+
+it('si el backend avisa que ya se agotó el cupo de corrección permanente, muestra el aviso discreto', async () => {
+    ;(api.iniciarVisita as any).mockResolvedValue({
+        visitaId: 99,
+        ofrecimientos: 0,
+        correccionPermanenteAplicada: false,
+    })
+    // La segunda verificación de distancia (onIniciar) usa el coord de
+    // capturarUbicacion contra la posición reposicionada — tienen que coincidir para
+    // que no la rechace por "lejos del cliente".
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.41',
+        precisionM: 10,
+    })
+    const { onAviso } = renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+
+    fireEvent.click(screen.getByRole('button', { name: /reposicionar cliente/i }))
+    const handleClick = await getClickHandler()
+    handleClick({ latlng: { lat: -34.61, lng: -58.41 } })
+
+    const botonIniciar = screen.getByRole('button', { name: /^iniciar visita$/i })
+    await waitFor(() => expect(botonIniciar).toBeEnabled())
+    fireEvent.click(botonIniciar)
+
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith(
+            'info',
+            'Esta corrección ya no se guarda de forma permanente (límite alcanzado).',
+        ),
+    )
+})
+
+it('sin reposicionar, aunque el backend no mande correccionPermanenteAplicada, no avisa nada raro', async () => {
+    const { onAviso } = renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() => expect(onAviso).toHaveBeenCalledWith('exito', 'Visita iniciada'))
+    expect(onAviso).not.toHaveBeenCalledWith('info', expect.stringContaining('límite'))
 })
