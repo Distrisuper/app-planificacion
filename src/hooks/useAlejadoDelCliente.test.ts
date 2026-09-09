@@ -1,0 +1,146 @@
+import { act, renderHook } from '@testing-library/react'
+import { vi } from 'vitest'
+import { useAlejadoDelCliente } from './useAlejadoDelCliente'
+
+/** Igual patrón que IniciarVisitaMapa.test.tsx: reemplaza `navigator` entero por un mock
+ *  controlable. `wakeLockRequest` es opcional — cuando no se pasa, `navigator.wakeLock`
+ *  directamente no existe, para probar el caso "la API no está". */
+function mockNavigator(opts: {
+    watchImpl?: (ok: any, err: any) => void
+    getCurrentImpl?: (ok: any, err: any) => void
+    wakeLockRequest?: any
+}) {
+    const watchPosition = vi.fn(opts.watchImpl ?? (() => {}))
+    const getCurrentPosition = vi.fn(opts.getCurrentImpl ?? (() => {}))
+    const clearWatch = vi.fn()
+    const nav: any = { geolocation: { watchPosition, getCurrentPosition, clearWatch } }
+    if (opts.wakeLockRequest) nav.wakeLock = { request: opts.wakeLockRequest }
+    vi.stubGlobal('navigator', nav)
+    return { watchPosition, getCurrentPosition, clearWatch }
+}
+
+function fix(latitude: number, longitude: number, accuracy: number) {
+    return { coords: { latitude, longitude, accuracy } }
+}
+
+// Cliente en (0,0). ~0.01° de latitud ≈ 1.1 km — de sobra para "francamente lejos".
+const CLIENTE = { latitud: 0, longitud: 0 }
+
+beforeEach(() => vi.unstubAllGlobals())
+
+it('dispara alejado cuando el fix está francamente lejos', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    act(() => entregar(fix(0.01, 0, 5)))
+
+    expect(result.current.alejado).toBe(true)
+})
+
+it('no dispara con un fix grueso a distancia moderada: la precisión lo cubre', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    // ~150 m de distancia con 500 m de precisión: no prueba que esté fuera de rango.
+    act(() => entregar(fix(0.00135, 0, 500)))
+
+    expect(result.current.alejado).toBe(false)
+})
+
+it('no re-dispara oscilando en el borde: la salida exige la distancia cruda dentro del radio', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    act(() => entregar(fix(0.01, 0, 5))) // francamente lejos, fix preciso
+    expect(result.current.alejado).toBe(true)
+
+    // Un fix impreciso que igual marca una distancia cruda > 100 m: si la salida
+    // descontara precisión (como la entrada), esto oscilaría a false y de vuelta a true
+    // en el próximo tick. Con la salida sobre la distancia cruda, se queda en alejado.
+    act(() => entregar(fix(0.001, 0, 200)))
+    expect(result.current.alejado).toBe(true)
+
+    // Recién vuelve dentro cuando la distancia CRUDA entra al radio.
+    act(() => entregar(fix(0.0001, 0, 5)))
+    expect(result.current.alejado).toBe(false)
+})
+
+it('chequea la posición al volver del background', () => {
+    const { getCurrentPosition } = mockNavigator({})
+    renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true })
+    act(() => document.dispatchEvent(new Event('visibilitychange')))
+
+    expect(getCurrentPosition).toHaveBeenCalled()
+})
+
+it('queda inactivo si el cliente no tiene coordenadas', () => {
+    const { watchPosition } = mockNavigator({})
+    renderHook(() => useAlejadoDelCliente({ activo: true, latitud: null, longitud: null }))
+
+    expect(watchPosition).not.toHaveBeenCalled()
+})
+
+it('queda inactivo si la visita no está activa, aunque haya coordenadas', () => {
+    const { watchPosition } = mockNavigator({})
+    renderHook(() => useAlejadoDelCliente({ activo: false, ...CLIENTE }))
+
+    expect(watchPosition).not.toHaveBeenCalled()
+})
+
+it('pide el wake lock al activarse, lo libera al desmontarse, y lo vuelve a pedir al volver del background', async () => {
+    const release = vi.fn()
+    const wakeLockRequest = vi.fn().mockResolvedValue({ release })
+    mockNavigator({ wakeLockRequest })
+
+    const { unmount } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+    await act(async () => {})
+    expect(wakeLockRequest).toHaveBeenCalledWith('screen')
+    expect(wakeLockRequest).toHaveBeenCalledTimes(1)
+
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true })
+    await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'))
+    })
+    expect(wakeLockRequest).toHaveBeenCalledTimes(2)
+
+    unmount()
+    expect(release).toHaveBeenCalled()
+})
+
+it('no rompe si navigator.wakeLock no existe', async () => {
+    mockNavigator({})
+    expect(() => {
+        renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+    }).not.toThrow()
+    await act(async () => {})
+})
+
+it('no rompe si wakeLock.request() rechaza', async () => {
+    const wakeLockRequest = vi.fn().mockRejectedValue(new Error('denegado'))
+    mockNavigator({ wakeLockRequest })
+    expect(() => {
+        renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+    }).not.toThrow()
+    await act(async () => {})
+})
+
+it('limpia el watch y el listener de visibilitychange al desmontarse', () => {
+    const { watchPosition, clearWatch, getCurrentPosition } = mockNavigator({
+        watchImpl: () => 42,
+    })
+    ;(watchPosition as any).mockReturnValue(42)
+    const { unmount } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    unmount()
+    expect(clearWatch).toHaveBeenCalledWith(42)
+
+    getCurrentPosition.mockClear()
+    Object.defineProperty(document, 'hidden', { value: false, configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+    expect(getCurrentPosition).not.toHaveBeenCalled()
+})

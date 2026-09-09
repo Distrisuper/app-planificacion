@@ -10,6 +10,8 @@ import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geoloca
 import { distanciaMetros, estaFueraDeRango } from '@/lib/distancia'
 import { errorCode } from '@/lib/apiError'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
+import { guardarVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
+import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
 import type { IAgendaClient, IPropuestaRubroDTO, IVisitClientCard } from '@/types/planificacion'
@@ -41,6 +43,12 @@ interface VisitaFlowProps {
     onAviso?: (tipo: NotificacionTipo, mensaje: string) => void
     /** Si se pasa, los sheets del cliente ofrecen las apps externas. */
     onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
+    /** true mientras el vendedor está lejos del cliente de `visitaEnCurso`, con la visita
+     *  todavía abierta — ver docs/superpowers/specs/2026-09-08-aviso-alejado-del-cliente-design.md.
+     *  VisitaFlow calcula el estado (nunca se desmonta mientras haya visita en curso, a
+     *  diferencia de VisitaSheet, que se minimiza); quien lo renderiza es el padre, en
+     *  VisitaEnCursoBar. */
+    onAlejadoChange?: (alejado: boolean) => void
 }
 
 /**
@@ -59,9 +67,32 @@ export default function VisitaFlow({
     onGeoBloqueada,
     onAviso,
     onAbrirAppExterna,
+    onAlejadoChange,
 }: VisitaFlowProps) {
     const iniciar = useIniciarVisita()
     const cerrar = useCerrarVisita()
+
+    // Coordenadas del cliente de LA VISITA EN CURSO, no del `cliente` que esté abierto en
+    // pantalla — el vendedor puede estar mirando la propuesta de otro cliente mientras la
+    // visita sigue corriendo en otro lado.
+    const { alejado } = useAlejadoDelCliente({
+        activo: visitaEnCurso !== null,
+        latitud: visitaEnCurso?.cliente.latitud,
+        longitud: visitaEnCurso?.cliente.longitud,
+    })
+    useEffect(() => {
+        onAlejadoChange?.(alejado)
+    }, [alejado, onAlejadoChange])
+    // Toast al CRUZAR a alejado, una sola vez por cruce: `alejado` solo cambia de valor en
+    // el cruce (ver useAlejadoDelCliente), así que este efecto ya corre una vez por cruce
+    // sin necesidad de un ref propio.
+    useEffect(() => {
+        if (!alejado || !visitaEnCurso) return
+        const nombreVisita =
+            visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente
+        onAviso?.('info', `Te alejaste de ${nombreVisita} y la visita sigue abierta.`)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [alejado])
 
     // Propuesta ya confirmada en el sheet, esperando que se confirme en el mapa. Solo se usa
     // cuando el cliente tiene coordenadas; si no, onIniciar se llama directo.
@@ -191,6 +222,7 @@ export default function VisitaFlow({
                     setPropuestaPendiente(null)
                     onVisitaIniciada(cliente!, id)
                     marcarInicioVisita(id)
+                    guardarVisitaEnCurso({ cliente: cliente!, visitaId: id })
                     onAviso?.('exito', 'Visita iniciada')
                     // El gate ya se destrabó (efímero, arriba); esto es aparte: si
                     // client-service ya tenía 3 correcciones permanentes de este
@@ -243,12 +275,14 @@ export default function VisitaFlow({
                         onAviso?.('exito', 'Visita cerrada')
                     }
                     limpiarInicioVisita(visitaId)
+                    limpiarVisitaEnCurso()
                     onVisitaCerrada()
                     cerrarFlujo()
                 } catch (err) {
                     if (errorCode(err) === 'VISITA_YA_CERRADA') {
                         // Tratar como éxito: la visita está cerrada, que es lo que se quería.
                         limpiarInicioVisita(visitaId)
+                        limpiarVisitaEnCurso()
                         onVisitaCerrada()
                         cerrarFlujo()
                         return

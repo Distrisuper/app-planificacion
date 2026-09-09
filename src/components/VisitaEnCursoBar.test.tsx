@@ -36,3 +36,27 @@ it('actualiza el cronómetro cada segundo', () => {
 
     vi.useRealTimers()
 })
+
+it('alejado: muestra el aviso en vez del nombre, en rojo, y el cronómetro se sigue viendo', () => {
+    marcarInicioVisita(1)
+    render(
+        <VisitaEnCursoBar
+            visitaId={1}
+            nombreCliente="Kiosco Sur"
+            alejado
+            onExpandir={() => {}}
+        />,
+    )
+
+    expect(
+        screen.getByText('Te alejaste de Kiosco Sur y la visita sigue abierta'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/visitando a kiosco sur/i)).not.toBeInTheDocument()
+    expect(screen.getByText('00:00')).toBeInTheDocument()
+    expect(screen.getByRole('button')).toHaveClass('bg-dsred')
+})
+
+it('sin alejado, se ve el naranja de siempre', () => {
+    render(<VisitaEnCursoBar visitaId={1} nombreCliente="Kiosco Sur" onExpandir={() => {}} />)
+    expect(screen.getByRole('button')).toHaveClass('bg-dsorange')
+})

@@ -22,6 +22,7 @@ import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
+import { leerVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
@@ -237,7 +238,15 @@ export default function AgendaSemanaPage() {
     // La visita en curso del vendedor, independiente de qué card esté mirando ahora
     // (`visitaCliente`). Antes vivía adentro de VisitaFlow atada al cliente abierto: tocar
     // la propuesta de OTRO cliente y cerrarla la perdía, y la barra flotante desaparecía.
-    const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(null)
+    // Arranca desde localStorage, no en null: sin esto, recargar la app sin señal deja a
+    // `agenda` en falla y la barra flotante desaparece aunque la visita siga abierta en el
+    // servidor — ver docs/superpowers/specs/2026-09-08-aviso-alejado-del-cliente-design.md,
+    // sección 0. El efecto de acá abajo reconcilia contra el servidor apenas la agenda llega.
+    const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(() => leerVisitaEnCurso())
+    // El vendedor está lejos del cliente de `visitaEnCurso`, con la visita todavía abierta.
+    // VisitaFlow es quien lo calcula (no se desmonta mientras haya visita en curso); acá
+    // solo se sostiene para pintar VisitaEnCursoBar.
+    const [alejado, setAlejado] = useState(false)
 
     // La instancia embebida es del cliente que se estaba mirando. Al cambiar de día — o de
     // semana, que es el mismo tipo de cambio de contexto: el cliente deja de estar en
@@ -263,6 +272,7 @@ export default function AgendaSemanaPage() {
             // visita ya se resolvió por otro lado.
             if (actual && actual.estado !== 'en_curso' && actual.estado !== 'pendiente') {
                 setVisitaEnCurso(null)
+                limpiarVisitaEnCurso()
             }
             return
         }
@@ -486,6 +496,7 @@ export default function AgendaSemanaPage() {
                 onGeoBloqueada={motivo => mostrar('error', MENSAJE_GEO[motivo])}
                 onAviso={mostrar}
                 onAbrirAppExterna={abrirAppExternaEnPestana}
+                onAlejadoChange={setAlejado}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar
@@ -493,6 +504,7 @@ export default function AgendaSemanaPage() {
                     nombreCliente={
                         visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente
                     }
+                    alejado={alejado}
                     onExpandir={() => abrirPropuesta(visitaEnCurso.cliente)}
                 />
             )}

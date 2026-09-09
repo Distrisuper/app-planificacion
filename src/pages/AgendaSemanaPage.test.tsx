@@ -5,6 +5,7 @@ import { vi } from 'vitest'
 import AgendaSemanaPage from './AgendaSemanaPage'
 import * as api from '@/api/planificacion'
 import { getDiaDeHoy } from '@/lib/weekDates'
+import { guardarVisitaEnCurso, leerVisitaEnCurso } from '@/lib/visitaEnCurso'
 
 vi.mock('@/api/planificacion')
 vi.mock('@/context/AuthContext', () => ({
@@ -83,6 +84,7 @@ function renderPage(url = '/') {
 
 beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     ;(api.getMotivos as any).mockResolvedValue([])
     ;(api.getAgendaSemana as any).mockResolvedValue(semanaVacia)
     ;(api.sincronizar as any).mockResolvedValue({
@@ -466,6 +468,70 @@ it('un reintento fallido muestra el mensaje que trae la respuesta, no uno armado
     expect(
         await screen.findByText('Tu usuario todavía no está vinculado al CRM. Avisá a sistemas.'),
     ).toBeInTheDocument()
+})
+
+// Persistencia de la visita en curso — ver
+// docs/superpowers/specs/2026-09-08-aviso-alejado-del-cliente-design.md, sección 0.
+it('hidrata la barra flotante desde localStorage cuando la agenda todavía no cargó', async () => {
+    fijarLunes()
+    guardarVisitaEnCurso({ cliente: { ...clienteLunes, estado: 'en_curso', visitaId: 7, esExtra: false }, visitaId: 7 })
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    // Nunca resuelve: reproduce estar sin señal, con la respuesta en vuelo para siempre.
+    ;(api.getAgendaSemana as any).mockReturnValue(new Promise(() => {}))
+    renderPage()
+
+    expect(await screen.findByText(/visitando a almacen don jose/i)).toBeInTheDocument()
+})
+
+it('cuando la agenda llega y el cliente ya no está en_curso, suelta el puntero y limpia la clave', async () => {
+    fijarLunes()
+    guardarVisitaEnCurso({ cliente: { ...clienteLunes, estado: 'en_curso', visitaId: 7, esExtra: false }, visitaId: 7 })
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    // El servidor ya la ve cerrada — es lo que gana.
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteLunes, estado: 'visitada', visitaId: 7 }],
+    })
+    renderPage()
+
+    await waitFor(() => expect(screen.queryByText(/visitando a/i)).not.toBeInTheDocument())
+    expect(leerVisitaEnCurso()).toBeNull()
+})
+
+it('el vendedor alejado del cliente en curso ve la barra en rojo (wiring completo)', async () => {
+    // Extremo a extremo: AgendaSemanaPage → VisitaFlow → useAlejadoDelCliente →
+    // VisitaEnCursoBar. Mismo mock de navigator que usa VisitaFlow.test.tsx.
+    const watchPosition = vi.fn((ok: any) => {
+        ok({ coords: { latitude: -34.61, longitude: -58.41, accuracy: 5 } })
+        return 1
+    })
+    vi.stubGlobal('navigator', {
+        geolocation: { watchPosition, getCurrentPosition: vi.fn(), clearWatch: vi.fn() },
+    })
+    fijarLunes()
+    guardarVisitaEnCurso({
+        cliente: {
+            ...clienteLunes,
+            estado: 'en_curso',
+            visitaId: 7,
+            esExtra: false,
+            latitud: -34.6,
+            longitud: -58.4,
+        },
+        visitaId: 7,
+    })
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockReturnValue(new Promise(() => {}))
+
+    renderPage()
+
+    // Ojo: el toast de "te alejaste…" (VisitaFlow.onAviso, ya cableado a `mostrar`) usa el
+    // MISMO texto que la barra — un findByText suelto pasaría por el toast solo, sin probar
+    // nada del wiring de `alejado` hacia VisitaEnCursoBar. Hay que mirar la barra puntual.
+    const barra = await screen.findByTestId('visita-en-curso-bar')
+    await waitFor(() => expect(barra).toHaveClass('bg-dsred'))
+    expect(barra).toHaveTextContent('Te alejaste de ALMACEN DON JOSE y la visita sigue abierta')
+    vi.unstubAllGlobals()
 })
 
 it('volver a la semana abierta devuelve el modo operable', async () => {
