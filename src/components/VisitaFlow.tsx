@@ -263,6 +263,16 @@ export default function VisitaFlow({
 
     async function onCerrarVisita() {
         if (visitaId === null || cerrandoFlujo) return
+        // Común a "cerró bien" y a "ya estaba cerrada" (tratado como éxito, ver abajo): las
+        // dos anclas locales de la visita se limpian igual, sea cual sea el motivo por el
+        // que se da por cerrada. Un solo lugar para esto evita que una tercera clave que se
+        // sume el día de mañana quede escrita en un call site y olvidada en el otro — que es
+        // justo la familia de bugs que este mismo archivo tuvo que corregir después de
+        // escrito (ver los fix posteriores al spec de "te alejaste del cliente").
+        function limpiarAnclasDeLaVisita() {
+            limpiarInicioVisita(visitaId!)
+            limpiarVisitaEnCurso()
+        }
         setCerrandoFlujo(true)
         try {
             await conUbicacion(async geo => {
@@ -282,15 +292,13 @@ export default function VisitaFlow({
                     } else {
                         onAviso?.('exito', 'Visita cerrada')
                     }
-                    limpiarInicioVisita(visitaId)
-                    limpiarVisitaEnCurso()
+                    limpiarAnclasDeLaVisita()
                     onVisitaCerrada()
                     cerrarFlujo()
                 } catch (err) {
                     if (errorCode(err) === 'VISITA_YA_CERRADA') {
                         // Tratar como éxito: la visita está cerrada, que es lo que se quería.
-                        limpiarInicioVisita(visitaId)
-                        limpiarVisitaEnCurso()
+                        limpiarAnclasDeLaVisita()
                         onVisitaCerrada()
                         cerrarFlujo()
                         return

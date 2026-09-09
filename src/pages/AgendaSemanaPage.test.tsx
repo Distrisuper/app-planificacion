@@ -636,6 +636,87 @@ it('un refetch tardío no revive una visita ya cerrada (no reaparece "te alejast
     expect(leerVisitaEnCurso()).toBeNull()
 })
 
+it('cerrar una SEGUNDA visita no destapa el veto de la primera (un refetch viejo de la primera sigue sin revivirla)', async () => {
+    // Regresión sobre el fix anterior: un ref simple (un solo id) pierde el veto del primer
+    // cliente en cuanto se cierra un segundo — el mismo bug, con dos visitas en vuelo en vez
+    // de una. Tiene que ser un conjunto de ids sueltos, no el último nomás.
+    fijarLunes()
+    const clienteA = { ...clienteLunes, rotacionClienteId: 42, latitud: -34.6, longitud: -58.4 }
+    const clienteB = { ...clienteLunes, rotacionClienteId: 43, codigoParticularCliente: '20099', nombreCliente: 'KIOSCO SUR' }
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteA, estado: 'en_curso', visitaId: 7 }],
+    })
+    const { qc } = renderPage()
+    await screen.findByTestId('visita-en-curso-bar')
+
+    // Se cierra A.
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteA, estado: 'visitada', visitaId: 7 }],
+    })
+    await act(async () => {
+        await qc.invalidateQueries({ queryKey: ['agenda', 'semana'] })
+    })
+    await waitFor(() => expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument())
+
+    // Antes de que llegue el refetch viejo de A, se inicia Y se cierra B — dos ciclos
+    // completos de la reconciliación con un cliente DISTINTO en el medio.
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteA, estado: 'visitada', visitaId: 7 }, { ...clienteB, estado: 'en_curso', visitaId: 8 }],
+    })
+    await act(async () => {
+        await qc.invalidateQueries({ queryKey: ['agenda', 'semana'] })
+    })
+    await screen.findByTestId('visita-en-curso-bar') // adoptó a B
+
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteA, estado: 'visitada', visitaId: 7 }, { ...clienteB, estado: 'visitada', visitaId: 8 }],
+    })
+    await act(async () => {
+        await qc.invalidateQueries({ queryKey: ['agenda', 'semana'] })
+    })
+    await waitFor(() => expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument())
+
+    // Ahora sí, el refetch VIEJO de A — que quedó en vuelo desde antes de su propio cierre —
+    // resuelve tarde, diciendo que A todavía está en_curso.
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteA, estado: 'en_curso', visitaId: 7 }, { ...clienteB, estado: 'visitada', visitaId: 8 }],
+    })
+    await act(async () => {
+        await qc.invalidateQueries({ queryKey: ['agenda', 'semana'] })
+    })
+
+    expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument()
+    expect(leerVisitaEnCurso()).toBeNull()
+})
+
+it('si el cliente persistido no existe en absoluto en la agenda, suelta el puntero igual', async () => {
+    // Regresión: la condición original solo limpiaba cuando el servidor SÍ tenía al cliente
+    // pero en otro estado (`actual && actual.estado !== ...`). Si el cliente no aparece EN
+    // ABSOLUTO en la agenda actual — el caso real es otro vendedor logueándose en el mismo
+    // dispositivo, con clientes completamente distintos — `actual` es undefined y la rama
+    // entera se salteaba: la barra quedaba fantasma para siempre, sin ninguna forma de
+    // cerrarla (tocarla abre la propuesta de un cliente que ni siquiera está en los datos
+    // de este vendedor).
+    fijarLunes()
+    guardarVisitaEnCurso({
+        cliente: { ...clienteLunes, rotacionClienteId: 99999, estado: 'en_curso', visitaId: 7, esExtra: false },
+        visitaId: 7,
+    })
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    // Agenda de OTRO vendedor: no incluye el rotacionClienteId 99999 en absoluto.
+    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    renderPage()
+
+    await waitFor(() => expect(screen.queryByText(/visitando a/i)).not.toBeInTheDocument())
+    expect(leerVisitaEnCurso()).toBeNull()
+})
+
 it('volver a la semana abierta devuelve el modo operable', async () => {
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage()
