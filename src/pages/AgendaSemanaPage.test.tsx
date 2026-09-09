@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
@@ -79,7 +79,7 @@ function renderPage(url = '/') {
             </MemoryRouter>
         </QueryClientProvider>,
     )
-    return { urlActual: () => `${router.current.pathname}${router.current.search}` }
+    return { urlActual: () => `${router.current.pathname}${router.current.search}`, qc }
 }
 
 beforeEach(() => {
@@ -531,6 +531,64 @@ it('el vendedor alejado del cliente en curso ve la barra en rojo (wiring complet
     const barra = await screen.findByTestId('visita-en-curso-bar')
     await waitFor(() => expect(barra).toHaveClass('bg-dsred'))
     expect(barra).toHaveTextContent('Te alejaste de ALMACEN DON JOSE y la visita sigue abierta')
+    vi.unstubAllGlobals()
+})
+
+it('la carrera con el refetch de la agenda no pisa la posición reposicionada', async () => {
+    // Regresión: iniciarVisita invalida la agenda en su onSuccess (useVisitas.ts) ANTES de
+    // que VisitaFlow llegue a llamar a onVisitaIniciada — así que si ese refetch resuelve
+    // primero, la rama "adoptar desde el servidor" de este efecto puede correr con
+    // visitaEnCurso todavía en null, y el servidor no sabe nada del reposicionamiento (esa
+    // corrección es asíncrona del lado de client-service). Sin este resguardo, la barra
+    // (y useAlejadoDelCliente) terminan ancladas a la coordenada VIEJA justo después de
+    // iniciar, y el vendedor recibe "te alejaste" parado donde reposicionó.
+    fijarLunes()
+    // Coordenada ORIGINAL del warehouse — la que trae la card ANTES de reposicionar.
+    const clienteConCoordsOriginales = { ...clienteLunes, latitud: -34.6, longitud: -58.4 }
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [clienteConCoordsOriginales],
+    })
+    const { qc } = renderPage()
+    await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalledTimes(1))
+
+    // VisitaFlow ya escribió el ancla correcta (síncrono, antes de que React procese el
+    // setVisitaEnCurso de onVisitaIniciada) — es justo lo que pasa en el código real.
+    guardarVisitaEnCurso({
+        cliente: { ...clienteLunes, estado: 'en_curso', visitaId: 7, esExtra: false, latitud: -34.603, longitud: -58.4 },
+        visitaId: 7,
+    })
+
+    // El watch de useAlejadoDelCliente tiene que estar disponible ANTES de que la
+    // reconciliación de acá abajo dispare el montaje del hook (visitaEnCurso null → non-null).
+    const watchPosition = vi.fn((ok: any) => {
+        ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } })
+        return 1
+    })
+    vi.stubGlobal('navigator', {
+        geolocation: { watchPosition, getCurrentPosition: vi.fn(), clearWatch: vi.fn() },
+    })
+
+    // El refetch de la agenda (invalidateQueries del onSuccess de iniciarVisita) gana la
+    // carrera: confirma "en_curso" pero con la coordenada ORIGINAL del warehouse — el
+    // servidor no conoce el reposicionamiento en este momento.
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteConCoordsOriginales, estado: 'en_curso', visitaId: 7 }],
+    })
+    await act(async () => {
+        await qc.invalidateQueries({ queryKey: ['agenda', 'semana'] })
+    })
+
+    await screen.findByTestId('visita-en-curso-bar')
+    // Da tiempo a que el efecto de useAlejadoDelCliente llegue a llamar watchPosition
+    // (puede correr un tick después de que la barra ya esté en pantalla).
+    await waitFor(() => expect(watchPosition).toHaveBeenCalled())
+
+    const barra = screen.getByTestId('visita-en-curso-bar')
+    expect(barra).not.toHaveClass('bg-dsred')
+    expect(barra).toHaveTextContent('Visitando a ALMACEN DON JOSE')
     vi.unstubAllGlobals()
 })
 

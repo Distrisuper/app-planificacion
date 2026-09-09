@@ -278,7 +278,20 @@ export default function AgendaSemanaPage() {
         }
         const enCurso = DIAS.flatMap(d => agenda[d] ?? []).find(c => c.estado === 'en_curso')
         if (enCurso && enCurso.visitaId !== null) {
-            setVisitaEnCurso({ cliente: enCurso, visitaId: enCurso.visitaId })
+            // El servidor confirma "en_curso" pero su card sale del snapshot del warehouse —
+            // no sabe nada de un reposicionamiento del pin al iniciar (esa corrección es
+            // asíncrona del lado de client-service). Si iniciarVisita ya escribió el ancla
+            // correcta acá — pasa siempre, es síncrono — y ESTE efecto corre antes de que
+            // React llegue a procesar el setVisitaEnCurso de onVisitaIniciada (invalidateQueries
+            // del onSuccess de la mutación puede ganarle esa carrera, ver
+            // docs/superpowers/specs/2026-09-08-aviso-alejado-del-cliente-design.md), adoptar
+            // el snapshot del servidor sin más pisaría la posición reposicionada con la vieja.
+            const persistido = leerVisitaEnCurso()
+            const clienteAAdoptar =
+                persistido && persistido.cliente.rotacionClienteId === enCurso.rotacionClienteId
+                    ? persistido.cliente
+                    : enCurso
+            setVisitaEnCurso({ cliente: clienteAAdoptar, visitaId: enCurso.visitaId })
         }
     }, [agenda, visitaEnCurso])
 

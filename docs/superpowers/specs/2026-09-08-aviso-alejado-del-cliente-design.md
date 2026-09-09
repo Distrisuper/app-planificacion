@@ -194,6 +194,22 @@ persiste `visitaEnCurso.ts` y el que lee este hook) lleva `latitud/longitud` del
 las originales del warehouse — mismo criterio que ya usa el gate de inicio, ahora consistente
 con el aviso posterior.
 
+Ese fix no alcanzaba solo: quedaba una segunda vía por la que la coordenada vieja volvía a
+colarse. `useIniciarVisita` invalida la query de la agenda en su `onSuccess`
+(`src/hooks/useVisitas.ts`) — **antes** de que `VisitaFlow.onIniciar` llegue a llamar
+`onVisitaIniciada`. Si ese refetch de la agenda resuelve primero, la rama "adoptar desde el
+servidor" del efecto de reconciliación de `AgendaSemanaPage` (pensada para el reload: "no hay
+puntero local pero la agenda ya trae un cliente en curso") puede correr con `visitaEnCurso`
+todavía en `null`, y adoptar la card que trae el servidor — que sale del snapshot del
+warehouse y no sabe nada del reposicionamiento (la corrección permanente contra client-service
+es asíncrona). Esa rama termina pisando, con la coordenada vieja, el ancla que
+`guardarVisitaEnCurso` ya había escrito correctamente unos milisegundos antes. Corregido:
+esa rama ahora primero busca en `leerVisitaEnCurso()` un puntero para el mismo
+`rotacionClienteId` y, si existe, adopta **ese** cliente en vez del que trae el servidor — el
+localStorage es más reciente que cualquier snapshot del warehouse, así que gana siempre que
+haya uno. Regresión cubierta en `AgendaSemanaPage.test.tsx` ("la carrera con el refetch de la
+agenda no pisa la posición reposicionada").
+
 ### Qué ve el vendedor
 
 - Al **cruzar de dentro a fuera**, una sola vez por cruce (no en cada tick del watch): un toast
