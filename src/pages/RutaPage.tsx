@@ -6,13 +6,14 @@ import GridRotacion from '@/components/ruta/GridRotacion'
 import SelectorVendedor from '@/components/ruta/SelectorVendedor'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
-import { errorData } from '@/lib/apiError'
+import { errorCode, errorData } from '@/lib/apiError'
 import {
     useCancelarRotacion,
     useCrearRotacion,
     useEditarDescripcionRotacion,
     useEditarDescripcionSemana,
     useIntercambiarDias,
+    useQuitarClienteAdmin,
     useReacomodarAdmin,
     useReordenarRotacion,
     useRotacion,
@@ -68,6 +69,7 @@ export default function RutaPage() {
     const renombrarSemana = useEditarDescripcionSemana(vendedor ?? '')
     const reordenar = useReordenarRotacion(vendedor ?? '')
     const intercambiar = useIntercambiarDias(vendedor ?? '')
+    const quitar = useQuitarClienteAdmin(vendedor ?? '')
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -195,6 +197,9 @@ export default function RutaPage() {
                                 diaB: b.dia,
                             })
                         }
+                        onQuitar={rotacionClienteId =>
+                            quitar.mutate({ rotacionId: grid.id, rotacionClienteId })
+                        }
                     />
                 )}
 
@@ -227,6 +232,14 @@ export default function RutaPage() {
                                 nombres.length === 1 ? 'fue' : 'fueron'
                             } resuelto${nombres.length === 1 ? '' : 's'} en esta vuelta.`
                         })()}
+                    </p>
+                )}
+
+                {quitar.isError && (
+                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        {errorCode(quitar.error) === 'VISITA_EN_CURSO'
+                            ? 'No se pudo quitar: el vendedor está visitando a ese cliente ahora mismo. Probá de nuevo cuando cierre la visita.'
+                            : 'No se pudo quitar ese cliente. Puede que ya lo hayan visitado en esta vuelta.'}
                     </p>
                 )}
 

@@ -62,6 +62,8 @@ interface CeldaProps {
     /** Hay un intercambio empezado en OTRA celda: esta es un destino posible. */
     esDestinoPosible: boolean
     onTocarIntercambio: (celda: { semana: number; dia: number }) => void
+    /** Ausente = no se ofrece quitar en esta celda. */
+    onQuitar?: (rotacionClienteId: number) => void
 }
 
 function Celda({
@@ -73,6 +75,7 @@ function Celda({
     esOrigen,
     esDestinoPosible,
     onTocarIntercambio,
+    onQuitar,
 }: CeldaProps) {
     const { setNodeRef, isOver } = useDroppable({ id: `celda-${semana}-${dia}` })
 
@@ -119,6 +122,7 @@ function Celda({
                     key={cliente.rotacionClienteId}
                     cliente={cliente}
                     arrastrable={arrastrable}
+                    onQuitar={arrastrable ? onQuitar : undefined}
                 />
             ))}
         </td>
@@ -130,6 +134,8 @@ interface GridRotacionProps {
     onMover: (rotacionClienteId: number, semana: number, dia: number) => void
     onRenombrarSemana: (semana: number, descripcion: string | null) => void
     onIntercambiar: (a: Celda, b: Celda) => void
+    /** Ausente = no se ofrece quitar (rotación no editable). */
+    onQuitar?: (rotacionClienteId: number) => void
     /** false = rotación cerrada: se ve pero no se toca. */
     editable?: boolean
 }
@@ -146,6 +152,7 @@ export default function GridRotacion({
     onMover,
     onRenombrarSemana,
     onIntercambiar,
+    onQuitar,
     editable,
 }: GridRotacionProps) {
     // Celda origen del intercambio en curso. null = no hay intercambio empezado.
@@ -253,6 +260,7 @@ export default function GridRotacion({
                                             )
                                         }
                                         onTocarIntercambio={tocarCelda}
+                                        onQuitar={onQuitar}
                                     />
                                 ))}
                             </tr>
