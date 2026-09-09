@@ -138,6 +138,13 @@ martes — la divergencia se conserva, que es lo que hace medible la adherencia.
 - **La rotación se completa cuando están todas sus semanas, y NO en orden.** `proponerSemana` propone
   una de las que **faltan**. Las semanas son **zonas**, y cuál se hace primero es una decisión del
   mundo real (el clima, un camión, un cliente que solo atiende martes).
+- **`fecha_fin` la estampa el servidor, y por eso hoy no se puede cerrar una visita sin conexión.**
+  `cerrarVisita` manda únicamente `coordFinal`; el instante lo pone api-vendedores al recibir el
+  request. Mientras siga así, encolar el cierre para reintentarlo cuando vuelva la señal —lo natural
+  para una app de campo— registraría la duración equivocada: un cierre que se drena 40 minutos más
+  tarde graba una visita 40 minutos más larga, y la duración es justo lo que clasifica a la visita en
+  `visitasCortas`. **Pendiente:** aceptar `fechaFin` del cliente en el endpoint de cierre. Sin eso,
+  cualquier cola de reintentos del front cambia silenciosamente lo que la métrica mide.
 
 ## Cerrar una zona, y por qué el vendedor no lo ve
 

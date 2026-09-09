@@ -10,6 +10,8 @@ import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geoloca
 import { distanciaMetros, estaFueraDeRango } from '@/lib/distancia'
 import { errorCode } from '@/lib/apiError'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
+import { guardarVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
+import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
 import type { IAgendaClient, IPropuestaRubroDTO, IVisitClientCard } from '@/types/planificacion'
@@ -41,6 +43,12 @@ interface VisitaFlowProps {
     onAviso?: (tipo: NotificacionTipo, mensaje: string) => void
     /** Si se pasa, los sheets del cliente ofrecen las apps externas. */
     onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
+    /** true mientras el vendedor está lejos del cliente de `visitaEnCurso`, con la visita
+     *  todavía abierta — ver docs/superpowers/specs/2026-09-08-aviso-alejado-del-cliente-design.md.
+     *  VisitaFlow calcula el estado (nunca se desmonta mientras haya visita en curso, a
+     *  diferencia de VisitaSheet, que se minimiza); quien lo renderiza es el padre, en
+     *  VisitaEnCursoBar. */
+    onAlejadoChange?: (alejado: boolean) => void
 }
 
 /**
@@ -59,9 +67,32 @@ export default function VisitaFlow({
     onGeoBloqueada,
     onAviso,
     onAbrirAppExterna,
+    onAlejadoChange,
 }: VisitaFlowProps) {
     const iniciar = useIniciarVisita()
     const cerrar = useCerrarVisita()
+
+    // Coordenadas del cliente de LA VISITA EN CURSO, no del `cliente` que esté abierto en
+    // pantalla — el vendedor puede estar mirando la propuesta de otro cliente mientras la
+    // visita sigue corriendo en otro lado.
+    const { alejado } = useAlejadoDelCliente({
+        activo: visitaEnCurso !== null,
+        latitud: visitaEnCurso?.cliente.latitud,
+        longitud: visitaEnCurso?.cliente.longitud,
+    })
+    useEffect(() => {
+        onAlejadoChange?.(alejado)
+    }, [alejado, onAlejadoChange])
+    // Toast al CRUZAR a alejado, una sola vez por cruce: `alejado` solo cambia de valor en
+    // el cruce (ver useAlejadoDelCliente), así que este efecto ya corre una vez por cruce
+    // sin necesidad de un ref propio.
+    useEffect(() => {
+        if (!alejado || !visitaEnCurso) return
+        const nombreVisita =
+            visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente
+        onAviso?.('info', `Te alejaste de ${nombreVisita} y la visita sigue abierta.`)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [alejado])
 
     // Propuesta ya confirmada en el sheet, esperando que se confirme en el mapa. Solo se usa
     // cuando el cliente tiene coordenadas; si no, onIniciar se llama directo.
@@ -189,8 +220,17 @@ export default function VisitaFlow({
                         propuesta,
                     })
                     setPropuestaPendiente(null)
-                    onVisitaIniciada(cliente!, id)
+                    // Si se reposicionó, el ancla que queda guardada para el resto de la
+                    // visita (el aviso de "te alejaste", y lo que sobrevive un reload) tiene
+                    // que ser la posición NUEVA, no la del warehouse: el gate de arriba ya
+                    // dejó iniciar contra el override, así que agarrar acá la coordenada
+                    // vieja avisaría "te alejaste" estando parado justo donde se reposicionó.
+                    const clienteParaVisita = clienteOverride
+                        ? { ...cliente!, latitud: clienteOverride.lat, longitud: clienteOverride.lng }
+                        : cliente!
+                    onVisitaIniciada(clienteParaVisita, id)
                     marcarInicioVisita(id)
+                    guardarVisitaEnCurso({ cliente: clienteParaVisita, visitaId: id })
                     onAviso?.('exito', 'Visita iniciada')
                     // El gate ya se destrabó (efímero, arriba); esto es aparte: si
                     // client-service ya tenía 3 correcciones permanentes de este
@@ -223,6 +263,16 @@ export default function VisitaFlow({
 
     async function onCerrarVisita() {
         if (visitaId === null || cerrandoFlujo) return
+        // Común a "cerró bien" y a "ya estaba cerrada" (tratado como éxito, ver abajo): las
+        // dos anclas locales de la visita se limpian igual, sea cual sea el motivo por el
+        // que se da por cerrada. Un solo lugar para esto evita que una tercera clave que se
+        // sume el día de mañana quede escrita en un call site y olvidada en el otro — que es
+        // justo la familia de bugs que este mismo archivo tuvo que corregir después de
+        // escrito (ver los fix posteriores al spec de "te alejaste del cliente").
+        function limpiarAnclasDeLaVisita() {
+            limpiarInicioVisita(visitaId!)
+            limpiarVisitaEnCurso()
+        }
         setCerrandoFlujo(true)
         try {
             await conUbicacion(async geo => {
@@ -242,13 +292,13 @@ export default function VisitaFlow({
                     } else {
                         onAviso?.('exito', 'Visita cerrada')
                     }
-                    limpiarInicioVisita(visitaId)
+                    limpiarAnclasDeLaVisita()
                     onVisitaCerrada()
                     cerrarFlujo()
                 } catch (err) {
                     if (errorCode(err) === 'VISITA_YA_CERRADA') {
                         // Tratar como éxito: la visita está cerrada, que es lo que se quería.
-                        limpiarInicioVisita(visitaId)
+                        limpiarAnclasDeLaVisita()
                         onVisitaCerrada()
                         cerrarFlujo()
                         return

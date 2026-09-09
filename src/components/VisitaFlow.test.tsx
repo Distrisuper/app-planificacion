@@ -6,6 +6,7 @@ import VisitaFlow, { type IVisitaEnCurso } from './VisitaFlow'
 import VisitaEnCursoBar from './VisitaEnCursoBar'
 import * as api from '@/api/planificacion'
 import * as geo from '@/lib/geolocation'
+import { leerVisitaEnCurso } from '@/lib/visitaEnCurso'
 import type { IAgendaClient } from '@/types/planificacion'
 
 vi.mock('@/api/planificacion')
@@ -75,6 +76,7 @@ function Harness({
             ? { cliente: clienteInicial, visitaId: clienteInicial.visitaId }
             : null,
     )
+    const [alejado, setAlejado] = useState(false)
     const viendoVisitaEnCurso =
         visitaEnCurso !== null && cliente !== null && cliente.rotacionClienteId === visitaEnCurso.cliente.rotacionClienteId
 
@@ -101,11 +103,13 @@ function Harness({
                 }}
                 onGeoBloqueada={onGeoBloqueada}
                 onAviso={onAviso}
+                onAlejadoChange={setAlejado}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar
                     visitaId={visitaEnCurso.visitaId}
                     nombreCliente={visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente}
+                    alejado={alejado}
                     onExpandir={() => setCliente(visitaEnCurso.cliente)}
                 />
             )}
@@ -144,6 +148,7 @@ function renderFlow(
 }
 
 beforeEach(() => {
+    localStorage.clear()
     vi.clearAllMocks()
     ;(api.getPropuesta as any).mockResolvedValue({ rubros: [] })
     ;(api.getOfrecimientos as any).mockResolvedValue([])
@@ -215,6 +220,33 @@ it('tras iniciar pasa a los rubros congelados', async () => {
     renderFlow()
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
     await waitFor(() => expect(api.getOfrecimientos).toHaveBeenCalledWith(99))
+})
+
+it('al iniciar visita, persiste la visita en curso en localStorage', async () => {
+    // Ancla local para sobrevivir a recargar la app sin señal — ver
+    // docs/superpowers/specs/2026-09-08-aviso-alejado-del-cliente-design.md, sección 0.
+    renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() =>
+        expect(leerVisitaEnCurso()).toEqual({ cliente, visitaId: 99 }),
+    )
+})
+
+it('al cerrar visita, limpia la visita en curso persistida', async () => {
+    ;(api.cerrarVisita as any).mockResolvedValue({
+        visitaId: 55,
+        ofrecimientosPendientes: 0,
+    })
+    const clienteEnCurso = { ...cliente, estado: 'en_curso' as const, visitaId: 55 }
+    renderFlow({ cliente: clienteEnCurso })
+    // Antes de cerrar ya hay algo guardado — es lo que se espera limpiar.
+    await waitFor(() => expect(api.getOfrecimientos).toHaveBeenCalledWith(55))
+    localStorage.setItem(
+        'visita-en-curso',
+        JSON.stringify({ cliente: clienteEnCurso, visitaId: 55 }),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await waitFor(() => expect(leerVisitaEnCurso()).toBeNull())
 })
 
 it('al iniciar avisa con una notificación de éxito', async () => {
@@ -618,6 +650,36 @@ it('reposicionar destraba el gate y manda coordCliente al iniciar', async () => 
     )
 })
 
+it('reposicionar y quedarse ahí NO dispara "te alejaste": el ancla es la posición nueva', async () => {
+    // Regresión: el gate de "estás lejos" al iniciar YA usaba clienteOverride (test de
+    // arriba), pero lo que quedaba guardado como visitaEnCurso.cliente seguía siendo el
+    // `cliente` original — así que apenas arrancaba la visita, useAlejadoDelCliente
+    // comparaba contra la coordenada VIEJA y avisaba "te alejaste" estando parado justo
+    // donde se reposicionó.
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.603,-58.4',
+        precisionM: 10,
+    })
+    mockGeolocacionEnVivo({ latitude: -34.603, longitude: -58.4, accuracy: 10 })
+    const { onAviso } = renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+
+    fireEvent.click(screen.getByRole('button', { name: /reposicionar cliente/i }))
+    const handleClick = await getClickHandler()
+    handleClick({ latlng: { lat: -34.603, lng: -58.4 } })
+
+    const boton = await screen.findByRole('button', { name: /^iniciar visita$/i })
+    await waitFor(() => expect(boton).toBeEnabled())
+    fireEvent.click(boton)
+
+    await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalled())
+    await screen.findByLabelText('Minimizar')
+
+    expect(onAviso).not.toHaveBeenCalledWith('info', expect.stringContaining('alejaste'))
+})
+
 it('sin reposicionar, coordCliente no viaja en el payload', async () => {
     renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
@@ -698,4 +760,62 @@ it('sin reposicionar, aunque el backend no mande correccionPermanenteAplicada, n
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
     await waitFor(() => expect(onAviso).toHaveBeenCalledWith('exito', 'Visita iniciada'))
     expect(onAviso).not.toHaveBeenCalledWith('info', expect.stringContaining('límite'))
+})
+
+// Aviso de "te alejaste del cliente" con la visita abierta — spec
+// 2026-09-08-aviso-alejado-del-cliente-design.md. Las coordenadas del hook salen de
+// `visitaEnCurso.cliente` (con coords), no del `cliente` que esté abierto en pantalla.
+function mockGeolocacionEnVivoAlejado(
+    coords: { latitude: number; longitude: number; accuracy: number },
+) {
+    let entregarFix: any
+    const watchPosition = vi.fn((ok: any) => {
+        entregarFix = ok
+        ok({ coords })
+        return 1
+    })
+    const getCurrentPosition = vi.fn()
+    const clearWatch = vi.fn()
+    vi.stubGlobal('navigator', { geolocation: { watchPosition, getCurrentPosition, clearWatch } })
+    return { reentregar: (c: typeof coords) => entregarFix({ coords: c }) }
+}
+
+it('cuando el vendedor se aleja del cliente en curso, avisa con un toast', async () => {
+    const clienteConCoords = { ...cliente, latitud: -34.6, longitud: -58.4 }
+    mockGeolocacionEnVivoAlejado({ latitude: -34.61, longitude: -58.41, accuracy: 5 })
+    const { onAviso } = renderFlow({
+        cliente: { ...clienteConCoords, estado: 'en_curso', visitaId: 55 },
+    })
+    await screen.findByLabelText('Minimizar')
+
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith(
+            'info',
+            'Te alejaste de ALMACEN DON JOSE y la visita sigue abierta.',
+        ),
+    )
+})
+
+it('cerca del cliente en curso, no avisa nada de alejarse', async () => {
+    const clienteConCoords = { ...cliente, latitud: -34.6, longitud: -58.4 }
+    mockGeolocacionEnVivoAlejado({ latitude: -34.6, longitude: -58.4, accuracy: 5 })
+    const { onAviso } = renderFlow({
+        cliente: { ...clienteConCoords, estado: 'en_curso', visitaId: 55 },
+    })
+    await screen.findByLabelText('Minimizar')
+
+    expect(onAviso).not.toHaveBeenCalledWith('info', expect.stringContaining('alejaste'))
+})
+
+it('la barra flotante pasa a rojo mientras el vendedor está alejado', async () => {
+    const clienteConCoords = { ...cliente, latitud: -34.6, longitud: -58.4 }
+    mockGeolocacionEnVivoAlejado({ latitude: -34.61, longitude: -58.41, accuracy: 5 })
+    renderFlow({
+        otroCliente,
+        cliente: { ...clienteConCoords, estado: 'en_curso', visitaId: 55 },
+    })
+    await screen.findByLabelText('Minimizar')
+    fireEvent.click(screen.getByRole('button', { name: /kiosco sur/i }))
+
+    expect(await screen.findByText(/te alejaste de almacen don jose/i)).toBeInTheDocument()
 })
