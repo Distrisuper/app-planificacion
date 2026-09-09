@@ -5,7 +5,7 @@ import { vi } from 'vitest'
 import AgendaSemanaPage from './AgendaSemanaPage'
 import * as api from '@/api/planificacion'
 import { getDiaDeHoy } from '@/lib/weekDates'
-import { guardarVisitaEnCurso, leerVisitaEnCurso } from '@/lib/visitaEnCurso'
+import { guardarVisitaEnCurso, leerVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 
 vi.mock('@/api/planificacion')
 vi.mock('@/context/AuthContext', () => ({
@@ -590,6 +590,50 @@ it('la carrera con el refetch de la agenda no pisa la posición reposicionada', 
     expect(barra).not.toHaveClass('bg-dsred')
     expect(barra).toHaveTextContent('Visitando a ALMACEN DON JOSE')
     vi.unstubAllGlobals()
+})
+
+it('un refetch tardío no revive una visita ya cerrada (no reaparece "te alejaste")', async () => {
+    // Regresión simétrica a la anterior, del lado del cierre: cerrarVisita TAMBIÉN invalida
+    // la agenda en su onSuccess (useVisitas.ts). Si un refetch que ya estaba en vuelo antes
+    // del cierre resuelve DESPUÉS — con el cliente todavía 'en_curso' en esa foto vieja —, la
+    // rama "adoptar desde el servidor" podía revivirlo: la barra volvía a aparecer, en rojo,
+    // con el aviso de "te alejaste" — mostrado DESPUÉS de que la visita ya había cerrado.
+    fijarLunes()
+    const clienteConCoords = { ...clienteLunes, latitud: -34.6, longitud: -58.4 }
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    // Arranca con el cliente YA en_curso (equivalente a haberlo adoptado al montar): fuerza
+    // que la reconciliación pase por la rama de adopción al menos una vez.
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteConCoords, estado: 'en_curso', visitaId: 7 }],
+    })
+    const { qc } = renderPage()
+    await screen.findByTestId('visita-en-curso-bar')
+
+    // El vendedor cierra la visita (por cualquier camino — acá se simula el resultado neto
+    // de VisitaFlow.onCerrarVisita: limpiar el ancla y soltar el puntero).
+    limpiarVisitaEnCurso()
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteConCoords, estado: 'visitada', visitaId: 7 }],
+    })
+    await act(async () => {
+        await qc.invalidateQueries({ queryKey: ['agenda', 'semana'] })
+    })
+    await waitFor(() => expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument())
+
+    // Ahora llega el refetch STALE: alguien (otra invalidación en vuelo desde antes del
+    // cierre) resuelve con una foto vieja que todavía dice 'en_curso'.
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteConCoords, estado: 'en_curso', visitaId: 7 }],
+    })
+    await act(async () => {
+        await qc.invalidateQueries({ queryKey: ['agenda', 'semana'] })
+    })
+
+    expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument()
+    expect(leerVisitaEnCurso()).toBeNull()
 })
 
 it('volver a la semana abierta devuelve el modo operable', async () => {

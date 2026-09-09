@@ -210,6 +210,28 @@ localStorage es más reciente que cualquier snapshot del warehouse, así que gan
 haya uno. Regresión cubierta en `AgendaSemanaPage.test.tsx` ("la carrera con el refetch de la
 agenda no pisa la posición reposicionada").
 
+**Tercera corrección (2026-09-09, misma carrera, sentido contrario):** el mismo mecanismo se
+disparaba también al **cerrar**. `useCerrarVisita` invalida la agenda en su `onSuccess` igual
+que `useIniciarVisita` — así que un refetch que ya estaba en vuelo *antes* del cierre (por
+cualquier otra invalidación previa) podía resolver *después*, con el cliente todavía
+`'en_curso'` en esa foto vieja. La rama de adopción del efecto de reconciliación no distinguía
+"nunca hubo nada que adoptar" de "hubo algo y se acaba de soltar": revivía la visita ya
+cerrada, con el toast de "te alejaste… y la visita sigue abierta" mostrándose *después* de que
+ya no lo estaba. Reproducido y confirmado en la app real (no solo en test) antes de corregir.
+
+Corregido con un veto por `rotacionClienteId`, no un freno global: un `ref`
+(`ultimoSueltoRotacionClienteId`) guarda el id de la última visita que se soltó —ya sea porque
+el servidor confirmó que se resolvió (rama 1 del efecto) o porque `VisitaFlow.onVisitaCerrada`
+la cerró explícitamente— y la rama de adopción rechaza revivir *ese mismo id* aunque un
+refetch stale lo siga marcando `en_curso`. Es seguro vetarlo para siempre en la vida del
+componente: una fila resuelta no se reabre (`FILA_RESUELTA`, ver `docs/dominio/modelo.md`), así
+que ese id nunca puede volver a estar genuinamente en curso en esta rotación. Y es deliberado
+que el veto sea *por id* y no un "ya adopté una vez, no repetir" general — la primera versión
+del fix era así de contundente y rompía el escenario legítimo de iniciar (el mismo test de la
+corrección anterior): otro cliente que arranca una visita nueva tiene que poder ganar la misma
+carrera de adopción sin que un cierre previo, de un cliente distinto, se lo bloquee. Regresión
+cubierta en `AgendaSemanaPage.test.tsx` ("un refetch tardío no revive una visita ya cerrada").
+
 ### Qué ve el vendedor
 
 - Al **cruzar de dentro a fuera**, una sola vez por cruce (no en cada tick del watch): un toast

@@ -243,6 +243,17 @@ export default function AgendaSemanaPage() {
     // servidor — ver docs/superpowers/specs/2026-09-08-aviso-alejado-del-cliente-design.md,
     // sección 0. El efecto de acá abajo reconcilia contra el servidor apenas la agenda llega.
     const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(() => leerVisitaEnCurso())
+    // rotacionClienteId de la ÚLTIMA visita que se soltó (resuelta según el servidor, o
+    // cerrada explícitamente por el vendedor) — vetado de re-adopción, no la app entera.
+    // Sin esto: cerrar una visita invalida la agenda (useVisitas.ts, onSuccess), y si un
+    // refetch que ya estaba en vuelo ANTES del cierre resuelve DESPUÉS (con el cliente
+    // todavía 'en_curso' en esa foto vieja), la rama de adopción de más abajo la revivía —
+    // "te alejaste" volvía a mostrarse con la visita ya cerrada. Es por id específico y no
+    // un "ya adopté una vez, no más" global: ESE id nunca puede volver a estar genuinamente
+    // en_curso en esta rotación (una fila resuelta no se reabre, ver docs/dominio/modelo.md),
+    // así que vetarlo es seguro — pero otro cliente que arranque una visita nueva sí tiene
+    // que poder adoptarse igual si gana la misma carrera (ver el test de arriba).
+    const ultimoSueltoRotacionClienteId = useRef<number | null>(null)
     // El vendedor está lejos del cliente de `visitaEnCurso`, con la visita todavía abierta.
     // VisitaFlow es quien lo calcula (no se desmonta mientras haya visita en curso); acá
     // solo se sostiene para pintar VisitaEnCursoBar.
@@ -271,13 +282,18 @@ export default function AgendaSemanaPage() {
             // no se toca acá. Cualquier otro estado que no sea 'en_curso' significa que la
             // visita ya se resolvió por otro lado.
             if (actual && actual.estado !== 'en_curso' && actual.estado !== 'pendiente') {
+                ultimoSueltoRotacionClienteId.current = visitaEnCurso.cliente.rotacionClienteId
                 setVisitaEnCurso(null)
                 limpiarVisitaEnCurso()
             }
             return
         }
         const enCurso = DIAS.flatMap(d => agenda[d] ?? []).find(c => c.estado === 'en_curso')
-        if (enCurso && enCurso.visitaId !== null) {
+        if (
+            enCurso &&
+            enCurso.visitaId !== null &&
+            enCurso.rotacionClienteId !== ultimoSueltoRotacionClienteId.current
+        ) {
             // El servidor confirma "en_curso" pero su card sale del snapshot del warehouse —
             // no sabe nada de un reposicionamiento del pin al iniciar (esa corrección es
             // asíncrona del lado de client-service). Si iniciarVisita ya escribió el ancla
@@ -501,7 +517,17 @@ export default function AgendaSemanaPage() {
                 visitaEnCurso={visitaEnCurso}
                 directoAMapa={directoAMapa}
                 onVisitaIniciada={(cliente, visitaId) => setVisitaEnCurso({ cliente, visitaId })}
-                onVisitaCerrada={() => setVisitaEnCurso(null)}
+                onVisitaCerrada={() => {
+                    // Mismo veto de re-adopción que la resolución detectada por polling —
+                    // ver el comentario de ultimoSueltoRotacionClienteId más arriba. Sin
+                    // esto, un refetch de agenda ya en vuelo desde antes del cierre (que
+                    // cerrarVisita también dispara, useVisitas.ts) puede resolver después
+                    // con el cliente todavía 'en_curso' y revivir la visita ya cerrada.
+                    if (visitaEnCurso) {
+                        ultimoSueltoRotacionClienteId.current = visitaEnCurso.cliente.rotacionClienteId
+                    }
+                    setVisitaEnCurso(null)
+                }}
                 onClose={() => {
                     setVisitaCliente(null)
                     setDirectoAMapa(false)
