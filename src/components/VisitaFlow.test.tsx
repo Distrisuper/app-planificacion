@@ -650,6 +650,36 @@ it('reposicionar destraba el gate y manda coordCliente al iniciar', async () => 
     )
 })
 
+it('reposicionar y quedarse ahí NO dispara "te alejaste": el ancla es la posición nueva', async () => {
+    // Regresión: el gate de "estás lejos" al iniciar YA usaba clienteOverride (test de
+    // arriba), pero lo que quedaba guardado como visitaEnCurso.cliente seguía siendo el
+    // `cliente` original — así que apenas arrancaba la visita, useAlejadoDelCliente
+    // comparaba contra la coordenada VIEJA y avisaba "te alejaste" estando parado justo
+    // donde se reposicionó.
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.603,-58.4',
+        precisionM: 10,
+    })
+    mockGeolocacionEnVivo({ latitude: -34.603, longitude: -58.4, accuracy: 10 })
+    const { onAviso } = renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+
+    fireEvent.click(screen.getByRole('button', { name: /reposicionar cliente/i }))
+    const handleClick = await getClickHandler()
+    handleClick({ latlng: { lat: -34.603, lng: -58.4 } })
+
+    const boton = await screen.findByRole('button', { name: /^iniciar visita$/i })
+    await waitFor(() => expect(boton).toBeEnabled())
+    fireEvent.click(boton)
+
+    await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalled())
+    await screen.findByLabelText('Minimizar')
+
+    expect(onAviso).not.toHaveBeenCalledWith('info', expect.stringContaining('alejaste'))
+})
+
 it('sin reposicionar, coordCliente no viaja en el payload', async () => {
     renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))

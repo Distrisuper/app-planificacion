@@ -220,9 +220,17 @@ export default function VisitaFlow({
                         propuesta,
                     })
                     setPropuestaPendiente(null)
-                    onVisitaIniciada(cliente!, id)
+                    // Si se reposicionó, el ancla que queda guardada para el resto de la
+                    // visita (el aviso de "te alejaste", y lo que sobrevive un reload) tiene
+                    // que ser la posición NUEVA, no la del warehouse: el gate de arriba ya
+                    // dejó iniciar contra el override, así que agarrar acá la coordenada
+                    // vieja avisaría "te alejaste" estando parado justo donde se reposicionó.
+                    const clienteParaVisita = clienteOverride
+                        ? { ...cliente!, latitud: clienteOverride.lat, longitud: clienteOverride.lng }
+                        : cliente!
+                    onVisitaIniciada(clienteParaVisita, id)
                     marcarInicioVisita(id)
-                    guardarVisitaEnCurso({ cliente: cliente!, visitaId: id })
+                    guardarVisitaEnCurso({ cliente: clienteParaVisita, visitaId: id })
                     onAviso?.('exito', 'Visita iniciada')
                     // El gate ya se destrabó (efímero, arriba); esto es aparte: si
                     // client-service ya tenía 3 correcciones permanentes de este

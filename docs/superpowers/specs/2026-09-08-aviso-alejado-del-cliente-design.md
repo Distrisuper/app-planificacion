@@ -182,9 +182,17 @@ vendedor parado en el borde con fixes que oscilan dispararía el toast una y otr
   corre.
 - **`VisitaEnCursoBar`** recibe `alejado` y pinta el estado.
 
-Nota: se usa `cliente.latitud/longitud`, no el `clienteOverride` efímero de la reposición del
-pin al iniciar. Ese override no sobrevive al inicio y no vale la pena arrastrarlo para un
-aviso informativo.
+**Corrección post-implementación (2026-09-09):** este spec decía originalmente que se usaba
+`cliente.latitud/longitud` sin arrastrar el `clienteOverride` efímero de la reposición del pin
+al iniciar ("no vale la pena arrastrarlo para un aviso informativo"). Estaba mal: en la
+práctica el override no es un caso raro que a veces genera un aviso de más — es la coordenada
+que el gate de inicio **ya usó** para dejar arrancar la visita (`VisitaFlow.onIniciar`, la
+segunda verificación de distancia), así que ignorarlo acá garantiza un falso "te alejaste"
+apenas arranca la visita, con el vendedor parado exactamente donde reposicionó. Corregido: si
+hubo reposicionamiento, el `cliente` que se guarda en `visitaEnCurso` (y por lo tanto el que
+persiste `visitaEnCurso.ts` y el que lee este hook) lleva `latitud/longitud` del override, no
+las originales del warehouse — mismo criterio que ya usa el gate de inicio, ahora consistente
+con el aviso posterior.
 
 ### Qué ve el vendedor
 
