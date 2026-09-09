@@ -73,6 +73,11 @@ export default function ClienteCardRuta({ cliente, arrastrable, onQuitar }: Clie
                     type="button"
                     aria-label={`Quitar de esta vuelta: ${titleCaseNombre(cliente.nombreCliente)}`}
                     onClick={confirmarQuitar}
+                    // El botón vive DENTRO del div arrastrable: sin cortar la propagación,
+                    // el pointerdown burbujea hasta los listeners de dnd-kit (enganchados en
+                    // el div) y lo que arranca es un drag, no el click — el puntero queda
+                    // capturado por el sensor y confirmarQuitar() nunca se ejecuta.
+                    onPointerDown={e => e.stopPropagation()}
                     className="absolute right-1 top-1 rounded px-1 text-[11px] text-slate-400 hover:bg-red-50 hover:text-red-600"
                 >
                     ✕

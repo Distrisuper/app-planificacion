@@ -1,7 +1,15 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { useDraggable } from '@dnd-kit/core'
 import ClienteCardRuta from './ClienteCardRuta'
 import type { IAgendaClientAdmin } from '@/types/planificacion'
+
+// Real por default (el resto de los tests depende de su comportamiento real, sin
+// DndContext); solo se sobreescribe puntualmente para espiar el listener de drag.
+vi.mock('@dnd-kit/core', async () => {
+    const actual = await vi.importActual<typeof import('@dnd-kit/core')>('@dnd-kit/core')
+    return { ...actual, useDraggable: vi.fn(actual.useDraggable) }
+})
 
 const CLIENTE = {
     rotacionClienteId: 11,
@@ -98,5 +106,27 @@ describe('ClienteCardRuta', () => {
         screen.getByRole('button', { name: /quitar de esta vuelta/i }).click()
 
         expect(onQuitar).not.toHaveBeenCalled()
+    })
+
+    it('corta la propagación del pointerdown para no arrancar un drag del card', () => {
+        // El botón vive DENTRO del div arrastrable: si el pointerdown burbujea, el
+        // listener de dnd-kit (enganchado en el div vía `{...listeners}`) lo toma como
+        // el inicio de un arrastre y el click de "quitar" nunca se dispara — es
+        // exactamente el bug reportado en producción. Se espía el listener real de
+        // dnd-kit (no uno agregado a mano) para probar la propagación tal como React
+        // la maneja de verdad entre dos props onPointerDown.
+        const onPointerDownDelDrag = vi.fn()
+        vi.mocked(useDraggable).mockReturnValueOnce({
+            attributes: {},
+            listeners: { onPointerDown: onPointerDownDelDrag },
+            setNodeRef: () => {},
+            transform: null,
+            isDragging: false,
+        } as unknown as ReturnType<typeof useDraggable>)
+
+        render(<ClienteCardRuta cliente={CLIENTE} onQuitar={() => {}} />)
+        fireEvent.pointerDown(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
+
+        expect(onPointerDownDelDrag).not.toHaveBeenCalled()
     })
 })
