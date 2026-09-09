@@ -7,6 +7,7 @@ import {
     getRotacion,
     getRotaciones,
     intercambiarDias,
+    quitarClienteAdmin,
     reacomodarAdmin,
     reordenarRotacion,
 } from '@/api/planificacionAdmin'
@@ -98,6 +99,25 @@ export function useReacomodarAdmin(codigo: string) {
             // movió y cuándo) la calcula el backend y no se puede adivinar acá. Con la card
             // recortada el grid pesa ~30 KB, así que este refetch es barato — antes eran
             // 1.46 MB por movimiento.
+            qc.invalidateQueries({
+                queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
+            })
+        },
+    })
+}
+
+/**
+ * Quitar una card de la rotación. Sin update optimista, a propósito: es una acción
+ * destructiva (aunque reversible solo por la próxima rotación) y el caso de bloqueo
+ * (409 FILA_RESUELTA / VISITA_EN_CURSO) es esperado, no un borde — mismo criterio que
+ * `useIntercambiarDias`.
+ */
+export function useQuitarClienteAdmin(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: { rotacionId: number; rotacionClienteId: number }) =>
+            quitarClienteAdmin(codigo, args.rotacionId, args.rotacionClienteId),
+        onSuccess: (_data, args) => {
             qc.invalidateQueries({
                 queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
             })
