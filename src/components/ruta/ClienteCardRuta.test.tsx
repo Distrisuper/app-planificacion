@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import ClienteCardRuta from './ClienteCardRuta'
 import type { IAgendaClientAdmin } from '@/types/planificacion'
@@ -51,5 +51,52 @@ describe('ClienteCardRuta', () => {
             'data-resuelto',
             'true',
         )
+    })
+
+    it('muestra "Quitar de esta vuelta" solo si está pendiente y hay callback', () => {
+        const onQuitar = () => {}
+        const { rerender } = render(
+            <ClienteCardRuta cliente={CLIENTE} onQuitar={onQuitar} />,
+        )
+        expect(
+            screen.getByRole('button', { name: /quitar de esta vuelta/i }),
+        ).toBeInTheDocument()
+
+        rerender(<ClienteCardRuta cliente={CLIENTE} />)
+        expect(
+            screen.queryByRole('button', { name: /quitar de esta vuelta/i }),
+        ).not.toBeInTheDocument()
+    })
+
+    it('no ofrece quitar una card en_curso: bloquearía con VISITA_EN_CURSO', () => {
+        render(
+            <ClienteCardRuta
+                cliente={{ ...CLIENTE, estado: 'en_curso' }}
+                onQuitar={() => {}}
+            />,
+        )
+        expect(
+            screen.queryByRole('button', { name: /quitar de esta vuelta/i }),
+        ).not.toBeInTheDocument()
+    })
+
+    it('confirma antes de quitar, y llama a onQuitar solo si se confirma', () => {
+        const onQuitar = vi.fn()
+        vi.spyOn(window, 'confirm').mockReturnValue(true)
+        render(<ClienteCardRuta cliente={CLIENTE} onQuitar={onQuitar} />)
+
+        screen.getByRole('button', { name: /quitar de esta vuelta/i }).click()
+
+        expect(onQuitar).toHaveBeenCalledWith(11)
+    })
+
+    it('no quita si se cancela la confirmación', () => {
+        const onQuitar = vi.fn()
+        vi.spyOn(window, 'confirm').mockReturnValue(false)
+        render(<ClienteCardRuta cliente={CLIENTE} onQuitar={onQuitar} />)
+
+        screen.getByRole('button', { name: /quitar de esta vuelta/i }).click()
+
+        expect(onQuitar).not.toHaveBeenCalled()
     })
 })
