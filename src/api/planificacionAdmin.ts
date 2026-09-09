@@ -52,6 +52,18 @@ export const reacomodarAdmin = async (
     )
 }
 
+/** Quita una fila pendiente de la rotación (soft-delete). 409 si ya está resuelta o el
+ *  vendedor la está visitando ahora mismo. */
+export const quitarClienteAdmin = async (
+    codigo: string,
+    rotacionId: number,
+    rotacionClienteId: number,
+): Promise<void> => {
+    await apiClient.delete(
+        `${base(codigo)}/${rotacionId}/rotacion-cliente/${rotacionClienteId}`,
+    )
+}
+
 /** Cambia la posición de una programada en la cola (1 = la próxima en activarse). */
 export const reordenarRotacion = async (
     codigo: string,
