@@ -131,8 +131,12 @@ const Cuerpo = memo(function Cuerpo({
                 <button
                     type="button"
                     aria-label={`Quitar de esta vuelta: ${titleCaseNombre(cliente.nombreCliente)}`}
+                    // Lo que hace falta explicar no es "quitar" —el ✕ se entiende— sino
+                    // hasta dónde llega: es solo esta vuelta, vuelve sola en la próxima y
+                    // se puede deshacer. Sin eso se lee como un borrado definitivo.
+                    title="Quitar esta visita de la vuelta actual. Vuelve sola en la próxima rotación, y mientras esta siga abierta se puede deshacer con Restaurar."
                     onClick={abrirQuitar}
-                    className="absolute right-1 top-1 rounded px-1 text-[11px] text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    className="absolute right-1 top-1 rounded px-1 text-[11px] font-bold leading-none text-slate-400 hover:bg-red-50 hover:text-red-600"
                 >
                     ✕
                 </button>
@@ -141,6 +145,7 @@ const Cuerpo = memo(function Cuerpo({
                 <button
                     type="button"
                     aria-label={`Restaurar: ${titleCaseNombre(cliente.nombreCliente)}`}
+                    title="Volver a poner esta visita en la vuelta, en el mismo día."
                     onClick={restaurar}
                     className="absolute right-1 top-1 rounded px-1 text-[11px] font-medium text-slate-500 hover:bg-emerald-50 hover:text-emerald-700"
                 >

@@ -145,6 +145,19 @@ function Celda({
           ? 'Intercambiar con este día'
           : 'Intercambiar este día'
 
+    /**
+     * Tooltips: `title` nativo, que es lo que ya usa esta pantalla para explicar sin
+     * ocupar lugar (la autoría del movimiento en la card, el punto de "en curso" en la
+     * cola). Explican el EFECTO, no el nombre del botón: "Intercambiar" ya está escrito
+     * al lado, y lo que no se puede adivinar es que mueve TODOS los clientes de los dos
+     * días de una sola vez.
+     */
+    const explicacionIntercambio = esOrigen
+        ? 'Cancelar el intercambio. También sale con Escape.'
+        : esDestinoPosible
+          ? 'Permutar este día con el que quedó marcado: todos los clientes de uno pasan al otro, y al revés.'
+          : 'Intercambiar este día completo con otro: tocá este y después el otro, y se permutan todos sus clientes.'
+
     return (
         <td
             ref={setNodeRef}
@@ -164,6 +177,7 @@ function Celda({
                         <button
                             type="button"
                             aria-label={`${etiqueta}: semana ${semana}, ${dia}`}
+                            title={explicacionIntercambio}
                             // `dia` acá es la clave ('LUN'), pero el estado del intercambio
                             // guarda el número (1..5) que viaja al backend — misma
                             // conversión que ya usa `parsearCelda`. Sin esto, la celda de
@@ -180,7 +194,11 @@ function Celda({
                                       : 'border-slate-200 text-slate-400 hover:border-slate-400 hover:text-slate-600'
                             }`}
                         >
-                            {esOrigen ? 'Cancelar' : esDestinoPosible ? 'Intercambiar acá' : '⇄'}
+                            {esOrigen
+                                ? 'Cancelar'
+                                : esDestinoPosible
+                                  ? 'Intercambiar acá'
+                                  : '⇄ Intercambiar'}
                         </button>
                     )}
                     {onAgregar && (
@@ -190,10 +208,11 @@ function Celda({
                             // 25 botones con el mismo nombre accesible son
                             // indistinguibles para un lector de pantalla y para los tests.
                             aria-label={`Agregar cliente: semana ${semana}, ${dia}`}
+                            title="Sumar un cliente a este día. Si ya tiene una visita en otra semana, se puede traer esa acá en vez de crear otra."
                             onClick={() => onAgregar({ semana, dia: DIAS.indexOf(dia) + 1 })}
-                            className="rounded border border-dashed border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 hover:border-slate-400 hover:text-slate-600"
+                            className="shrink-0 rounded border border-dashed border-slate-300 px-1.5 py-0.5 text-[11px] font-bold leading-none text-slate-500 hover:border-slate-500 hover:bg-slate-50 hover:text-slate-700"
                         >
-                            +
+                            + cliente
                         </button>
                     )}
                 </div>

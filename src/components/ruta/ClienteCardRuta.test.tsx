@@ -287,3 +287,14 @@ describe('chip de fila creada a mano', () => {
         expect(screen.queryByText('Extra')).not.toBeInTheDocument()
     })
 })
+
+describe('tooltips de la card', () => {
+    it('quitar aclara que es solo esta vuelta y que se puede deshacer', () => {
+        // Sin eso, el ✕ se lee como un borrado definitivo del cliente.
+        render(<ClienteCardRuta cliente={CLIENTE} onQuitar={vi.fn()} />)
+
+        const boton = screen.getByLabelText(/^Quitar de esta vuelta/)
+        expect(boton).toHaveAttribute('title', expect.stringContaining('vuelta actual'))
+        expect(boton).toHaveAttribute('title', expect.stringContaining('Restaurar'))
+    })
+})

@@ -297,3 +297,33 @@ describe('chip de la fila creada a mano', () => {
         expect(screen.queryByText('Extra')).not.toBeInTheDocument()
     })
 })
+
+describe('tooltips de los botones de la celda', () => {
+    // No es cosmética: los tres controles de esta pantalla mueven cosas distintas del
+    // plan, y el efecto de intercambiar (permuta TODOS los clientes de dos días) no se
+    // puede adivinar del ícono. Si el texto se cae, el botón vuelve a ser un glifo mudo.
+    const props = () => ({
+        semanas: SEMANAS,
+        onMover: vi.fn(),
+        onRenombrarSemana: vi.fn(),
+        onIntercambiar: vi.fn(),
+        onAgregar: vi.fn(),
+    })
+
+    it('el de intercambiar explica que permuta el día completo', () => {
+        render(<GridRotacion {...props()} />)
+
+        expect(
+            screen.getByLabelText('Intercambiar este día: semana 1, LUN'),
+        ).toHaveAttribute('title', expect.stringContaining('todos sus clientes'))
+    })
+
+    it('el de agregar aclara que también se puede traer una visita existente', () => {
+        render(<GridRotacion {...props()} />)
+
+        expect(screen.getByLabelText('Agregar cliente: semana 1, LUN')).toHaveAttribute(
+            'title',
+            expect.stringContaining('traer'),
+        )
+    })
+})
