@@ -90,6 +90,8 @@ interface CeldaProps {
     onQuitar?: (rotacionClienteId: number) => void
     /** Ausente = no se ofrece restaurar en esta celda. */
     onRestaurar?: (rotacionClienteId: number) => void
+    /** Ausente = no se ofrece agregar un cliente en esta celda. */
+    onAgregar?: (celda: { semana: number; dia: number }) => void
 }
 
 function Celda({
@@ -103,6 +105,7 @@ function Celda({
     onTocarIntercambio,
     onQuitar,
     onRestaurar,
+    onAgregar,
 }: CeldaProps) {
     const { setNodeRef, isOver } = useDroppable({ id: `celda-${semana}-${dia}` })
 
@@ -122,27 +125,50 @@ function Celda({
                 isOver ? 'bg-slate-200 ring-2 ring-slate-400' : 'bg-white'
             } ${esOrigen ? 'ring-2 ring-slate-900' : ''}`}
         >
-            {intercambiable && (
-                <button
-                    type="button"
-                    aria-label={`${etiqueta}: semana ${semana}, ${dia}`}
-                    // `dia` acá es la clave ('LUN'), pero el estado del intercambio guarda
-                    // el número (1..5) que viaja al backend — misma conversión que ya usa
-                    // `parsearCelda`. Sin esto, la celda de origen nunca se reconoce a sí
-                    // misma y todas las celdas se muestran como destino posible.
-                    onClick={() =>
-                        onTocarIntercambio({ semana, dia: DIAS.indexOf(dia) + 1 })
-                    }
-                    className={`mb-1 w-full rounded border border-dashed px-1 py-0.5 text-[10px] font-medium ${
-                        esOrigen
-                            ? 'border-slate-900 bg-slate-900 text-white'
-                            : esDestinoPosible
-                              ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
-                              : 'border-slate-200 text-slate-400 hover:border-slate-400 hover:text-slate-600'
-                    }`}
-                >
-                    {esOrigen ? 'Cancelar' : esDestinoPosible ? 'Intercambiar acá' : '⇄'}
-                </button>
+            {/* La barra de acciones de la celda. El "+" va ACÁ y no en el header de la
+                columna de día (como decía el spec): el grid tiene 5 columnas × N semanas,
+                así que un botón en el header no identifica ninguna semana — y el requisito
+                es justamente que la celda destino quede fijada por el botón que se tocó,
+                sin selector de semana/día en el modal. */}
+            {(intercambiable || onAgregar) && (
+                <div className="mb-1 flex gap-1">
+                    {intercambiable && (
+                        <button
+                            type="button"
+                            aria-label={`${etiqueta}: semana ${semana}, ${dia}`}
+                            // `dia` acá es la clave ('LUN'), pero el estado del intercambio
+                            // guarda el número (1..5) que viaja al backend — misma
+                            // conversión que ya usa `parsearCelda`. Sin esto, la celda de
+                            // origen nunca se reconoce a sí misma y todas las celdas se
+                            // muestran como destino posible.
+                            onClick={() =>
+                                onTocarIntercambio({ semana, dia: DIAS.indexOf(dia) + 1 })
+                            }
+                            className={`flex-1 rounded border border-dashed px-1 py-0.5 text-[10px] font-medium ${
+                                esOrigen
+                                    ? 'border-slate-900 bg-slate-900 text-white'
+                                    : esDestinoPosible
+                                      ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                                      : 'border-slate-200 text-slate-400 hover:border-slate-400 hover:text-slate-600'
+                            }`}
+                        >
+                            {esOrigen ? 'Cancelar' : esDestinoPosible ? 'Intercambiar acá' : '⇄'}
+                        </button>
+                    )}
+                    {onAgregar && (
+                        <button
+                            type="button"
+                            // El label lleva semana y día porque hay 25 celdas: sin eso,
+                            // 25 botones con el mismo nombre accesible son
+                            // indistinguibles para un lector de pantalla y para los tests.
+                            aria-label={`Agregar cliente: semana ${semana}, ${dia}`}
+                            onClick={() => onAgregar({ semana, dia: DIAS.indexOf(dia) + 1 })}
+                            className="rounded border border-dashed border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 hover:border-slate-400 hover:text-slate-600"
+                        >
+                            +
+                        </button>
+                    )}
+                </div>
             )}
             {clientes.map(cliente => (
                 <ClienteCardRuta
@@ -190,6 +216,8 @@ interface GridRotacionProps {
     onQuitar?: (rotacionClienteId: number) => void
     /** Ausente = no se ofrece restaurar (rotación no editable). */
     onRestaurar?: (rotacionClienteId: number) => void
+    /** Ausente = no se ofrece agregar clientes (solo la rotación Actual lo permite). */
+    onAgregar?: (semana: number, dia: number) => void
     /** false = rotación cerrada: se ve pero no se toca. */
     editable?: boolean
 }
@@ -208,6 +236,7 @@ export default function GridRotacion({
     onIntercambiar,
     onQuitar,
     onRestaurar,
+    onAgregar,
     editable,
 }: GridRotacionProps) {
     // Celda origen del intercambio en curso. null = no hay intercambio empezado.
@@ -342,6 +371,11 @@ export default function GridRotacion({
                                         onTocarIntercambio={tocarCelda}
                                         onQuitar={onQuitar}
                                         onRestaurar={onRestaurar}
+                                        onAgregar={
+                                            onAgregar
+                                                ? celda => onAgregar(celda.semana, celda.dia)
+                                                : undefined
+                                        }
                                     />
                                 ))}
                             </tr>

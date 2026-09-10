@@ -55,6 +55,39 @@ describe('GridRotacion', () => {
         const celda = screen.getByTestId('celda-1-LUN')
         expect(celda).toContainElement(screen.getByTestId('card-cliente-11'))
     })
+
+    it('sin onAgregar no dibuja ningún "+"', () => {
+        render(
+            <GridRotacion
+                semanas={SEMANAS}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+            />,
+        )
+        expect(screen.queryByLabelText(/^Agregar cliente:/)).not.toBeInTheDocument()
+    })
+
+    it('con onAgregar hay un "+" por celda, y avisa qué celda se tocó', async () => {
+        const onAgregar = vi.fn()
+        render(
+            <GridRotacion
+                semanas={SEMANAS}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+                onAgregar={onAgregar}
+            />,
+        )
+
+        // 2 semanas × 5 días.
+        expect(screen.getAllByLabelText(/^Agregar cliente:/)).toHaveLength(10)
+
+        await userEvent.click(
+            screen.getByLabelText('Agregar cliente: semana 3, JUE'),
+        )
+        expect(onAgregar).toHaveBeenCalledWith(3, 4)
+    })
 })
 
 /** Dónde está hoy cada fila, como lo resolvería el grid a partir de sus semanas. */
