@@ -1,9 +1,12 @@
 import { useState } from 'react'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
+import HelpPopover from '@/components/analitica/HelpPopover'
 import AccountMenu from '@/components/AccountMenu'
+import AgregarClienteExtraDialog from '@/components/ruta/AgregarClienteExtraDialog'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
 import SelectorVendedor from '@/components/ruta/SelectorVendedor'
+import { AyudaRuta } from '@/components/ruta/ayudaRuta'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
 import { errorCode, errorData } from '@/lib/apiError'
@@ -32,6 +35,11 @@ export default function RutaPage() {
     const { user, logout } = useAuth()
     const [vendedor, setVendedor] = useState<string | null>(null)
     const [rotacionActivaId, setRotacionActivaId] = useState<number | null>(null)
+    // La celda cuyo "+" se tocó. null = el diálogo está cerrado. Guarda la celda y no un
+    // booleano porque la celda ES el destino de lo que se agregue.
+    const [celdaAgregar, setCeldaAgregar] = useState<{ semana: number; dia: number } | null>(
+        null,
+    )
 
     const { data: roster } = useVendedores()
     const { data: cola, isLoading, isError } = useRotaciones(vendedor)
@@ -88,6 +96,15 @@ export default function RutaPage() {
                     elegido={vendedor}
                     onElegir={elegirVendedor}
                 />
+                {/* Va en la barra y no dentro del grid: lo que explica son las reglas de la
+                    pantalla entera (mover vs. agregar, qué significa cada cartel, qué no se
+                    puede tocar), y adentro del grid competiría con los controles de celda. */}
+                <div className="flex items-center gap-1 pb-2 text-xs text-slate-500">
+                    <span>Cómo funciona</span>
+                    <HelpPopover label="Cómo funciona la edición de la ruta" align="left">
+                        <AyudaRuta />
+                    </HelpPopover>
+                </div>
             </div>
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
@@ -125,28 +142,15 @@ export default function RutaPage() {
                     />
                 )}
 
+                {/* Sin la cola vacía dentro: ese `ColaRotaciones` estaba solo para ofrecer
+                    "Agregar rotación", que hoy está oculto (ver `ColaRotaciones`), así que
+                    dibujaba un contenedor vacío debajo del texto. La rotación la crea el
+                    vendedor al abrir su primera zona. */}
                 {vendedor !== null && cola?.length === 0 && (
-                    <div className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
-                        <p className="text-sm text-slate-600">
-                            Este vendedor todavía no tiene ninguna rotación.
-                        </p>
-                        <div className="mt-3 flex justify-center">
-                            <ColaRotaciones
-                                rotaciones={[]}
-                                activaId={null}
-                                onElegir={setRotacionActivaId}
-                                onCrear={() => crear.mutate()}
-                                onCancelar={id => cancelar.mutate(id)}
-                                onRenombrarRotacion={(rotacionId, descripcion) =>
-                                    renombrarRotacion.mutate({ rotacionId, descripcion })
-                                }
-                                onReordenar={(rotacionId, orden) =>
-                                    reordenar.mutate({ rotacionId, orden })
-                                }
-                                creando={crear.isPending}
-                            />
-                        </div>
-                    </div>
+                    <p className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600">
+                        Este vendedor todavía no tiene ninguna rotación. Se crea sola cuando
+                        empieza a recorrer su primera zona.
+                    </p>
                 )}
 
                 {rotacionElegida !== null && cargandoGrid && (
@@ -164,48 +168,79 @@ export default function RutaPage() {
                 )}
 
                 {grid && (
-                    <GridRotacion
-                        // La `key` NO es cosmética: `GridRotacion` guarda en estado la celda
-                        // origen del intercambio armado. Sin remontar, cambiar de rotación
-                        // con la otra ya en caché deja el componente montado y ese origen
-                        // vivo: el próximo ⇄ permutaría ~20 clientes de la rotación NUEVA
-                        // contra una celda de la vieja, sin confirmación de por medio.
-                        key={grid.id}
-                        semanas={grid.semanas}
-                        // Una rotación cerrada se ve pero no se edita: el backend contesta
-                        // 409 ROTACION_CERRADA.
-                        editable={grid.estado === 'abierta' || grid.estado === 'programada'}
-                        onMover={(rotacionClienteId, semana, dia) =>
-                            mover.mutate({
-                                rotacionId: grid.id,
-                                rotacionClienteId,
-                                semana,
-                                dia,
-                            })
-                        }
-                        onRenombrarSemana={(semana, descripcion) =>
-                            renombrarSemana.mutate({
-                                rotacionId: grid.id,
-                                semana,
-                                descripcion,
-                            })
-                        }
-                        onIntercambiar={(a, b) =>
-                            intercambiar.mutate({
-                                rotacionId: grid.id,
-                                semanaA: a.semana,
-                                diaA: a.dia,
-                                semanaB: b.semana,
-                                diaB: b.dia,
-                            })
-                        }
-                        onQuitar={rotacionClienteId =>
-                            quitar.mutate({ rotacionId: grid.id, rotacionClienteId })
-                        }
-                        onRestaurar={rotacionClienteId =>
-                            restaurar.mutate({ rotacionId: grid.id, rotacionClienteId })
-                        }
-                    />
+                    <>
+                        <GridRotacion
+                            // La `key` NO es cosmética: `GridRotacion` guarda en estado la
+                            // celda origen del intercambio armado. Sin remontar, cambiar de
+                            // rotación con la otra ya en caché deja el componente montado y
+                            // ese origen vivo: el próximo ⇄ permutaría ~20 clientes de la
+                            // rotación NUEVA contra una celda de la vieja, sin confirmación
+                            // de por medio.
+                            key={grid.id}
+                            semanas={grid.semanas}
+                            // Una rotación cerrada se ve pero no se edita: el backend
+                            // contesta 409 ROTACION_CERRADA.
+                            editable={
+                                grid.estado === 'abierta' || grid.estado === 'programada'
+                            }
+                            onMover={(rotacionClienteId, semana, dia) =>
+                                mover.mutate({
+                                    rotacionId: grid.id,
+                                    rotacionClienteId,
+                                    semana,
+                                    dia,
+                                })
+                            }
+                            onRenombrarSemana={(semana, descripcion) =>
+                                renombrarSemana.mutate({
+                                    rotacionId: grid.id,
+                                    semana,
+                                    descripcion,
+                                })
+                            }
+                            onIntercambiar={(a, b) =>
+                                intercambiar.mutate({
+                                    rotacionId: grid.id,
+                                    semanaA: a.semana,
+                                    diaA: a.dia,
+                                    semanaB: b.semana,
+                                    diaB: b.dia,
+                                })
+                            }
+                            onQuitar={rotacionClienteId =>
+                                quitar.mutate({ rotacionId: grid.id, rotacionClienteId })
+                            }
+                            onRestaurar={rotacionClienteId =>
+                                restaurar.mutate({ rotacionId: grid.id, rotacionClienteId })
+                            }
+                            // Cualquier rotación editable, igual que mover, quitar e
+                            // intercambiar: `GridRotacion` aplica el gate de `editable`
+                            // por su cuenta, así que acá no se repite la condición.
+                            //
+                            // El spec 2026-09-09 lo limitaba a la rotación en curso ("sin
+                            // caso de uso real hoy"), pero apareció: armar la PRÓXIMA
+                            // vuelta es justamente cuando hace falta sumar un cliente
+                            // nuevo. El backend nunca lo restringió — `agregarExtra` valida
+                            // con `requireRotacionEditableDe`, que acepta 'programada' y
+                            // solo rebota 'cerrada'/'cancelada'.
+                            onAgregar={(semana, dia) => setCeldaAgregar({ semana, dia })}
+                        />
+
+                        {celdaAgregar && vendedor && (
+                            <AgregarClienteExtraDialog
+                                open
+                                onClose={() => setCeldaAgregar(null)}
+                                codigoVendedor={vendedor}
+                                rotacionId={grid.id}
+                                semana={celdaAgregar.semana}
+                                dia={celdaAgregar.dia}
+                                // Todas las semanas, no solo la del "+": el diálogo también
+                                // rotula las celdas donde el cliente ya está, y tienen que
+                                // llamarse igual que en el grid.
+                                zonas={grid.semanas}
+                            />
+                        )}
+                    </>
                 )}
 
                 {mover.isError && (

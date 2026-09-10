@@ -123,12 +123,15 @@ describe('ColaRotaciones', () => {
         expect(props.onCancelar).toHaveBeenCalledWith(30)
     })
 
-    it('el botón de agregar avisa y se bloquea mientras crea', async () => {
-        const props = renderCola({ creando: true })
-        const agregar = screen.getByRole('button', { name: /agregar rotación/i })
+    // "Agregar rotación" está oculto (MOSTRAR_AGREGAR_ROTACION): encola una vuelta
+    // entera, que es de otra escala que el resto de la barra, y ahí se leía como una
+    // acción más. El endpoint y el hook siguen vivos; volver a mostrarlo es una línea.
+    it('no ofrece crear una rotación nueva', () => {
+        const props = renderCola()
 
-        expect(agregar).toBeDisabled()
-        await userEvent.click(agregar)
+        expect(
+            screen.queryByRole('button', { name: /agregar rotación/i }),
+        ).not.toBeInTheDocument()
         expect(props.onCrear).not.toHaveBeenCalled()
     })
 

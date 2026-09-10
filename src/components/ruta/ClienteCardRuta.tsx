@@ -15,6 +15,22 @@ interface ClienteCardRutaProps {
     /** Ausente = no se ofrece restaurar. Solo tiene efecto si `cliente.eliminado` es true. */
     onRestaurar?: (rotacionClienteId: number) => void
     /**
+     * true = el cliente tiene OTRA visita viva en esta rotacion, en otra celda.
+     *
+     * Solo cambia el chip de una fila `esExtra`, y lo cambia porque `es_extra` mete dos
+     * hechos distintos en el mismo booleano:
+     *
+     *  - sin otra visita: se sumo un cliente que la vuelta no tenia (cartera nueva) -> "Agregado".
+     *  - con otra visita: el cliente ya estaba planificado y se le sumo una pasada mas
+     *    (la original sigue pendiente donde estaba) -> "Extra".
+     *
+     * NO es "reagendado": reagendar es mover la fila (`reacomodar`, el drag y el "Traer
+     * aca" del buscador), que no crea ninguna fila ni deja chip — lo que queda ahi es la
+     * autoria del movimiento. Decirle reagendado a esto afirmaria que la visita se movio
+     * cuando en realidad hay dos.
+     */
+    visitaAdicional?: boolean
+    /**
      * Esta es la copia que sigue al cursor dentro del `DragOverlay`, no la card real:
      * no arrastra (la original ya lo está haciendo) y no ofrece acciones.
      */
@@ -23,6 +39,7 @@ interface ClienteCardRutaProps {
 
 interface CuerpoProps {
     cliente: IAgendaClientAdmin
+    visitaAdicional: boolean
     puedeQuitarse: boolean
     puedeRestaurarse: boolean
     abrirQuitar: () => void
@@ -49,6 +66,7 @@ interface CuerpoProps {
  */
 const Cuerpo = memo(function Cuerpo({
     cliente,
+    visitaAdicional,
     puedeQuitarse,
     puedeRestaurarse,
     abrirQuitar,
@@ -79,8 +97,14 @@ const Cuerpo = memo(function Cuerpo({
                     <span className="flex items-center gap-1 text-[11px] text-slate-500">
                         {cliente.codigoParticularCliente}
                         {cliente.esExtra && (
-                            <span className="inline-flex items-center rounded-full bg-[#E0E7FF] px-1 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#3730A3]">
-                                Agregado
+                            <span
+                                className={`inline-flex items-center rounded-full px-1 py-0.5 text-[9px] font-extrabold uppercase tracking-wide ${
+                                    visitaAdicional
+                                        ? 'bg-[#FEF3C7] text-[#92400E]'
+                                        : 'bg-[#E0E7FF] text-[#3730A3]'
+                                }`}
+                            >
+                                {visitaAdicional ? 'Extra' : 'Agregado'}
                             </span>
                         )}
                         {cliente.eliminado && (
@@ -107,8 +131,12 @@ const Cuerpo = memo(function Cuerpo({
                 <button
                     type="button"
                     aria-label={`Quitar de esta vuelta: ${titleCaseNombre(cliente.nombreCliente)}`}
+                    // Lo que hace falta explicar no es "quitar" —el ✕ se entiende— sino
+                    // hasta dónde llega: es solo esta vuelta, vuelve sola en la próxima y
+                    // se puede deshacer. Sin eso se lee como un borrado definitivo.
+                    title="Quitar esta visita de la vuelta actual. Vuelve sola en la próxima rotación, y mientras esta siga abierta se puede deshacer con Restaurar."
                     onClick={abrirQuitar}
-                    className="absolute right-1 top-1 rounded px-1 text-[11px] text-slate-400 hover:bg-red-50 hover:text-red-600"
+                    className="absolute right-1 top-1 rounded px-1 text-[11px] font-bold leading-none text-slate-400 hover:bg-red-50 hover:text-red-600"
                 >
                     ✕
                 </button>
@@ -117,6 +145,7 @@ const Cuerpo = memo(function Cuerpo({
                 <button
                     type="button"
                     aria-label={`Restaurar: ${titleCaseNombre(cliente.nombreCliente)}`}
+                    title="Volver a poner esta visita en la vuelta, en el mismo día."
                     onClick={restaurar}
                     className="absolute right-1 top-1 rounded px-1 text-[11px] font-medium text-slate-500 hover:bg-emerald-50 hover:text-emerald-700"
                 >
@@ -141,6 +170,7 @@ export default function ClienteCardRuta({
     arrastrable,
     onQuitar,
     onRestaurar,
+    visitaAdicional = false,
     overlay,
 }: ClienteCardRutaProps) {
     const resuelto = estaResuelto(cliente.estado)
@@ -246,6 +276,7 @@ export default function ClienteCardRuta({
 
             <Cuerpo
                 cliente={cliente}
+                visitaAdicional={visitaAdicional}
                 puedeQuitarse={puedeQuitarse}
                 puedeRestaurarse={puedeRestaurarse}
                 abrirQuitar={abrirQuitar}

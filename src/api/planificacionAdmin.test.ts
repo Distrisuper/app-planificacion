@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiClient } from './apiClient'
 import {
+    buscarEnCarteraAdmin,
     cancelarRotacion,
+    consultarClienteAdmin,
     crearRotacion,
     editarDescripcionRotacion,
     editarDescripcionSemana,
@@ -10,6 +12,7 @@ import {
     intercambiarDias,
     reacomodarAdmin,
     reordenarRotacion,
+    agregarClienteExtraAdmin,
 } from './planificacionAdmin'
 
 vi.mock('./apiClient', () => ({
@@ -169,5 +172,52 @@ describe('intercambiarDias', () => {
             { semanaA: 1, diaA: 2, semanaB: 1, diaB: 4 },
         )
         expect(movidas).toBe(18)
+    })
+})
+
+describe('buscarEnCarteraAdmin', () => {
+    it('busca en la cartera del vendedor dentro de una rotación', async () => {
+        vi.mocked(apiClient.get).mockResolvedValue({
+            data: { ok: 1, data: [{ codigoParticularCliente: 'P001', estado: 'sin_plan' }] },
+        } as never)
+
+        const r = await buscarEnCarteraAdmin('V 2', 7, 'alma')
+
+        expect(apiClient.get).toHaveBeenCalledWith(
+            '/planificacion/vendedores/V%202/rotaciones/7/buscador',
+            { params: { q: 'alma' } },
+        )
+        expect(r[0].codigoParticularCliente).toBe('P001')
+    })
+})
+
+describe('consultarClienteAdmin', () => {
+    it('encodea el código del cliente y desenvuelve la consulta', async () => {
+        vi.mocked(apiClient.get).mockResolvedValue({
+            data: { ok: 1, data: { yaPlanificado: false, celdas: [] } },
+        } as never)
+
+        const r = await consultarClienteAdmin('V 2', 7, 'P 001')
+
+        expect(apiClient.get).toHaveBeenCalledWith(
+            '/planificacion/vendedores/V%202/rotaciones/7/buscador/cliente/P%20001',
+        )
+        expect(r).toEqual({ yaPlanificado: false, celdas: [] })
+    })
+})
+
+describe('agregarClienteExtraAdmin', () => {
+    it('manda la celda destino en el body y devuelve la fila creada', async () => {
+        vi.mocked(apiClient.post).mockResolvedValue({
+            data: { ok: 1, data: { rotacionClienteId: 44, esExtra: true } },
+        } as never)
+
+        const card = await agregarClienteExtraAdmin('V 2', 7, 'P001', 2, 3)
+
+        expect(apiClient.post).toHaveBeenCalledWith(
+            '/planificacion/vendedores/V%202/rotaciones/7/buscador/cliente/P001/extra',
+            { semana: 2, dia: 3 },
+        )
+        expect(card.rotacionClienteId).toBe(44)
     })
 })

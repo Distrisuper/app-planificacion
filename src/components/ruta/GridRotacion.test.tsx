@@ -55,6 +55,39 @@ describe('GridRotacion', () => {
         const celda = screen.getByTestId('celda-1-LUN')
         expect(celda).toContainElement(screen.getByTestId('card-cliente-11'))
     })
+
+    it('sin onAgregar no dibuja ningún "+"', () => {
+        render(
+            <GridRotacion
+                semanas={SEMANAS}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+            />,
+        )
+        expect(screen.queryByLabelText(/^Agregar cliente:/)).not.toBeInTheDocument()
+    })
+
+    it('con onAgregar hay un "+" por celda, y avisa qué celda se tocó', async () => {
+        const onAgregar = vi.fn()
+        render(
+            <GridRotacion
+                semanas={SEMANAS}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+                onAgregar={onAgregar}
+            />,
+        )
+
+        // 2 semanas × 5 días.
+        expect(screen.getAllByLabelText(/^Agregar cliente:/)).toHaveLength(10)
+
+        await userEvent.click(
+            screen.getByLabelText('Agregar cliente: semana 3, JUE'),
+        )
+        expect(onAgregar).toHaveBeenCalledWith(3, 4)
+    })
 })
 
 /** Dónde está hoy cada fila, como lo resolvería el grid a partir de sus semanas. */
@@ -187,5 +220,110 @@ describe('intercambiar días', () => {
         expect(
             screen.queryByRole('button', { name: /intercambiar este día/i }),
         ).not.toBeInTheDocument()
+    })
+})
+
+describe('chip de la fila creada a mano', () => {
+    /** Una fila cualquiera del plan, con lo que la card necesita. */
+    const fila = (id: number, codigo: string, dia: number, esExtra = false, eliminado = false) =>
+        ({
+            rotacionClienteId: id,
+            codigoParticularCliente: codigo,
+            nombreCliente: `Cliente ${codigo}`,
+            dia,
+            estado: 'pendiente',
+            ultimoMovimiento: null,
+            esExtra,
+            eliminado,
+        }) as never
+
+    it('la extra de un cliente que no está en ninguna otra celda dice AGREGADO', () => {
+        const semanas = [
+            { semana: 1, descripcion: null, dias: { ...vacia(), LUN: [fila(11, 'P001', 1, true)] } },
+        ]
+        render(
+            <GridRotacion
+                semanas={semanas as never}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+            />,
+        )
+
+        expect(screen.getByText('Agregado')).toBeInTheDocument()
+    })
+
+    it('la extra de un cliente que YA tiene fila en otra semana dice EXTRA', () => {
+        // El caso del quincenal al que le sumaron una pasada, o del cliente que ya
+        // estaba planificado y se agregó igual: dos visitas al mismo cliente.
+        const semanas = [
+            { semana: 1, descripcion: null, dias: { ...vacia(), LUN: [fila(11, 'P001', 1)] } },
+            { semana: 3, descripcion: null, dias: { ...vacia(), MAR: [fila(12, 'P001', 2, true)] } },
+        ]
+        render(
+            <GridRotacion
+                semanas={semanas as never}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+            />,
+        )
+
+        expect(screen.getByText('Extra')).toBeInTheDocument()
+        expect(screen.queryByText('Agregado')).not.toBeInTheDocument()
+    })
+
+    it('una fila QUITADA no cuenta como la otra visita', () => {
+        // Si la planificada se quitó, la extra pasó a ser la única visita del cliente en
+        // la vuelta: llamarla "extra" diría que hay dos cuando hay una.
+        const semanas = [
+            {
+                semana: 1,
+                descripcion: null,
+                dias: { ...vacia(), LUN: [fila(11, 'P001', 1, false, true)] },
+            },
+            { semana: 3, descripcion: null, dias: { ...vacia(), MAR: [fila(12, 'P001', 2, true)] } },
+        ]
+        render(
+            <GridRotacion
+                semanas={semanas as never}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+            />,
+        )
+
+        expect(screen.getByText('Agregado')).toBeInTheDocument()
+        expect(screen.queryByText('Extra')).not.toBeInTheDocument()
+    })
+})
+
+describe('tooltips de los botones de la celda', () => {
+    // No es cosmética: los tres controles de esta pantalla mueven cosas distintas del
+    // plan, y el efecto de intercambiar (permuta TODOS los clientes de dos días) no se
+    // puede adivinar del ícono. Si el texto se cae, el botón vuelve a ser un glifo mudo.
+    const props = () => ({
+        semanas: SEMANAS,
+        onMover: vi.fn(),
+        onRenombrarSemana: vi.fn(),
+        onIntercambiar: vi.fn(),
+        onAgregar: vi.fn(),
+    })
+
+    it('el de intercambiar explica que permuta el día completo', () => {
+        render(<GridRotacion {...props()} />)
+
+        expect(
+            screen.getByLabelText('Intercambiar este día: semana 1, LUN'),
+        ).toHaveAttribute('title', expect.stringContaining('todos sus clientes'))
+    })
+
+    it('el de agregar aclara que también se puede traer una visita existente', () => {
+        render(<GridRotacion {...props()} />)
+
+        expect(screen.getByLabelText('Agregar cliente: semana 1, LUN')).toHaveAttribute(
+            'title',
+            expect.stringContaining('traer'),
+        )
     })
 })
