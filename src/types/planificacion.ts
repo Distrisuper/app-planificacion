@@ -500,3 +500,24 @@ export interface IResultadoBuscadorGeneral {
     fecha: string | null
     motivo: string | null
 }
+
+/** Una celda de la rotación donde el cliente ya tiene fila (buscador de gerencia). */
+export interface ICeldaPlanificada {
+    rotacionClienteId: number
+    semana: number
+    dia: number
+    /** true = la fila está quitada de la rotación: agregar ahí la restaura. */
+    eliminado: boolean
+}
+
+/**
+ * La consulta previa del buscador de gerencia. `celdas` y no una sola `(semana, dia)`
+ * porque un cliente quincenal tiene dos filas por diseño: el front necesita distinguir
+ * "ya está en OTRA celda" (avisa y deja forzar) de "ya está en ESTA celda" (no ofrece
+ * la acción, sería un duplicado literal).
+ */
+export interface IClienteEnRotacion {
+    /** true si tiene al menos una fila NO quitada en esta rotación. */
+    yaPlanificado: boolean
+    celdas: ICeldaPlanificada[]
+}

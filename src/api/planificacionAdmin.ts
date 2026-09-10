@@ -1,7 +1,10 @@
 import { apiClient } from './apiClient'
 import type {
+    IAgendaClientAdmin,
+    IClienteEnRotacion,
     IIntercambiarDiasDTO,
     IReacomodarDTO,
+    IResultadoBuscadorGeneral,
     IRotacionCompleta,
     IRotacionResumen,
 } from '@/types/planificacion'
@@ -124,4 +127,48 @@ export const intercambiarDias = async (
         dto,
     )
     return res.data.data.movidas
+}
+
+// ── Buscador de cartera de gerencia (spec 2026-09-09) ──────────────────────────
+// Espejo de `/planificacion/buscador/*` del vendedor, con dos diferencias: el vendedor
+// y la rotación viajan en la URL (no salen del token ni del ciclo abierto), y la celda
+// destino es explícita.
+
+/** Busca en toda la cartera del vendedor, con el estado de cada cliente en esta rotación. */
+export const buscarEnCarteraAdmin = async (
+    codigo: string,
+    rotacionId: number,
+    texto: string,
+): Promise<IResultadoBuscadorGeneral[]> => {
+    const res = await apiClient.get(`${base(codigo)}/${rotacionId}/buscador`, {
+        params: { q: texto },
+    })
+    return res.data.data
+}
+
+/** ¿El cliente ya tiene fila en esta rotación, y en qué celdas? */
+export const consultarClienteAdmin = async (
+    codigo: string,
+    rotacionId: number,
+    codigoCliente: string,
+): Promise<IClienteEnRotacion> => {
+    const res = await apiClient.get(
+        `${base(codigo)}/${rotacionId}/buscador/cliente/${encodeURIComponent(codigoCliente)}`,
+    )
+    return res.data.data
+}
+
+/** Crea la fila `es_extra` en la celda `(semana, dia)`. Idempotente sobre la misma celda. */
+export const agregarClienteExtraAdmin = async (
+    codigo: string,
+    rotacionId: number,
+    codigoCliente: string,
+    semana: number,
+    dia: number,
+): Promise<IAgendaClientAdmin> => {
+    const res = await apiClient.post(
+        `${base(codigo)}/${rotacionId}/buscador/cliente/${encodeURIComponent(codigoCliente)}/extra`,
+        { semana, dia },
+    )
+    return res.data.data
 }
