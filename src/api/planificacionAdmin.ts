@@ -64,6 +64,18 @@ export const quitarClienteAdmin = async (
     )
 }
 
+/** Deshace un "quitar" (soft-delete). Sin límite de tiempo mientras la rotación siga
+ *  editable. */
+export const restaurarClienteAdmin = async (
+    codigo: string,
+    rotacionId: number,
+    rotacionClienteId: number,
+): Promise<void> => {
+    await apiClient.patch(
+        `${base(codigo)}/${rotacionId}/rotacion-cliente/${rotacionClienteId}/restaurar`,
+    )
+}
+
 /** Cambia la posición de una programada en la cola (1 = la próxima en activarse). */
 export const reordenarRotacion = async (
     codigo: string,
