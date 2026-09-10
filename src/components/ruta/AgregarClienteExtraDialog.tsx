@@ -21,7 +21,9 @@ interface AgregarClienteExtraDialogProps {
     dia: number
     /** El nombre de la zona de esa semana, para rotular la celda destino. */
     descripcionSemana: string | null
-    /** Se creó (o restauró) la fila. La usa la página para avisar. */
+    /** Se creó (o restauró) la fila. Opcional: `RutaPage`, el único caller hoy, no lo pasa
+     *  (el diálogo se cierra solo y el grid se actualiza vía query invalidation), pero
+     *  queda disponible para un futuro caller que quiera mostrar un aviso propio. */
     onAgregado?: (nombreCliente: string) => void
 }
 

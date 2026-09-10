@@ -372,7 +372,7 @@ export default function GridRotacion({
                                         onQuitar={onQuitar}
                                         onRestaurar={onRestaurar}
                                         onAgregar={
-                                            onAgregar
+                                            (editable ?? true) && onAgregar
                                                 ? celda => onAgregar(celda.semana, celda.dia)
                                                 : undefined
                                         }
