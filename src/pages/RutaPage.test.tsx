@@ -227,4 +227,90 @@ describe('RutaPage', () => {
 
         expect(await screen.findByText(/no se pudo cargar el plan/i)).toBeInTheDocument()
     })
+
+    /** Cola + grid de un vendedor, con el estado de la rotación como parámetro. */
+    function montarRotacion(estado: 'abierta' | 'programada') {
+        const rotacion = {
+            id: 7,
+            codigoParticularVendedor: 'V 2',
+            estado,
+            fechaInicio: estado === 'abierta' ? '2026-09-01T12:00:00.000Z' : null,
+            fechaFin: null,
+            descripcion: 'Ronda Septiembre',
+            orden: estado === 'programada' ? 1 : null,
+        }
+        vi.mocked(apiAdmin.getRotaciones).mockResolvedValue([rotacion])
+        vi.mocked(apiAdmin.getRotacion).mockResolvedValue({
+            ...rotacion,
+            semanas: [
+                {
+                    semana: 1,
+                    descripcion: 'Zárate',
+                    dias: { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] },
+                },
+            ],
+        })
+    }
+
+    async function elegirVendedor() {
+        renderPage()
+        await screen.findByRole('option', { name: 'Juan Pérez' })
+        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+    }
+
+    it('ofrece agregar clientes en la rotación abierta', async () => {
+        montarRotacion('abierta')
+        await elegirVendedor()
+
+        expect(
+            await screen.findByLabelText('Agregar cliente: semana 1, MAR'),
+        ).toBeInTheDocument()
+    })
+
+    it('no ofrece agregar clientes en una rotación programada', async () => {
+        montarRotacion('programada')
+        await elegirVendedor()
+
+        await screen.findByText(/Semana 1/)
+        expect(screen.queryByLabelText(/^Agregar cliente:/)).not.toBeInTheDocument()
+    })
+
+    it('agregar un cliente desde una celda lo manda a esa celda', async () => {
+        montarRotacion('abierta')
+        vi.mocked(apiAdmin.buscarEnCarteraAdmin).mockResolvedValue([
+            {
+                codigoParticularCliente: 'P001',
+                nombreCliente: 'ALMACEN ZARATE',
+                estado: 'sin_plan',
+                semana: null,
+                dia: null,
+                descripcionZona: null,
+                fecha: null,
+                motivo: null,
+            },
+        ])
+        vi.mocked(apiAdmin.consultarClienteAdmin).mockResolvedValue({
+            yaPlanificado: false,
+            celdas: [],
+        })
+        vi.mocked(apiAdmin.agregarClienteExtraAdmin).mockResolvedValue({
+            rotacionClienteId: 44,
+        } as never)
+
+        await elegirVendedor()
+        await userEvent.click(await screen.findByLabelText('Agregar cliente: semana 1, MAR'))
+        await userEvent.type(screen.getByPlaceholderText(/Nombre o código/), 'alma')
+        await userEvent.click(await screen.findByRole('button', { name: /Almacen Zarate/i }))
+        await userEvent.click(await screen.findByRole('button', { name: 'Agregar' }))
+
+        await waitFor(() =>
+            expect(apiAdmin.agregarClienteExtraAdmin).toHaveBeenCalledWith(
+                'V 2',
+                7,
+                'P001',
+                1,
+                2,
+            ),
+        )
+    })
 })

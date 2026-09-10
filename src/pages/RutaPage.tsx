@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import AccountMenu from '@/components/AccountMenu'
+import AgregarClienteExtraDialog from '@/components/ruta/AgregarClienteExtraDialog'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
 import SelectorVendedor from '@/components/ruta/SelectorVendedor'
@@ -32,6 +33,11 @@ export default function RutaPage() {
     const { user, logout } = useAuth()
     const [vendedor, setVendedor] = useState<string | null>(null)
     const [rotacionActivaId, setRotacionActivaId] = useState<number | null>(null)
+    // La celda cuyo "+" se tocó. null = el diálogo está cerrado. Guarda la celda y no un
+    // booleano porque la celda ES el destino de lo que se agregue.
+    const [celdaAgregar, setCeldaAgregar] = useState<{ semana: number; dia: number } | null>(
+        null,
+    )
 
     const { data: roster } = useVendedores()
     const { data: cola, isLoading, isError } = useRotaciones(vendedor)
@@ -164,48 +170,77 @@ export default function RutaPage() {
                 )}
 
                 {grid && (
-                    <GridRotacion
-                        // La `key` NO es cosmética: `GridRotacion` guarda en estado la celda
-                        // origen del intercambio armado. Sin remontar, cambiar de rotación
-                        // con la otra ya en caché deja el componente montado y ese origen
-                        // vivo: el próximo ⇄ permutaría ~20 clientes de la rotación NUEVA
-                        // contra una celda de la vieja, sin confirmación de por medio.
-                        key={grid.id}
-                        semanas={grid.semanas}
-                        // Una rotación cerrada se ve pero no se edita: el backend contesta
-                        // 409 ROTACION_CERRADA.
-                        editable={grid.estado === 'abierta' || grid.estado === 'programada'}
-                        onMover={(rotacionClienteId, semana, dia) =>
-                            mover.mutate({
-                                rotacionId: grid.id,
-                                rotacionClienteId,
-                                semana,
-                                dia,
-                            })
-                        }
-                        onRenombrarSemana={(semana, descripcion) =>
-                            renombrarSemana.mutate({
-                                rotacionId: grid.id,
-                                semana,
-                                descripcion,
-                            })
-                        }
-                        onIntercambiar={(a, b) =>
-                            intercambiar.mutate({
-                                rotacionId: grid.id,
-                                semanaA: a.semana,
-                                diaA: a.dia,
-                                semanaB: b.semana,
-                                diaB: b.dia,
-                            })
-                        }
-                        onQuitar={rotacionClienteId =>
-                            quitar.mutate({ rotacionId: grid.id, rotacionClienteId })
-                        }
-                        onRestaurar={rotacionClienteId =>
-                            restaurar.mutate({ rotacionId: grid.id, rotacionClienteId })
-                        }
-                    />
+                    <>
+                        <GridRotacion
+                            // La `key` NO es cosmética: `GridRotacion` guarda en estado la
+                            // celda origen del intercambio armado. Sin remontar, cambiar de
+                            // rotación con la otra ya en caché deja el componente montado y
+                            // ese origen vivo: el próximo ⇄ permutaría ~20 clientes de la
+                            // rotación NUEVA contra una celda de la vieja, sin confirmación
+                            // de por medio.
+                            key={grid.id}
+                            semanas={grid.semanas}
+                            // Una rotación cerrada se ve pero no se edita: el backend
+                            // contesta 409 ROTACION_CERRADA.
+                            editable={
+                                grid.estado === 'abierta' || grid.estado === 'programada'
+                            }
+                            onMover={(rotacionClienteId, semana, dia) =>
+                                mover.mutate({
+                                    rotacionId: grid.id,
+                                    rotacionClienteId,
+                                    semana,
+                                    dia,
+                                })
+                            }
+                            onRenombrarSemana={(semana, descripcion) =>
+                                renombrarSemana.mutate({
+                                    rotacionId: grid.id,
+                                    semana,
+                                    descripcion,
+                                })
+                            }
+                            onIntercambiar={(a, b) =>
+                                intercambiar.mutate({
+                                    rotacionId: grid.id,
+                                    semanaA: a.semana,
+                                    diaA: a.dia,
+                                    semanaB: b.semana,
+                                    diaB: b.dia,
+                                })
+                            }
+                            onQuitar={rotacionClienteId =>
+                                quitar.mutate({ rotacionId: grid.id, rotacionClienteId })
+                            }
+                            onRestaurar={rotacionClienteId =>
+                                restaurar.mutate({ rotacionId: grid.id, rotacionClienteId })
+                            }
+                            // Solo la rotación Actual, no las de la cola: agregar a una
+                            // programada no tiene urgencia operativa y el spec lo deja
+                            // afuera a propósito. Es más restrictivo que `editable`, que
+                            // también habilita 'programada'.
+                            onAgregar={
+                                grid.estado === 'abierta'
+                                    ? (semana, dia) => setCeldaAgregar({ semana, dia })
+                                    : undefined
+                            }
+                        />
+
+                        {celdaAgregar && vendedor && (
+                            <AgregarClienteExtraDialog
+                                open
+                                onClose={() => setCeldaAgregar(null)}
+                                codigoVendedor={vendedor}
+                                rotacionId={grid.id}
+                                semana={celdaAgregar.semana}
+                                dia={celdaAgregar.dia}
+                                descripcionSemana={
+                                    grid.semanas.find(s => s.semana === celdaAgregar.semana)
+                                        ?.descripcion ?? null
+                                }
+                            />
+                        )}
+                    </>
                 )}
 
                 {mover.isError && (
