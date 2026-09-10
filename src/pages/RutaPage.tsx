@@ -16,6 +16,7 @@ import {
     useQuitarClienteAdmin,
     useReacomodarAdmin,
     useReordenarRotacion,
+    useRestaurarClienteAdmin,
     useRotacion,
     useRotaciones,
 } from '@/hooks/useRotacionAdmin'
@@ -70,6 +71,7 @@ export default function RutaPage() {
     const reordenar = useReordenarRotacion(vendedor ?? '')
     const intercambiar = useIntercambiarDias(vendedor ?? '')
     const quitar = useQuitarClienteAdmin(vendedor ?? '')
+    const restaurar = useRestaurarClienteAdmin(vendedor ?? '')
 
     return (
         <div className="min-h-screen bg-slate-50">
@@ -200,6 +202,9 @@ export default function RutaPage() {
                         onQuitar={rotacionClienteId =>
                             quitar.mutate({ rotacionId: grid.id, rotacionClienteId })
                         }
+                        onRestaurar={rotacionClienteId =>
+                            restaurar.mutate({ rotacionId: grid.id, rotacionClienteId })
+                        }
                     />
                 )}
 
@@ -240,6 +245,12 @@ export default function RutaPage() {
                         {errorCode(quitar.error) === 'VISITA_EN_CURSO'
                             ? 'No se pudo quitar: el vendedor está visitando a ese cliente ahora mismo. Probá de nuevo cuando cierre la visita.'
                             : 'No se pudo quitar ese cliente. Puede que ya lo hayan visitado en esta vuelta.'}
+                    </p>
+                )}
+
+                {restaurar.isError && (
+                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        No se pudo restaurar ese cliente. Probá de nuevo en un momento.
                     </p>
                 )}
 
