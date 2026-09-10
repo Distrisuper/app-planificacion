@@ -60,21 +60,54 @@ const Cuerpo = memo(function Cuerpo({
 
     return (
         <>
+            {/* El texto NO recibe eventos de puntero: así el arrastre se puede empezar
+                desde el nombre del cliente, que es de donde uno lo agarra naturalmente —
+                los eventos lo atraviesan hasta la superficie de arrastre de abajo.
+                `relative` para pintarse por encima de esa superficie, que es absoluta. */}
+            <div className="pointer-events-none relative">
+                {/* El padding derecho deja lugar al botón de la esquina. "Restaurar" es
+                    una palabra, no un ícono: con `pr-4` (lo que necesita el ✕) el nombre
+                    del cliente le pasaba por debajo en una columna de ~147px. */}
+                <p
+                    className={`font-medium leading-tight ${
+                        puedeRestaurarse ? 'pr-16' : 'pr-4'
+                    }`}
+                >
+                    {titleCaseNombre(cliente.nombreCliente)}
+                </p>
+                <div className="mt-0.5 flex items-center justify-between gap-1">
+                    <span className="flex items-center gap-1 text-[11px] text-slate-500">
+                        {cliente.codigoParticularCliente}
+                        {cliente.esExtra && (
+                            <span className="inline-flex items-center rounded-full bg-[#E0E7FF] px-1 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#3730A3]">
+                                Agregado
+                            </span>
+                        )}
+                        {cliente.eliminado && (
+                            <span className="inline-flex items-center rounded-full bg-red-50 px-1 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-red-700">
+                                Quitado
+                            </span>
+                        )}
+                    </span>
+                    {autoria && (
+                        // Recupera los eventos de puntero porque su `title` es un tooltip:
+                        // sin esto no se puede hover y la autoría del movimiento no se lee.
+                        <span
+                            title={autoria}
+                            aria-label={autoria}
+                            className="pointer-events-auto cursor-help text-[11px] text-slate-400"
+                        >
+                            ✎
+                        </span>
+                    )}
+                </div>
+            </div>
+
             {puedeQuitarse && (
                 <button
                     type="button"
                     aria-label={`Quitar de esta vuelta: ${titleCaseNombre(cliente.nombreCliente)}`}
                     onClick={abrirQuitar}
-                    // El botón vive DENTRO del div arrastrable: sin cortar la propagación,
-                    // el pointerdown burbujea hasta los listeners de dnd-kit (enganchados en
-                    // el div) y lo que arranca es un drag, no el click — el puntero queda
-                    // capturado por el sensor y el diálogo de confirmación nunca se abre.
-                    onPointerDown={e => e.stopPropagation()}
-                    // Mismo motivo para el teclado: el KeyboardSensor de dnd-kit escucha
-                    // el keydown en el div de la card, así que Enter/Espacio acá arrancaban
-                    // un arrastre de teclado en vez de abrir el diálogo — el botón era
-                    // inalcanzable sin mouse.
-                    onKeyDown={e => e.stopPropagation()}
                     className="absolute right-1 top-1 rounded px-1 text-[11px] text-slate-400 hover:bg-red-50 hover:text-red-600"
                 >
                     ✕
@@ -85,40 +118,11 @@ const Cuerpo = memo(function Cuerpo({
                     type="button"
                     aria-label={`Restaurar: ${titleCaseNombre(cliente.nombreCliente)}`}
                     onClick={restaurar}
-                    onPointerDown={e => e.stopPropagation()}
-                    onKeyDown={e => e.stopPropagation()}
                     className="absolute right-1 top-1 rounded px-1 text-[11px] font-medium text-slate-500 hover:bg-emerald-50 hover:text-emerald-700"
                 >
                     Restaurar
                 </button>
             )}
-            <p className="font-medium leading-tight pr-4">
-                {titleCaseNombre(cliente.nombreCliente)}
-            </p>
-            <div className="mt-0.5 flex items-center justify-between gap-1">
-                <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                    {cliente.codigoParticularCliente}
-                    {cliente.esExtra && (
-                        <span className="inline-flex items-center rounded-full bg-[#E0E7FF] px-1 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-[#3730A3]">
-                            Agregado
-                        </span>
-                    )}
-                    {cliente.eliminado && (
-                        <span className="inline-flex items-center rounded-full bg-red-50 px-1 py-0.5 text-[9px] font-extrabold uppercase tracking-wide text-red-700">
-                            Quitado
-                        </span>
-                    )}
-                </span>
-                {autoria && (
-                    <span
-                        title={autoria}
-                        aria-label={autoria}
-                        className="cursor-help text-[11px] text-slate-400"
-                    >
-                        ✎
-                    </span>
-                )}
-            </div>
         </>
     )
 })
@@ -157,6 +161,12 @@ export default function ClienteCardRuta({
     const [confirmandoQuitar, setConfirmandoQuitar] = useState(false)
     const abrirQuitar = useCallback(() => setConfirmandoQuitar(true), [])
 
+    // Si la fila deja de poder quitarse con el diálogo abierto (un refetch en segundo
+    // plano la trae ya `eliminado` porque otro la quitó), el diálogo desaparece pero el
+    // estado quedaría en `true`: al restaurarla, se abriría solo. Se reajusta en el
+    // render, que es lo que React recomienda para estado derivado de props.
+    if (confirmandoQuitar && !puedeQuitarse) setConfirmandoQuitar(false)
+
     // Restaurar no pide confirmación: es la acción de "deshacer", no una destructiva —
     // pedirle al usuario que confirme un undo es fricción sin beneficio.
     const restaurar = useCallback(
@@ -176,12 +186,6 @@ export default function ClienteCardRuta({
 
     return (
         <div
-            ref={setNodeRef}
-            {...(puedeMoverse && !overlay ? { ...listeners, ...attributes } : {})}
-            // No se aplica el `transform` de useDraggable: quien viaja con el cursor es la
-            // copia del `DragOverlay`. Moviendo la card original quedaba dentro del flujo
-            // de la tabla —sin z-index, por debajo de las celdas siguientes, y recortada
-            // por el `overflow-x-auto` del contenedor.
             // La copia del overlay lleva otro testid: dos nodos con el mismo dejarían las
             // consultas ambiguas justo durante el arrastre.
             data-testid={
@@ -195,9 +199,7 @@ export default function ClienteCardRuta({
             // Igual criterio para una fila quitada de esta rotación.
             data-eliminado={cliente.eliminado ? 'true' : 'false'}
             // `select-none`: sin él, arrastrar desde el nombre del cliente pinta la
-            // selección de texto de la fila entera. Antes no se veía porque el sensor
-            // hacía preventDefault en el pointerdown; con el umbral de 6px ese
-            // preventDefault llega recién al activarse el arrastre.
+            // selección de texto de la fila entera.
             className={`relative select-none rounded-md border px-2 py-1.5 text-xs ${
                 resuelto || cliente.eliminado
                     ? 'border-slate-200 bg-slate-100 text-slate-500'
@@ -207,13 +209,41 @@ export default function ClienteCardRuta({
             } ${
                 // El `active:` es CSS puro, así que responde en el mismo instante en que
                 // se aprieta —cero JS— y tapa los ~2 frames que el arrastre tarda en
-                // levantar la card por el umbral de 3px. Sin esto, apretar y todavía no
-                // ver nada se siente trabado.
+                // levantar la card por el umbral de activación. Sin esto, apretar y
+                // todavía no ver nada se siente trabado.
                 puedeMoverse && !overlay
                     ? 'cursor-grab active:cursor-grabbing active:ring-1 active:ring-slate-400'
                     : ''
             }`}
         >
+            {/* LA SUPERFICIE DE ARRASTRE: el único nodo con los listeners de dnd-kit, y
+                deliberadamente vacío. Los botones y el diálogo son HERMANOS suyos, no
+                descendientes, así que sus eventos no pueden llegar al sensor y arrancar un
+                arrastre en lugar del click.
+
+                Antes los listeners vivían en el div de afuera y los botones se defendían
+                con `stopPropagation` del `pointerdown`. Eso se rompió solo al cambiar los
+                sensores: `MouseSensor`/`TouchSensor` escuchan `onMouseDown`/`onTouchStart`,
+                no `onPointerDown` (ver `activators` en @dnd-kit/core), así que la guarda
+                dejó de guardar sin que nada fallara a la vista. Y cuando el arrastre
+                arranca, dnd-kit agrega un `click` con `stopPropagation` en capture sobre el
+                document: el click del botón se pierde y el botón parece muerto.
+
+                Con la superficie aparte, la protección no depende de qué evento use el
+                sensor configurado. */}
+            {puedeMoverse && !overlay && (
+                <div
+                    ref={setNodeRef}
+                    {...listeners}
+                    {...attributes}
+                    // dnd-kit la expone como `role="button"` tabbable para el arrastre por
+                    // teclado. Al estar vacía necesita nombre propio: antes lo heredaba del
+                    // texto de la card.
+                    aria-label={`Mover ${titleCaseNombre(cliente.nombreCliente)}`}
+                    className="absolute inset-0 rounded-md"
+                />
+            )}
+
             <Cuerpo
                 cliente={cliente}
                 puedeQuitarse={puedeQuitarse}
@@ -224,8 +254,7 @@ export default function ClienteCardRuta({
 
             {/* Se monta recién al abrirse, no junto con la card: son ~150 cards en la
                 grilla y cada `AlertDialog.Root` cerrado igual cuesta su árbol de
-                componentes en cada re-render del arrastre. Radix lo portalea al body, así
-                que no hereda los listeners de dnd-kit del div de la card. */}
+                componentes en cada re-render del arrastre. */}
             {puedeQuitarse && confirmandoQuitar && (
                 <ConfirmDialog
                     open

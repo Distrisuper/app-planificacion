@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useDraggable } from '@dnd-kit/core'
 import ClienteCardRuta from './ClienteCardRuta'
@@ -114,77 +114,71 @@ describe('ClienteCardRuta', () => {
         expect(onQuitar).not.toHaveBeenCalled()
     })
 
-    it('corta la propagación del pointerdown para no arrancar un drag del card', () => {
-        // El botón vive DENTRO del div arrastrable: si el pointerdown burbujea, el
-        // listener de dnd-kit (enganchado en el div vía `{...listeners}`) lo toma como
-        // el inicio de un arrastre y el click de "quitar" nunca se dispara — es
-        // exactamente el bug reportado en producción. Se espía el listener real de
-        // dnd-kit (no uno agregado a mano) para probar la propagación tal como React
-        // la maneja de verdad entre dos props onPointerDown.
-        const onPointerDownDelDrag = vi.fn()
-        vi.mocked(useDraggable).mockReturnValueOnce({
-            attributes: {},
-            listeners: { onPointerDown: onPointerDownDelDrag },
-            setNodeRef: () => {},
-            transform: null,
-            isDragging: false,
-        } as unknown as ReturnType<typeof useDraggable>)
-
+    it('los controles de la card NO viven dentro de la superficie de arrastre', () => {
+        // Esta es la única protección real contra que un click en un botón arranque un
+        // arrastre, y por eso se verifica la ESTRUCTURA y no la propagación de un evento.
+        //
+        // La protección anterior era `stopPropagation` del pointerdown en cada botón, y
+        // se rompió sola al cambiar los sensores: `MouseSensor`/`TouchSensor` escuchan
+        // `onMouseDown`/`onTouchStart`, no `onPointerDown`, así que la guarda dejó de
+        // guardar sin que ningún test fallara — los tests stubbeaban
+        // `listeners: { onPointerDown }`, una forma que la config real ya no produce.
+        // Con el bug presente, en Chromium: apretar el ✕ y temblar 5px no abría el
+        // diálogo, y mantenerlo apretado en touch arrancaba un arrastre.
+        //
+        // En jsdom no se puede probar la propagación de verdad: sin `DndContext`,
+        // `useDraggable` devuelve `listeners` vacío. La verificación de comportamiento
+        // vive en navegador real; acá se blinda el invariante que la hace cierta.
         render(<ClienteCardRuta cliente={CLIENTE} onQuitar={() => {}} />)
-        fireEvent.pointerDown(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
 
-        expect(onPointerDownDelDrag).not.toHaveBeenCalled()
+        const card = screen.getByTestId('card-cliente-11')
+        const superficie = card.querySelector('[aria-roledescription="draggable"]')
+        const quitar = screen.getByRole('button', { name: /quitar de esta vuelta/i })
+
+        expect(superficie).not.toBeNull()
+        // La card NO es el nodo arrastrable ni lleva sus atributos: de eso depende también
+        // el diálogo, que es hijo suyo en el árbol de React (React propaga por ahí, no por
+        // el DOM, así que el portal no lo salva).
+        expect(superficie).not.toBe(card)
+        expect(card).not.toHaveAttribute('aria-roledescription', 'draggable')
+        expect(superficie!.contains(quitar)).toBe(false)
+        // Vacía: nada que se agregue a la card en el futuro puede caer adentro.
+        expect(superficie!.childElementCount).toBe(0)
     })
 
-    it('el pointerdown DENTRO del diálogo tampoco arranca un drag del card', async () => {
-        // El diálogo se portalea al body, pero React propaga los eventos por el árbol de
-        // REACT: al ser hijo JSX de la card, su pointerdown llegaba a los listeners de
-        // dnd-kit, arrancaba un drag que se quedaba con el puntero y el `click` de los
-        // botones nunca se disparaba — el diálogo quedaba muerto en el navegador (en
-        // jsdom no se veía: userEvent sintetiza el click igual, haya drag o no).
-        const onPointerDownDelDrag = vi.fn()
-        vi.mocked(useDraggable).mockReturnValue({
-            attributes: {},
-            listeners: { onPointerDown: onPointerDownDelDrag },
-            setNodeRef: () => {},
-            transform: null,
-            isDragging: false,
-        } as unknown as ReturnType<typeof useDraggable>)
+    it('el diálogo no se abre solo si la fila deja de poder quitarse mientras está abierto', async () => {
+        // Escenario real: con el diálogo abierto, un refetch en segundo plano (foco de la
+        // ventana, o la invalidación de otra mutación) trae la fila ya `eliminado` porque
+        // otro la quitó. El diálogo desaparece; si el estado se quedaba en `true`, al
+        // restaurarla el "¿Quitar a X?" se abría solo, sin que nadie lo pidiera.
+        const { rerender } = render(<ClienteCardRuta cliente={CLIENTE} onQuitar={() => {}} />)
+        await userEvent.click(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument()
 
-        try {
-            render(<ClienteCardRuta cliente={CLIENTE} onQuitar={() => {}} />)
-            fireEvent.pointerDown(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
-            await userEvent.click(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
+        rerender(
+            <ClienteCardRuta
+                cliente={{ ...CLIENTE, eliminado: true }}
+                onQuitar={() => {}}
+                onRestaurar={() => {}}
+            />,
+        )
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
 
-            fireEvent.pointerDown(screen.getByRole('button', { name: 'Cancelar' }))
-            expect(onPointerDownDelDrag).not.toHaveBeenCalled()
-        } finally {
-            const actual = await vi.importActual<typeof import('@dnd-kit/core')>('@dnd-kit/core')
-            vi.mocked(useDraggable).mockImplementation(actual.useDraggable)
-        }
+        // …y al volver a pendiente sigue cerrado.
+        rerender(
+            <ClienteCardRuta cliente={CLIENTE} onQuitar={() => {}} onRestaurar={() => {}} />,
+        )
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     })
 
-    it('Enter en los botones de la card no arranca un arrastre de teclado', () => {
-        // El KeyboardSensor de dnd-kit escucha el keydown en el div de la card, y los
-        // botones viven adentro: sin cortar la propagación, Enter/Espacio sobre "Quitar"
-        // arrancaban un arrastre de teclado en vez de abrir el diálogo — el botón quedaba
-        // inalcanzable sin mouse (verificado en Chromium: dnd-kit anunciaba "Draggable
-        // item card-11 was moved over droppable area" y el diálogo nunca aparecía).
-        const onKeyDownDelDrag = vi.fn()
-        vi.mocked(useDraggable).mockReturnValueOnce({
-            attributes: {},
-            listeners: { onKeyDown: onKeyDownDelDrag },
-            setNodeRef: () => {},
-            transform: null,
-            isDragging: false,
-        } as unknown as ReturnType<typeof useDraggable>)
+    it('una card eliminada no tiene superficie de arrastre, así "Restaurar" es seguro', () => {
+        render(
+            <ClienteCardRuta cliente={{ ...CLIENTE, eliminado: true }} onRestaurar={() => {}} />,
+        )
 
-        render(<ClienteCardRuta cliente={CLIENTE} onQuitar={() => {}} />)
-        fireEvent.keyDown(screen.getByRole('button', { name: /quitar de esta vuelta/i }), {
-            key: 'Enter',
-        })
-
-        expect(onKeyDownDelDrag).not.toHaveBeenCalled()
+        const card = screen.getByTestId('card-cliente-11')
+        expect(card.querySelector('[aria-roledescription="draggable"]')).toBeNull()
+        expect(screen.getByRole('button', { name: /restaurar/i })).toBeInTheDocument()
     })
 
     it('la copia del overlay no arrastra ni ofrece acciones', () => {
@@ -264,23 +258,5 @@ describe('ClienteCardRuta', () => {
         expect(onRestaurar).toHaveBeenCalledWith(11)
         // Sin diálogo de por medio: restaurar es el undo, no una acción destructiva.
         expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-    })
-
-    it('corta la propagación del pointerdown en el botón de restaurar', () => {
-        const onPointerDownDelDrag = vi.fn()
-        vi.mocked(useDraggable).mockReturnValueOnce({
-            attributes: {},
-            listeners: { onPointerDown: onPointerDownDelDrag },
-            setNodeRef: () => {},
-            transform: null,
-            isDragging: false,
-        } as unknown as ReturnType<typeof useDraggable>)
-
-        render(
-            <ClienteCardRuta cliente={{ ...CLIENTE, eliminado: true }} onRestaurar={() => {}} />,
-        )
-        fireEvent.pointerDown(screen.getByRole('button', { name: /restaurar/i }))
-
-        expect(onPointerDownDelDrag).not.toHaveBeenCalled()
     })
 })

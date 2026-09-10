@@ -4,7 +4,12 @@ import { Button } from './button'
 
 interface ConfirmDialogProps {
     open: boolean
-    /** Se llama con `false` al cancelar, tocar afuera o apretar Escape. */
+    /**
+     * Se llama con `false` al cancelar o apretar Escape. NO al tocar afuera:
+     * `AlertDialog` de Radix previene el cierre por interacción externa a propósito
+     * (`onPointerDownOutside`/`onInteractOutside` con `preventDefault`), porque una
+     * confirmación se responde, no se descarta sin querer.
+     */
     onOpenChange: (open: boolean) => void
     title: string
     description: ReactNode
@@ -41,20 +46,17 @@ export default function ConfirmDialog({
         <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
             <AlertDialog.Portal>
                 <AlertDialog.Overlay className="animate-fade-in fixed inset-0 z-[60] bg-black/45" />
-                <AlertDialog.Content
-                    // Radix portalea esto al body, pero React propaga los eventos por el
-                    // árbol de REACT, no por el del DOM: si el diálogo se renderiza como
-                    // hijo de un elemento arrastrable (la card de la grilla de gerencia),
-                    // el pointerdown de estos botones burbujea hasta los listeners de
-                    // dnd-kit y arranca un drag que se queda con el puntero — el `click`
-                    // nunca se dispara y el diálogo queda muerto. Se corta acá y no en
-                    // cada consumidor porque es la clase de bug que no se ve venir.
-                    // Radix no se entera: su cierre por Escape y por click afuera va por
-                    // listeners nativos en el document, no por el burbujeo de React.
-                    onPointerDown={e => e.stopPropagation()}
-                    onKeyDown={e => e.stopPropagation()}
-                    className="animate-dialogo-in fixed left-1/2 top-1/2 z-[60] w-[92vw] max-w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-5 shadow-[0_18px_44px_rgba(10,15,30,.28)]"
-                >
+                {/* OJO si este diálogo se usa dentro de algo arrastrable: Radix lo
+                    portalea al body, pero React propaga los eventos por el árbol de
+                    REACT, así que los clicks de estos botones llegan a los listeners del
+                    ancestro que lo renderizó. Si ese ancestro es un draggable, el sensor
+                    arranca un arrastre y se come el click — el diálogo parece muerto.
+                    Acá NO se corta la propagación: hacerlo obliga a adivinar qué evento
+                    escucha el sensor (`onMouseDown` no es `onPointerDown`) y encima
+                    silencia los handlers de teclado a nivel window de la app. Lo que
+                    corresponde es que el ancestro no mezcle su superficie de arrastre con
+                    sus controles — ver la superficie aparte en `ClienteCardRuta`. */}
+                <AlertDialog.Content className="animate-dialogo-in fixed left-1/2 top-1/2 z-[60] w-[92vw] max-w-[400px] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white p-5 shadow-[0_18px_44px_rgba(10,15,30,.28)]">
                     <AlertDialog.Title className="text-[16px] font-extrabold leading-tight text-dsnavytext">
                         {title}
                     </AlertDialog.Title>
