@@ -10,6 +10,7 @@ import {
     quitarClienteAdmin,
     reacomodarAdmin,
     reordenarRotacion,
+    restaurarClienteAdmin,
 } from '@/api/planificacionAdmin'
 import { moverEnGrid } from '@/lib/moverEnGrid'
 import type {
@@ -117,6 +118,21 @@ export function useQuitarClienteAdmin(codigo: string) {
     return useMutation({
         mutationFn: (args: { rotacionId: number; rotacionClienteId: number }) =>
             quitarClienteAdmin(codigo, args.rotacionId, args.rotacionClienteId),
+        onSuccess: (_data, args) => {
+            qc.invalidateQueries({
+                queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
+            })
+        },
+    })
+}
+
+/** Deshace un "quitar". Mismo patrón que useQuitarClienteAdmin: sin optimistic update,
+ *  el bloqueo (404 FILA_NO_ELIMINADA si alguien más ya la restauró) es un caso esperado. */
+export function useRestaurarClienteAdmin(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: { rotacionId: number; rotacionClienteId: number }) =>
+            restaurarClienteAdmin(codigo, args.rotacionId, args.rotacionClienteId),
         onSuccess: (_data, args) => {
             qc.invalidateQueries({
                 queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
