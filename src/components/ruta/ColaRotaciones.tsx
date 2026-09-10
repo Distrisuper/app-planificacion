@@ -5,6 +5,9 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import DescripcionInline from './DescripcionInline'
 import type { IRotacionResumen } from '@/types/planificacion'
 
+/** Interruptor de una línea para "Agregar rotación" — ver el comentario del botón. */
+const MOSTRAR_AGREGAR_ROTACION = false
+
 interface ColaRotacionesProps {
     rotaciones: IRotacionResumen[]
     activaId: number | null
@@ -166,16 +169,27 @@ export default function ColaRotaciones({
                 )
             })}
 
-            <Button
-                variant="outline"
-                size="sm"
-                aria-label="Agregar rotación"
-                onClick={onCrear}
-                disabled={creando}
-            >
-                <Plus className="mr-1 h-4 w-4" />
-                {creando ? 'Agregando…' : 'Agregar rotación'}
-            </Button>
+            {/* Oculto a propósito, no borrado: el endpoint y el hook siguen vivos y
+                probados, así que volver a mostrarlo es cambiar esta constante.
+
+                Por qué se oculta: "Agregar rotación" encola una vuelta NUEVA
+                materializada contra el template de ahora, que es una operación de otra
+                escala que todo lo demás de esta pantalla —mover, quitar, agregar un
+                cliente— y no se distingue de ellas en la barra. Al lado de los chips de
+                la cola se lee como "agregar algo acá", y lo que hace es crear una vuelta
+                entera. Hasta que tenga su propio lugar y su confirmación, no se ofrece. */}
+            {MOSTRAR_AGREGAR_ROTACION && (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    aria-label="Agregar rotación"
+                    onClick={onCrear}
+                    disabled={creando}
+                >
+                    <Plus className="mr-1 h-4 w-4" />
+                    {creando ? 'Agregando…' : 'Agregar rotación'}
+                </Button>
+            )}
 
             <ConfirmDialog
                 open={aCancelar !== null}

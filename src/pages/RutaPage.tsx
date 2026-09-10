@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
+import HelpPopover from '@/components/analitica/HelpPopover'
 import AccountMenu from '@/components/AccountMenu'
 import AgregarClienteExtraDialog from '@/components/ruta/AgregarClienteExtraDialog'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
 import SelectorVendedor from '@/components/ruta/SelectorVendedor'
+import { AyudaRuta } from '@/components/ruta/ayudaRuta'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
 import { errorCode, errorData } from '@/lib/apiError'
@@ -94,6 +96,15 @@ export default function RutaPage() {
                     elegido={vendedor}
                     onElegir={elegirVendedor}
                 />
+                {/* Va en la barra y no dentro del grid: lo que explica son las reglas de la
+                    pantalla entera (mover vs. agregar, qué significa cada cartel, qué no se
+                    puede tocar), y adentro del grid competiría con los controles de celda. */}
+                <div className="flex items-center gap-1 pb-2 text-xs text-slate-500">
+                    <span>Cómo funciona</span>
+                    <HelpPopover label="Cómo funciona la edición de la ruta" align="left">
+                        <AyudaRuta />
+                    </HelpPopover>
+                </div>
             </div>
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
@@ -131,28 +142,15 @@ export default function RutaPage() {
                     />
                 )}
 
+                {/* Sin la cola vacía dentro: ese `ColaRotaciones` estaba solo para ofrecer
+                    "Agregar rotación", que hoy está oculto (ver `ColaRotaciones`), así que
+                    dibujaba un contenedor vacío debajo del texto. La rotación la crea el
+                    vendedor al abrir su primera zona. */}
                 {vendedor !== null && cola?.length === 0 && (
-                    <div className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
-                        <p className="text-sm text-slate-600">
-                            Este vendedor todavía no tiene ninguna rotación.
-                        </p>
-                        <div className="mt-3 flex justify-center">
-                            <ColaRotaciones
-                                rotaciones={[]}
-                                activaId={null}
-                                onElegir={setRotacionActivaId}
-                                onCrear={() => crear.mutate()}
-                                onCancelar={id => cancelar.mutate(id)}
-                                onRenombrarRotacion={(rotacionId, descripcion) =>
-                                    renombrarRotacion.mutate({ rotacionId, descripcion })
-                                }
-                                onReordenar={(rotacionId, orden) =>
-                                    reordenar.mutate({ rotacionId, orden })
-                                }
-                                creando={crear.isPending}
-                            />
-                        </div>
-                    </div>
+                    <p className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600">
+                        Este vendedor todavía no tiene ninguna rotación. Se crea sola cuando
+                        empieza a recorrer su primera zona.
+                    </p>
                 )}
 
                 {rotacionElegida !== null && cargandoGrid && (

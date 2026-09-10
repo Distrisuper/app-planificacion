@@ -222,3 +222,78 @@ describe('intercambiar días', () => {
         ).not.toBeInTheDocument()
     })
 })
+
+describe('chip de la fila creada a mano', () => {
+    /** Una fila cualquiera del plan, con lo que la card necesita. */
+    const fila = (id: number, codigo: string, dia: number, esExtra = false, eliminado = false) =>
+        ({
+            rotacionClienteId: id,
+            codigoParticularCliente: codigo,
+            nombreCliente: `Cliente ${codigo}`,
+            dia,
+            estado: 'pendiente',
+            ultimoMovimiento: null,
+            esExtra,
+            eliminado,
+        }) as never
+
+    it('la extra de un cliente que no está en ninguna otra celda dice AGREGADO', () => {
+        const semanas = [
+            { semana: 1, descripcion: null, dias: { ...vacia(), LUN: [fila(11, 'P001', 1, true)] } },
+        ]
+        render(
+            <GridRotacion
+                semanas={semanas as never}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+            />,
+        )
+
+        expect(screen.getByText('Agregado')).toBeInTheDocument()
+    })
+
+    it('la extra de un cliente que YA tiene fila en otra semana dice EXTRA', () => {
+        // El caso del quincenal al que le sumaron una pasada, o del cliente que ya
+        // estaba planificado y se agregó igual: dos visitas al mismo cliente.
+        const semanas = [
+            { semana: 1, descripcion: null, dias: { ...vacia(), LUN: [fila(11, 'P001', 1)] } },
+            { semana: 3, descripcion: null, dias: { ...vacia(), MAR: [fila(12, 'P001', 2, true)] } },
+        ]
+        render(
+            <GridRotacion
+                semanas={semanas as never}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+            />,
+        )
+
+        expect(screen.getByText('Extra')).toBeInTheDocument()
+        expect(screen.queryByText('Agregado')).not.toBeInTheDocument()
+    })
+
+    it('una fila QUITADA no cuenta como la otra visita', () => {
+        // Si la planificada se quitó, la extra pasó a ser la única visita del cliente en
+        // la vuelta: llamarla "extra" diría que hay dos cuando hay una.
+        const semanas = [
+            {
+                semana: 1,
+                descripcion: null,
+                dias: { ...vacia(), LUN: [fila(11, 'P001', 1, false, true)] },
+            },
+            { semana: 3, descripcion: null, dias: { ...vacia(), MAR: [fila(12, 'P001', 2, true)] } },
+        ]
+        render(
+            <GridRotacion
+                semanas={semanas as never}
+                onMover={vi.fn()}
+                onRenombrarSemana={vi.fn()}
+                onIntercambiar={vi.fn()}
+            />,
+        )
+
+        expect(screen.getByText('Agregado')).toBeInTheDocument()
+        expect(screen.queryByText('Extra')).not.toBeInTheDocument()
+    })
+})

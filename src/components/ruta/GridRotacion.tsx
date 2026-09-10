@@ -74,6 +74,31 @@ interface Celda {
     dia: number
 }
 
+/**
+ * Códigos de cliente con MÁS DE UNA visita viva en la rotación.
+ *
+ * Es lo que distingue los dos hechos que `es_extra` mezcla en un solo booleano: una fila
+ * creada a mano de un cliente que la vuelta no tenía es cartera que se sumó ("Agregado"),
+ * y la de un cliente que ya estaba planificado es una pasada de más ("Extra"), con su
+ * fila original todavía pendiente en otra celda.
+ *
+ * Las filas quitadas no cuentan: si la planificada se quitó, la extra pasó a ser la única
+ * visita del cliente en la vuelta, y llamarla "extra" diría que hay dos cuando hay una.
+ */
+export function clientesConVariasVisitas(semanas: ISemanaRotacionAdmin[]): Set<string> {
+    const veces = new Map<string, number>()
+    for (const semana of semanas) {
+        for (const dia of DIAS) {
+            for (const cliente of semana.dias[dia]) {
+                if (cliente.eliminado) continue
+                const codigo = cliente.codigoParticularCliente
+                veces.set(codigo, (veces.get(codigo) ?? 0) + 1)
+            }
+        }
+    }
+    return new Set([...veces].filter(([, n]) => n > 1).map(([codigo]) => codigo))
+}
+
 interface CeldaProps {
     semana: number
     dia: Dia
@@ -90,6 +115,8 @@ interface CeldaProps {
     onQuitar?: (rotacionClienteId: number) => void
     /** Ausente = no se ofrece restaurar en esta celda. */
     onRestaurar?: (rotacionClienteId: number) => void
+    /** Clientes con más de una visita viva en la vuelta: decide el chip de las extras. */
+    conVariasVisitas: Set<string>
     /** Ausente = no se ofrece agregar un cliente en esta celda. */
     onAgregar?: (celda: { semana: number; dia: number }) => void
 }
@@ -106,6 +133,7 @@ function Celda({
     onQuitar,
     onRestaurar,
     onAgregar,
+    conVariasVisitas,
 }: CeldaProps) {
     const { setNodeRef, isOver } = useDroppable({ id: `celda-${semana}-${dia}` })
 
@@ -174,6 +202,7 @@ function Celda({
                 <ClienteCardRuta
                     key={cliente.rotacionClienteId}
                     cliente={cliente}
+                    visitaAdicional={conVariasVisitas.has(cliente.codigoParticularCliente)}
                     arrastrable={arrastrable}
                     onQuitar={arrastrable ? onQuitar : undefined}
                     onRestaurar={arrastrable ? onRestaurar : undefined}
@@ -244,6 +273,10 @@ export default function GridRotacion({
     // UNA vez: las tres acciones de celda (arrastrar, intercambiar, agregar) tienen que
     // aparecer y desaparecer juntas, y repetir la expresión es como se desincronizan.
     const seEdita = editable ?? true
+
+    // Una sola pasada por las ~150 filas, no una por card: el chip de cada extra depende
+    // de la vuelta completa, no de la fila.
+    const conVariasVisitas = clientesConVariasVisitas(semanas)
 
     // Celda origen del intercambio en curso. null = no hay intercambio empezado.
     const [origen, setOrigen] = useState<Celda | null>(null)
@@ -377,6 +410,7 @@ export default function GridRotacion({
                                         onTocarIntercambio={tocarCelda}
                                         onQuitar={onQuitar}
                                         onRestaurar={onRestaurar}
+                                        conVariasVisitas={conVariasVisitas}
                                         onAgregar={
                                             seEdita && onAgregar
                                                 ? celda => onAgregar(celda.semana, celda.dia)

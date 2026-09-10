@@ -260,3 +260,30 @@ describe('ClienteCardRuta', () => {
         expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     })
 })
+
+describe('chip de fila creada a mano', () => {
+    it('sin otra visita al mismo cliente dice AGREGADO: se sumó cartera', () => {
+        render(<ClienteCardRuta cliente={{ ...CLIENTE, esExtra: true }} />)
+
+        expect(screen.getByText('Agregado')).toBeInTheDocument()
+        expect(screen.queryByText('Extra')).not.toBeInTheDocument()
+    })
+
+    it('con otra visita al mismo cliente dice EXTRA: es una visita de más', () => {
+        // Mismo `es_extra` en la base; lo que cambia es que el cliente ya tenía su fila
+        // en otra celda, así que esto no es cartera nueva sino una segunda pasada.
+        render(
+            <ClienteCardRuta cliente={{ ...CLIENTE, esExtra: true }} visitaAdicional />,
+        )
+
+        expect(screen.getByText('Extra')).toBeInTheDocument()
+        expect(screen.queryByText('Agregado')).not.toBeInTheDocument()
+    })
+
+    it('una fila del template no lleva chip, tenga o no otra visita', () => {
+        render(<ClienteCardRuta cliente={CLIENTE} visitaAdicional />)
+
+        expect(screen.queryByText('Agregado')).not.toBeInTheDocument()
+        expect(screen.queryByText('Extra')).not.toBeInTheDocument()
+    })
+})
