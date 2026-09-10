@@ -315,11 +315,20 @@ describe('useAgregarClienteExtraAdmin', () => {
             eliminado: false,
         } as IAgendaClientAdmin)
 
-        const { result } = renderHook(() => useAgregarClienteExtraAdmin('V 2'), { wrapper })
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+        const w = ({ children }: { children: React.ReactNode }) => (
+            <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+        )
+
+        const { result } = renderHook(() => useAgregarClienteExtraAdmin('V 2'), { wrapper: w })
         result.current.mutate({ rotacionId: 7, codigoCliente: 'P001', semana: 2, dia: 3 })
 
         await waitFor(() => expect(result.current.isSuccess).toBe(true))
         expect(api.agregarClienteExtraAdmin).toHaveBeenCalledWith('V 2', 7, 'P001', 2, 3)
+        expect(invalidateSpy).toHaveBeenCalledWith({
+            queryKey: ['rotacionAdmin', 'V 2', 'grid', 7],
+        })
     })
 })
 
