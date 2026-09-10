@@ -21,6 +21,7 @@ const CLIENTE = {
     visitaId: null,
     ofrecimientosPendientes: 0,
     ultimoMovimiento: null,
+    eliminado: false,
 } as unknown as IAgendaClientAdmin
 
 describe('ClienteCardRuta', () => {
@@ -126,6 +127,86 @@ describe('ClienteCardRuta', () => {
 
         render(<ClienteCardRuta cliente={CLIENTE} onQuitar={() => {}} />)
         fireEvent.pointerDown(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
+
+        expect(onPointerDownDelDrag).not.toHaveBeenCalled()
+    })
+
+    it('una card eliminada se muestra deshabilitada, sin drag y sin "Quitar"', () => {
+        render(
+            <ClienteCardRuta
+                cliente={{ ...CLIENTE, eliminado: true }}
+                onQuitar={() => {}}
+                onRestaurar={() => {}}
+            />,
+        )
+
+        expect(screen.getByTestId('card-cliente-11')).toHaveAttribute(
+            'data-eliminado',
+            'true',
+        )
+        expect(
+            screen.queryByRole('button', { name: /quitar de esta vuelta/i }),
+        ).not.toBeInTheDocument()
+    })
+
+    it('una card eliminada no es arrastrable (useDraggable recibe disabled: true)', () => {
+        render(
+            <ClienteCardRuta
+                cliente={{ ...CLIENTE, eliminado: true }}
+                onRestaurar={() => {}}
+            />,
+        )
+
+        const llamada = vi.mocked(useDraggable).mock.calls.at(-1)?.[0]
+        expect(llamada).toMatchObject({ disabled: true })
+    })
+
+    it('muestra "Restaurar" solo si está eliminada y hay callback', () => {
+        const { rerender } = render(
+            <ClienteCardRuta cliente={{ ...CLIENTE, eliminado: true }} onRestaurar={() => {}} />,
+        )
+        expect(
+            screen.getByRole('button', { name: /restaurar/i }),
+        ).toBeInTheDocument()
+
+        rerender(<ClienteCardRuta cliente={{ ...CLIENTE, eliminado: true }} />)
+        expect(screen.queryByRole('button', { name: /restaurar/i })).not.toBeInTheDocument()
+
+        rerender(<ClienteCardRuta cliente={CLIENTE} onRestaurar={() => {}} />)
+        expect(screen.queryByRole('button', { name: /restaurar/i })).not.toBeInTheDocument()
+    })
+
+    it('restaurar llama a onRestaurar sin pedir confirmación', () => {
+        const onRestaurar = vi.fn()
+        // vi.spyOn reutiliza el mismo spy si window.confirm ya está espiado por un test
+        // anterior (acá, los de "quitar"): sin este mockClear(), su historial de llamadas
+        // viejas contamina el "not.toHaveBeenCalled()" de abajo.
+        const confirmSpy = vi.spyOn(window, 'confirm')
+        confirmSpy.mockClear()
+        render(
+            <ClienteCardRuta cliente={{ ...CLIENTE, eliminado: true }} onRestaurar={onRestaurar} />,
+        )
+
+        screen.getByRole('button', { name: /restaurar/i }).click()
+
+        expect(onRestaurar).toHaveBeenCalledWith(11)
+        expect(confirmSpy).not.toHaveBeenCalled()
+    })
+
+    it('corta la propagación del pointerdown en el botón de restaurar', () => {
+        const onPointerDownDelDrag = vi.fn()
+        vi.mocked(useDraggable).mockReturnValueOnce({
+            attributes: {},
+            listeners: { onPointerDown: onPointerDownDelDrag },
+            setNodeRef: () => {},
+            transform: null,
+            isDragging: false,
+        } as unknown as ReturnType<typeof useDraggable>)
+
+        render(
+            <ClienteCardRuta cliente={{ ...CLIENTE, eliminado: true }} onRestaurar={() => {}} />,
+        )
+        fireEvent.pointerDown(screen.getByRole('button', { name: /restaurar/i }))
 
         expect(onPointerDownDelDrag).not.toHaveBeenCalled()
     })
