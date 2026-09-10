@@ -216,7 +216,8 @@ interface GridRotacionProps {
     onQuitar?: (rotacionClienteId: number) => void
     /** Ausente = no se ofrece restaurar (rotación no editable). */
     onRestaurar?: (rotacionClienteId: number) => void
-    /** Ausente = no se ofrece agregar clientes (solo la rotación Actual lo permite). */
+    /** Ausente = no se ofrece agregar clientes. Presente, se ofrece en toda celda de una
+     *  rotación editable: el grid lo silencia solo si `editable` es false. */
     onAgregar?: (semana: number, dia: number) => void
     /** false = rotación cerrada: se ve pero no se toca. */
     editable?: boolean
@@ -239,6 +240,11 @@ export default function GridRotacion({
     onAgregar,
     editable,
 }: GridRotacionProps) {
+    // `editable` ausente = editable, por compatibilidad con los callers viejos. Se resuelve
+    // UNA vez: las tres acciones de celda (arrastrar, intercambiar, agregar) tienen que
+    // aparecer y desaparecer juntas, y repetir la expresión es como se desincronizan.
+    const seEdita = editable ?? true
+
     // Celda origen del intercambio en curso. null = no hay intercambio empezado.
     const [origen, setOrigen] = useState<Celda | null>(null)
 
@@ -355,8 +361,8 @@ export default function GridRotacion({
                                         semana={semana.semana}
                                         dia={dia}
                                         clientes={semana.dias[dia]}
-                                        arrastrable={editable ?? true}
-                                        intercambiable={editable ?? true}
+                                        arrastrable={seEdita}
+                                        intercambiable={seEdita}
                                         esOrigen={
                                             origen?.semana === semana.semana &&
                                             origen?.dia === DIAS.indexOf(dia) + 1
@@ -372,7 +378,7 @@ export default function GridRotacion({
                                         onQuitar={onQuitar}
                                         onRestaurar={onRestaurar}
                                         onAgregar={
-                                            (editable ?? true) && onAgregar
+                                            seEdita && onAgregar
                                                 ? celda => onAgregar(celda.semana, celda.dia)
                                                 : undefined
                                         }

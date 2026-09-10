@@ -12,6 +12,15 @@ import type { ICeldaPlanificada, IResultadoBuscadorGeneral } from '@/types/plani
 
 const DIAS = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 
+/** El estado del cliente en la vuelta, en palabras. `sin_plan` no se rotula: es la
+ *  ausencia de fila, y en la lista se lee como "solo el código". */
+const ESTADO_BUSCADOR: Record<IResultadoBuscadorGeneral['estado'], string> = {
+    pendiente: 'Pendiente',
+    visitado: 'Visitado',
+    no_visita: 'No visitado',
+    sin_plan: '',
+}
+
 interface AgregarClienteExtraDialogProps {
     open: boolean
     onClose: () => void
@@ -75,11 +84,12 @@ export default function AgregarClienteExtraDialog({
     const [eleccion, setEleccion] = useState<Eleccion | null>(null)
     const [error, setError] = useState<string | null>(null)
 
-    const { data: resultados = [], buscando } = useBuscarEnCarteraAdmin(
-        codigoVendedor,
-        rotacionId,
-        texto,
-    )
+    const {
+        data: resultados = [],
+        buscando,
+        isError: fallóBusqueda,
+        refetch: reintentarBusqueda,
+    } = useBuscarEnCarteraAdmin(codigoVendedor, rotacionId, texto)
     const consultar = useConsultarClienteAdmin(codigoVendedor)
     const agregar = useAgregarClienteExtraAdmin(codigoVendedor)
     const traer = useReacomodarAdmin(codigoVendedor)
@@ -185,6 +195,29 @@ export default function AgregarClienteExtraDialog({
     // Al menos una de esas filas se puede mover. Una resuelta no: `reacomodar` la rechaza
     // (409 FILA_RESUELTA), así que con todas resueltas la única salida es agregar otra.
     const hayTraibles = enOtraCelda?.some(c => !c.resuelto) ?? false
+
+    /**
+     * Qué se puede hacer en ESTA celda con el cliente elegido. Un solo valor derivado, y
+     * de él salen el texto y la jerarquía del botón.
+     *
+     * Antes el botón se decidía por `hayEnOtraCelda` a secas, y eso mentía en la
+     * combinación "quitado acá + vivo en otra celda": la única acción posible era
+     * revivirlo acá, pero el botón decía "Agregar otra visita" y se pintaba secundario,
+     * como si lo importante estuviera en otra parte.
+     *
+     *  - `nada`      ya está planificado/visitado acá: no hay nada que ofrecer.
+     *  - `restaurar` hay una fila quitada en esta celda: agregar la revive.
+     *  - `otra`      está vivo en otra celda Y esa se puede traer: agregar es la
+     *                alternativa a traer, y va segundo.
+     *  - `agregar`   único camino: crear la fila acá.
+     */
+    const accion: 'nada' | 'restaurar' | 'otra' | 'agregar' = yaEstaAcaViva
+        ? 'nada'
+        : estaQuitadaAca
+          ? 'restaurar'
+          : hayTraibles
+            ? 'otra'
+            : 'agregar'
     const trabajando = agregar.isPending || traer.isPending
 
     return (
@@ -196,7 +229,13 @@ export default function AgregarClienteExtraDialog({
                         Agregar cliente
                     </Dialog.Title>
                     <Dialog.Description className="mt-1 text-[13px] text-slate-500">
-                        Va al {celdaDestino}, marcado como agregado.
+                        {/* Sin la elección hecha, el único camino posible es agregar. Después
+                            puede aparecer "Traer acá", que MUEVE una fila del plan y no la
+                            marca como agregada: prometer "marcado como agregado" ahí sería
+                            falso, y esto es lo que anuncia el lector de pantalla. */}
+                        {eleccion
+                            ? `Celda destino: ${celdaDestino}.`
+                            : `Va al ${celdaDestino}, marcado como agregado.`}
                     </Dialog.Description>
 
                     {!eleccion && (
@@ -215,6 +254,25 @@ export default function AgregarClienteExtraDialog({
                                 />
                             </div>
                             {buscando && <p className="px-1 text-xs text-slate-500">Buscando…</p>}
+                            {/* Sin esto, un GET fallado deja `resultados` en [] y la pantalla
+                                dice "Sin resultados": gerencia concluye que el cliente no es
+                                de la cartera del vendedor cuando en realidad no se preguntó
+                                nada. Es la misma trampa que CLAUDE.md documenta para los
+                                ofrecimientos: mirar solo `data` no distingue vacío de fallo. */}
+                            {fallóBusqueda && !buscando && (
+                                <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2">
+                                    <p className="text-[13px] text-red-700">
+                                        No pudimos buscar en la cartera.
+                                    </p>
+                                    <button
+                                        type="button"
+                                        className="mt-1 text-[13px] font-semibold text-red-800 underline"
+                                        onClick={() => reintentarBusqueda()}
+                                    >
+                                        Volver a intentar
+                                    </button>
+                                </div>
+                            )}
                             <div className="flex min-h-0 flex-col gap-1.5 overflow-y-auto">
                                 {resultados.map(r => (
                                     <button
@@ -228,11 +286,23 @@ export default function AgregarClienteExtraDialog({
                                             {titleCaseNombre(r.nombreCliente)}
                                         </span>
                                         <span className="text-[11px] text-slate-500">
+                                            {/* `estado`/`semana` vienen en el resultado y el
+                                                endpoint ya los calculó (una query por cliente):
+                                                mostrarlos evita tener que elegir el cliente solo
+                                                para enterarse de que ya está en la vuelta. */}
                                             {r.codigoParticularCliente}
+                                            {r.estado !== 'sin_plan' &&
+                                            r.semana !== null &&
+                                            r.dia !== null
+                                                ? ` · ${ESTADO_BUSCADOR[r.estado]} el ${etiquetaCelda(r.semana, r.dia)}`
+                                                : ''}
                                         </span>
                                     </button>
                                 ))}
-                                {texto.trim().length >= 2 && !buscando && resultados.length === 0 && (
+                                {texto.trim().length >= 2 &&
+                                    !buscando &&
+                                    !fallóBusqueda &&
+                                    resultados.length === 0 && (
                                     <p className="py-6 text-center text-sm text-slate-500">
                                         Sin resultados
                                     </p>
@@ -245,15 +315,32 @@ export default function AgregarClienteExtraDialog({
                                     </p>
                                 )}
                             </div>
+                            {/* Escape y el overlay cierran, pero el resto de los diálogos del
+                                repo ofrecen la salida explícita (ver ConfirmDialog). */}
+                            <div className="flex justify-end">
+                                <button
+                                    type="button"
+                                    className="h-9 rounded-lg border-[1.5px] border-slate-200 px-3.5 text-[13px] font-semibold text-slate-700"
+                                    onClick={cerrar}
+                                >
+                                    Cancelar
+                                </button>
+                            </div>
                         </div>
                     )}
 
                     {eleccion && (
                         <div className="mt-4 flex flex-col gap-3">
-                            {yaEstaAcaViva && (
+                            {accion === 'nada' && (
                                 <p className="text-sm leading-snug text-slate-800">
-                                    <b>{eleccion.nombre}</b> ya está planificado acá, en el{' '}
-                                    {celdaDestino}.
+                                    <b>{eleccion.nombre}</b>{' '}
+                                    {/* Una visita ya resuelta NO es "está planificado": eso
+                                        suena a pendiente, y es un hecho que ya ocurrió. La
+                                        distinción plan/hecho es la del dominio (ver CLAUDE.md),
+                                        y esta pantalla es donde gerencia la lee. */}
+                                    {enEstaCelda?.resuelto
+                                        ? `ya se resolvió acá, en el ${celdaDestino}.`
+                                        : `ya está planificado acá, en el ${celdaDestino}.`}
                                 </p>
                             )}
 
@@ -262,7 +349,7 @@ export default function AgregarClienteExtraDialog({
                                 `(rotación, cliente, semana, día)`, así que traer OTRA fila a
                                 esta celda chocaría contra el UNIQUE. Agregar acá es el único
                                 camino que funciona, y de paso la revive. */}
-                            {!yaEstaAcaViva && estaQuitadaAca && (
+                            {accion === 'restaurar' && (
                                 <p className="text-sm leading-snug text-slate-800">
                                     <b>{eleccion.nombre}</b> está quitado de este día. Agregarlo lo
                                     vuelve a poner en el {celdaDestino}.
@@ -336,26 +423,29 @@ export default function AgregarClienteExtraDialog({
                                 <button
                                     type="button"
                                     className="h-9 rounded-lg border-[1.5px] border-slate-200 px-3.5 text-[13px] font-semibold text-slate-700"
-                                    onClick={() => (yaEstaAcaViva ? cerrar() : setEleccion(null))}
+                                    onClick={() =>
+                                        accion === 'nada' ? cerrar() : setEleccion(null)
+                                    }
                                 >
-                                    {yaEstaAcaViva ? 'Cerrar' : 'Cancelar'}
+                                    {accion === 'nada' ? 'Cerrar' : 'Cancelar'}
                                 </button>
-                                {!yaEstaAcaViva && (
+                                {accion !== 'nada' && (
                                     <button
                                         type="button"
                                         disabled={trabajando}
-                                        // Secundario cuando hay algo que traer: mover el plan es
-                                        // lo correcto si el cliente cambió de lugar, y la extra
-                                        // es para la pasada puntual. Primario cuando es la única
-                                        // salida.
+                                        // Secundario SOLO cuando hay un "Traer acá" arriba con
+                                        // el que competir: mover el plan es lo correcto si el
+                                        // cliente cambió de lugar, y la extra es para la pasada
+                                        // puntual. En cualquier otro caso es la única salida, y
+                                        // una única salida no se pinta como alternativa.
                                         className={
-                                            hayEnOtraCelda
+                                            accion === 'otra'
                                                 ? 'h-9 rounded-lg border-[1.5px] border-slate-200 px-3.5 text-[13px] font-semibold text-slate-700 disabled:opacity-60'
                                                 : 'h-9 rounded-lg bg-slate-900 px-3.5 text-[13px] font-semibold text-white disabled:opacity-60'
                                         }
                                         onClick={confirmar}
                                     >
-                                        {hayEnOtraCelda ? 'Agregar otra visita' : 'Agregar'}
+                                        {accion === 'otra' ? 'Agregar otra visita' : 'Agregar'}
                                     </button>
                                 )}
                             </div>
