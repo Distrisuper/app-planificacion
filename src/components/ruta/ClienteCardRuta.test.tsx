@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { useDraggable } from '@dnd-kit/core'
 import ClienteCardRuta from './ClienteCardRuta'
 import type { IAgendaClientAdmin } from '@/types/planificacion'
@@ -89,22 +90,26 @@ describe('ClienteCardRuta', () => {
         ).not.toBeInTheDocument()
     })
 
-    it('confirma antes de quitar, y llama a onQuitar solo si se confirma', () => {
+    it('confirma antes de quitar, y llama a onQuitar solo si se confirma', async () => {
         const onQuitar = vi.fn()
-        vi.spyOn(window, 'confirm').mockReturnValue(true)
         render(<ClienteCardRuta cliente={CLIENTE} onQuitar={onQuitar} />)
 
-        screen.getByRole('button', { name: /quitar de esta vuelta/i }).click()
+        await userEvent.click(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
+        // El click solo abre el diálogo: nada se quita hasta confirmar.
+        expect(onQuitar).not.toHaveBeenCalled()
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Quitar' }))
 
         expect(onQuitar).toHaveBeenCalledWith(11)
     })
 
-    it('no quita si se cancela la confirmación', () => {
+    it('no quita si se cancela la confirmación', async () => {
         const onQuitar = vi.fn()
-        vi.spyOn(window, 'confirm').mockReturnValue(false)
         render(<ClienteCardRuta cliente={CLIENTE} onQuitar={onQuitar} />)
 
-        screen.getByRole('button', { name: /quitar de esta vuelta/i }).click()
+        await userEvent.click(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
+        await userEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
 
         expect(onQuitar).not.toHaveBeenCalled()
     })
@@ -129,6 +134,78 @@ describe('ClienteCardRuta', () => {
         fireEvent.pointerDown(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
 
         expect(onPointerDownDelDrag).not.toHaveBeenCalled()
+    })
+
+    it('el pointerdown DENTRO del diálogo tampoco arranca un drag del card', async () => {
+        // El diálogo se portalea al body, pero React propaga los eventos por el árbol de
+        // REACT: al ser hijo JSX de la card, su pointerdown llegaba a los listeners de
+        // dnd-kit, arrancaba un drag que se quedaba con el puntero y el `click` de los
+        // botones nunca se disparaba — el diálogo quedaba muerto en el navegador (en
+        // jsdom no se veía: userEvent sintetiza el click igual, haya drag o no).
+        const onPointerDownDelDrag = vi.fn()
+        vi.mocked(useDraggable).mockReturnValue({
+            attributes: {},
+            listeners: { onPointerDown: onPointerDownDelDrag },
+            setNodeRef: () => {},
+            transform: null,
+            isDragging: false,
+        } as unknown as ReturnType<typeof useDraggable>)
+
+        try {
+            render(<ClienteCardRuta cliente={CLIENTE} onQuitar={() => {}} />)
+            fireEvent.pointerDown(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
+            await userEvent.click(screen.getByRole('button', { name: /quitar de esta vuelta/i }))
+
+            fireEvent.pointerDown(screen.getByRole('button', { name: 'Cancelar' }))
+            expect(onPointerDownDelDrag).not.toHaveBeenCalled()
+        } finally {
+            const actual = await vi.importActual<typeof import('@dnd-kit/core')>('@dnd-kit/core')
+            vi.mocked(useDraggable).mockImplementation(actual.useDraggable)
+        }
+    })
+
+    it('Enter en los botones de la card no arranca un arrastre de teclado', () => {
+        // El KeyboardSensor de dnd-kit escucha el keydown en el div de la card, y los
+        // botones viven adentro: sin cortar la propagación, Enter/Espacio sobre "Quitar"
+        // arrancaban un arrastre de teclado en vez de abrir el diálogo — el botón quedaba
+        // inalcanzable sin mouse (verificado en Chromium: dnd-kit anunciaba "Draggable
+        // item card-11 was moved over droppable area" y el diálogo nunca aparecía).
+        const onKeyDownDelDrag = vi.fn()
+        vi.mocked(useDraggable).mockReturnValueOnce({
+            attributes: {},
+            listeners: { onKeyDown: onKeyDownDelDrag },
+            setNodeRef: () => {},
+            transform: null,
+            isDragging: false,
+        } as unknown as ReturnType<typeof useDraggable>)
+
+        render(<ClienteCardRuta cliente={CLIENTE} onQuitar={() => {}} />)
+        fireEvent.keyDown(screen.getByRole('button', { name: /quitar de esta vuelta/i }), {
+            key: 'Enter',
+        })
+
+        expect(onKeyDownDelDrag).not.toHaveBeenCalled()
+    })
+
+    it('la copia del overlay no arrastra ni ofrece acciones', () => {
+        // Es la card que sigue al cursor: si arrastrara, se registraría con el mismo id
+        // que la real y le pisaría la medición a mitad del movimiento.
+        render(
+            <ClienteCardRuta
+                cliente={CLIENTE}
+                overlay
+                onQuitar={() => {}}
+                onRestaurar={() => {}}
+            />,
+        )
+
+        expect(vi.mocked(useDraggable).mock.calls.at(-1)?.[0]).toMatchObject({
+            id: 'overlay-11',
+            disabled: true,
+        })
+        expect(
+            screen.queryByRole('button', { name: /quitar de esta vuelta/i }),
+        ).not.toBeInTheDocument()
     })
 
     it('una card eliminada se muestra deshabilitada, sin drag y sin "Quitar"', () => {
@@ -178,11 +255,6 @@ describe('ClienteCardRuta', () => {
 
     it('restaurar llama a onRestaurar sin pedir confirmación', () => {
         const onRestaurar = vi.fn()
-        // vi.spyOn reutiliza el mismo spy si window.confirm ya está espiado por un test
-        // anterior (acá, los de "quitar"): sin este mockClear(), su historial de llamadas
-        // viejas contamina el "not.toHaveBeenCalled()" de abajo.
-        const confirmSpy = vi.spyOn(window, 'confirm')
-        confirmSpy.mockClear()
         render(
             <ClienteCardRuta cliente={{ ...CLIENTE, eliminado: true }} onRestaurar={onRestaurar} />,
         )
@@ -190,7 +262,8 @@ describe('ClienteCardRuta', () => {
         screen.getByRole('button', { name: /restaurar/i }).click()
 
         expect(onRestaurar).toHaveBeenCalledWith(11)
-        expect(confirmSpy).not.toHaveBeenCalled()
+        // Sin diálogo de por medio: restaurar es el undo, no una acción destructiva.
+        expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     })
 
     it('corta la propagación del pointerdown en el botón de restaurar', () => {
