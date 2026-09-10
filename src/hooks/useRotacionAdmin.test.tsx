@@ -336,7 +336,9 @@ describe('useConsultarClienteAdmin', () => {
     it('consulta un cliente puntual sin invalidar nada', async () => {
         vi.mocked(api.consultarClienteAdmin).mockResolvedValue({
             yaPlanificado: true,
-            celdas: [{ rotacionClienteId: 11, semana: 1, dia: 2, eliminado: false }],
+            celdas: [
+                { rotacionClienteId: 11, semana: 1, dia: 2, eliminado: false, resuelto: false },
+            ],
         })
 
         const { result } = renderHook(() => useConsultarClienteAdmin('V 2'), { wrapper })

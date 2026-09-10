@@ -508,6 +508,10 @@ export interface ICeldaPlanificada {
     dia: number
     /** true = la fila está quitada de la rotación: agregar ahí la restaura. */
     eliminado: boolean
+    /** true = ya tiene resolución, así que NO se puede traer a otra celda: `reacomodar`
+     *  la rechaza con 409 FILA_RESUELTA. Una visita en curso también cuenta como
+     *  resuelta para esto — tampoco se mueve. */
+    resuelto: boolean
 }
 
 /**

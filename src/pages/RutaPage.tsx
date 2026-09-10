@@ -236,10 +236,10 @@ export default function RutaPage() {
                                 rotacionId={grid.id}
                                 semana={celdaAgregar.semana}
                                 dia={celdaAgregar.dia}
-                                descripcionSemana={
-                                    grid.semanas.find(s => s.semana === celdaAgregar.semana)
-                                        ?.descripcion ?? null
-                                }
+                                // Todas las semanas, no solo la del "+": el diálogo también
+                                // rotula las celdas donde el cliente ya está, y tienen que
+                                // llamarse igual que en el grid.
+                                zonas={grid.semanas}
                             />
                         )}
                     </>
