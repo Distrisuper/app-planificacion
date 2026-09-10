@@ -1,5 +1,7 @@
 import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import DescripcionInline from './DescripcionInline'
 import type { IRotacionResumen } from '@/types/planificacion'
 
@@ -38,13 +40,10 @@ export default function ColaRotaciones({
     creando,
 }: ColaRotacionesProps) {
     // Cancelar borra trabajo de planificación que puede haber llevado un rato, y el
-    // backend no lo revierte: se confirma antes.
-    const confirmarCancelar = (rotacion: IRotacionResumen) => {
-        const ok = window.confirm(
-            `¿Cancelar "${etiquetaDe(rotacion)}"? Se descarta su planificación.`,
-        )
-        if (ok) onCancelar(rotacion.id)
-    }
+    // backend no lo revierte: se confirma antes. Se guarda la rotación entera y no solo
+    // el id porque el diálogo necesita su etiqueta, y para cuando se confirma la fila
+    // puede haber desaparecido de `rotaciones` (el refetch de otra mutación).
+    const [aCancelar, setACancelar] = useState<IRotacionResumen | null>(null)
 
     // Solo las programadas forman la cola: la vigente ya se está ejecutando y las
     // cerradas/canceladas no viajan en este payload.
@@ -155,7 +154,7 @@ export default function ColaRotaciones({
                             <button
                                 type="button"
                                 aria-label={`Cancelar ${etiquetaDe(rotacion)}`}
-                                onClick={() => confirmarCancelar(rotacion)}
+                                onClick={() => setACancelar(rotacion)}
                                 className={`mr-1 rounded-full p-1 ${
                                     activa ? 'hover:bg-white/20' : 'hover:bg-slate-100'
                                 }`}
@@ -177,6 +176,21 @@ export default function ColaRotaciones({
                 <Plus className="mr-1 h-4 w-4" />
                 {creando ? 'Agregando…' : 'Agregar rotación'}
             </Button>
+
+            <ConfirmDialog
+                open={aCancelar !== null}
+                onOpenChange={abierto => {
+                    if (!abierto) setACancelar(null)
+                }}
+                title={aCancelar ? `¿Cancelar "${etiquetaDe(aCancelar)}"?` : ''}
+                description="Se descarta su planificación."
+                confirmLabel="Cancelar rotación"
+                // "Cancelar" solo, en los dos botones, sería ambiguo: uno cancela la
+                // rotación y el otro el diálogo.
+                cancelLabel="Volver"
+                destructivo
+                onConfirm={() => aCancelar && onCancelar(aCancelar.id)}
+            />
         </div>
     )
 }

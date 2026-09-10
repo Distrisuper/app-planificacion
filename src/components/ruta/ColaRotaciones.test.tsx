@@ -103,23 +103,24 @@ describe('ColaRotaciones', () => {
 
     it('pide confirmación antes de cancelar', async () => {
         const props = renderCola()
-        const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false)
 
-        await userEvent.click(screen.getAllByRole('button', { name: /cancelar/i })[0])
+        await userEvent.click(screen.getByRole('button', { name: /^cancelar programada #1$/i }))
 
-        expect(confirmar).toHaveBeenCalled()
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument()
         expect(props.onCancelar).not.toHaveBeenCalled()
-        confirmar.mockRestore()
+
+        // El botón seguro cierra el diálogo sin tocar nada.
+        await userEvent.click(screen.getByRole('button', { name: 'Volver' }))
+        expect(props.onCancelar).not.toHaveBeenCalled()
     })
 
     it('cancela cuando se confirma', async () => {
         const props = renderCola()
-        const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true)
 
-        await userEvent.click(screen.getAllByRole('button', { name: /cancelar/i })[0])
+        await userEvent.click(screen.getByRole('button', { name: /^cancelar programada #1$/i }))
+        await userEvent.click(screen.getByRole('button', { name: 'Cancelar rotación' }))
 
         expect(props.onCancelar).toHaveBeenCalledWith(30)
-        confirmar.mockRestore()
     })
 
     it('el botón de agregar avisa y se bloquea mientras crea', async () => {
