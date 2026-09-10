@@ -215,15 +215,17 @@ export default function RutaPage() {
                             onRestaurar={rotacionClienteId =>
                                 restaurar.mutate({ rotacionId: grid.id, rotacionClienteId })
                             }
-                            // Solo la rotación Actual, no las de la cola: agregar a una
-                            // programada no tiene urgencia operativa y el spec lo deja
-                            // afuera a propósito. Es más restrictivo que `editable`, que
-                            // también habilita 'programada'.
-                            onAgregar={
-                                grid.estado === 'abierta'
-                                    ? (semana, dia) => setCeldaAgregar({ semana, dia })
-                                    : undefined
-                            }
+                            // Cualquier rotación editable, igual que mover, quitar e
+                            // intercambiar: `GridRotacion` aplica el gate de `editable`
+                            // por su cuenta, así que acá no se repite la condición.
+                            //
+                            // El spec 2026-09-09 lo limitaba a la rotación en curso ("sin
+                            // caso de uso real hoy"), pero apareció: armar la PRÓXIMA
+                            // vuelta es justamente cuando hace falta sumar un cliente
+                            // nuevo. El backend nunca lo restringió — `agregarExtra` valida
+                            // con `requireRotacionEditableDe`, que acepta 'programada' y
+                            // solo rebota 'cerrada'/'cancelada'.
+                            onAgregar={(semana, dia) => setCeldaAgregar({ semana, dia })}
                         />
 
                         {celdaAgregar && vendedor && (

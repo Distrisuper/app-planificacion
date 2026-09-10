@@ -229,13 +229,13 @@ describe('RutaPage', () => {
     })
 
     /** Cola + grid de un vendedor, con el estado de la rotación como parámetro. */
-    function montarRotacion(estado: 'abierta' | 'programada') {
+    function montarRotacion(estado: 'abierta' | 'programada' | 'cerrada') {
         const rotacion = {
             id: 7,
             codigoParticularVendedor: 'V 2',
             estado,
-            fechaInicio: estado === 'abierta' ? '2026-09-01T12:00:00.000Z' : null,
-            fechaFin: null,
+            fechaInicio: estado === 'programada' ? null : '2026-09-01T12:00:00.000Z',
+            fechaFin: estado === 'cerrada' ? '2026-09-05T21:00:00.000Z' : null,
             descripcion: 'Ronda Septiembre',
             orden: estado === 'programada' ? 1 : null,
         }
@@ -267,8 +267,19 @@ describe('RutaPage', () => {
         ).toBeInTheDocument()
     })
 
-    it('no ofrece agregar clientes en una rotación programada', async () => {
+    // Armar la próxima vuelta es justamente cuando hace falta sumar un cliente nuevo, y
+    // el backend nunca lo restringió (`requireRotacionEditableDe` acepta programada).
+    it('ofrece agregar clientes en una rotación programada', async () => {
         montarRotacion('programada')
+        await elegirVendedor()
+
+        expect(
+            await screen.findByLabelText('Agregar cliente: semana 1, MAR'),
+        ).toBeInTheDocument()
+    })
+
+    it('no ofrece agregar clientes en una rotación cerrada', async () => {
+        montarRotacion('cerrada')
         await elegirVendedor()
 
         await screen.findByText(/Semana 1/)
