@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { buscarEnCartera, confirmarExtra, consultarBuscador } from '@/api/planificacion'
 import { agendaKeys } from './useAgenda'
 import { cicloKeys } from './useCiclo'
-
-const DEBOUNCE_MS = 300
+import { useTextoDebounced } from './useTextoDebounced'
 
 /** Solo lectura: consulta si el cliente ya tiene fila pendiente en la zona en curso o
  *  en otra zona. No invalida nada — no escribe. */
@@ -41,11 +39,7 @@ export function useConfirmarExtra() {
  * así que una request por tecla sobre una cartera grande es cara de verdad.
  */
 export function useBuscarEnCartera(texto: string) {
-    const [debounced, setDebounced] = useState(texto)
-    useEffect(() => {
-        const id = setTimeout(() => setDebounced(texto), DEBOUNCE_MS)
-        return () => clearTimeout(id)
-    }, [texto])
+    const debounced = useTextoDebounced(texto)
 
     const listo = debounced.trim().length >= 2
     const query = useQuery({

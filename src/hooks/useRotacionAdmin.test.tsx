@@ -8,7 +8,10 @@ import type {
     IRotacionCompleta,
 } from '@/types/planificacion'
 import {
+    useAgregarClienteExtraAdmin,
+    useBuscarEnCarteraAdmin,
     useCancelarRotacion,
+    useConsultarClienteAdmin,
     useCrearRotacion,
     useIntercambiarDias,
     useQuitarClienteAdmin,
@@ -267,5 +270,73 @@ describe('useIntercambiarDias', () => {
             semanaB: 3,
             diaB: 5,
         })
+    })
+})
+
+describe('useBuscarEnCarteraAdmin', () => {
+    it('no consulta con menos de 2 caracteres', () => {
+        renderHook(() => useBuscarEnCarteraAdmin('V 2', 7, 'a'), { wrapper })
+        expect(api.buscarEnCarteraAdmin).not.toHaveBeenCalled()
+    })
+
+    it('busca con el vendedor y la rotación del grid', async () => {
+        vi.mocked(api.buscarEnCarteraAdmin).mockResolvedValue([
+            {
+                codigoParticularCliente: 'P001',
+                nombreCliente: 'Almacén Zárate',
+                estado: 'sin_plan',
+                semana: null,
+                dia: null,
+                descripcionZona: null,
+                fecha: null,
+                motivo: null,
+            },
+        ])
+
+        const { result } = renderHook(() => useBuscarEnCarteraAdmin('V 2', 7, 'alma'), {
+            wrapper,
+        })
+
+        await waitFor(() => expect(result.current.data).toBeDefined())
+        expect(api.buscarEnCarteraAdmin).toHaveBeenCalledWith('V 2', 7, 'alma')
+    })
+})
+
+describe('useAgregarClienteExtraAdmin', () => {
+    it('crea la fila y releé el grid de esa rotación', async () => {
+        vi.mocked(api.agregarClienteExtraAdmin).mockResolvedValue({
+            rotacionClienteId: 44,
+            codigoParticularCliente: 'P001',
+            nombreCliente: 'Almacén Zárate',
+            dia: 3,
+            estado: 'pendiente',
+            ultimoMovimiento: null,
+            esExtra: true,
+            eliminado: false,
+        } as IAgendaClientAdmin)
+
+        const { result } = renderHook(() => useAgregarClienteExtraAdmin('V 2'), { wrapper })
+        result.current.mutate({ rotacionId: 7, codigoCliente: 'P001', semana: 2, dia: 3 })
+
+        await waitFor(() => expect(result.current.isSuccess).toBe(true))
+        expect(api.agregarClienteExtraAdmin).toHaveBeenCalledWith('V 2', 7, 'P001', 2, 3)
+    })
+})
+
+describe('useConsultarClienteAdmin', () => {
+    it('consulta un cliente puntual sin invalidar nada', async () => {
+        vi.mocked(api.consultarClienteAdmin).mockResolvedValue({
+            yaPlanificado: true,
+            celdas: [{ rotacionClienteId: 11, semana: 1, dia: 2, eliminado: false }],
+        })
+
+        const { result } = renderHook(() => useConsultarClienteAdmin('V 2'), { wrapper })
+        const consulta = await result.current.mutateAsync({
+            rotacionId: 7,
+            codigoCliente: 'P001',
+        })
+
+        expect(api.consultarClienteAdmin).toHaveBeenCalledWith('V 2', 7, 'P001')
+        expect(consulta.yaPlanificado).toBe(true)
     })
 })

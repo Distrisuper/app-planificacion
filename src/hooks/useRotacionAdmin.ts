@@ -1,6 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+    agregarClienteExtraAdmin,
+    buscarEnCarteraAdmin,
     cancelarRotacion,
+    consultarClienteAdmin,
     crearRotacion,
     editarDescripcionRotacion,
     editarDescripcionSemana,
@@ -18,6 +21,7 @@ import type {
     IReacomodarDTO,
     IRotacionCompleta,
 } from '@/types/planificacion'
+import { useTextoDebounced } from './useTextoDebounced'
 
 export const rotacionAdminKeys = {
     /** Toda la data de gerencia de un vendedor, para invalidar de una. */
@@ -205,6 +209,77 @@ export function useIntercambiarDias(codigo: string) {
                 semanaB: args.semanaB,
                 diaB: args.diaB,
             }),
+        onSuccess: (_data, args) => {
+            qc.invalidateQueries({
+                queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
+            })
+        },
+    })
+}
+
+// ── Buscador de cartera de gerencia (spec 2026-09-09) ──────────────────────────
+
+/** Mismo mínimo que el backend, que devuelve `[]` por debajo de 2 caracteres. */
+const MIN_CARACTERES = 2
+
+/**
+ * Busca en la cartera del vendedor, dentro de una rotación concreta.
+ *
+ * Mismo patrón que `useBuscarEnCartera` (el del vendedor): debounce y mínimo de 2
+ * caracteres, porque el endpoint resuelve el estado cliente por cliente.
+ */
+export function useBuscarEnCarteraAdmin(
+    codigo: string,
+    rotacionId: number,
+    texto: string,
+) {
+    const debounced = useTextoDebounced(texto)
+    const listo = debounced.trim().length >= MIN_CARACTERES
+
+    const query = useQuery({
+        queryKey: [...rotacionAdminKeys.vendedor(codigo), 'buscador', rotacionId, debounced],
+        queryFn: () => buscarEnCarteraAdmin(codigo, rotacionId, debounced),
+        enabled: listo,
+    })
+
+    return {
+        ...query,
+        // Mientras el debounce no alcanzó al input, lo que hay en pantalla son los
+        // resultados del texto ANTERIOR: sin esto, tipear una letra más deja ver 300ms
+        // una lista que ya no corresponde, y el "Sin resultados" aparece antes de haber
+        // buscado.
+        buscando: query.isFetching || (listo && debounced !== texto),
+    }
+}
+
+/** Solo lectura: no invalida nada. Es la consulta previa a confirmar. */
+export function useConsultarClienteAdmin(codigo: string) {
+    return useMutation({
+        mutationFn: (args: { rotacionId: number; codigoCliente: string }) =>
+            consultarClienteAdmin(codigo, args.rotacionId, args.codigoCliente),
+    })
+}
+
+/**
+ * Crea la fila extra. Sin update optimista, igual que `useQuitarClienteAdmin`: la fila
+ * nueva la arma el backend (nombre del cliente, estado) y no se puede adivinar acá.
+ */
+export function useAgregarClienteExtraAdmin(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: {
+            rotacionId: number
+            codigoCliente: string
+            semana: number
+            dia: number
+        }) =>
+            agregarClienteExtraAdmin(
+                codigo,
+                args.rotacionId,
+                args.codigoCliente,
+                args.semana,
+                args.dia,
+            ),
         onSuccess: (_data, args) => {
             qc.invalidateQueries({
                 queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
