@@ -435,6 +435,8 @@ export interface IAgendaClientAdmin {
     ultimoMovimiento: IReacomodacionInfo | null
     /** true = fila creada por el buscador del vendedor, no por el template. */
     esExtra: boolean
+    /** true = quitada de esta rotación: se muestra deshabilitada, con botón "Restaurar". */
+    eliminado: boolean
 }
 
 export interface ISemanaRotacionAdmin {

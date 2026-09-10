@@ -1,10 +1,34 @@
 import { useEffect, useState } from 'react'
-import { DndContext, useDroppable, type DragEndEvent } from '@dnd-kit/core'
+import {
+    DndContext,
+    DragOverlay,
+    KeyboardSensor,
+    MouseSensor,
+    TouchSensor,
+    useDndContext,
+    useDroppable,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from '@dnd-kit/core'
 import ClienteCardRuta from './ClienteCardRuta'
 import DescripcionInline from './DescripcionInline'
 import type { Dia, IAgendaClientAdmin, ISemanaRotacionAdmin } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
+
+/**
+ * Las opciones viven a nivel módulo, NO como objeto literal dentro del `useSensor`:
+ * `useSensor` memoiza con `[sensor, options]`, así que un literal nuevo en cada render
+ * invalida el memo, `useSensors` devuelve otro array y el `useSensorSetup` de dnd-kit
+ * desarma y rearma los sensores en cada render.
+ *
+ * (No confundir con el arrastre que se sentía tildado: se midió y NO era esto. El costo
+ * estaba en re-renderizar las 150 cards — ver el comentario de `Cuerpo` en
+ * `ClienteCardRuta`. Esto es higiene, no la solución de ese problema.)
+ */
+const OPCIONES_MOUSE = { activationConstraint: { distance: 3 } }
+const OPCIONES_TOUCH = { activationConstraint: { delay: 220, tolerance: 8 } }
 
 /** `celda-3-JUE` → `{ semana: 3, dia: 4 }`. null si el id no es de una celda. */
 export function parsearCelda(id: string): { semana: number; dia: number } | null {
@@ -62,6 +86,10 @@ interface CeldaProps {
     /** Hay un intercambio empezado en OTRA celda: esta es un destino posible. */
     esDestinoPosible: boolean
     onTocarIntercambio: (celda: { semana: number; dia: number }) => void
+    /** Ausente = no se ofrece quitar en esta celda. */
+    onQuitar?: (rotacionClienteId: number) => void
+    /** Ausente = no se ofrece restaurar en esta celda. */
+    onRestaurar?: (rotacionClienteId: number) => void
 }
 
 function Celda({
@@ -73,6 +101,8 @@ function Celda({
     esOrigen,
     esDestinoPosible,
     onTocarIntercambio,
+    onQuitar,
+    onRestaurar,
 }: CeldaProps) {
     const { setNodeRef, isOver } = useDroppable({ id: `celda-${semana}-${dia}` })
 
@@ -119,10 +149,36 @@ function Celda({
                     key={cliente.rotacionClienteId}
                     cliente={cliente}
                     arrastrable={arrastrable}
+                    onQuitar={arrastrable ? onQuitar : undefined}
+                    onRestaurar={arrastrable ? onRestaurar : undefined}
                 />
             ))}
         </td>
     )
+}
+
+/**
+ * La copia que viaja con el cursor. Lee la card activa del contexto de dnd-kit en vez de
+ * recibirla por prop a propósito: guardarla en un estado de `GridRotacion` obligaba a un
+ * `setState` en el `onDragStart`, y eso re-renderizaba la grilla entera —25 celdas, ~150
+ * cards, cada una con su `useDraggable`— exactamente en el instante de agarrar. Medido con
+ * 150 cards: el pickup pasaba de un longtask de 90ms a uno de 214ms y el feedback visual
+ * de 0 a 280ms. Se sentía tildado, que es justo lo que el overlay venía a mejorar.
+ *
+ * `DragOverlay` no monta a sus hijos si no hay arrastre, así que esto solo existe en vuelo.
+ */
+function CardArrastrada({ semanas }: { semanas: ISemanaRotacionAdmin[] }) {
+    const { active } = useDndContext()
+    const id = active ? parsearCard(String(active.id)) : null
+    if (id === null) return null
+
+    for (const semana of semanas) {
+        for (const dia of DIAS) {
+            const cliente = semana.dias[dia].find(c => c.rotacionClienteId === id)
+            if (cliente) return <ClienteCardRuta cliente={cliente} overlay />
+        }
+    }
+    return null
 }
 
 interface GridRotacionProps {
@@ -130,6 +186,10 @@ interface GridRotacionProps {
     onMover: (rotacionClienteId: number, semana: number, dia: number) => void
     onRenombrarSemana: (semana: number, descripcion: string | null) => void
     onIntercambiar: (a: Celda, b: Celda) => void
+    /** Ausente = no se ofrece quitar (rotación no editable). */
+    onQuitar?: (rotacionClienteId: number) => void
+    /** Ausente = no se ofrece restaurar (rotación no editable). */
+    onRestaurar?: (rotacionClienteId: number) => void
     /** false = rotación cerrada: se ve pero no se toca. */
     editable?: boolean
 }
@@ -146,10 +206,37 @@ export default function GridRotacion({
     onMover,
     onRenombrarSemana,
     onIntercambiar,
+    onQuitar,
+    onRestaurar,
     editable,
 }: GridRotacionProps) {
     // Celda origen del intercambio en curso. null = no hay intercambio empezado.
     const [origen, setOrigen] = useState<Celda | null>(null)
+
+
+    /**
+     * Sin `sensors`, dnd-kit usa el PointerSensor sin `activationConstraint`: el arrastre
+     * arranca en el mismo pointerdown, así que un click cualquiera sobre la card ya la
+     * atenuaba y la "enganchaba" (medido: `translate3d(0,0,0)` + opacity .5 sin mover un
+     * píxel). Con umbral, un click es un click y un arrastre es un arrastre — que es lo
+     * que hace usable tener botones dentro de la card.
+     *
+     * 3px y no 8: el umbral es tiempo en el que la card todavía no reaccionó, y con 6px
+     * el arranque ya se sentía trabado. 3px alcanza para descartar el temblor de un
+     * click (medido: un click limpio y un micro-movimiento de 1-2px no arrastran).
+     *
+     * En touch el umbral por distancia no sirve: competiría con el scroll de la grilla,
+     * que es ancha y se scrollea en horizontal. Ahí se usa mantener apretado (220ms),
+     * el gesto que el sistema ya asocia con "agarrar y mover".
+     *
+     * El KeyboardSensor se declara explícito: al pasar `sensors` se reemplaza la lista
+     * por defecto, y sin él se perdía el arrastre por teclado.
+     */
+    const sensores = useSensors(
+        useSensor(MouseSensor, OPCIONES_MOUSE),
+        useSensor(TouchSensor, OPCIONES_TOUCH),
+        useSensor(KeyboardSensor),
+    )
 
     // Escape cancela: es la salida que el usuario espera de un modo, y sin ella la única
     // forma de salir era acertarle de nuevo al botón de origen.
@@ -199,7 +286,7 @@ export default function GridRotacion({
     }
 
     return (
-        <DndContext onDragEnd={alSoltar}>
+        <DndContext sensors={sensores} onDragEnd={alSoltar}>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-4xl border-separate border-spacing-1">
                     <thead>
@@ -253,6 +340,8 @@ export default function GridRotacion({
                                             )
                                         }
                                         onTocarIntercambio={tocarCelda}
+                                        onQuitar={onQuitar}
+                                        onRestaurar={onRestaurar}
                                     />
                                 ))}
                             </tr>
@@ -260,6 +349,12 @@ export default function GridRotacion({
                     </tbody>
                 </table>
             </div>
+
+            {/* Va FUERA del div con `overflow-x-auto`: el overlay es `position: fixed`,
+                pero un ancestro que recorta igual lo cortaría al arrastrar hacia el borde. */}
+            <DragOverlay>
+                <CardArrastrada semanas={semanas} />
+            </DragOverlay>
         </DndContext>
     )
 }

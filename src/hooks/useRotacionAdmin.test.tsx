@@ -11,7 +11,9 @@ import {
     useCancelarRotacion,
     useCrearRotacion,
     useIntercambiarDias,
+    useQuitarClienteAdmin,
     useReacomodarAdmin,
+    useRestaurarClienteAdmin,
     useRotacion,
     useRotaciones,
 } from './useRotacionAdmin'
@@ -128,6 +130,7 @@ describe('useReacomodarAdmin — update optimista', () => {
                             dia: 1,
                             estado: 'pendiente' as const,
                             ultimoMovimiento: null,
+                            eliminado: false,
                             esExtra: false,
                         },
                     ],
@@ -182,6 +185,44 @@ describe('useReacomodarAdmin — update optimista', () => {
         // Vuelve a su celda original: dejarla movida mostraría un estado que no existe.
         await waitFor(() => expect(celdas(qc).LUN).toEqual([11]))
         expect(celdas(qc).JUE).toEqual([])
+    })
+})
+
+describe('useQuitarClienteAdmin', () => {
+    it('quita por rotación y fila, e invalida el grid', async () => {
+        vi.mocked(api.quitarClienteAdmin).mockResolvedValue(undefined)
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+        const w = ({ children }: { children: React.ReactNode }) => (
+            <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+        )
+
+        const { result } = renderHook(() => useQuitarClienteAdmin('V 2'), { wrapper: w })
+        await result.current.mutateAsync({ rotacionId: 7, rotacionClienteId: 11 })
+
+        expect(api.quitarClienteAdmin).toHaveBeenCalledWith('V 2', 7, 11)
+        expect(invalidateSpy).toHaveBeenCalledWith({
+            queryKey: ['rotacionAdmin', 'V 2', 'grid', 7],
+        })
+    })
+})
+
+describe('useRestaurarClienteAdmin', () => {
+    it('restaura por rotación y fila, e invalida el grid', async () => {
+        vi.mocked(api.restaurarClienteAdmin).mockResolvedValue(undefined)
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        const invalidateSpy = vi.spyOn(qc, 'invalidateQueries')
+        const w = ({ children }: { children: React.ReactNode }) => (
+            <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+        )
+
+        const { result } = renderHook(() => useRestaurarClienteAdmin('V 2'), { wrapper: w })
+        await result.current.mutateAsync({ rotacionId: 7, rotacionClienteId: 11 })
+
+        expect(api.restaurarClienteAdmin).toHaveBeenCalledWith('V 2', 7, 11)
+        expect(invalidateSpy).toHaveBeenCalledWith({
+            queryKey: ['rotacionAdmin', 'V 2', 'grid', 7],
+        })
     })
 })
 

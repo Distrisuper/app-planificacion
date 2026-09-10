@@ -8,6 +8,7 @@ const card = (id: number, dia: number): IAgendaClientAdmin => ({
     nombreCliente: `Cliente ${id}`,
     dia,
     estado: 'pendiente',
+    eliminado: false,
     ultimoMovimiento: null,
     esExtra: false,
 })

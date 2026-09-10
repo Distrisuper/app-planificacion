@@ -129,7 +129,6 @@ describe('RutaPage', () => {
             semanas: [],
         }))
         vi.mocked(apiAdmin.cancelarRotacion).mockResolvedValue(undefined)
-        const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true)
 
         renderPage()
         await screen.findByRole('option', { name: 'Juan Pérez' })
@@ -137,12 +136,11 @@ describe('RutaPage', () => {
 
         await userEvent.click(await screen.findByRole('button', { name: 'Programada #1' }))
         await userEvent.click(screen.getByRole('button', { name: 'Cancelar Programada #1' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Cancelar rotación' }))
 
         // El id 30 ya no existe: seguir pidiéndolo devuelve 404 y deja el grid en blanco.
         await screen.findByRole('button', { name: 'Ronda Agosto' })
         expect(apiAdmin.getRotacion).toHaveBeenLastCalledWith('V 2', 7)
-
-        confirmar.mockRestore()
     })
 
     it('cambiar de rotación desarma el intercambio a medio hacer', async () => {
