@@ -87,6 +87,21 @@ describe('construirFilasPropuesta', () => {
         expect(filas[0]).toMatchObject({ actual: null, mesAnterior: null, promedio6m: null })
     })
 
+    it('expandida ordena "otros rubros" por el 80/20, no por el orden del backend', () => {
+        const filas = construirFilasPropuesta(
+            [propuesta({ rubroCode: 'R1' })],
+            [
+                estado({ rubroCode: 'R1' }),
+                // Llegan en orden inverso al 80/20 (335=PARRILLAS antes que 322=AMORT):
+                estado({ rubroCode: '331', nombre: 'Bieletas' }),
+                estado({ rubroCode: '335', nombre: 'Parrillas' }),
+                estado({ rubroCode: '322', nombre: 'Amortiguadores' }),
+            ],
+            true,
+        )
+        expect(filas.map(f => f.codigo)).toEqual(['R1', '322', '335', '331'])
+    })
+
     it('los totales suman sólo las filas visibles (colapsada vs. expandida)', () => {
         const propuestaRubros = [propuesta({ rubroCode: 'R1' })]
         const status = [estado({ rubroCode: 'R1' }), estado({ rubroCode: 'R2', nombre: 'Filtros', actual: 100_000, mesAnterior: 200_000, promedio6m: 300_000 })]
@@ -152,6 +167,22 @@ describe('construirFilasVisita', () => {
         expect(filas.map(f => f.codigo)).toEqual(['AMORT', 'BAT'])
         expect(filas[1]).toMatchObject({ destacada: false, agregable: true })
         expect(filas[0].agregable).toBeUndefined()
+    })
+
+    it('expandida ordena "otros rubros" por el 80/20, no por el orden del backend', () => {
+        const filas = construirFilasVisita(
+            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
+            [
+                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
+                { rubroCode: '331', nombre: 'Bieletas', actual: 0, mesAnterior: 0, promedio6m: 0 },
+                { rubroCode: '335', nombre: 'Parrillas', actual: 0, mesAnterior: 0, promedio6m: 0 },
+                { rubroCode: '322', nombre: 'Amortiguadores', actual: 0, mesAnterior: 0, promedio6m: 0 },
+            ],
+            { 7: { motivosCargados: 0, completo: false } },
+            true,
+            true,
+        )
+        expect(filas.map(f => f.codigo)).toEqual(['AMORT', '322', '335', '331'])
     })
 
     it('con la visita cerrada, ninguna fila trae resolucion ni agregable', () => {
