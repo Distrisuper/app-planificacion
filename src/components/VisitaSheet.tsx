@@ -486,7 +486,22 @@ export default function VisitaSheet({
                     onClick={cerrarConBorrador}
                     disabled={faltanParaMinimo > 0}
                     loading={cerrando || guardandoBorrador}
-                    className="h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90"
+                    // El naranja queda reservado para "ya podés cerrar". Mientras falten
+                    // rubros va gris con texto navy, y NO el naranja al 40% de opacidad
+                    // que daba el `disabled:` del variant: eso se veía como un CTA roto
+                    // — del tamaño del botón principal, gritando "tocame", ilegible por
+                    // el bajo contraste del blanco sobre naranja lavado, y sin comunicar
+                    // que el que falta es el vendedor. Gris + navy se lee como ESTADO, y
+                    // de paso el salto a naranja se vuelve una señal de progreso.
+                    //
+                    // `disabled:opacity-100` es necesario: el 40% del variant también
+                    // lavaría el gris y dejaría el texto del faltante ilegible, que es
+                    // justo el único texto que el vendedor necesita leer en ese momento.
+                    className={
+                        faltanParaMinimo > 0
+                            ? 'h-12 w-full border border-[#D8DEEA] bg-[#F1F4F9] text-[15px] text-dsnavy disabled:opacity-100'
+                            : 'h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90'
+                    }
                 >
                     {/* El faltante va DENTRO del botón deshabilitado, no en una línea
                      *  aparte arriba: dice lo mismo, en el único lugar donde el vendedor

@@ -486,18 +486,22 @@ it('con acción y marca a la vez, cada una aparece en su propia sección', () =>
     expect(screen.getByText('Marcas')).toBeInTheDocument()
 })
 
-it('en la tabla de una visita, el header dice el gesto de tocar la fila', () => {
+// El gesto va en una banda de ancho completo y NO en la columna Rubro: ahí mide
+// ~60-100px en mobile y el texto salía truncado.
+it('en la tabla de una visita, una banda propia dice el gesto de cargar', () => {
     render(
         <OfrecimientoTable
             filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
         />,
     )
-    expect(screen.getAllByRole('columnheader')[0].textContent).toMatch(/rubro · tocá para cargar/i)
+    expect(screen.getByText(/tocá uno para cargar el resultado/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Rubro')
 })
 
-it('en la propuesta (sin filas resolubles) el header no pide tocar nada', () => {
+it('en la propuesta (sin filas resolubles) no hay banda de cargar', () => {
     render(<OfrecimientoTable filas={[fila()]} />)
-    expect(screen.getAllByRole('columnheader')[0].textContent).not.toMatch(/tocá/i)
+    expect(screen.queryByText(/tocá uno para cargar el resultado/i)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Rubro')
 })
 
 it('el chip pendiente va navy relleno y los resueltos en tinte suave', () => {

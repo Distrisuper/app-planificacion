@@ -770,5 +770,25 @@ it('no muestra el párrafo introductorio: la instrucción vive en el header de l
     await screen.findByText('Amortiguadores')
 
     expect(screen.queryByText(/cargá el resultado de cada rubro/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/tocá para cargar/i)).toBeInTheDocument()
+    expect(screen.getByText(/tu propuesta · tocá uno para cargar el resultado/i)).toBeInTheDocument()
+})
+
+// El naranja es de "ya podés cerrar". Mientras falten rubros el botón va gris con
+// texto navy y a opacidad plena: el naranja al 40% se veía como un CTA roto y dejaba
+// ilegible el único texto que el vendedor necesita leer en ese momento.
+it('el boton de cerrar va gris mientras falten rubros y naranja cuando se puede cerrar', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    const bloqueado = screen.getByRole('button', { name: /cargá 1 rubro más/i })
+    expect(bloqueado).toHaveClass('bg-[#F1F4F9]', 'text-dsnavy', 'disabled:opacity-100')
+    expect(bloqueado).not.toHaveClass('bg-dsorange')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    const habilitado = await screen.findByRole('button', { name: /^cerrar visita$/i })
+    expect(habilitado).toHaveClass('bg-dsorange')
+    expect(habilitado).toBeEnabled()
 })

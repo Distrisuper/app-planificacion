@@ -312,15 +312,28 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `larga` fuera rojo, rojo significaría dos cosas. (3) `VisitaSheet` recibe
   `alejado={esClienteEnCurso && alejado}`, no `enCurso && alejado`: el vendedor puede estar
   mirando la propuesta de otro cliente mientras la visita corre en otro lado.
-- **En la tabla de la visita, el gesto se explica en el header sticky y no en un párrafo.**
-  `RUBRO · TOCÁ PARA CARGAR` (solo con `conChip`), y el chip pendiente es navy **relleno**
-  con el ＋ en blanco mientras el ✓ verde y el número ámbar quedan en tinte suave: son
-  estados, no invitaciones, y ese contraste es lo que hace legible qué falta. El párrafo
-  introductorio ("Cargá el resultado de cada rubro…") se borró — costaba ~54px de una
-  pantalla donde entran 5 filas; no volver a agregarlo. Con él se fue el único texto que
-  explicaba la convención de **"No lo ofrecí"**, y se acepta. El botón del pie dice
-  `Cargá N rubros más` (no "Completá"): mismo verbo que el header, que es lo que conecta
-  la instrucción con el botón que bloquea.
+- **En la tabla de la visita, el gesto se explica en una banda de ancho completo, NO en la
+  columna `Rubro`.** `Tu propuesta · tocá uno para cargar el resultado`, gemela de la que
+  ya existía abajo (`Otros rubros del cliente · tocá uno para agregarlo`): dos bandas,
+  misma gramática, **verbos opuestos** — arriba se carga, abajo se agrega. Ese contraste es
+  lo que hace que la pantalla se explique sola. **No volver a meter la instrucción en el
+  header de columnas**: esa columna absorbe lo que sobra después del chip (26px) y los
+  3×54px de números, así que en mobile mide ~60-100px y `Rubro · tocá para cargar` salía
+  truncado en `Rubro · tocá para c…` — se probó y se revirtió. La banda de arriba es
+  estática (la de abajo sí es sticky): el bloque que rotula son ~5 filas pegadas a ella, y
+  scrolleado más abajo la instrucción que corresponde es la otra. El párrafo introductorio
+  ("Cargá el resultado de cada rubro…") se borró — costaba ~54px de una pantalla donde
+  entran 5 filas; con él se fue el único texto que explicaba la convención de **"No lo
+  ofrecí"**, y se acepta. El botón del pie dice `Cargá N rubros más` (no "Completá"): mismo
+  verbo que la banda, que es lo que conecta la instrucción con el botón que bloquea.
+- **El botón de cerrar visita va gris mientras falten rubros, y naranja solo cuando se
+  puede cerrar.** El naranja al 40% que daba el `disabled:` del variant se veía como un CTA
+  roto: del tamaño del botón principal, gritando "tocame", con el blanco ilegible sobre
+  naranja lavado y sin comunicar que el que falta es el vendedor. Gris `#F1F4F9` + texto
+  `dsnavy` se lee como **estado**, y de paso el salto a naranja queda como señal de
+  progreso. Necesita `disabled:opacity-100` explícito: el 40% del variant también lavaría
+  el gris y dejaría ilegible el texto del faltante, que es justo el único que hay que leer
+  en ese momento.
 - **Al cerrar visita se genera un seguimiento en Cromo automáticamente** (`POST /crm/events`),
   reemplazando el redirect manual a Cromo que existe hoy en el flujo de Lupa.
 - **La vista semanal SÍ muestra el estado de cada cliente**, y es gratis: sale del `LEFT JOIN` con la

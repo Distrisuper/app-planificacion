@@ -391,6 +391,25 @@ export default function OfrecimientoTable({
             agregandoCodes={agregandoCodes}
             eliminandoIds={eliminandoIds}
         />
+        {/* La gemela de "Otros rubros del cliente · tocá uno para agregarlo": dos bandas,
+            misma gramática, verbos opuestos — arriba se CARGA el resultado, abajo se
+            AGREGA un rubro. Ese contraste es lo que hace que la pantalla se explique sola,
+            y reemplaza al párrafo de tres líneas que vivía arriba del sheet (~54px contra
+            ~18px de esto).
+
+            De ancho completo y no dentro del header de columnas porque ahí no entra (ver
+            la nota del `columnheader`). Estática y no sticky a propósito: el bloque de
+            arriba son ~5 filas pegadas a esta banda, así que mientras el vendedor lo está
+            mirando la banda está a la vista igual. Scrolleado más abajo ya está en el
+            catálogo, y ahí la instrucción que corresponde es la otra — que sí es sticky.
+
+            Solo en la tabla de una visita (`conChip`): en la propuesta previa no hay nada
+            que cargar. */}
+        {conChip && (
+            <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
+                Tu propuesta · tocá uno para cargar el resultado
+            </p>
+        )}
         {/* Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
             overflow oculto anula el `position: sticky` de adentro contra el scroll del
             sheet. Las esquinas de arriba las redondea el propio header. */}
@@ -400,16 +419,14 @@ export default function OfrecimientoTable({
                 scrollea (ACTUAL vs. M.ANT vs. P.6M no se adivinan por el valor). */}
             <div className="sticky top-0 z-20 flex h-8 items-center gap-1 rounded-t-[11px] border-b border-dsline bg-[#F7F8FB] px-2.5 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
                 {conChip && <div className={ANCHO_CHIP} />}
-                {/* En la tabla de una visita (`conChip`) el rótulo dice además el gesto:
-                    es el único texto que explica que la fila se toca para cargar el
-                    resultado, y reemplaza al párrafo introductorio que vivía arriba del
-                    sheet (ver VisitaSheet). Va acá y no en un `<p>` aparte por dos
-                    razones: cuesta cero px (la palabra "Rubro" ya ocupaba esta línea) y,
-                    al ser sticky, la instrucción sigue a la vista con el catálogo
-                    scrolleado — que es justo cuando el vendedor la necesita. Mismo patrón
-                    que "Otros rubros del cliente · tocá uno para agregarlo". */}
-                <div role="columnheader" className="min-w-0 flex-1 truncate">
-                    Rubro{conChip && ' · tocá para cargar'}
+                {/* Solo "Rubro". La instrucción de tocar la fila vivió acá un rato y fue un
+                    error: esta columna es la que absorbe lo que sobra después de los 26px
+                    del chip y los 3×54px de números, así que en mobile mide ~60-100px y
+                    "Rubro · tocá para cargar" salía cortado en "Rubro · tocá para c…" —
+                    una instrucción truncada es peor que ninguna. Ahora vive en la banda de
+                    ancho completo de arriba (`BANDA_PROPUESTA`), que es donde entra. */}
+                <div role="columnheader" className="min-w-0 flex-1">
+                    Rubro
                 </div>
                 {/* pr-1.5: el número de datos vive dentro de una pastilla con ese mismo
                     padding interno — sin este ajuste, la etiqueta del header queda pegada

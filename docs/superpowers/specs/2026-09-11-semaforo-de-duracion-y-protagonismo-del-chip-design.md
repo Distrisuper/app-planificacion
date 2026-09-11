@@ -87,12 +87,25 @@ olvido.
 Tres cambios que trabajan juntos; ninguno solo alcanza. El eje es que **el vendedor tenga
 un mismo verbo** desde la instrucción hasta el botón que lo bloquea.
 
-**a. El header sticky dice el gesto.** `RUBRO` → `RUBRO · TOCÁ PARA CARGAR`, solo en la
-tabla de una visita (`conChip`). Es el patrón que ya existía en *"Otros rubros del cliente
-· tocá uno para agregarlo"*. Va acá y no en un `<p>` por dos razones: cuesta **cero px**
-(la palabra "Rubro" ya ocupaba esa línea) y, al ser sticky, la instrucción **sigue a la
-vista con el catálogo scrolleado** — que es justo cuando se necesita, y lo que el párrafo
-de arriba no hacía.
+**a. Una banda de ancho completo dice el gesto.** `Tu propuesta · tocá uno para cargar el
+resultado`, arriba del bloque de ofrecimientos y solo en la tabla de una visita
+(`conChip`). Es la gemela de la que ya existía abajo, *"Otros rubros del cliente · tocá uno
+para agregarlo"*: dos bandas, misma gramática, **verbos opuestos** — arriba se carga, abajo
+se agrega. Ese contraste es lo que hace que la pantalla se explique sola. Cuesta ~18px
+contra los ~54px del párrafo.
+
+> **Corrección (mismo día).** La primera versión metió la instrucción en el header de
+> columnas (`RUBRO · TOCÁ PARA CARGAR`) con el argumento de que costaba "cero px". Estaba
+> mal: esa columna es la que absorbe lo que sobra después de los 26px del chip y los
+> 3×54px de números, así que en mobile mide ~60-100px y el texto salía cortado en
+> `RUBRO · TOCÁ PARA C…`. Una instrucción truncada es peor que ninguna. **No volver a
+> ponerla ahí.**
+>
+> La banda de arriba es **estática**, no sticky — y el argumento del "sigue a la vista con
+> el catálogo scrolleado" también era flojo: el bloque que rotula son ~5 filas pegadas a
+> ella, así que mientras se lo mira la banda está a la vista igual; y scrolleado más abajo
+> el vendedor ya está en el catálogo, donde la instrucción que corresponde es la otra (esa
+> sí es sticky, y por eso lo necesita).
 
 **b. El chip pendiente pasa a navy relleno con el ＋ en blanco** (24px), en lugar del
 `bg-[#F1F4F9]` con borde `#C9D2E3` y ＋ navy. Sobre el fondo blanco del sheet ese gris era
@@ -105,8 +118,25 @@ lleve 24px contra los 22 de los resueltos (entra en `ANCHO_CHIP`, 26px, sin corr
 columna).
 
 **c. El botón del pie usa el mismo verbo.** `Completá N rubros más` → `Cargá N rubros más`.
-Chico, pero es lo que cierra el círculo: el header dice "tocá para **cargar**", el botón
-pide "**cargá** 2 más". Con "Completá" no había de dónde agarrarse.
+Chico, pero es lo que cierra el círculo: la banda dice "tocá uno para **cargar** el
+resultado", el botón pide "**cargá** 2 más". Con "Completá" no había de dónde agarrarse.
+
+**d. Y deja de parecer un CTA roto.** El `disabled:opacity-40` del variant sobre
+`bg-dsorange` daba un naranja lavado con texto blanco: del tamaño del botón principal,
+gritando "tocame", ilegible, y sin comunicar que el que falta es el vendedor.
+
+| | falta cargar | listo |
+|---|---|---|
+| antes | naranja al 40% · `Cargá 2 rubros más` | naranja · `Cerrar visita` |
+| ahora | **gris `#F1F4F9` + texto `dsnavy`, opacidad plena** | naranja · `Cerrar visita` |
+
+El naranja queda reservado para "ya podés cerrar", así que el salto de color se vuelve una
+señal de progreso. El `disabled:opacity-100` explícito es necesario: el 40% del variant
+también lavaría el gris y dejaría ilegible el texto del faltante, que es justo el único que
+hay que poder leer en ese momento.
+
+El faltante **sigue adentro del botón**, como estaba documentado en `VisitaSheet.tsx`: lo
+que estaba mal era el color, no el lugar.
 
 El párrafo introductorio **se borra**. Lo único accionable que decía se mudó al header.
 
@@ -125,9 +155,9 @@ el problema real, y la pantalla tiene que priorizar filas de tabla sobre prosa.
 | `src/lib/estadoDuracion.ts` | **nuevo** — umbrales, `estadoVisitaVivo`, paleta y rótulos |
 | `src/lib/visitaTimer.ts` | `formatearDuracion` con horas desde los 60 min |
 | `src/components/VisitaEnCursoBar.tsx` | color del semáforo + `· visita larga` |
-| `src/components/VisitaSheet.tsx` | prop `alejado`, eyebrow del semáforo, fuera el párrafo, verbo del botón |
+| `src/components/VisitaSheet.tsx` | prop `alejado`, eyebrow del semáforo, fuera el párrafo, verbo y color del botón |
 | `src/components/VisitaFlow.tsx` | pasa `alejado={esClienteEnCurso && alejado}` |
-| `src/components/propuesta/OfrecimientoTable.tsx` | header con el gesto, chip pendiente navy relleno |
+| `src/components/propuesta/OfrecimientoTable.tsx` | banda con el gesto, chip pendiente navy relleno |
 
 Tests: `estadoDuracion.test.ts` (nuevo, con los bordes exactos 15:00/90:00 y la
 precedencia de `alejado`), más los de `visitaTimer`, `VisitaEnCursoBar`, `VisitaSheet` y
