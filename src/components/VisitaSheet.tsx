@@ -44,11 +44,16 @@ interface VisitaSheetProps {
      *  cronómetro. */
     enCurso?: boolean
     /** true = el vendedor está lejos del cliente DE ESTA visita, con la visita abierta.
-     *  Pinta el eyebrow en rojo, igual que la barra flotante — es la misma visita vista
-     *  desde el otro lado del minimizar. El llamador tiene que asegurarse de que la
-     *  visita abierta en el sheet sea la que está en curso (ver `esClienteEnCurso` en
-     *  VisitaFlow): el vendedor puede estar mirando la propuesta de otro cliente
-     *  mientras la visita corre en otro lado, y ahí este aviso no aplica. */
+     *  Lo calcula `useAlejadoDelCliente`, en VisitaFlow.
+     *
+     *  Alimenta dos cosas: el eyebrow pasa a rojo (igual que la barra flotante — es la
+     *  misma visita vista desde el otro lado del minimizar) y aparece el aviso con
+     *  "Ver mi posición" arriba de Cerrar visita.
+     *
+     *  El llamador tiene que asegurarse de que la visita abierta en el sheet sea la que
+     *  está en curso (ver `esClienteEnCurso` en VisitaFlow): el vendedor puede estar
+     *  mirando la propuesta de otro cliente mientras la visita corre en otro lado, y ahí
+     *  este aviso no aplica. */
     alejado?: boolean
     /** Si se pasa, habilita la tabla "cómo viene comprando" durante la visita, igual
      *  que en la Propuesta previa. */
@@ -62,9 +67,6 @@ interface VisitaSheetProps {
      *  sin las dos no se muestra la fila. */
     cliente?: IVisitClientCard
     onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
-    /** true = el vendedor está lejos del cliente de ESTA visita, con la visita abierta.
-     *  Lo calcula useAlejadoDelCliente, en VisitaFlow. */
-    alejado?: boolean
     /** Abre MapaVisita en modo consulta. Sólo tiene sentido junto con `alejado`. */
     onVerPosicion?: () => void
 }
@@ -83,7 +85,6 @@ export default function VisitaSheet({
     cerrando,
     cliente,
     onAbrirAppExterna,
-    alejado,
     onVerPosicion,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)

@@ -353,11 +353,6 @@ export default function VisitaFlow({
                     nombreCliente={nombre}
                     visitaCerrada={cliente.estado === 'visitada'}
                     enCurso={enCurso}
-                    // `esClienteEnCurso` y no `enCurso` a secas: `alejado` se calcula
-                    // contra las coords del cliente de LA visita en curso, así que
-                    // pintarlo en el sheet de otro cliente sería un aviso sobre un
-                    // local que no es el que está mirando.
-                    alejado={esClienteEnCurso && alejado}
                     codigoParticularCliente={cliente.codigoParticularCliente}
                     cliente={cliente}
                     onAbrirAppExterna={onAbrirAppExterna}
@@ -365,6 +360,10 @@ export default function VisitaFlow({
                     cerrando={cerrandoFlujo}
                     onCerrarVisita={onCerrarVisita}
                     onClose={cerrarFlujo}
+                    // `esClienteEnCurso` y no `enCurso` a secas: `alejado` se calcula
+                    // contra las coords del cliente de LA visita en curso, así que
+                    // pintarlo en el sheet de otro cliente sería un aviso sobre un
+                    // local que no es el que está mirando.
                     alejado={alejado && esClienteEnCurso}
                     onVerPosicion={() => setVerPosicion(true)}
                 />

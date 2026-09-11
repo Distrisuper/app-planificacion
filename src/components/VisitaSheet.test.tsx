@@ -639,7 +639,7 @@ it('no ofrece ver la posición si el vendedor no se alejó', async () => {
 
     // Esperar a que el pie termine de armarse (los ofrecimientos cargan async y el botón
     // de cerrar recién aparece con ellos): si no, el queryBy pasa por pantalla vacía.
-    await screen.findByRole('button', { name: /cerrar visita|completá/i })
+    await screen.findByRole('button', { name: /cerrar visita|cargá/i })
 
     expect(screen.queryByRole('button', { name: 'Ver mi posición' })).not.toBeInTheDocument()
 })
