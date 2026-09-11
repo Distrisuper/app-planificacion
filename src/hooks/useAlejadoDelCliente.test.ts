@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { vi } from 'vitest'
 import { useAlejadoDelCliente } from './useAlejadoDelCliente'
 
-/** Igual patrón que IniciarVisitaMapa.test.tsx: reemplaza `navigator` entero por un mock
+/** Igual patrón que MapaVisita.test.tsx: reemplaza `navigator` entero por un mock
  *  controlable. `wakeLockRequest` es opcional — cuando no se pasa, `navigator.wakeLock`
  *  directamente no existe, para probar el caso "la API no está". */
 function mockNavigator(opts: {
@@ -143,4 +143,69 @@ it('limpia el watch y el listener de visibilitychange al desmontarse', () => {
     Object.defineProperty(document, 'hidden', { value: false, configurable: true })
     document.dispatchEvent(new Event('visibilitychange'))
     expect(getCurrentPosition).not.toHaveBeenCalled()
+})
+
+it('entra a alejado con un fix lejano aunque la precisión sea gruesa (caso Chrome DevTools Sensors)', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    // El override de ubicación de Chrome DevTools (panel Sensors) no tiene forma de
+    // configurar la precisión desde la UI, y reporta un valor fijo por encima de
+    // RADIO_INICIO_METROS. Con una distancia que aplasta cualquier margen de error
+    // (~1.100 km), el fix tiene que seguir entrando: `d - p` sigue siendo evidencia
+    // sólida de lejanía. Bloquearlo con una puerta ciega sobre la precisión (lo que
+    // hacía la implementación anterior) rompía justo este caso.
+    act(() => entregar(fix(10, 0, 150)))
+
+    expect(result.current.alejado).toBe(true)
+})
+
+it('un fix ambiguo no saca del aviso, pero sí actualiza la distancia mostrada', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    act(() => entregar(fix(0.01, 0, 5)))
+    expect(result.current.alejado).toBe(true)
+
+    // ~180 m con 150 m de precisión: `d + p` = 330 > 100, no alcanza para probar que
+    // volvió (evidencia insuficiente, no evidencia de lo contrario). Se queda en
+    // alejado, pero la distancia que se muestra sí se actualiza al último fix conocido.
+    act(() => entregar(fix(0.00162, 0, 150)))
+
+    expect(result.current.alejado).toBe(true)
+    expect(result.current.distanciaM).toBeCloseTo(180, -1)
+})
+
+it('la salida exige evidencia de cercanía aun en el peor caso para el fix', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    act(() => entregar(fix(0.01, 0, 5)))
+    expect(result.current.alejado).toBe(true)
+
+    // ~56 m con 60 m de precisión: `d + p` = 116 > 100 — ni en el mejor caso (d - p)
+    // ni en el peor (d + p) hay evidencia concluyente, así que no sale.
+    act(() => result.current.evaluarFix(0.0005, 0, 60))
+    expect(result.current.alejado).toBe(true)
+
+    // ~56 m con 40 m de precisión: `d + p` = 96 <= 100 — aun en el peor caso, adentro.
+    act(() => result.current.evaluarFix(0.0005, 0, 40))
+    expect(result.current.alejado).toBe(false)
+})
+
+it('evaluarFix apaga el aviso con un fix fino y cercano', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    act(() => entregar(fix(0.01, 0, 5)))
+    expect(result.current.alejado).toBe(true)
+
+    // ~44 m del cliente con 15 m de precisión: `d + p` = 59 <= 100.
+    act(() => result.current.evaluarFix(0.0004, 0, 15))
+
+    expect(result.current.alejado).toBe(false)
 })

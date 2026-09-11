@@ -625,6 +625,33 @@ it('poda del borrador los motivos que ya no están en el catálogo', async () =>
     )
 })
 
+it('ofrece ver la posición cuando el vendedor se alejó', async () => {
+    const onVerPosicion = vi.fn()
+    renderSheet({ alejado: true, onVerPosicion })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ver mi posición' }))
+
+    expect(onVerPosicion).toHaveBeenCalled()
+})
+
+it('no ofrece ver la posición si el vendedor no se alejó', async () => {
+    renderSheet({ alejado: false, onVerPosicion: vi.fn() })
+
+    // Esperar a que el pie termine de armarse (los ofrecimientos cargan async y el botón
+    // de cerrar recién aparece con ellos): si no, el queryBy pasa por pantalla vacía.
+    await screen.findByRole('button', { name: /cerrar visita|completá/i })
+
+    expect(screen.queryByRole('button', { name: 'Ver mi posición' })).not.toBeInTheDocument()
+})
+
+it('no ofrece ver la posición con la visita ya cerrada', async () => {
+    renderSheet({ alejado: true, visitaCerrada: true, onVerPosicion: vi.fn() })
+
+    await screen.findByText('Amortiguadores')
+
+    expect(screen.queryByRole('button', { name: 'Ver mi posición' })).not.toBeInTheDocument()
+})
+
 // Acción Comercial se sacó del formulario de resolución (spec 2026-08-19): en la práctica
 // `accion` siempre es null, así que `detalle` solo existe para llevar la marca. El backend
 // la acepta sin acción desde el fix de 2026-08-21 (validarDetalleAccion ya no exige
