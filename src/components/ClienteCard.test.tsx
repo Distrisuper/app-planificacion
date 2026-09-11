@@ -72,7 +72,7 @@ it('no_visita (sin visita real) no muestra fila de acciones', () => {
     render(
         <ClienteCard cliente={cliente({ estado: 'no_visita', telefono: '1140506070' })} {...handlers} />,
     )
-    expect(botones()).toEqual(['Pagos', 'Versus', 'CRM'])
+    expect(botones()).toEqual(['Pagos', 'Versus', 'Lupa', 'CRM'])
     expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
 })
 
