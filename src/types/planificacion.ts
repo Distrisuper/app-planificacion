@@ -81,6 +81,10 @@ export interface IVisitClientCard {
     paymentCreditLimit?: number | null
     paymentAmount?: number | null
     paymentPlan?: number | null
+    /** Observación que el vendedor dejó al cerrar la visita. Solo presente cuando este
+     *  card viaja como `IAgendaClient` (ver ahí) — se declara acá, opcional, para que
+     *  VisitaSheet pueda leerla del prop `cliente` sin castear. */
+    observaciones?: string | null
 }
 
 /** Estado del aviso a Cromo de una resolución (api-vendedores,

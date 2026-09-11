@@ -38,6 +38,7 @@ const cliente: IAgendaClient = {
     ofrecimientosPendientes: 0,
     seguimiento: { estado: 'no_corresponde', motivo: null, mensaje: null },
     esExtra: false,
+    observaciones: null,
 }
 
 interface HarnessProps {
@@ -569,6 +570,7 @@ const otroCliente: IAgendaClient = {
     ofrecimientosPendientes: 0,
     seguimiento: { estado: 'no_corresponde', motivo: null, mensaje: null },
     esExtra: false,
+    observaciones: null,
 }
 
 it('la visita en curso sigue viva aunque se abra y cierre la propuesta de otro cliente', async () => {

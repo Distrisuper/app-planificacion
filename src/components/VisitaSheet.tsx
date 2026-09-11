@@ -28,9 +28,16 @@ import {
     leerDetalles,
     guardarDetalles,
     limpiarDetalles,
+    leerObservaciones,
+    guardarObservaciones,
+    limpiarObservaciones,
 } from '@/lib/resolucionDraft'
 import type { AppExterna } from '@/lib/appsExternas'
 import type { IAccionComercial, IOfrecimiento, IOfrecimientoMotivo, IVisitClientCard } from '@/types/planificacion'
+
+/** Tiene que coincidir con el VARCHAR(500) de pl_resolucion.observaciones y con
+ *  OBSERVACIONES_MAX del controller de api-vendedores. */
+const OBSERVACIONES_MAX = 500
 
 interface VisitaSheetProps {
     open: boolean
@@ -58,7 +65,9 @@ interface VisitaSheetProps {
     /** Si se pasa, habilita la tabla "cómo viene comprando" durante la visita, igual
      *  que en la Propuesta previa. */
     codigoParticularCliente?: string
-    onCerrarVisita: () => void
+    /** Recibe la observación libre ya normalizada (trim, `''` → null). Se manda en el
+     *  PUT de cierre, que es su único punto de escritura. */
+    onCerrarVisita: (observaciones: string | null) => void
     onClose: () => void
     /** Si se pasa (y enCurso), aparece el botón de minimizar en el header. */
     onMinimize?: () => void
@@ -117,6 +126,7 @@ export default function VisitaSheet({
     // cambio. No se manda al backend hasta "Cerrar visita" — ver cerrarConBorrador.
     const [borradores, setBorradores] = useState<Record<number, IOfrecimientoMotivo[]>>({})
     const [detalles, setDetalles] = useState<Record<number, IAccionComercial | null>>({})
+    const [observaciones, setObservaciones] = useState('')
     const [borradorListo, setBorradorListo] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
@@ -152,6 +162,7 @@ export default function VisitaSheet({
             setWizard(null)
             setBorradores({})
             setDetalles({})
+            setObservaciones('')
             setBorradorListo(false)
             setErrorGuardado(null)
             setAltaAbierta(false)
@@ -175,6 +186,7 @@ export default function VisitaSheet({
             return next
         })
         setDetalles(prev => (Object.keys(prev).length > 0 ? prev : (leerDetalles(visitaId) ?? {})))
+        setObservaciones(prev => (prev !== '' ? prev : (leerObservaciones(visitaId) ?? '')))
         setBorradorListo(true)
     }, [open, ofrecimientosCargados, visitaId, ofrecimientos])
 
@@ -215,7 +227,8 @@ export default function VisitaSheet({
         if (!open || !borradorListo) return
         guardarBorrador(visitaId, borradores)
         guardarDetalles(visitaId, detalles)
-    }, [open, borradorListo, visitaId, borradores, detalles])
+        guardarObservaciones(visitaId, observaciones)
+    }, [open, borradorListo, visitaId, borradores, detalles, observaciones])
 
     // Abre el wizard del ofrecimiento recién agregado, en cuanto el refetch de
     // `ofrecimientos` lo trae. Se resuelve acá y no en `agregarDesdeTabla`/
@@ -427,7 +440,11 @@ export default function VisitaSheet({
 
         limpiarBorrador(visitaId)
         limpiarDetalles(visitaId)
-        onCerrarVisita()
+        limpiarObservaciones(visitaId)
+        // Trimmeado del lado del front además del backend: así "   " no viaja como si
+        // fuera una observación. null y no '' — es el mismo valor que la columna.
+        const texto = observaciones.trim()
+        onCerrarVisita(texto === '' ? null : texto)
     }
 
     // El pie es fijo (fuera del scroll) tanto en list (Cerrar visita) como en el
@@ -467,6 +484,56 @@ export default function VisitaSheet({
                     >
                         Ver mi posición
                     </button>
+                </div>
+            )}
+            {/* En el pie FIJO y no al final del cuerpo scrolleable: así el vendedor ve
+             *  siempre si dejó observación o no, sin scrollear debajo de un catálogo que
+             *  puede tener docenas de filas. Es una decisión tomada sabiendo su costo —
+             *  ~56px del pie, que es el recurso más escaso del sheet, y el riesgo del
+             *  teclado en iOS (ver el spec y el meta viewport de index.html).
+             *
+             *  `ofrecimientosCargados` es parte del gate por la misma razón que en el
+             *  botón de cerrar: con el GET en vuelo o fallado, `ofrecimientos` es [] y
+             *  min(2, 0) es 0, así que el mínimo se auto-satisface. */}
+            {!visitaCerrada && ofrecimientosCargados && faltanParaMinimo === 0 && (
+                <div className="mb-2.5">
+                    <div className="mb-1 flex items-baseline justify-between">
+                        <label
+                            htmlFor="visita-observaciones"
+                            className="text-[9.5px] font-bold uppercase tracking-wide text-dsmuted"
+                        >
+                            Observaciones (opcional)
+                        </label>
+                        <span className="text-[10px] font-semibold tabular-nums text-dsmuted">
+                            {observaciones.length}/{OBSERVACIONES_MAX}
+                        </span>
+                    </div>
+                    {/* `rows={2}` fijo, sin auto-grow: un textarea que crece dentro de un
+                     *  pie fijo mueve el botón de cerrar mientras el vendedor tipea. */}
+                    <textarea
+                        id="visita-observaciones"
+                        rows={2}
+                        maxLength={OBSERVACIONES_MAX}
+                        value={observaciones}
+                        onChange={e => setObservaciones(e.target.value)}
+                        placeholder="Algo para agregar de esta visita…"
+                        className="w-full resize-none rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
+                    />
+                </div>
+            )}
+            {/* Visita cerrada: solo lectura, y solo si hay algo que leer. `pl_resolucion`
+             *  es inmutable, así que no hay forma de agregarla ni editarla después del
+             *  cierre — de ahí que sea texto plano, sin textarea, sin contador y sin
+             *  ningún afórdance de edición. Y si no dejó ninguna no se muestra nada: un
+             *  campo vacío deshabilitado se lee como "todavía lo podés llenar". */}
+            {visitaCerrada && cliente?.observaciones && (
+                <div className="mb-2.5 rounded-md border border-dsline bg-[#FAFBFD] px-2.5 py-2">
+                    <p className="mb-0.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
+                        Observaciones
+                    </p>
+                    <p className="whitespace-pre-wrap text-[12.5px] font-semibold leading-snug text-[#182645]">
+                        {cliente.observaciones}
+                    </p>
                 </div>
             )}
             {/* Pegado arriba de "Cerrar visita", en el pie fijo: es la última acción a

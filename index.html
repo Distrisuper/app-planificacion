@@ -3,7 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- interactive-widget=resizes-content: al abrirse el teclado virtual, el layout
+         viewport se encoge, así que el pie fijo del BottomSheet sube con el teclado en
+         vez de quedar debajo. Necesario desde que hay un textarea en ese pie (spec
+         2026-09-11). Anda en Chrome/Android; iOS Safari NO lo soporta — ver el spec. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
+    />
     <title>app-planificacion</title>
   </head>
   <body>

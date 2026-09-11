@@ -60,6 +60,7 @@ const clienteLunes = {
     visitaId: null,
     ofrecimientosPendientes: 0,
     seguimiento: { estado: 'no_corresponde' as const, motivo: null, mensaje: null },
+    observaciones: null,
 }
 
 /** `url` permite arrancar en una posición concreta (?dia=/?semana=), que es de donde la
