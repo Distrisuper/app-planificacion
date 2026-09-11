@@ -28,8 +28,17 @@ export function segundosTranscurridos(visitaId: number): number | null {
     return Math.max(0, Math.floor((Date.now() - inicio) / 1000))
 }
 
+/** `MM:SS` abajo de una hora, `H:MM:SS` a partir de ahí.
+ *
+ *  El corte en la hora no es cosmético: sin él, una visita que el vendedor se dejó
+ *  abierta mostraba `94:02` a los 94 minutos y `312:40` a las cinco horas — números
+ *  que se leen como minutos y no se entienden de un vistazo. Importa desde que el
+ *  semáforo tiene un estado `larga` (>90 min, ver `estadoDuracion.ts`): ese estado
+ *  existe justamente para el caso en que el cronómetro pasa la hora. */
 export function formatearDuracion(totalSegundos: number): string {
-    const minutos = Math.floor(totalSegundos / 60)
+    const horas = Math.floor(totalSegundos / 3600)
+    const minutos = Math.floor(totalSegundos / 60) % 60
     const segundos = totalSegundos % 60
-    return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`
+    const mmss = `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`
+    return horas > 0 ? `${horas}:${mmss}` : mmss
 }

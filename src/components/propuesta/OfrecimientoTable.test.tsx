@@ -485,3 +485,39 @@ it('con acción y marca a la vez, cada una aparece en su propia sección', () =>
     expect(screen.getByText('Acciones')).toBeInTheDocument()
     expect(screen.getByText('Marcas')).toBeInTheDocument()
 })
+
+it('en la tabla de una visita, el header dice el gesto de tocar la fila', () => {
+    render(
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
+        />,
+    )
+    expect(screen.getAllByRole('columnheader')[0].textContent).toMatch(/rubro · tocá para cargar/i)
+})
+
+it('en la propuesta (sin filas resolubles) el header no pide tocar nada', () => {
+    render(<OfrecimientoTable filas={[fila()]} />)
+    expect(screen.getAllByRole('columnheader')[0].textContent).not.toMatch(/tocá/i)
+})
+
+it('el chip pendiente va navy relleno y los resueltos en tinte suave', () => {
+    const { container, unmount } = render(
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
+        />,
+    )
+    // El pendiente es el único que tiene que leerse como botón: relleno oscuro.
+    const pendiente = container.querySelector('span[aria-hidden].rounded-full')
+    expect(pendiente).toHaveClass('bg-dsnavy')
+    expect(pendiente).toHaveClass('text-white')
+    unmount()
+
+    const { container: c2 } = render(
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 2, completo: true, esPropuesto: true } })]}
+        />,
+    )
+    const completo = c2.querySelector('span[aria-hidden].rounded-full')
+    expect(completo).not.toHaveClass('bg-dsnavy')
+    expect(completo).toHaveClass('text-dsgreen')
+})

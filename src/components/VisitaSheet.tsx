@@ -19,6 +19,7 @@ import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
 import { formatearDuracion } from '@/lib/visitaTimer'
+import { estadoVisitaVivo, PALETA_VISITA_VIVO, ROTULO_VISITA_VIVO } from '@/lib/estadoDuracion'
 import { motivosIguales, tieneDetalleIncompleto } from '@/lib/resolucionOfrecimiento'
 import {
     leerBorrador,
@@ -39,8 +40,16 @@ interface VisitaSheetProps {
      *  ni agregar nada (ver `esEditable`). Los rubros se cargan durante la visita; una vez
      *  cerrada no hay forma de completar los que quedaron pendientes. */
     visitaCerrada: boolean
-    /** true = la visita está en curso (no cerrada): pinta el eyebrow naranja + cronómetro. */
+    /** true = la visita está en curso (no cerrada): pinta el eyebrow del semáforo +
+     *  cronómetro. */
     enCurso?: boolean
+    /** true = el vendedor está lejos del cliente DE ESTA visita, con la visita abierta.
+     *  Pinta el eyebrow en rojo, igual que la barra flotante — es la misma visita vista
+     *  desde el otro lado del minimizar. El llamador tiene que asegurarse de que la
+     *  visita abierta en el sheet sea la que está en curso (ver `esClienteEnCurso` en
+     *  VisitaFlow): el vendedor puede estar mirando la propuesta de otro cliente
+     *  mientras la visita corre en otro lado, y ahí este aviso no aplica. */
+    alejado?: boolean
     /** Si se pasa, habilita la tabla "cómo viene comprando" durante la visita, igual
      *  que en la Propuesta previa. */
     codigoParticularCliente?: string
@@ -66,6 +75,7 @@ export default function VisitaSheet({
     nombreCliente,
     visitaCerrada,
     enCurso,
+    alejado,
     codigoParticularCliente,
     onCerrarVisita,
     onClose,
@@ -77,6 +87,7 @@ export default function VisitaSheet({
     onVerPosicion,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
+    const estadoVivo = estadoVisitaVivo(segundos, alejado)
     // `isError`/`refetch` no son un extra: con `data` en undefined, un default `[]` hace que
     // el gate de cierre calcule "0 rubros exigidos" y habilite "Cerrar visita" (así se
     // cerró la visita 923 con sus 5 rubros sin resolver). Mismo criterio que
@@ -486,7 +497,7 @@ export default function VisitaSheet({
                         : cerrando
                           ? 'Cerrando…'
                           : faltanParaMinimo > 0
-                            ? `Completá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
+                            ? `Cargá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
                             : 'Cerrar visita'}
                 </Button>
             )}
@@ -500,8 +511,12 @@ export default function VisitaSheet({
                 onClose={onClose}
                 onMinimize={enCurso ? onMinimize : undefined}
                 title={nombreCliente}
-                eyebrow={enCurso ? `● En curso · ${formatearDuracion(segundos)}` : 'Propuesta comercial'}
-                eyebrowClassName={enCurso ? 'text-[#B45309]' : undefined}
+                eyebrow={
+                    enCurso
+                        ? `● ${ROTULO_VISITA_VIVO[estadoVivo]} · ${formatearDuracion(segundos)}`
+                        : 'Propuesta comercial'
+                }
+                eyebrowClassName={enCurso ? PALETA_VISITA_VIVO[estadoVivo].eyebrow : undefined}
                 altura="completa"
                 footer={footer}
             >
@@ -552,12 +567,13 @@ export default function VisitaSheet({
                         )}
                     </div>
                 ) : (
+                    /* Sin párrafo introductorio a propósito: los ~54px que costaba el
+                     * "Cargá el resultado de cada rubro que ofreciste…" valían más como
+                     * filas de la tabla (entran ~5 en la pantalla, y hay que resolver 2
+                     * para poder cerrar). Lo único accionable que decía —que se toca la
+                     * fila para cargar— se mudó al header sticky de la tabla, donde el
+                     * ojo ya está y sigue a la vista con el catálogo scrolleado. */
                     <div>
-                        <p className="mb-3 text-[13px] leading-snug text-dsmuted">
-                            Cargá el resultado de cada rubro que ofreciste. Los que no ofreciste se
-                            resuelven con <b className="font-bold text-[#182645]">"No lo ofrecí"</b>.
-                        </p>
-
                         {filas.length === 0 ? (
                             <div className="text-sm text-dsmuted">Esta visita no tiene rubros propuestos.</div>
                         ) : (

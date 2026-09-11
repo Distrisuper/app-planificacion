@@ -101,16 +101,30 @@ function ChipEstado({ resolucion }: { resolucion: IOfrecimientoFilaResolucion })
         <div className={`${ANCHO_CHIP} flex justify-start`}>
             <span
                 aria-hidden
-                className={`grid h-[22px] w-[22px] place-items-center rounded-full border text-[11px] font-extrabold ${
+                // 24px para el pendiente y 22 para los resueltos: el que hay que tocar
+                // gana los 2px. Entra en `ANCHO_CHIP` (26px) sin correr ninguna columna.
+                className={`grid place-items-center rounded-full border text-[11px] font-extrabold ${
+                    completo || motivosCargados > 0 ? 'h-[22px] w-[22px]' : 'h-6 w-6'
+                } ${
                     completo
                         ? 'border-[#BFE6CE] bg-[#EAF7EF] text-dsgreen'
                         : motivosCargados > 0
                           ? 'border-[#F0D3A0] bg-[#FDF6EA] text-[#B45309]'
                           : // Sin cargar lleva ＋: un círculo vacío se lee como "acá no
-                            // hay nada" y no invita a tocarlo. Con el ＋ (y el relleno,
-                            // en vez del borde punteado) la fila se lee como el botón
-                            // que efectivamente es.
-                            'border-[#C9D2E3] bg-[#F1F4F9] text-dsnavy'
+                            // hay nada" y no invita a tocarlo.
+                            //
+                            // Y lleva navy RELLENO con el ＋ en blanco, no el gris claro
+                            // que tenía antes (`bg-[#F1F4F9]` con borde `#C9D2E3` y el ＋
+                            // en navy): sobre el fondo blanco del sheet ese gris era gris
+                            // sobre gris y se leía como decoración, así que el vendedor
+                            // veía "Cargá 2 rubros más" en el pie sin nada que le dijera
+                            // por dónde. Un círculo oscuro sólido se lee como botón.
+                            //
+                            // El ✓ verde y el número ámbar siguen en tinte suave a
+                            // propósito: son ESTADOS, no invitaciones. El contraste
+                            // "oscuro sólido = falta tocar / tinte suave = ya está" es
+                            // justamente lo que hace legible qué queda pendiente.
+                            'border-dsnavy bg-dsnavy text-white'
                 }`}
             >
                 {completo ? (
@@ -386,8 +400,16 @@ export default function OfrecimientoTable({
                 scrollea (ACTUAL vs. M.ANT vs. P.6M no se adivinan por el valor). */}
             <div className="sticky top-0 z-20 flex h-8 items-center gap-1 rounded-t-[11px] border-b border-dsline bg-[#F7F8FB] px-2.5 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
                 {conChip && <div className={ANCHO_CHIP} />}
-                <div role="columnheader" className="min-w-0 flex-1">
-                    Rubro
+                {/* En la tabla de una visita (`conChip`) el rótulo dice además el gesto:
+                    es el único texto que explica que la fila se toca para cargar el
+                    resultado, y reemplaza al párrafo introductorio que vivía arriba del
+                    sheet (ver VisitaSheet). Va acá y no en un `<p>` aparte por dos
+                    razones: cuesta cero px (la palabra "Rubro" ya ocupaba esta línea) y,
+                    al ser sticky, la instrucción sigue a la vista con el catálogo
+                    scrolleado — que es justo cuando el vendedor la necesita. Mismo patrón
+                    que "Otros rubros del cliente · tocá uno para agregarlo". */}
+                <div role="columnheader" className="min-w-0 flex-1 truncate">
+                    Rubro{conChip && ' · tocá para cargar'}
                 </div>
                 {/* pr-1.5: el número de datos vive dentro de una pastilla con ese mismo
                     padding interno — sin este ajuste, la etiqueta del header queda pegada

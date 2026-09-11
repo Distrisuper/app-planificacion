@@ -298,6 +298,29 @@ Hay **tres capas separadas**, y una operación toca una sola:
   solo `data`, un fallo la deja en `undefined` para siempre. **El gate es solo del front**;
   `PUT /visitas/:id/cerrar` acepta cerrar con cero resoluciones, así que un bundle viejo
   cacheado se lo saltea igual.
+- **El cronómetro de la visita abierta es un semáforo, y sus umbrales NO son el criterio de
+  validez.** `src/lib/estadoDuracion.ts`: ámbar <15 min (`arranque`), **verde 15–90**
+  (`valida`, bordes inclusive), ámbar >90 (`larga`), y `alejado` gana sobre las tres. Lo
+  pintan las dos pantallas de la visita abierta (`VisitaEnCursoBar` y el eyebrow de
+  `VisitaSheet`) desde ese único módulo: son la misma visita, y minimizar el sheet no puede
+  cambiarle el color. Tres cosas que no hay que confundir: (1) `DURACION_LARGA_MIN = 90`
+  **no repone el techo** que se sacó del criterio real — ese vive en `pl_criterio_visita`
+  y hoy es "mínimo 15, sin techo" (`DURACION_MIN_VALIDA`), así que una visita de 2 horas
+  sigue siendo válida y el ámbar solo sugiere cerrarla; estos umbrales son de UI y **no se
+  sincronizan** con la base. (2) `larga` es ámbar y **no rojo a propósito**: `dsred` está
+  reservado para `alejado`, que es el único de los cuatro que indica un problema real — si
+  `larga` fuera rojo, rojo significaría dos cosas. (3) `VisitaSheet` recibe
+  `alejado={esClienteEnCurso && alejado}`, no `enCurso && alejado`: el vendedor puede estar
+  mirando la propuesta de otro cliente mientras la visita corre en otro lado.
+- **En la tabla de la visita, el gesto se explica en el header sticky y no en un párrafo.**
+  `RUBRO · TOCÁ PARA CARGAR` (solo con `conChip`), y el chip pendiente es navy **relleno**
+  con el ＋ en blanco mientras el ✓ verde y el número ámbar quedan en tinte suave: son
+  estados, no invitaciones, y ese contraste es lo que hace legible qué falta. El párrafo
+  introductorio ("Cargá el resultado de cada rubro…") se borró — costaba ~54px de una
+  pantalla donde entran 5 filas; no volver a agregarlo. Con él se fue el único texto que
+  explicaba la convención de **"No lo ofrecí"**, y se acepta. El botón del pie dice
+  `Cargá N rubros más` (no "Completá"): mismo verbo que el header, que es lo que conecta
+  la instrucción con el botón que bloquea.
 - **Al cerrar visita se genera un seguimiento en Cromo automáticamente** (`POST /crm/events`),
   reemplazando el redirect manual a Cromo que existe hoy en el flujo de Lupa.
 - **La vista semanal SÍ muestra el estado de cada cliente**, y es gratis: sale del `LEFT JOIN` con la

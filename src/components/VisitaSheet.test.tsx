@@ -192,7 +192,7 @@ it('con rubros sin completar, Cerrar visita está deshabilitado y avisa cuántos
     renderSheet()
     await screen.findByText('Amortiguadores')
     // El faltante lo dice el propio botón deshabilitado, no una línea aparte en el pie.
-    expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /cargá 1 rubro más/i })).toBeDisabled()
     expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
 })
 
@@ -207,7 +207,7 @@ it('con 2 de 3 rubros completos ya alcanza el mínimo, sin exigir el tercero', a
     renderSheet()
     await screen.findByText('Frenos')
     // "Filtros" ya viene completo del servidor; falta 1 más para llegar al mínimo de 2.
-    expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /cargá 1 rubro más/i })).toBeDisabled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
     await tildarSaquePedido()
@@ -229,7 +229,7 @@ it('con 5 rubros propuestos exige 2, y con 2 resueltos deja cerrar (visita 923)'
     )
     renderSheet({ visitaId: 923 })
     await screen.findByText('RUBRO 322')
-    expect(screen.getByRole('button', { name: /completá 2 rubros más/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /cargá 2 rubros más/i })).toBeDisabled()
 
     fireEvent.click(screen.getByRole('button', { name: 'Resolución de RUBRO 322' }))
     await tildarSaquePedido()
@@ -301,7 +301,7 @@ it('un fallo de refetch después de haber cargado no esconde los rubros ni el ga
         </QueryClientProvider>,
     )
     await screen.findByText('Amortiguadores')
-    expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cargá 1 rubro más/i })).toBeInTheDocument()
 
     ;(api.getOfrecimientos as any).mockRejectedValue(new Error('Network Error'))
     await act(async () => {
@@ -309,7 +309,7 @@ it('un fallo de refetch después de haber cargado no esconde los rubros ni el ga
     })
 
     expect(screen.getByText('Amortiguadores')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /completá 1 rubro más/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /cargá 1 rubro más/i })).toBeInTheDocument()
     expect(screen.queryByText(/no pudimos traer los rubros/i)).not.toBeInTheDocument()
 })
 
@@ -726,4 +726,49 @@ describe('la marca se manda en `detalle`, sin acción comercial', () => {
         const rubrosEnviados = (api.resolverOfrecimiento as any).mock.calls.map((c: unknown[]) => c[1])
         expect(rubrosEnviados).toEqual([7])
     })
+})
+
+it('el eyebrow sigue el semáforo de duración: verde en el tramo válido', async () => {
+    localStorage.setItem('visita-inicio-42', String(Date.now() - 20 * 60 * 1000))
+    renderSheet({ enCurso: true })
+    await screen.findByText('Amortiguadores')
+
+    const eyebrow = screen.getByText(/● En curso · 20:0\d/)
+    expect(eyebrow).toHaveClass('text-dsgreen')
+})
+
+it('el eyebrow avisa "Visita larga" pasados los 90 min, en ámbar y no en rojo', async () => {
+    localStorage.setItem('visita-inicio-42', String(Date.now() - 94 * 60 * 1000))
+    renderSheet({ enCurso: true })
+    await screen.findByText('Amortiguadores')
+
+    const eyebrow = screen.getByText(/● Visita larga · 1:34:0\d/)
+    expect(eyebrow).toHaveClass('text-[#B45309]')
+    expect(eyebrow).not.toHaveClass('text-dsred')
+})
+
+it('alejado pinta el eyebrow en rojo y gana sobre el tramo válido', async () => {
+    localStorage.setItem('visita-inicio-42', String(Date.now() - 20 * 60 * 1000))
+    renderSheet({ enCurso: true, alejado: true })
+    await screen.findByText('Amortiguadores')
+
+    const eyebrow = screen.getByText(/● Te alejaste · 20:0\d/)
+    expect(eyebrow).toHaveClass('text-dsred')
+})
+
+it('sin enCurso el eyebrow es la propuesta comercial, sin semáforo', async () => {
+    localStorage.setItem('visita-inicio-42', String(Date.now() - 94 * 60 * 1000))
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    expect(screen.getByText('Propuesta comercial')).toBeInTheDocument()
+    expect(screen.queryByText(/visita larga/i)).not.toBeInTheDocument()
+})
+
+it('no muestra el párrafo introductorio: la instrucción vive en el header de la tabla', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    expect(screen.queryByText(/cargá el resultado de cada rubro/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/tocá para cargar/i)).toBeInTheDocument()
 })

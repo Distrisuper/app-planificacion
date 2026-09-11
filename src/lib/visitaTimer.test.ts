@@ -58,9 +58,19 @@ it('visitas distintas no se pisan entre sí', () => {
     expect(segundosTranscurridos(2)).toBe(7)
 })
 
-it('formatearDuracion arma mm:ss con ceros a la izquierda', () => {
+it('formatearDuracion arma mm:ss con ceros a la izquierda abajo de una hora', () => {
     expect(formatearDuracion(0)).toBe('00:00')
     expect(formatearDuracion(5)).toBe('00:05')
     expect(formatearDuracion(65)).toBe('01:05')
-    expect(formatearDuracion(3661)).toBe('61:01')
+    expect(formatearDuracion(3599)).toBe('59:59')
+})
+
+// Antes devolvía '61:01' y '312:40': minutos sin tope, que se leen como si fueran
+// minutos y no se entienden de un vistazo. Importa desde que el semáforo tiene un
+// estado `larga` (>90 min), que es justo el que pasa la hora.
+it('formatearDuracion arranca a contar horas al cumplir la hora', () => {
+    expect(formatearDuracion(3600)).toBe('1:00:00')
+    expect(formatearDuracion(3661)).toBe('1:01:01')
+    expect(formatearDuracion(94 * 60)).toBe('1:34:00')
+    expect(formatearDuracion(18760)).toBe('5:12:40')
 })
