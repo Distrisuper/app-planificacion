@@ -247,12 +247,17 @@ Hay **tres capas separadas**, y una operación toca una sola:
   abre `MapaVisita` en `modo='consulta'` — sin CTA, sin reposicionar, sin gate. Ese mapa
   corre un watch de **alta** precisión y le pasa cada fix a `useAlejadoDelCliente.evaluarFix`,
   así que si el vendedor está donde dice, el aviso se apaga solo. El watch del hook sigue en
-  baja precisión a propósito (batería) y desde el spec del 11/09 **descarta todo fix con
-  precisión mayor a `RADIO_INICIO_METROS`**: sin esa puerta, entrada (`d − p > 100`) y salida
-  (`d ≤ 100` cruda) usan escalas distintas y dejan una banda muerta donde el aviso queda
-  pegado para siempre. No "arreglarlo" volviendo simétrica la salida (`d − p ≤ 60`): eso
-  convierte un fix basura en evidencia de cercanía. Y ojo con el nombre: `IniciarVisitaMapa`
-  pasó a llamarse **`MapaVisita`**.
+  baja precisión a propósito (batería), y desde el spec del 11/09 la salida es **simétrica a
+  la entrada**: entra con `distancia − precisión > RADIO_INICIO_METROS` (lejos aun en el MEJOR
+  caso del fix) y sale con `distancia + precisión ≤ RADIO_INICIO_METROS` (cerca aun en el PEOR
+  caso). Un fix ambiguo no mueve el estado, pero sí actualiza la distancia mostrada. No
+  "arreglarlo" con una puerta que descarte entero cualquier fix con precisión > el radio: una
+  primera versión de este fix hacía eso y de paso bloqueaba la ENTRADA con fixes lejanos pero
+  imprecisos — se detectó probando con el override de ubicación de Chrome DevTools (panel
+  Sensors), que no tiene forma de configurar la precisión y reporta un valor fijo por encima
+  del radio, así que ningún fix simulado desde ahí podía disparar el aviso. Tampoco restar la
+  precisión en la salida (`d − p ≤ 100`): eso sí convierte un fix basura en evidencia de
+  cercanía. Y ojo con el nombre: `IniciarVisitaMapa` pasó a llamarse **`MapaVisita`**.
 - **`VisitaFlow.onIniciar` repite el chequeo con la
   coordenada definitiva**, para que tocar el botón en el instante en que el watch marcó "cerca" no
   lo saltee. El cierre no bloquea a propósito: para esa altura ya se puede haber ido del local

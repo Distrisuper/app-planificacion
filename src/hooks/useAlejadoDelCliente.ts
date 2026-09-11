@@ -26,10 +26,13 @@ interface UseAlejadoDelClienteResult {
  * con `getCurrentPosition` al volver de background (`visibilitychange`) — sin este segundo,
  * la feature no cubre su caso principal (se fue con el celu guardado).
  *
- * Histéresis: se ENTRA a `alejado` con `estaFueraDeRango` (distancia menos precisión mayor
- * al radio — evidencia positiva de lejanía). Se SALE solo cuando la distancia CRUDA vuelve
- * a estar dentro del radio, sin descontar precisión — un umbral único haría que un fix
- * oscilando en el borde prendiera y apagara el aviso en cada tick.
+ * Histéresis simétrica, ambos lados exigen evidencia concluyente incluso en el caso
+ * contrario para el fix: se ENTRA con `estaFueraDeRango` (`distancia - precisión > radio`
+ * — lejos aun en el MEJOR caso del fix) y se SALE con `distancia + precisión <= radio`
+ * (cerca aun en el PEOR caso). Un umbral único (comparar solo `distancia`) haría que un
+ * fix oscilando en el borde prendiera y apagara el aviso en cada tick; y una salida sobre
+ * la distancia cruda sin descontar nada deja, para un fix impreciso, una banda muerta
+ * donde no puede probar ni que sigue lejos ni que ya volvió.
  *
  * `enableHighAccuracy: false`: una visita dura media hora y no vale la pena mantener el GPS
  * fino prendido todo ese rato para una advertencia — un fix grueso, con la precisión ya
@@ -53,20 +56,23 @@ export function useAlejadoDelCliente({
 
     function evaluarFix(lat: number, lon: number, precisionM: number) {
         if (!tieneCoords) return
-        // Puerta de precisión: un fix más impreciso que el propio radio no puede concluir
-        // nada, ni para entrar ni para salir. Sin esto, entrada y salida usan escalas
-        // distintas —entrar descuenta la precisión, salir mide la distancia cruda— y entre
-        // las dos queda una banda muerta (100 < d <= 100 + precisión) donde el fix ni entra
-        // ni sale. Como el watch de acá corre en baja precisión a propósito, casi todos sus
-        // fixes caen en esa banda: se entraba a `alejado` con un fix bueno y después ningún
-        // fix grueso alcanzaba para salir, con el vendedor parado en el local. Ver
-        // docs/superpowers/specs/2026-09-11-ver-mi-posicion-con-visita-abierta-design.md.
-        if (precisionM > RADIO_INICIO_METROS) return
         const d = distanciaMetros(lat, lon, latitud as number, longitud as number)
         setDistanciaM(d)
         if (alejadoRef.current) {
-            // Salida: distancia cruda, sin descontar precisión.
-            if (d <= RADIO_INICIO_METROS) {
+            // Salida: evidencia positiva de CERCANÍA, aun en el PEOR caso para el fix —
+            // espejo exacto de la entrada de abajo (`estaFueraDeRango`), que exige
+            // evidencia positiva de lejanía en el MEJOR caso (`d - p`). Antes esto
+            // comparaba contra la distancia cruda, sin descontar nada, y quedaba una
+            // banda muerta (100 < d <= 100 + precisión) donde un fix grueso no podía
+            // probar ni lejanía ni cercanía: el aviso quedaba pegado para siempre con
+            // el watch pasivo (baja precisión a propósito). Una puerta que descartaba
+            // cualquier fix con precisión > 100 (versión anterior) tapaba esa banda,
+            // pero de paso bloqueaba la ENTRADA con fixes lejanos e imprecisos — el
+            // caso exacto de un override de ubicación de Chrome DevTools (panel
+            // Sensors), que no permite configurar la precisión y reporta un valor fijo
+            // por encima del radio. Ver
+            // docs/superpowers/specs/2026-09-11-ver-mi-posicion-con-visita-abierta-design.md.
+            if (d + precisionM <= RADIO_INICIO_METROS) {
                 alejadoRef.current = false
                 setAlejado(false)
             }
