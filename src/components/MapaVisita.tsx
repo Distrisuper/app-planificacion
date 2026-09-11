@@ -8,6 +8,11 @@ import { formatDistancia } from '@/lib/analiticaFormat'
 
 interface MapaVisitaProps {
     open: boolean
+    /** 'iniciar' = mapa previo a arrancar la visita, con su CTA y el gate de cercanía.
+     *  'consulta' = el vendedor sólo quiere ver dónde lo está ubicando el GPS con la
+     *  visita ya abierta: sin CTA, sin reposicionar, sin gate. Ver
+     *  docs/superpowers/specs/2026-09-11-ver-mi-posicion-con-visita-abierta-design.md. */
+    modo?: 'iniciar' | 'consulta'
     nombreCliente: string
     direccion?: string
     latitud: number
@@ -15,8 +20,13 @@ interface MapaVisitaProps {
     iniciando?: boolean
     /** Mensaje del último intento fallido. Queda visible hasta el próximo intento. */
     error?: string | null
-    onIniciar: () => void
+    /** Sólo se usa en modo 'iniciar'. */
+    onIniciar?: () => void
     onCancel: () => void
+    /** Cada fix propio del vendedor (watch en vivo y "Recalcular posición"). El watch de
+     *  este componente es de ALTA precisión, a diferencia del de useAlejadoDelCliente: por
+     *  eso abrir el mapa alcanza para que el hook pueda apagar el aviso de "te alejaste". */
+    onFix?: (lat: number, lon: number, precisionM: number) => void
     /** El vendedor tocó el mapa con el modo de reposicionar armado. `null` = volvió a
      *  la coordenada original ("Restablecer"). Efímero: quien lo reciba lo manda como
      *  coordCliente al iniciar, y no necesita guardarlo en ningún otro lado — ver
@@ -45,6 +55,7 @@ const ICONO_VENDEDOR = L.divIcon({
  */
 export default function MapaVisita({
     open,
+    modo = 'iniciar',
     nombreCliente,
     direccion,
     latitud,
@@ -53,8 +64,10 @@ export default function MapaVisita({
     error,
     onIniciar,
     onCancel,
+    onFix,
     onReposicionar,
 }: MapaVisitaProps) {
+    const esConsulta = modo === 'consulta'
     const mapRef = useRef<HTMLDivElement>(null)
     const mapInstance = useRef<L.Map | null>(null)
     const vendedorMarker = useRef<L.Marker | null>(null)
@@ -174,6 +187,7 @@ export default function MapaVisita({
                     setCalculando(false)
                     const { latitude, longitude, accuracy } = pos.coords
                     vendedorFixRef.current = { lat: latitude, lng: longitude, accuracy }
+                    onFix?.(latitude, longitude, accuracy)
                     const punto = overrideRef.current ?? { lat: latitud, lng: longitud }
                     const distanciaM = distanciaMetros(punto.lat, punto.lng, latitude, longitude)
                     marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
@@ -226,6 +240,7 @@ export default function MapaVisita({
                 setCalculando(false)
                 const { latitude, longitude, accuracy } = pos.coords
                 vendedorFixRef.current = { lat: latitude, lng: longitude, accuracy }
+                onFix?.(latitude, longitude, accuracy)
                 const punto = overrideRef.current ?? { lat: latitud, lng: longitud }
                 const distanciaM = distanciaMetros(punto.lat, punto.lng, latitude, longitude)
                 marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
@@ -293,7 +308,7 @@ export default function MapaVisita({
             <div className="flex items-center justify-between border-b border-dsline px-4 py-3">
                 <div className="min-w-0">
                     <span className="text-[11px] font-extrabold uppercase tracking-wide text-dsmuted">
-                        Iniciar visita
+                        {esConsulta ? 'Tu posición' : 'Iniciar visita'}
                     </span>
                     <h2 className="truncate text-[16px] font-extrabold text-[#182645]">{nombreCliente}</h2>
                 </div>
@@ -319,8 +334,10 @@ export default function MapaVisita({
                 )}
                 {posicion && posicion.fueraDeRango && (
                     <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
-                        Estás a {formatDistancia(posicion.distanciaM)} del cliente — acercate a menos
-                        de {RADIO_INICIO_METROS} m para iniciar.
+                        Estás a {formatDistancia(posicion.distanciaM)} del cliente
+                        {esConsulta
+                            ? '.'
+                            : ` — acercate a menos de ${RADIO_INICIO_METROS} m para iniciar.`}
                     </p>
                 )}
                 {posicion && !posicion.fueraDeRango && (
@@ -330,7 +347,9 @@ export default function MapaVisita({
                 )}
                 {sinUbicacion && (
                     <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
-                        No pudimos ubicarte, pero podés iniciar igual.
+                        {esConsulta
+                            ? 'No pudimos ubicarte. Probá al aire libre y tocá "Recalcular posición".'
+                            : 'No pudimos ubicarte, pero podés iniciar igual.'}
                     </p>
                 )}
                 {/* Distinto de `sinUbicacion`: acá SÍ hay una posición conocida (el aviso de
@@ -343,7 +362,7 @@ export default function MapaVisita({
                     </p>
                 )}
                 {error && <p className="mb-3 text-[12.5px] font-semibold text-dsred">{error}</p>}
-                {modoReposicionar && (
+                {!esConsulta && modoReposicionar && (
                     <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-dashed border-[#F59E0B] bg-[#FFFBEB] px-3 py-2">
                         <span className="text-[12.5px] font-semibold text-[#92400E]">
                             Tocá el mapa para mover al cliente
@@ -357,7 +376,7 @@ export default function MapaVisita({
                         </button>
                     </div>
                 )}
-                {overrideCliente && !modoReposicionar && (
+                {!esConsulta && overrideCliente && !modoReposicionar && (
                     <div className="mb-3 flex items-center justify-between gap-2">
                         <span className="text-[12.5px] font-semibold text-dsmuted">
                             Posición ajustada para esta visita
@@ -371,7 +390,7 @@ export default function MapaVisita({
                         </button>
                     </div>
                 )}
-                {!modoReposicionar && (
+                {!esConsulta && !modoReposicionar && (
                     <Button
                         variant="outline"
                         onClick={handleArmarReposicionar}
@@ -400,14 +419,16 @@ export default function MapaVisita({
                         <span className="truncate">¿Cómo llegar?</span>
                     </Button>
                 </div>
-                <Button
-                    onClick={onIniciar}
-                    loading={iniciando}
-                    disabled={calculando || fueraDeRango || modoReposicionar}
-                    className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
-                >
-                    {iniciando ? 'Iniciando…' : calculando ? 'Calculando…' : 'Iniciar visita'}
-                </Button>
+                {!esConsulta && (
+                    <Button
+                        onClick={onIniciar}
+                        loading={iniciando}
+                        disabled={calculando || fueraDeRango || modoReposicionar}
+                        className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
+                    >
+                        {iniciando ? 'Iniciando…' : calculando ? 'Calculando…' : 'Iniciar visita'}
+                    </Button>
+                )}
             </div>
         </div>
     )

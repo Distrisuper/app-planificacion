@@ -331,3 +331,86 @@ it('Restablecer vuelve a la coordenada original y avisa onReposicionar(null)', a
     // Vuelve a estar bloqueado: la coordenada original seguía lejos del vendedor.
     expect(await screen.findByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
 })
+
+it('en modo consulta no ofrece iniciar ni reposicionar', () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="consulta"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCancel={() => {}}
+        />,
+    )
+
+    expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /reposicionar/i })).not.toBeInTheDocument()
+    // Lo que sí tiene que seguir estando: la medición.
+    expect(screen.getByRole('button', { name: /recalcular posición/i })).toBeInTheDocument()
+})
+
+it('en modo consulta el encabezado dice "Tu posición"', () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="consulta"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCancel={() => {}}
+        />,
+    )
+
+    expect(screen.getByText('Tu posición')).toBeInTheDocument()
+    expect(screen.queryByText('Iniciar visita')).not.toBeInTheDocument()
+})
+
+it('avisa cada fix del watch por onFix, con la precisión', () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.601, longitude: -58.401, accuracy: 12 } }),
+    )
+    const onFix = vi.fn()
+    render(
+        <MapaVisita
+            open
+            modo="consulta"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onFix={onFix}
+            onCancel={() => {}}
+        />,
+    )
+
+    expect(onFix).toHaveBeenCalledWith(-34.601, -58.401, 12)
+})
+
+it('avisa por onFix también al recalcular', async () => {
+    mockGeolocation(
+        () => {},
+        (ok: any) => ok({ coords: { latitude: -34.602, longitude: -58.402, accuracy: 8 } }),
+    )
+    const onFix = vi.fn()
+    render(
+        <MapaVisita
+            open
+            modo="consulta"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onFix={onFix}
+            onCancel={() => {}}
+        />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /recalcular posición/i }))
+
+    expect(onFix).toHaveBeenCalledWith(-34.602, -58.402, 8)
+})
