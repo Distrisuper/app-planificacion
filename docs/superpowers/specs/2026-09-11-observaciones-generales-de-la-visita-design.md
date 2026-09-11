@@ -160,10 +160,32 @@ esperada).
 Se escribe en cada cambio, sobrevive a minimizar / cerrar / reabrir el sheet, y se limpia en
 `cerrarConBorrador` junto con los otros dos, solo después de que el guardado salió bien.
 
+### Se escribe SOLO antes de cerrar. Nunca después.
+
+La observación se carga mientras la visita está abierta y viaja en el `PUT .../cerrar`.
+**Una vez cerrada la visita no se puede agregar ni editar** — ni desde el sheet, ni por
+ningún otro camino.
+
+No es una restricción de esta feature: es la del dominio. `pl_resolucion` es inmutable, con
+`UNIQUE (rotacion_cliente_id)`, y resolver es la única puerta sin retorno del modelo (ver
+CLAUDE.md y `docs/dominio/modelo.md`). La observación es una columna de esa fila, así que
+hereda su inmutabilidad. Si el vendedor necesita corregir algo, el camino del dominio es un
+hecho nuevo de ajuste, no editar el viejo.
+
+Consecuencias concretas:
+
+- El `PUT .../cerrar` es el **único** punto de escritura de `observaciones`. No hay
+  `PATCH` de observaciones, y no hay que agregarlo después "para corregir un typo".
+- La misma lógica que ya rige los rubros: **se cargan durante la visita; cerrada, ya no**.
+  Y el mismo costo aceptado — lo que no se escribió antes de cerrar, se perdió.
+- El textarea solo se renderiza con `!visitaCerrada` (ver "Cuándo aparece").
+
 ### Visita cerrada
 
-Si la visita ya está cerrada y tiene observación, se muestra **en modo lectura** en el sheet
-de consulta. Sin esto, el vendedor no tiene ningún lugar donde releer lo que escribió: el
+Si la visita ya está cerrada y tiene observación, se muestra **en modo lectura** — texto
+plano, sin `textarea`, sin contador y sin ningún afórdance de edición. Y si no tiene, no se
+muestra nada: un campo vacío deshabilitado se lee como "todavía lo podés llenar", que es
+justo lo contrario de lo que pasa. Sin esto, el vendedor no tiene ningún lugar donde releer lo que escribió: el
 sheet cerrado es su única vista de la visita, y `/analitica` es de gerencia.
 
 **De dónde sale el dato, y por qué no hace falta endpoint nuevo:** se agrega
@@ -191,7 +213,8 @@ de cada cliente en la vista semanal ("es gratis: sale del LEFT JOIN que ya se le
 - Sobrevive a cerrar y reabrir el sheet (borrador).
 - Se limpia al cerrar con éxito, y **no** se limpia si el guardado falló.
 - `observaciones` viaja en el DTO de cierre; vacío no manda el campo.
-- Visita cerrada con observación → se ve, y no es editable.
+- Visita cerrada con observación → se ve como texto, **no hay `textarea` en el DOM**.
+- Visita cerrada **sin** observación → no se muestra el bloque (ni vacío ni deshabilitado).
 
 ## Fuera de alcance
 
