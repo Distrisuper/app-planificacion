@@ -35,25 +35,39 @@ vendedor está en desacuerdo con el sistema. No es parte del flujo normal de una
 
 ## Diseño
 
-### 1. Puerta de precisión en `useAlejadoDelCliente`
+### 1. Salida simétrica a la entrada en `useAlejadoDelCliente`
 
-Un fix con `precisionM > RADIO_INICIO_METROS` **se descarta entero**: no entra, no sale, no
-actualiza `distanciaM`. Es el mismo criterio que `estaFueraDeRango` ya documenta para el inicio
-—ausencia de prueba no es prueba— aplicado también a la permanencia en el estado.
+La entrada ya es sólida: `estaFueraDeRango` da `distancia − precisión > RADIO_INICIO_METROS`,
+es decir "lejos aun en el MEJOR caso para el fix" (evidencia positiva de lejanía). El bug estaba
+solo en la salida, que comparaba la distancia **cruda** contra el radio, sin descontar nada. La
+corrección es mirar la misma idea en espejo: se sale cuando
 
-Esto arregla la banda muerta por el lado correcto. Hoy un fix grueso *puede* entrar (p=150,
-d=400 cumple `d − p > 100`) pero nunca puede sacarte; con la puerta, simplemente no opina.
+```
+distancia + precisión ≤ RADIO_INICIO_METROS
+```
 
-La histéresis entre entrada y salida **no se toca**: sobre fixes ya filtrados sigue siendo
-`d − p > 100` para entrar y `d ≤ 100` para salir. Un umbral único haría que un fix oscilando en
-el borde prendiera y apagara el aviso en cada tick.
+— "cerca aun en el PEOR caso para el fix" (evidencia positiva de cercanía). Con eso no queda
+ninguna banda muerta: para cualquier par (distancia, precisión) hay tres resultados posibles —
+lejos concluyente (entra/se sostiene), cerca concluyente (sale), o ambiguo (el estado no se
+toca, pero `distanciaM` sí se actualiza al último fix, para que el vendedor vea el número
+vigente aunque no sea decisivo).
 
-**Se descartó** la alternativa simétrica (salir con `d − p ≤ 60`, es decir decidir siempre sobre
-la distancia con la precisión descontada). Arreglaba la banda muerta sola, sin botón, pero
-convertía un fix basura en evidencia de cercanía: con p=400 y d=300, `d − p < 0` apagaría el
-aviso incluso con el vendedor genuinamente lejos. El aviso es informativo y no bloquea nada, así
-que errar hacia "sigo avisando hasta que un fix confiable diga que volviste" es el lado barato
-del error.
+**Se descartó** una primera versión de este arreglo que agregaba una puerta ciega: descartar
+entero cualquier fix con `precisionM > RADIO_INICIO_METROS`, sin mirar la distancia. Tapaba la
+banda muerta, pero de paso bloqueaba también la **entrada**: un fix genuinamente lejano (a
+kilómetros) con una precisión apenas por encima del radio quedaba descartado igual que uno
+ambiguo, aunque la distancia aplastara cualquier margen de error. Esto se detectó al probar el
+aviso con el override de ubicación de Chrome DevTools (panel Sensors): ese panel **no tiene
+campo de precisión configurable** — solo lat/lon/timezone/locale — y reporta un valor fijo que
+el usuario no puede bajar. Con la puerta ciega, ningún fix simulado desde Sensors podía disparar
+el aviso, sin importar qué tan lejos se simulara la ubicación.
+
+**Se descartó también** la alternativa simétrica *mal aplicada* (salir con `d − p ≤ 60`, es
+decir restar la precisión también en la salida en vez de sumarla). Convertía un fix basura en
+evidencia de cercanía: con p=400 y d=300, `d − p < 0` apagaría el aviso incluso con el vendedor
+genuinamente lejos — el error va para el lado equivocado. La versión correcta suma la precisión
+en la salida (`d + p`), no la resta: así la salida solo concluye cercanía cuando ni el peor caso
+del error deja lugar a duda.
 
 El watch pasivo **sigue en `enableHighAccuracy: false`**. La decisión de batería del spec
 anterior sigue en pie; el fix fino se consigue por el camino explícito de abajo.
@@ -119,9 +133,10 @@ vendedor no habría podido iniciar la visita: ese gate sí bloquea, y la correcc
 ## Tests (vitest)
 
 `useAlejadoDelCliente.test.ts`
-- un fix con `precisión > 100` no entra a `alejado`, aunque `d − p > 100`;
-- un fix con `precisión > 100` no apaga un aviso ya prendido;
-- `evaluarFix` con un fix fino y cercano (`p=15`, `d=40`) apaga el aviso.
+- un fix lejano (a kilómetros) con precisión gruesa igual entra a `alejado` — el caso Sensors;
+- un fix ambiguo no saca del aviso, pero sí actualiza `distanciaM`;
+- la salida exige `distancia + precisión ≤ 100`, no la distancia cruda;
+- `evaluarFix` con un fix fino y cercano (`p=15`, `d=44`) apaga el aviso.
 
 `MapaVisita.test.tsx`
 - en `modo='consulta'` no se dibuja el CTA de iniciar ni el botón de reposicionar;

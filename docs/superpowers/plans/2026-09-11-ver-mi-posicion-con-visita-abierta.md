@@ -24,6 +24,17 @@
 
 ### Task 1: Puerta de precisión en `useAlejadoDelCliente`
 
+> **Corrección posterior (11/09, tras QA manual):** la implementación de esta tarea tal como
+> queda descripta abajo (una puerta que descarta cualquier fix con `precisionM > RADIO_INICIO_METROS`)
+> tenía un bug: bloqueaba también la ENTRADA a `alejado` con fixes genuinamente lejanos pero
+> imprecisos — el caso exacto del override de ubicación de Chrome DevTools (panel Sensors), que
+> no permite configurar la precisión y reporta un valor fijo por encima del radio. Se corrigió
+> reemplazando la puerta por una salida simétrica a la entrada (`distancia + precisión ≤ radio`
+> en vez de descartar el fix entero). El diseño vigente y su razón están en la sección 1 de
+> [`docs/superpowers/specs/2026-09-11-ver-mi-posicion-con-visita-abierta-design.md`](../specs/2026-09-11-ver-mi-posicion-con-visita-abierta-design.md);
+> los pasos de abajo quedan como registro histórico de lo que se implementó primero, no como
+> referencia para tocar este código de nuevo.
+
 Arregla el bug de la salida y expone `evaluarFix` para que la Task 4 pueda alimentar el hook desde el mapa.
 
 **Files:**
