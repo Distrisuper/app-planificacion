@@ -228,7 +228,7 @@ Hay **tres capas separadas**, y una operación toca una sola:
   una guía operativa, no un candado infalseable. Bloquea por evidencia positiva de lejanía —
   `distancia − precisión del fix > 100 m` — así que un fix grueso de wifi/antena (la segunda
   etapa de `capturarUbicacion()`, que puede errar cientos de metros) no bloquea a un vendedor
-  parado en el local. El mapa de `IniciarVisitaMapa` muestra la distancia en vivo y deshabilita
+  parado en el local. El mapa de `MapaVisita` muestra la distancia en vivo y deshabilita
   el botón mientras esté fuera de rango — y también mientras el primer fix todavía no llegó
   (`calculando`, "Calculando tu posición…"): sin ese estado transitorio el botón queda
   habilitado como si ya se hubiera confirmado la cercanía, cuando en realidad no se sabe nada
@@ -242,6 +242,17 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `marcarFixExitoso()` y un `posicionRef` (el `watchPosition` vive todo el ciclo del mapa y sus
   callbacks no se redefinen en cada fix, así que necesitan un ref para ver el último `posicion`
   real y no el del render en que se armaron).
+  Con la visita **ya abierta**, el aviso de "te alejaste" tiene una salida manual: el botón
+  **"Ver mi posición"** en el pie de `VisitaSheet` (sólo con `alejado` y la visita abierta)
+  abre `MapaVisita` en `modo='consulta'` — sin CTA, sin reposicionar, sin gate. Ese mapa
+  corre un watch de **alta** precisión y le pasa cada fix a `useAlejadoDelCliente.evaluarFix`,
+  así que si el vendedor está donde dice, el aviso se apaga solo. El watch del hook sigue en
+  baja precisión a propósito (batería) y desde el spec del 11/09 **descarta todo fix con
+  precisión mayor a `RADIO_INICIO_METROS`**: sin esa puerta, entrada (`d − p > 100`) y salida
+  (`d ≤ 100` cruda) usan escalas distintas y dejan una banda muerta donde el aviso queda
+  pegado para siempre. No "arreglarlo" volviendo simétrica la salida (`d − p ≤ 60`): eso
+  convierte un fix basura en evidencia de cercanía. Y ojo con el nombre: `IniciarVisitaMapa`
+  pasó a llamarse **`MapaVisita`**.
 - **`VisitaFlow.onIniciar` repite el chequeo con la
   coordenada definitiva**, para que tocar el botón en el instante en que el watch marcó "cerca" no
   lo saltee. El cierre no bloquea a propósito: para esa altura ya se puede haber ido del local
