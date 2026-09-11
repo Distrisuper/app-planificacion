@@ -1,4 +1,5 @@
 import type { IAlcance, IOfrecimiento, IRubroEstado, IRubroPropuesta, TipoOfrecimiento } from '@/types/planificacion'
+import { ordenar80_20 } from '@/lib/ordenRubros'
 
 /** Presente ⇒ segunda línea con el botón de resolución. Sólo en la visita. */
 export interface IOfrecimientoFilaResolucion {
@@ -85,18 +86,22 @@ export function construirFilasPropuesta(
 
     if (!expandido) return bloqueArriba
 
-    const bloqueAbajo: IOfrecimientoFila[] = rubroStatus
-        .filter(s => !codesPropuesta.has(s.rubroCode))
-        .map(s => ({
-            codigo: s.rubroCode,
-            nombre: s.nombre,
-            actual: s.actual,
-            mesAnterior: s.mesAnterior,
-            promedio6m: s.promedio6m,
-            destacada: false,
-            tipo: 'rubro',
-            alcance: [],
-        }))
+    // Orden 80/20 (ver ordenRubros.ts): ninguno de los endpoints lo aplica, y acá
+    // es donde corresponde — la propuesta arriba ya tiene su propio orden por
+    // caída/pesos perdidos y no se toca.
+    const bloqueAbajo: IOfrecimientoFila[] = ordenar80_20(
+        rubroStatus.filter(s => !codesPropuesta.has(s.rubroCode)),
+        s => s.rubroCode,
+    ).map(s => ({
+        codigo: s.rubroCode,
+        nombre: s.nombre,
+        actual: s.actual,
+        mesAnterior: s.mesAnterior,
+        promedio6m: s.promedio6m,
+        destacada: false,
+        tipo: 'rubro',
+        alcance: [],
+    }))
 
     return [...bloqueArriba, ...bloqueAbajo]
 }
@@ -147,19 +152,22 @@ export function construirFilasVisita(
 
     if (!expandido) return bloqueArriba
 
-    const bloqueAbajo: IOfrecimientoFila[] = rubroStatus
-        .filter(s => !codesVisita.has(s.rubroCode))
-        .map(s => ({
-            codigo: s.rubroCode,
-            nombre: s.nombre,
-            actual: s.actual,
-            mesAnterior: s.mesAnterior,
-            promedio6m: s.promedio6m,
-            destacada: false,
-            agregable: editable || undefined,
-            tipo: 'rubro',
-            alcance: [],
-        }))
+    // Orden 80/20 (ver ordenRubros.ts): igual que en construirFilasPropuesta,
+    // solo acá — la visita arriba preserva el orden del backend a propósito.
+    const bloqueAbajo: IOfrecimientoFila[] = ordenar80_20(
+        rubroStatus.filter(s => !codesVisita.has(s.rubroCode)),
+        s => s.rubroCode,
+    ).map(s => ({
+        codigo: s.rubroCode,
+        nombre: s.nombre,
+        actual: s.actual,
+        mesAnterior: s.mesAnterior,
+        promedio6m: s.promedio6m,
+        destacada: false,
+        agregable: editable || undefined,
+        tipo: 'rubro',
+        alcance: [],
+    }))
 
     return [...bloqueArriba, ...bloqueAbajo]
 }
