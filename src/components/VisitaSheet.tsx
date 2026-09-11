@@ -473,7 +473,7 @@ export default function VisitaSheet({
              *  porque ese es el momento en que aparece el desacuerdo. No es parte del flujo
              *  normal: sólo se renderiza con el aviso activo. */}
             {alejado && !visitaCerrada && onVerPosicion && (
-                <div className="mb-2.5 flex items-center justify-between gap-2 rounded-md border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2">
+                <div className="mb-3.5 flex items-center justify-between gap-2 rounded-md border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2">
                     <span className="min-w-0 text-[12.5px] font-semibold text-dsred">
                         Te alejaste del cliente
                     </span>
@@ -496,7 +496,7 @@ export default function VisitaSheet({
              *  botón de cerrar: con el GET en vuelo o fallado, `ofrecimientos` es [] y
              *  min(2, 0) es 0, así que el mínimo se auto-satisface. */}
             {!visitaCerrada && ofrecimientosCargados && faltanParaMinimo === 0 && (
-                <div className="mb-2.5">
+                <div className="mb-3.5">
                     <div className="mb-1 flex items-baseline justify-between">
                         <label
                             htmlFor="visita-observaciones"
@@ -527,7 +527,10 @@ export default function VisitaSheet({
              *  ningún afórdance de edición. Y si no dejó ninguna no se muestra nada: un
              *  campo vacío deshabilitado se lee como "todavía lo podés llenar". */}
             {visitaCerrada && cliente?.observaciones && (
-                <div className="mb-2.5 rounded-md border border-dsline bg-[#FAFBFD] px-2.5 py-2">
+                // bg-white (no bg-[#FAFBFD]) a propósito: el pie fijo ahora usa ese mismo
+                // gris de fondo, así que este bloque necesita el blanco para seguir
+                // leyéndose como una tarjeta propia en vez de fundirse con el pie.
+                <div className="mb-3.5 rounded-md border border-dsline bg-white px-2.5 py-2">
                     <p className="mb-0.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
                         Observaciones
                     </p>
@@ -541,7 +544,7 @@ export default function VisitaSheet({
              *  scrollear hasta arriba a buscarlo. Mismo criterio que antes sobre el wizard
              *  (no se muestra ahí): este bloque solo se arma en la rama de lista. */}
             {cliente && onAbrirAppExterna && (
-                <div className="mb-2.5">
+                <div className="mb-3.5">
                     <AccionesExternas cliente={cliente} variante="fila" onAbrir={onAbrirAppExterna} />
                 </div>
             )}

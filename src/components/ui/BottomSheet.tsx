@@ -109,8 +109,12 @@ export default function BottomSheet({
 
                 {/* Footer — fijo, fuera del scroll. Se mantiene visible al cambiar
                     de vista (ej. "Iniciar visita" sigue ahí en "Ver versus"). */}
+                {/* `bg-[#FAFBFD]` (no solo el borde) para que el pie se lea como una zona
+                 *  aparte del contenido scrolleable: el borde solo, casi del mismo blanco
+                 *  que el fondo, dejaba la tabla y los controles fijos pegados en una sola
+                 *  masa visual. */}
                 {footer && (
-                    <div className="shrink-0 border-t border-[#EEF0F5] px-[18px] pb-6 pt-3">{footer}</div>
+                    <div className="shrink-0 border-t border-[#EEF0F5] bg-[#FAFBFD] px-[18px] pb-6 pt-3">{footer}</div>
                 )}
             </div>
         </div>
