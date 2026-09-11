@@ -17,6 +17,7 @@ const CLIENTE: IVisitClientCard = {
     codigoCliente: '1-10034',
     codigoParticularCliente: '10034',
     nombreCliente: 'Almacén Don José',
+    observaciones: null,
 }
 
 const ofrecimientos = [
@@ -791,4 +792,142 @@ it('el boton de cerrar va gris mientras falten rubros y naranja cuando se puede 
     const habilitado = await screen.findByRole('button', { name: /^cerrar visita$/i })
     expect(habilitado).toHaveClass('bg-dsorange')
     expect(habilitado).toBeEnabled()
+})
+
+const OBS_LABEL = /observaciones/i
+
+it('no muestra el campo de observaciones mientras falten rubros', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    expect(screen.getByRole('button', { name: /cargá 1 rubro más/i })).toBeDisabled()
+    expect(screen.queryByRole('textbox', { name: OBS_LABEL })).not.toBeInTheDocument()
+})
+
+it('muestra el campo al cumplir el mínimo de rubros', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    await screen.findByRole('button', { name: /^cerrar visita$/i })
+    expect(screen.getByRole('textbox', { name: OBS_LABEL })).toBeInTheDocument()
+})
+
+it('no muestra el campo si los ofrecimientos no cargaron', async () => {
+    // Con el GET fallado, `ofrecimientos` es [] y min(2, 0) es 0: sin este gate el
+    // campo aparecería sobre una visita cuyos rubros ni cargaron. Es la misma trampa
+    // que ya gobierna el botón de cerrar.
+    ;(api.getOfrecimientos as any).mockRejectedValue(new Error('Network'))
+    renderSheet()
+
+    await screen.findByText(/no pudimos traer los rubros/i)
+    expect(screen.queryByRole('textbox', { name: OBS_LABEL })).not.toBeInTheDocument()
+})
+
+it('el texto sobrevive a cerrar y reabrir el sheet', async () => {
+    localStorage.setItem('visita-observaciones-42', 'lo que escribí antes')
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    await screen.findByRole('button', { name: /^cerrar visita$/i })
+    expect(screen.getByRole('textbox', { name: OBS_LABEL })).toHaveValue('lo que escribí antes')
+})
+
+it('manda la observación al cerrar y limpia el borrador', async () => {
+    const { onCerrarVisita } = renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    const campo = await screen.findByRole('textbox', { name: OBS_LABEL })
+    fireEvent.change(campo, { target: { value: '  Pidió lista de precios  ' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^cerrar visita$/i }))
+
+    // Trimmeado también del lado del front: el backend lo normaliza igual, pero mandar
+    // el texto ya limpio evita que "   " cuente como observación en el contador.
+    await waitFor(() => expect(onCerrarVisita).toHaveBeenCalledWith('Pidió lista de precios'))
+    expect(localStorage.getItem('visita-observaciones-42')).toBeNull()
+})
+
+it('sin texto, cerrar manda null', async () => {
+    const { onCerrarVisita } = renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    fireEvent.click(await screen.findByRole('button', { name: /^cerrar visita$/i }))
+
+    await waitFor(() => expect(onCerrarVisita).toHaveBeenCalledWith(null))
+})
+
+it('si el guardado de los rubros falla, NO limpia el borrador ni cierra', async () => {
+    // `cerrarConBorrador` corta antes de limpiar cuando el batch devuelve error. Sin
+    // esto, un fallo de red le borraria al vendedor el texto que escribio Y no cerraria
+    // la visita: perderia el trabajo sin haber avanzado nada.
+    ;(api.resolverOfrecimiento as any).mockRejectedValue(new Error('Network'))
+    const { onCerrarVisita } = renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    const campo = await screen.findByRole('textbox', { name: OBS_LABEL })
+    fireEvent.change(campo, { target: { value: 'no se tiene que perder' } })
+
+    fireEvent.click(screen.getByRole('button', { name: /^cerrar visita$/i }))
+
+    await screen.findByText(/no se pudo guardar la resolución/i)
+    expect(onCerrarVisita).not.toHaveBeenCalled()
+    expect(localStorage.getItem('visita-observaciones-42')).toBe('no se tiene que perder')
+})
+
+it('el contador cuenta el texto escrito y topea en 500', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    const campo = await screen.findByRole('textbox', { name: OBS_LABEL })
+    expect(campo).toHaveAttribute('maxLength', '500')
+    expect(screen.getByText('0/500')).toBeInTheDocument()
+
+    fireEvent.change(campo, { target: { value: 'hola' } })
+    expect(screen.getByText('4/500')).toBeInTheDocument()
+})
+
+it('visita cerrada con observación: se ve como texto, sin textarea', async () => {
+    renderSheet({
+        visitaCerrada: true,
+        cliente: { ...CLIENTE, observaciones: 'Pidió lista de precios' },
+    })
+    await screen.findByText('Amortiguadores')
+
+    expect(screen.getByText('Pidió lista de precios')).toBeInTheDocument()
+    // Sin textarea ni contador: una vez cerrada no se puede agregar ni editar, porque
+    // pl_resolucion es inmutable. Un campo deshabilitado se leería como "todavía lo
+    // podés llenar", que es lo contrario de lo que pasa.
+    expect(screen.queryByRole('textbox', { name: /observaciones/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/\/500/)).not.toBeInTheDocument()
+})
+
+it('visita cerrada sin observación: no muestra el bloque', async () => {
+    renderSheet({ visitaCerrada: true, cliente: { ...CLIENTE, observaciones: null } })
+    await screen.findByText('Amortiguadores')
+
+    expect(screen.queryByText(/observaciones/i)).not.toBeInTheDocument()
 })

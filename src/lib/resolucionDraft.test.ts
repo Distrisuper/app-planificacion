@@ -1,4 +1,11 @@
-import { leerBorrador, guardarBorrador, limpiarBorrador } from './resolucionDraft'
+import {
+    leerBorrador,
+    guardarBorrador,
+    limpiarBorrador,
+    leerObservaciones,
+    guardarObservaciones,
+    limpiarObservaciones,
+} from './resolucionDraft'
 
 beforeEach(() => {
     localStorage.clear()
@@ -52,4 +59,50 @@ it('lee un borrador con la forma nueva', () => {
 it('un borrador vacío sigue siendo válido', () => {
     localStorage.setItem('visita-borrador-42', JSON.stringify({ 7: [] }))
     expect(leerBorrador(42)).toEqual({ 7: [] })
+})
+
+describe('borrador de observaciones', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('guarda y lee el texto de una visita', () => {
+        guardarObservaciones(42, 'Pidió lista de precios')
+        expect(leerObservaciones(42)).toBe('Pidió lista de precios')
+    })
+
+    it('null si no hay nada guardado', () => {
+        expect(leerObservaciones(42)).toBeNull()
+    })
+
+    it('cada visita tiene su propio borrador', () => {
+        guardarObservaciones(42, 'de la 42')
+        guardarObservaciones(43, 'de la 43')
+        expect(leerObservaciones(42)).toBe('de la 42')
+        expect(leerObservaciones(43)).toBe('de la 43')
+    })
+
+    it('limpiar borra solo el de esa visita', () => {
+        guardarObservaciones(42, 'de la 42')
+        guardarObservaciones(43, 'de la 43')
+        limpiarObservaciones(42)
+        expect(leerObservaciones(42)).toBeNull()
+        expect(leerObservaciones(43)).toBe('de la 43')
+    })
+
+    it('no comparte clave con el borrador de motivos ni con el de detalles', () => {
+        // Clave propia a propósito: cambiar la forma del borrador de motivos dejaría
+        // ilegibles los borradores ya guardados de las visitas en curso (leerBorrador
+        // descarta lo que no matchea su forma). Misma razón que `detalles`.
+        guardarObservaciones(42, 'texto')
+        expect(localStorage.getItem('visita-observaciones-42')).toBe('texto')
+        expect(localStorage.getItem('visita-borrador-42')).toBeNull()
+        expect(localStorage.getItem('visita-detalles-42')).toBeNull()
+    })
+
+    it('el texto se guarda tal cual, sin JSON.stringify', () => {
+        // Es un string, no una estructura: guardarlo crudo hace que no haya forma de
+        // que un JSON corrupto lo vuelva ilegible, que es el caso que leerBorrador
+        // tiene que manejar con try/catch.
+        guardarObservaciones(42, 'con "comillas" y \\ barras')
+        expect(leerObservaciones(42)).toBe('con "comillas" y \\ barras')
+    })
 })

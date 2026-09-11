@@ -14,6 +14,7 @@ function cliente(over: Partial<IAgendaClient> = {}): IAgendaClient {
         ofrecimientosPendientes: 0,
         seguimiento: { estado: 'no_corresponde', motivo: null, mensaje: null },
         esExtra: false,
+        observaciones: null,
         ...over,
     }
 }

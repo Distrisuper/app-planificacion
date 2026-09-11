@@ -68,3 +68,28 @@ export function guardarDetalles(visitaId: number, detalles: BorradorDetalles): v
 export function limpiarDetalles(visitaId: number): void {
     localStorage.removeItem(keyDetalles(visitaId))
 }
+
+/** Observación libre de la visita, en su propia clave.
+ *
+ *  Clave propia y no un campo dentro de `Borrador`, por la misma razón documentada arriba
+ *  para `detalles`: cambiar la forma del borrador de motivos obliga a tocar VisitaSheet,
+ *  el wizard y su pie a la vez, y dejaría ilegibles los borradores ya guardados de las
+ *  visitas en curso (`leerBorrador` descarta lo que no matchea la forma esperada).
+ *
+ *  Se guarda como string crudo, sin JSON: es un texto, no una estructura, así que no hay
+ *  forma de que quede ilegible y no necesita el try/catch que sí necesitan los otros dos. */
+function keyObservaciones(visitaId: number): string {
+    return `visita-observaciones-${visitaId}`
+}
+
+export function leerObservaciones(visitaId: number): string | null {
+    return localStorage.getItem(keyObservaciones(visitaId))
+}
+
+export function guardarObservaciones(visitaId: number, texto: string): void {
+    localStorage.setItem(keyObservaciones(visitaId), texto)
+}
+
+export function limpiarObservaciones(visitaId: number): void {
+    localStorage.removeItem(keyObservaciones(visitaId))
+}

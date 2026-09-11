@@ -214,6 +214,15 @@ describe('visitas', () => {
         expect(res.ofrecimientosPendientes).toBe(2)
     })
 
+    it('cerrarVisita manda observaciones cuando hay texto', async () => {
+        ;(apiClient.put as any).mockResolvedValue(ok({ visitaId: 42, ofrecimientosPendientes: 0 }))
+        await cerrarVisita(42, { coordFinal: '-34.7,-58.4', observaciones: 'Pidió lista' })
+        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/visitas/42/cerrar', {
+            coordFinal: '-34.7,-58.4',
+            observaciones: 'Pidió lista',
+        })
+    })
+
     it('registrarNoVisita manda rotacionClienteId y motivoIds', async () => {
         ;(apiClient.post as any).mockResolvedValue(ok({ rotacionClienteId: 11 }))
         await registrarNoVisita({ rotacionClienteId: 11, motivoIds: [1, 3] })

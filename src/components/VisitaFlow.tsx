@@ -264,7 +264,7 @@ export default function VisitaFlow({
         }
     }
 
-    async function onCerrarVisita() {
+    async function onCerrarVisita(observaciones: string | null) {
         if (visitaId === null || cerrandoFlujo) return
         // Común a "cerró bien" y a "ya estaba cerrada" (tratado como éxito, ver abajo): las
         // dos anclas locales de la visita se limpian igual, sea cual sea el motivo por el
@@ -280,7 +280,11 @@ export default function VisitaFlow({
         try {
             await conUbicacion(async geo => {
                 try {
-                    const res = await cerrar.mutateAsync({ visitaId, coordFinal: geo.coord })
+                    const res = await cerrar.mutateAsync({
+                        visitaId,
+                        coordFinal: geo.coord,
+                        ...(observaciones ? { observaciones } : {}),
+                    })
                     if (res.ofrecimientosPendientes > 0) {
                         // Resultado normal, no un error: el gate pide un mínimo de 2 rubros,
                         // así que cerrar con pendientes es esperable. Pero el aviso NO invita

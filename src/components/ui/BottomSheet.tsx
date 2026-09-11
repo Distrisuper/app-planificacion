@@ -1,6 +1,7 @@
 import { ChevronDown, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Button } from './button'
+import { useAlturaTeclado } from '@/hooks/useAlturaTeclado'
 
 interface BottomSheetProps {
     open: boolean
@@ -45,9 +46,21 @@ export default function BottomSheet({
     footer,
     children,
 }: BottomSheetProps) {
+    // Hook antes del `if (!open)`: las reglas de hooks exigen llamarlo siempre, y
+    // adentro se gatea con `open` para no dejar un listener de por vida en un sheet
+    // cerrado. Ver el porqué completo en useAlturaTeclado.
+    const alturaTeclado = useAlturaTeclado(open)
     if (!open) return null
     return (
-        <div className="animate-fade-in fixed inset-0 z-50 flex items-end bg-black/45" onClick={onClose}>
+        // `paddingBottom` empuja el sheet (alineado `items-end`) hacia arriba, tanto
+        // como lo tapa el teclado — así el pie fijo (observaciones, Cerrar visita) no
+        // queda debajo. En Android ya lo resuelve `interactive-widget=resizes-content`
+        // solo (acá da 0); esto es lo que hace falta en iOS, que no lo soporta.
+        <div
+            className="animate-fade-in fixed inset-0 z-50 flex items-end bg-black/45"
+            style={{ paddingBottom: alturaTeclado }}
+            onClick={onClose}
+        >
             <div
                 className={`animate-sheet-up flex w-full flex-col rounded-t-[24px] bg-white shadow-[0_-10px_34px_rgba(10,15,30,.22)] ${
                     // En 'completa', el max-h no llega a aplicar nunca con dvh soportado
@@ -109,8 +122,12 @@ export default function BottomSheet({
 
                 {/* Footer — fijo, fuera del scroll. Se mantiene visible al cambiar
                     de vista (ej. "Iniciar visita" sigue ahí en "Ver versus"). */}
+                {/* `bg-[#FAFBFD]` (no solo el borde) para que el pie se lea como una zona
+                 *  aparte del contenido scrolleable: el borde solo, casi del mismo blanco
+                 *  que el fondo, dejaba la tabla y los controles fijos pegados en una sola
+                 *  masa visual. */}
                 {footer && (
-                    <div className="shrink-0 border-t border-[#EEF0F5] px-[18px] pb-6 pt-3">{footer}</div>
+                    <div className="shrink-0 border-t border-[#EEF0F5] bg-[#FAFBFD] px-[18px] pb-6 pt-3">{footer}</div>
                 )}
             </div>
         </div>
