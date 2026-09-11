@@ -118,6 +118,9 @@ export interface IAgendaClient extends IVisitClientCard {
     /** true = fila creada por el buscador (spec 2026-08-12), no por el template de la
      *  rotación. No cuenta en el denominador de cobertura — ver docs/dominio/modelo.md. */
     esExtra: boolean
+    /** Observación que el vendedor dejó al cerrar. null si no dejó ninguna o si la fila
+     *  todavía no tiene resolución. Solo lectura: no se puede editar después del cierre. */
+    observaciones: string | null
 }
 
 /** El plan de una semana que no es necesariamente la abierta, con el estado REAL de
@@ -349,6 +352,9 @@ export interface IIniciarVisitaDTO {
 /** Sin motivoIds: al cerrar una visita el resultado comercial vive en los ofrecimientos. */
 export interface ICerrarVisitaDTO {
     coordFinal: string
+    /** Texto libre del vendedor. Se omite cuando no escribió nada — ver useCerrarVisita.
+     *  Este es el ÚNICO momento en que se puede mandar: `pl_resolucion` es inmutable. */
+    observaciones?: string
 }
 
 export interface ICerrarVisitaResult {

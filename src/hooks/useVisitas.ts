@@ -30,7 +30,13 @@ export function useIniciarVisita() {
 /** Sin motivoIds: el resultado comercial vive en los ofrecimientos. */
 export function useCerrarVisita() {
     return useMutacionDeVisita((args: { visitaId: number } & ICerrarVisitaDTO) =>
-        cerrarVisita(args.visitaId, { coordFinal: args.coordFinal }),
+        cerrarVisita(args.visitaId, {
+            coordFinal: args.coordFinal,
+            // Se OMITE la clave cuando no hay texto, en vez de mandar `null`: el body
+            // queda idéntico al de antes de esta feature para el caso más común, así que
+            // un backend viejo sin la columna sigue recibiendo exactamente lo que espera.
+            ...(args.observaciones ? { observaciones: args.observaciones } : {}),
+        }),
     )
 }
 
