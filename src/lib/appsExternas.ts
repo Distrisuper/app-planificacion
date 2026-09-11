@@ -1,4 +1,4 @@
-import { BarChart3, MessageSquare, Wallet } from 'lucide-react'
+import { BarChart3, MessageSquare, Search, Wallet } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { IVisitClientCard } from '@/types/planificacion'
 
@@ -6,6 +6,9 @@ import type { IVisitClientCard } from '@/types/planificacion'
 // está configurada en este deploy" y no la ofrece.
 const PAGOS_LUPA_URL: string = import.meta.env.VITE_PAGOS_LUPA_URL || ''
 const VERSUS_URL: string = import.meta.env.VITE_VERSUS_URL || ''
+// Lupa es OTRO sistema del ecosistema (lupa.distrisuper.com) — no lo reemplaza esta app,
+// ver "Cómo se relaciona con el resto del ecosistema" en CLAUDE.md.
+const LUPA_URL: string = import.meta.env.VITE_LUPA_URL || ''
 
 // Mismos nombres de variable y misma composición de base que ya usa app-vendedores para el
 // CRM (panel Aoki) en V2RightPanel.tsx: base = `${VITE_AOKI_URL}/assistant/${VITE_AOKI_ASSISTANT_ID}`.
@@ -107,6 +110,29 @@ const DECLARADAS: AppExternaDeclarada[] = [
                         q: cliente.codigoParticularCliente,
                     })
                     return `${VERSUS_URL}/v2/rubro/clientes?${params}`
+                },
+            },
+        },
+    },
+    {
+        baseUrl: LUPA_URL,
+        app: {
+            id: 'lupa',
+            label: 'Lupa',
+            icon: Search,
+            // Mismo camino que Pagos/Versus/CRM: la sesión la crea el vendedor
+            // logueándose una vez dentro de Lupa.
+            token: 'ninguno',
+            handoff: {
+                tipo: 'url',
+                // Contrato dado por el usuario: Lupa lee el cliente de
+                // `?particularCodeClient=` en la raíz (ej.
+                // https://lupa.distrisuper.com/?particularCodeClient=01129).
+                url: ({ cliente }) => {
+                    const params = new URLSearchParams({
+                        particularCodeClient: cliente.codigoParticularCliente,
+                    })
+                    return `${LUPA_URL}/?${params}`
                 },
             },
         },

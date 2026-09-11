@@ -32,6 +32,12 @@ function appDeCrm(): AppExterna {
     return app
 }
 
+function appDeLupa(): AppExterna {
+    const app = APPS_EXTERNAS.find(a => a.id === 'lupa')
+    if (!app) throw new Error('la app "lupa" tiene que estar registrada')
+    return app
+}
+
 describe('appsExternas', () => {
     beforeEach(() => {
         localStorage.clear()
@@ -213,6 +219,51 @@ describe('appsExternas', () => {
             const { APPS_EXTERNAS: sinAssistantId } = await import('./appsExternas')
             expect(sinAssistantId.find(a => a.id === 'crm')).toBeUndefined()
             expect(error).toHaveBeenCalledWith(expect.stringContaining('"crm"'))
+        } finally {
+            vi.unstubAllEnvs()
+            vi.resetModules()
+            error.mockRestore()
+        }
+    })
+
+    it('registra lupa sin credencial en el handoff', () => {
+        const app = appDeLupa()
+        expect(app.label).toBe('Lupa')
+        // Mismo camino que las demás: la sesión la crea el vendedor una vez dentro,
+        // logueándose en Lupa directamente. No se manda token.
+        expect(app.token).toBe('ninguno')
+        expect(app.handoff.tipo).toBe('url')
+    })
+
+    it('arma la URL de handoff de lupa con particularCodeClient en la raíz', () => {
+        const { url } = resolverHandoff(appDeLupa(), CLIENTE)
+        const parsed = new URL(url)
+        expect(parsed.pathname).toBe('/')
+        expect(parsed.searchParams.get('particularCodeClient')).toBe('05519')
+    })
+
+    // Mismo riesgo que las otras tres: no hay razón para mandar el token acá tampoco.
+    it('no filtra el token en la URL de lupa', () => {
+        localStorage.setItem('access_token', 'tok-123')
+        const { url } = resolverHandoff(appDeLupa(), CLIENTE)
+        expect(url).not.toContain('tok-123')
+        expect(new URL(url).searchParams.has('token')).toBe(false)
+    })
+
+    it('escapa el código de cliente en el handoff de lupa', () => {
+        const raro: IVisitClientCard = { ...CLIENTE, codigoParticularCliente: 'a&b=c' }
+        const { url } = resolverHandoff(appDeLupa(), raro)
+        expect(new URL(url).searchParams.get('particularCodeClient')).toBe('a&b=c')
+    })
+
+    it('no ofrece lupa si falta su URL base en el entorno', async () => {
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        vi.stubEnv('VITE_LUPA_URL', '')
+        vi.resetModules()
+        try {
+            const { APPS_EXTERNAS: sinConfigurar } = await import('./appsExternas')
+            expect(sinConfigurar.find(a => a.id === 'lupa')).toBeUndefined()
+            expect(error).toHaveBeenCalledWith(expect.stringContaining('"lupa"'))
         } finally {
             vi.unstubAllEnvs()
             vi.resetModules()
