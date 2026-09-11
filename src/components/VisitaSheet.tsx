@@ -53,6 +53,11 @@ interface VisitaSheetProps {
      *  sin las dos no se muestra la fila. */
     cliente?: IVisitClientCard
     onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
+    /** true = el vendedor está lejos del cliente de ESTA visita, con la visita abierta.
+     *  Lo calcula useAlejadoDelCliente, en VisitaFlow. */
+    alejado?: boolean
+    /** Abre MapaVisita en modo consulta. Sólo tiene sentido junto con `alejado`. */
+    onVerPosicion?: () => void
 }
 
 export default function VisitaSheet({
@@ -68,6 +73,8 @@ export default function VisitaSheet({
     cerrando,
     cliente,
     onAbrirAppExterna,
+    alejado,
+    onVerPosicion,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
     // `isError`/`refetch` no son un extra: con `data` en undefined, un default `[]` hace que
@@ -429,6 +436,26 @@ export default function VisitaSheet({
                 <p className="mb-2 text-center text-[12.5px] font-semibold text-dsred">
                     {errorGuardado}
                 </p>
+            )}
+            {/* Salida manual del aviso de "te alejaste": el vendedor dice que está parado
+             *  en el cliente y el sistema le dice que no. El mapa corre un watch de alta
+             *  precisión y le reporta cada fix al hook, así que si tiene razón el aviso se
+             *  apaga solo a los pocos segundos de abrirlo. Va acá, pegado a "Cerrar visita",
+             *  porque ese es el momento en que aparece el desacuerdo. No es parte del flujo
+             *  normal: sólo se renderiza con el aviso activo. */}
+            {alejado && !visitaCerrada && onVerPosicion && (
+                <div className="mb-2.5 flex items-center justify-between gap-2 rounded-md border border-[#FCA5A5] bg-[#FEF2F2] px-3 py-2">
+                    <span className="min-w-0 text-[12.5px] font-semibold text-dsred">
+                        Te alejaste del cliente
+                    </span>
+                    <button
+                        type="button"
+                        onClick={onVerPosicion}
+                        className="shrink-0 text-[12.5px] font-semibold text-[#213D82] underline"
+                    >
+                        Ver mi posición
+                    </button>
+                </div>
             )}
             {/* Pegado arriba de "Cerrar visita", en el pie fijo: es la última acción a
              *  mano antes de cerrar, para un vistazo de último momento a pagos/cuenta sin

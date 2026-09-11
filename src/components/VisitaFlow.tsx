@@ -75,7 +75,7 @@ export default function VisitaFlow({
     // Coordenadas del cliente de LA VISITA EN CURSO, no del `cliente` que esté abierto en
     // pantalla — el vendedor puede estar mirando la propuesta de otro cliente mientras la
     // visita sigue corriendo en otro lado.
-    const { alejado } = useAlejadoDelCliente({
+    const { alejado, evaluarFix } = useAlejadoDelCliente({
         activo: visitaEnCurso !== null,
         latitud: visitaEnCurso?.cliente.latitud,
         longitud: visitaEnCurso?.cliente.longitud,
@@ -117,6 +117,9 @@ export default function VisitaFlow({
     const [clienteOverride, setClienteOverride] = useState<{ lat: number; lng: number } | null>(
         null,
     )
+    // Mapa de consulta abierto (botón "Ver mi posición" del sheet). Nada que ver con
+    // `propuestaPendiente`, que es el mapa del flujo de iniciar.
+    const [verPosicion, setVerPosicion] = useState(false)
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
@@ -316,6 +319,7 @@ export default function VisitaFlow({
     function cerrarFlujo() {
         setPropuestaPendiente(null)
         setErrorIniciar(null)
+        setVerPosicion(false)
         onClose()
     }
 
@@ -356,6 +360,8 @@ export default function VisitaFlow({
                     cerrando={cerrandoFlujo}
                     onCerrarVisita={onCerrarVisita}
                     onClose={cerrarFlujo}
+                    alejado={alejado && esClienteEnCurso}
+                    onVerPosicion={() => setVerPosicion(true)}
                 />
             )}
             {tieneCoords && (
@@ -386,6 +392,23 @@ export default function VisitaFlow({
                     }}
                 />
             )}
+            {verPosicion &&
+                visitaEnCurso?.cliente.latitud != null &&
+                visitaEnCurso.cliente.longitud != null && (
+                    <MapaVisita
+                        open
+                        modo="consulta"
+                        nombreCliente={
+                            visitaEnCurso.cliente.nombreFantasia ||
+                            visitaEnCurso.cliente.nombreCliente
+                        }
+                        direccion={visitaEnCurso.cliente.direccion || visitaEnCurso.cliente.barrio}
+                        latitud={visitaEnCurso.cliente.latitud}
+                        longitud={visitaEnCurso.cliente.longitud}
+                        onFix={evaluarFix}
+                        onCancel={() => setVerPosicion(false)}
+                    />
+                )}
             {cargandoDirecto &&
                 !propuestaDirecta &&
                 (fallóPropuestaDirecta ? (
