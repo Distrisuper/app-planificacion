@@ -60,3 +60,34 @@ it('sin alejado, se ve el naranja de siempre', () => {
     render(<VisitaEnCursoBar visitaId={1} nombreCliente="Kiosco Sur" onExpandir={() => {}} />)
     expect(screen.getByRole('button')).toHaveClass('bg-dsorange')
 })
+
+it('en el tramo válido (15–90 min) la barra se pone verde', () => {
+    localStorage.setItem('visita-inicio-1', String(Date.now() - 20 * 60 * 1000))
+    render(<VisitaEnCursoBar visitaId={1} nombreCliente="Kiosco Sur" onExpandir={() => {}} />)
+
+    expect(screen.getByRole('button')).toHaveClass('bg-dsgreen')
+    expect(screen.getByText(/^20:0/)).toBeInTheDocument()
+    expect(screen.queryByText(/visita larga/i)).not.toBeInTheDocument()
+})
+
+it('pasados los 90 min vuelve a ámbar, avisa "visita larga" y el cronómetro muestra horas', () => {
+    localStorage.setItem('visita-inicio-1', String(Date.now() - 94 * 60 * 1000))
+    render(<VisitaEnCursoBar visitaId={1} nombreCliente="Kiosco Sur" onExpandir={() => {}} />)
+
+    const barra = screen.getByRole('button')
+    expect(barra).toHaveClass('bg-dsorange')
+    // Rojo queda reservado para `alejado`: una visita larga no es un problema de geo.
+    expect(barra).not.toHaveClass('bg-dsred')
+    expect(screen.getByText(/1:34:0\d · visita larga/)).toBeInTheDocument()
+})
+
+it('alejado gana sobre el verde del tramo válido', () => {
+    localStorage.setItem('visita-inicio-1', String(Date.now() - 20 * 60 * 1000))
+    render(
+        <VisitaEnCursoBar visitaId={1} nombreCliente="Kiosco Sur" alejado onExpandir={() => {}} />,
+    )
+
+    const barra = screen.getByRole('button')
+    expect(barra).toHaveClass('bg-dsred')
+    expect(barra).not.toHaveClass('bg-dsgreen')
+})

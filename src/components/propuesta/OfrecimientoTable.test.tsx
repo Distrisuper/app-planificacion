@@ -150,16 +150,27 @@ it('la fila resoluble es una sola línea: toda la fila (nombre incluido) es el b
     expect(boton).toContainElement(screen.getByText('Amortiguadores'))
 })
 
-it('sin ningún motivo cargado el chip muestra ＋ (invita a tocar), no un círculo vacío', () => {
-    render(
+it('sin ningún motivo cargado el chip es un anillo hueco, no un ＋ de agregar', () => {
+    const { container } = render(
         <OfrecimientoTable
             filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
             onResolucion={vi.fn()}
         />,
     )
+    // Los tres estados del chip son un checklist, y la contraparte de un check verde es
+    // una casilla sin tildar. El ＋ que este test fijaba significa "agregar algo
+    // nuevo", que en ESTA misma tabla ya es otra acción (las filas agregables de "otros
+    // rubros del cliente"): quedaba pegado al verbo equivocado. Lo que ese ＋
+    // compensaba — que nada dijera que la fila se toca — hoy lo dice la banda de arriba.
     const boton = screen.getByRole('button', { name: /resolución de amortiguadores/i })
-    expect(boton.querySelector('.lucide-plus')).toBeTruthy()
+    expect(boton.querySelector('.lucide-plus')).toBeNull()
     expect(screen.queryByText('0')).not.toBeInTheDocument()
+
+    const chip = container.querySelector('span[aria-hidden].rounded-full')
+    expect(chip).toHaveClass('border-2', 'border-dsnavy', 'bg-white')
+    expect(chip).not.toHaveClass('bg-dsnavy')
+    expect(chip?.textContent).toBe('')
+    expect(chip?.querySelector('svg')).toBeNull()
 })
 
 it('el chip muestra la cantidad de motivos mientras el rubro está incompleto', () => {
@@ -484,4 +495,99 @@ it('con acción y marca a la vez, cada una aparece en su propia sección', () =>
     )
     expect(screen.getByText('Acciones')).toBeInTheDocument()
     expect(screen.getByText('Marcas')).toBeInTheDocument()
+})
+
+// El gesto va en una banda de ancho completo y NO en la columna Rubro: ahí mide
+// ~60-100px en mobile y el texto salía truncado.
+it('en la tabla de una visita, una banda propia dice el gesto de cargar', () => {
+    render(
+        <OfrecimientoTable
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
+        />,
+    )
+    expect(screen.getByText(/tocá uno para cargar el resultado/i)).toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Rubro')
+})
+
+it('en la propuesta (sin filas resolubles) no hay banda de cargar', () => {
+    render(<OfrecimientoTable filas={[fila()]} />)
+    expect(screen.queryByText(/tocá uno para cargar el resultado/i)).not.toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Rubro')
+})
+
+
+// jsdom no evalua media queries, asi que esto no prueba que la columna desaparezca: fija
+// el PAREO. Si alguien esconde el header sin esconder la celda (o al reves), las tres
+// columnas numericas quedan corridas entre si y el numero deja de caer bajo su rotulo.
+it('M.Ant esconde header y celda con el mismo breakpoint, y solo esa columna', () => {
+    const { container } = render(<OfrecimientoTable filas={[fila()]} />)
+    const headers = screen.getAllByRole('columnheader')
+
+    expect(headers[2].textContent).toMatch(/m\.ant/i)
+    expect(headers[2].className).toContain('hidden')
+    expect(headers[2].className).toContain('xs:block')
+    // Las otras dos NO se esconden: ACTUAL es el dato del mes y P.6M la referencia contra
+    // la que se arma la propuesta.
+    expect(headers[1].className).not.toContain('hidden')
+    expect(headers[3].className).not.toContain('hidden')
+
+    // La celda de M.Ant acompana al header. Sin querySelector con la clase escapada:
+    // el ":" de `xs:flex` hay que escaparlo en el selector y no sobrevive bien a las
+    // capas de quoting. Buscar por className es directo y dice lo mismo.
+    const celdas = [...container.querySelectorAll('div')].filter(d =>
+        d.className.includes('xs:flex'),
+    )
+    expect(celdas).toHaveLength(1)
+    expect(celdas[0].className).toContain('hidden')
+    expect(celdas[0].textContent).toMatch(/800/)
+})
+
+// El header alinea con text-right (es `block`), no con justify-end: si alguna vez se le
+// mete `flex`, su texto pasa a ser un item flex y text-right deja de tener efecto — el
+// rotulo se corre a la izquierda y deja de coincidir con el numero de abajo.
+it('los headers numericos no son contenedores flex', () => {
+    render(<OfrecimientoTable filas={[fila()]} />)
+    for (const h of screen.getAllByRole('columnheader').slice(1)) {
+        expect(h.className).toContain('text-right')
+        expect(h.className.split(/\s+/)).not.toContain('flex')
+    }
+})
+
+it('una fila agregable lleva un ＋ discreto, y la resoluble un anillo', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    codigo: 'R1',
+                    nombre: 'Amortiguadores',
+                    resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true },
+                }),
+                fila({ codigo: 'R2', nombre: 'Bieletas', destacada: false, agregable: true }),
+            ]}
+            onAgregar={vi.fn()}
+        />,
+    )
+
+    // El ＋ va SOLO en la fila que agrega. Es el verbo correcto para ese glifo, y es la
+    // contracara del chip de la fila resoluble: ahi el rubro ya existe y se carga su
+    // resultado, asi que ese es un anillo (ver ChipEstado).
+    const agregable = screen.getByRole('button', { name: 'Agregar Bieletas' })
+    expect(agregable.querySelector('.lucide-plus')).not.toBeNull()
+
+    const resoluble = screen.getByRole('button', { name: /resolución de amortiguadores/i })
+    expect(resoluble.querySelector('.lucide-plus')).toBeNull()
+    expect(resoluble.querySelector('span[aria-hidden].rounded-full')).not.toBeNull()
+
+    // Discreto a proposito: glifo pelado, sin circulo ni borde — agregar es opcional,
+    // cargar el resultado es lo que bloquea el cierre.
+    const slot = agregable.querySelector('span[aria-hidden]')
+    expect(slot?.className).not.toContain('rounded-full')
+    expect(slot?.className).not.toContain('border')
+})
+
+it('la propuesta previa no reserva el slot del chip: ahi ese espacio es ancho de nombre', () => {
+    render(<OfrecimientoTable filas={[fila()]} />)
+    // Ni resoluble ni agregable => 4 columnas y ningun spacer al principio.
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4)
+    expect(document.querySelector('.lucide-plus')).toBeNull()
 })

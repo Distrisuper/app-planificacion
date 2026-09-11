@@ -53,6 +53,17 @@ const TIPO_LABEL: Record<TipoOfrecimiento, string> = {
 // padding distinto, el número y la etiqueta del header dejan de coincidir en
 // la misma columna aunque el `div` que los contiene mida lo mismo.
 const ANCHO_NUMERICA = 'w-[54px] shrink-0'
+// M.ANT es la unica de las tres columnas numericas que se esconde abajo de 360px: es la
+// menos cargada de las tres (la propuesta se arma comparando ACTUAL contra P.6M, no
+// contra el mes anterior), y esos 54px son la diferencia entre leer "PARRILLAS, BRAZ..."
+// y leer el nombre del rubro completo.
+//
+// Son dos clases y no una porque el header es `block` (alinea con text-right) y la celda
+// es `flex` (alinea con justify-end): meterle `flex` al header haria que su texto pase a
+// ser un item flex y text-right deje de tener efecto. Van siempre de la mano — si solo
+// una de las dos se escondiera, las columnas quedarian corridas entre si.
+const OCULTA_ANGOSTO_CELDA = 'hidden xs:flex'
+const OCULTA_ANGOSTO_HEADER = 'hidden xs:block'
 
 // Slot del chip de estado, al principio de la fila. Se reserva en TODAS las filas de
 // la tabla (y en el header) cuando la tabla es la de una visita: si solo lo llevaran
@@ -68,14 +79,22 @@ function Celda({
     valor,
     promedio6m,
     referencia,
+    ocultaEnAngosto,
 }: {
     valor: number | null
     promedio6m: number | null
     referencia?: boolean
+    /** true = la columna desaparece abajo de 360px. Tiene que ir junto con el mismo flag
+     *  en su header (ver OCULTA_ANGOSTO_CELDA). */
+    ocultaEnAngosto?: boolean
 }) {
     const rojo = !referencia && cae(valor, promedio6m)
     return (
-        <div className={`${ANCHO_NUMERICA} flex justify-end`}>
+        <div
+            className={`${ANCHO_NUMERICA} justify-end ${
+                ocultaEnAngosto ? OCULTA_ANGOSTO_CELDA : 'flex'
+            }`}
+        >
             <span
                 // La celda de referencia (P.6M) lleva la misma pastilla de fondo que las
                 // demás — solo cambia el color de texto — porque sin ese fondo el ojo no
@@ -91,35 +110,79 @@ function Celda({
     )
 }
 
-/** Estado de la resolución del ofrecimiento, en 26px: ＋ (sin cargar), el número de
- *  motivos en ámbar (empezado pero incompleto) o ✓ verde (completo). Reemplaza al
- *  botón "Resolución" de ancho completo que ocupaba una segunda línea por fila: con
- *  5 rubros esa línea costaba ~250px de una pantalla que tiene ~500 útiles. */
+/** Estado de la resolución del ofrecimiento, en 26px: anillo hueco (sin cargar), el
+ *  número de motivos en ámbar (empezado pero incompleto) o un check verde (completo).
+ *  Reemplaza al botón "Resolución" de ancho completo que ocupaba una segunda línea por
+ *  fila: con 5 rubros esa línea costaba ~250px de una pantalla que tiene ~500 útiles.
+ *
+ *  Los tres estados son un CHECKLIST — pendiente, parcial, completo — y por eso el
+ *  pendiente es un anillo hueco y NO un ＋ (que es lo que tuvo un rato).
+ *  `＋` significa "agregar algo nuevo", y acá el rubro ya existe: viene de
+ *  la propuesta congelada y lo que se hace es registrar su resultado. Peor: en ESTA misma
+ *  tabla "agregar" ya es una acción distinta y real (las filas de "Otros rubros del
+ *  cliente · tocá uno para agregarlo"), así que el ＋ quedaba pegado al
+ *  verbo equivocado: en las filas que hay que completar, mientras las que sí agregan no
+ *  llevan ícono. El contraparte natural de un check es una casilla sin tildar. */
 function ChipEstado({ resolucion }: { resolucion: IOfrecimientoFilaResolucion }) {
     const { completo, motivosCargados } = resolucion
     return (
         <div className={`${ANCHO_CHIP} flex justify-start`}>
             <span
                 aria-hidden
-                className={`grid h-[22px] w-[22px] place-items-center rounded-full border text-[11px] font-extrabold ${
+                // 24px para el pendiente y 22 para los resueltos: el que hay que tocar
+                // gana los 2px. Entra en `ANCHO_CHIP` (26px) sin correr ninguna columna.
+                className={`grid place-items-center rounded-full border text-[11px] font-extrabold ${
+                    completo || motivosCargados > 0 ? 'h-[22px] w-[22px]' : 'h-6 w-6'
+                } ${
                     completo
                         ? 'border-[#BFE6CE] bg-[#EAF7EF] text-dsgreen'
                         : motivosCargados > 0
                           ? 'border-[#F0D3A0] bg-[#FDF6EA] text-[#B45309]'
-                          : // Sin cargar lleva ＋: un círculo vacío se lee como "acá no
-                            // hay nada" y no invita a tocarlo. Con el ＋ (y el relleno,
-                            // en vez del borde punteado) la fila se lee como el botón
-                            // que efectivamente es.
-                            'border-[#C9D2E3] bg-[#F1F4F9] text-dsnavy'
+                          : // Anillo navy de 2px sobre blanco: una casilla sin tildar.
+                            //
+                            // El hairline `#C9D2E3` que tenía originalmente era gris sobre
+                            // gris y se leía como decoración: de ahí venía que el vendedor
+                            // viera "Cargá 2 rubros más" en el pie sin nada que le dijera
+                            // por dónde. El anillo navy conserva toda esa visibilidad.
+                            //
+                            // Y no hace falta que además invite a tocarlo (lo que había
+                            // motivado el ＋, y despues el navy relleno): el
+                            // gesto ahora está escrito en la banda de arriba, "tocá uno
+                            // para cargar el resultado". Con la instrucción presente, el
+                            // chip puede volver a ser lo único que tiene que ser: un
+                            // indicador de estado.
+                            'border-2 border-dsnavy bg-white'
                 }`}
             >
                 {completo ? (
                     <Check className="h-3.5 w-3.5" strokeWidth={3} />
                 ) : motivosCargados > 0 ? (
                     motivosCargados
-                ) : (
-                    <Plus className="h-3.5 w-3.5" strokeWidth={3} />
-                )}
+                ) : null}
+            </span>
+        </div>
+    )
+}
+
+/** El ＋ de una fila agregable, en el mismo slot de 26px que `ChipEstado` y centrado
+ *  sobre el mismo eje que sus círculos.
+ *
+ *  Este SÍ es el lugar del ＋: tocar esta fila **agrega** el rubro a la visita. Es la
+ *  contracara del chip de arriba — ahí el rubro ya existe y lo que se carga es su
+ *  resultado, y por eso ese es un anillo y no un ＋ (ver `ChipEstado`).
+ *
+ *  Y va a propósito **más discreto**: glifo pelado en gris, sin círculo ni borde, contra
+ *  el anillo navy de arriba. Son dos jerarquías distintas — cargar el resultado es
+ *  trabajo pendiente (bloquea el cierre), agregar un rubro es opcional — y las formas
+ *  distintas (círculo vs. glifo suelto) evitan que se lean como el mismo control. */
+function ChipAgregar() {
+    return (
+        <div className={`${ANCHO_CHIP} flex justify-start`}>
+            {/* El wrapper de 24px es el que alinea: sin él, un glifo de 15px con
+                `justify-start` queda ~5px a la izquierda del centro de los círculos y las
+                dos mitades de la tabla dejan de compartir eje. */}
+            <span aria-hidden className="grid h-6 w-6 place-items-center">
+                <Plus className="h-[15px] w-[15px] text-[#8A93A6]" strokeWidth={2.5} />
             </span>
         </div>
     )
@@ -160,7 +223,7 @@ function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
             {fila.tipo === 'rubro' && (
                 <>
                     <Celda valor={fila.actual} promedio6m={fila.promedio6m} />
-                    <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} />
+                    <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} ocultaEnAngosto />
                     <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia />
                 </>
             )}
@@ -200,7 +263,13 @@ function FilaOfrecimiento({
     const interior = (
         <>
             {conChip &&
-                (resolucion ? <ChipEstado resolucion={resolucion} /> : <div className={ANCHO_CHIP} />)}
+                (resolucion ? (
+                    <ChipEstado resolucion={resolucion} />
+                ) : fila.agregable ? (
+                    <ChipAgregar />
+                ) : (
+                    <div className={ANCHO_CHIP} />
+                ))}
             <ContenidoFila fila={fila} />
         </>
     )
@@ -278,7 +347,7 @@ function SegmentoOfrecimientos({
 }) {
     if (filas.length === 0) return null
 
-    const conChip = filas.some(f => f.resolucion)
+    const conChip = filas.some(f => f.resolucion || f.agregable)
     const conColumnaQuitar = filas.some(f => f.resolucion && !f.resolucion.esPropuesto)
 
     return (
@@ -351,7 +420,11 @@ export default function OfrecimientoTable({
     // Tabla de una visita ⇒ hay chip de estado, y se reserva su ancho en todas las
     // filas y en el header. En la propuesta (ninguna fila resoluble) no se reserva
     // nada: ahí ese espacio es ancho de nombre.
-    const conChip = resto.some(f => f.resolucion)
+    // `|| f.agregable`: el slot tambien hace falta cuando la visita todavia no tiene
+    // ningun ofrecimiento y lo unico que hay son filas del catalogo — sin esto no habria
+    // donde dibujarles el ＋. En la propuesta previa sigue en false (ninguna de sus filas
+    // es resoluble ni agregable) y ese espacio sigue siendo ancho de nombre.
+    const conChip = resto.some(f => f.resolucion || f.agregable)
     const conColumnaQuitar = resto.some(f => f.resolucion && !f.resolucion.esPropuesto)
 
     const q = normalizar(busqueda.trim())
@@ -377,6 +450,25 @@ export default function OfrecimientoTable({
             agregandoCodes={agregandoCodes}
             eliminandoIds={eliminandoIds}
         />
+        {/* La gemela de "Otros rubros del cliente · tocá uno para agregarlo": dos bandas,
+            misma gramática, verbos opuestos — arriba se CARGA el resultado, abajo se
+            AGREGA un rubro. Ese contraste es lo que hace que la pantalla se explique sola,
+            y reemplaza al párrafo de tres líneas que vivía arriba del sheet (~54px contra
+            ~18px de esto).
+
+            De ancho completo y no dentro del header de columnas porque ahí no entra (ver
+            la nota del `columnheader`). Estática y no sticky a propósito: el bloque de
+            arriba son ~5 filas pegadas a esta banda, así que mientras el vendedor lo está
+            mirando la banda está a la vista igual. Scrolleado más abajo ya está en el
+            catálogo, y ahí la instrucción que corresponde es la otra — que sí es sticky.
+
+            Solo en la tabla de una visita (`conChip`): en la propuesta previa no hay nada
+            que cargar. */}
+        {conChip && (
+            <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
+                Tu propuesta · tocá uno para cargar el resultado
+            </p>
+        )}
         {/* Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
             overflow oculto anula el `position: sticky` de adentro contra el scroll del
             sheet. Las esquinas de arriba las redondea el propio header. */}
@@ -386,6 +478,12 @@ export default function OfrecimientoTable({
                 scrollea (ACTUAL vs. M.ANT vs. P.6M no se adivinan por el valor). */}
             <div className="sticky top-0 z-20 flex h-8 items-center gap-1 rounded-t-[11px] border-b border-dsline bg-[#F7F8FB] px-2.5 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
                 {conChip && <div className={ANCHO_CHIP} />}
+                {/* Solo "Rubro". La instrucción de tocar la fila vivió acá un rato y fue un
+                    error: esta columna es la que absorbe lo que sobra después de los 26px
+                    del chip y los 3×54px de números, así que en mobile mide ~60-100px y
+                    "Rubro · tocá para cargar" salía cortado en "Rubro · tocá para c…" —
+                    una instrucción truncada es peor que ninguna. Ahora vive en la banda de
+                    ancho completo de arriba (`BANDA_PROPUESTA`), que es donde entra. */}
                 <div role="columnheader" className="min-w-0 flex-1">
                     Rubro
                 </div>
@@ -397,7 +495,10 @@ export default function OfrecimientoTable({
                 <div role="columnheader" className={`${ANCHO_NUMERICA} pr-1.5 text-right`}>
                     Actual
                 </div>
-                <div role="columnheader" className={`${ANCHO_NUMERICA} pr-1.5 text-right`}>
+                <div
+                    role="columnheader"
+                    className={`${ANCHO_NUMERICA} ${OCULTA_ANGOSTO_HEADER} pr-1.5 text-right`}
+                >
                     M.Ant
                 </div>
                 <div role="columnheader" className={`${ANCHO_NUMERICA} pr-1.5 text-right`}>

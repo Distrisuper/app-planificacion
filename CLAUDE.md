@@ -298,6 +298,69 @@ Hay **tres capas separadas**, y una operación toca una sola:
   solo `data`, un fallo la deja en `undefined` para siempre. **El gate es solo del front**;
   `PUT /visitas/:id/cerrar` acepta cerrar con cero resoluciones, así que un bundle viejo
   cacheado se lo saltea igual.
+- **El cronómetro de la visita abierta es un semáforo, y sus umbrales NO son el criterio de
+  validez.** `src/lib/estadoDuracion.ts`: ámbar <15 min (`arranque`), **verde 15–90**
+  (`valida`, bordes inclusive), ámbar >90 (`larga`), y `alejado` gana sobre las tres. Lo
+  pintan las dos pantallas de la visita abierta (`VisitaEnCursoBar` y el eyebrow de
+  `VisitaSheet`) desde ese único módulo: son la misma visita, y minimizar el sheet no puede
+  cambiarle el color. Tres cosas que no hay que confundir: (1) `DURACION_LARGA_MIN = 90`
+  **no repone el techo** que se sacó del criterio real — ese vive en `pl_criterio_visita`
+  y hoy es "mínimo 15, sin techo" (`DURACION_MIN_VALIDA`), así que una visita de 2 horas
+  sigue siendo válida y el ámbar solo sugiere cerrarla; estos umbrales son de UI y **no se
+  sincronizan** con la base. (2) `larga` es ámbar y **no rojo a propósito**: `dsred` está
+  reservado para `alejado`, que es el único de los cuatro que indica un problema real — si
+  `larga` fuera rojo, rojo significaría dos cosas. (3) `VisitaSheet` recibe
+  `alejado={esClienteEnCurso && alejado}`, no `enCurso && alejado`: el vendedor puede estar
+  mirando la propuesta de otro cliente mientras la visita corre en otro lado.
+- **En la tabla de la visita, el gesto se explica en una banda de ancho completo, NO en la
+  columna `Rubro`.** `Tu propuesta · tocá uno para cargar el resultado`, gemela de la que
+  ya existía abajo (`Otros rubros del cliente · tocá uno para agregarlo`): dos bandas,
+  misma gramática, **verbos opuestos** — arriba se carga, abajo se agrega. Ese contraste es
+  lo que hace que la pantalla se explique sola. **No volver a meter la instrucción en el
+  header de columnas**: esa columna absorbe lo que sobra después del chip (26px) y los
+  3×54px de números, así que en mobile mide ~60-100px y `Rubro · tocá para cargar` salía
+  truncado en `Rubro · tocá para c…` — se probó y se revirtió. La banda de arriba es
+  estática (la de abajo sí es sticky): el bloque que rotula son ~5 filas pegadas a ella, y
+  scrolleado más abajo la instrucción que corresponde es la otra. El párrafo introductorio
+  ("Cargá el resultado de cada rubro…") se borró — costaba ~54px de una pantalla donde
+  entran 5 filas; con él se fue el único texto que explicaba la convención de **"No lo
+  ofrecí"**, y se acepta. El botón del pie dice `Cargá N rubros más` (no "Completá"): mismo
+  verbo que la banda, que es lo que conecta la instrucción con el botón que bloquea.
+- **El chip de estado del rubro es un CHECKLIST, y el pendiente es un anillo hueco — no un
+  ＋.** `＋` significa "agregar algo nuevo", y en esa fila el rubro YA existe: viene de la
+  propuesta congelada y lo que se hace es registrar su resultado. Peor: en esa misma tabla
+  "agregar" ya es otra acción real (las filas de *otros rubros del cliente*), así que el
+  ＋ quedaba pegado al verbo equivocado — en las filas que hay que completar, mientras las
+  que sí agregan no llevan ícono. La contraparte natural de un ✓ es una casilla sin tildar.
+  Se probó ＋ gris, y después navy relleno, y se revirtieron los dos: lo que el ＋
+  compensaba — que nada dijera que la fila se toca — hoy lo dice la banda de arriba, así que
+  el chip volvió a ser solo un indicador de estado. Anillo `border-2 border-dsnavy` sobre
+  blanco (no el hairline `#C9D2E3` original, que era gris sobre gris e invisible) → número
+  ámbar → ✓ verde.
+- **El ＋ existe, pero en las filas del CATÁLOGO, no en las de la propuesta.** Tocar una
+  fila de *otros rubros del cliente* **agrega** ese rubro a la visita: ese es el verbo de
+  `＋`, y va en el mismo slot de 26px que el chip de estado, centrado sobre el mismo eje.
+  A propósito es **más discreto** que el chip de arriba — glifo gris pelado, sin círculo ni
+  borde, contra el anillo navy: son dos jerarquías (cargar el resultado bloquea el cierre,
+  agregar un rubro es opcional) y las formas distintas evitan que se lean como el mismo
+  control. `conChip` incluye `|| f.agregable` para que el slot se reserve también cuando la
+  visita todavía no tiene ningún ofrecimiento y lo único que hay son filas del catálogo.
+- **`M.Ant` se esconde abajo de 360px de ancho** (breakpoint `xs`, propio — Tailwind no trae
+  nada abajo de `sm`). Es la menos cargada de las tres columnas numéricas: la propuesta se
+  arma comparando `ACTUAL` contra `P.6M`, no contra el mes anterior, y esos 54px son la
+  diferencia entre leer `PARRILLAS, BRAZ…` y leer el nombre completo. **El header y la celda
+  van siempre juntos**: si se escondiera uno solo, las tres columnas quedan corridas entre
+  sí. Y son dos clases distintas (`hidden xs:block` / `hidden xs:flex`) a propósito — el
+  header alinea con `text-right` y es `block`; meterle `flex` hace que su texto pase a ser
+  un item flex y `text-right` deje de tener efecto.
+- **El botón de cerrar visita va gris mientras falten rubros, y naranja solo cuando se
+  puede cerrar.** El naranja al 40% que daba el `disabled:` del variant se veía como un CTA
+  roto: del tamaño del botón principal, gritando "tocame", con el blanco ilegible sobre
+  naranja lavado y sin comunicar que el que falta es el vendedor. Gris `#F1F4F9` + texto
+  `dsnavy` se lee como **estado**, y de paso el salto a naranja queda como señal de
+  progreso. Necesita `disabled:opacity-100` explícito: el 40% del variant también lavaría
+  el gris y dejaría ilegible el texto del faltante, que es justo el único que hay que leer
+  en ese momento.
 - **Al cerrar visita se genera un seguimiento en Cromo automáticamente** (`POST /crm/events`),
   reemplazando el redirect manual a Cromo que existe hoy en el flujo de Lupa.
 - **La vista semanal SÍ muestra el estado de cada cliente**, y es gratis: sale del `LEFT JOIN` con la

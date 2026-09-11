@@ -3,6 +3,11 @@ module.exports = {
     content: ['./index.html', './src/**/*.{ts,tsx}'],
     theme: {
         extend: {
+            // Los celulares de 320-359px de ancho (iPhone SE 1st gen, Android chicos que
+            // todavia hay en la calle) son los unicos donde la tabla de rubros no cierra:
+            // ahi se esconde la columna M.ANT para devolverle esos 54px al nombre del
+            // rubro. Tailwind no trae nada abajo de sm (640px).
+            screens: { xs: '360px' },
             fontFamily: {
                 sans: ['Inter', 'system-ui', 'sans-serif'],
             },
