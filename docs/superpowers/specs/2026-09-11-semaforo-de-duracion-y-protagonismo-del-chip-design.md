@@ -152,6 +152,28 @@ que estaba mal era el color, no el lugar.
 
 El párrafo introductorio **se borra**. Lo único accionable que decía se mudó a la banda.
 
+## El ＋, en el verbo que le corresponde
+
+Sacarlo del chip de estado lo dejó libre para donde sí significa lo que dice: las filas de
+*"Otros rubros del cliente"*, donde tocar la fila **agrega** ese rubro a la visita. Antes
+esas filas no tenían ningún ícono — solo el texto de la banda — así que el único ＋ de la
+pantalla estaba en las filas equivocadas.
+
+Va en el mismo slot de 26px que `ChipEstado` y centrado sobre el mismo eje que sus
+círculos (de ahí el wrapper de 24px: un glifo de 15px con `justify-start` queda ~5px a la
+izquierda del centro y las dos mitades de la tabla dejan de compartir eje).
+
+Y es **deliberadamente más discreto**: glifo gris pelado, sin círculo ni borde, contra el
+anillo navy de arriba. Son dos jerarquías — cargar el resultado es trabajo pendiente que
+bloquea el cierre, agregar un rubro es opcional — y las dos formas distintas (círculo vs.
+glifo suelto) evitan que se lean como el mismo control.
+
+Un ajuste que arrastra: `conChip` pasa de `resto.some(f => f.resolucion)` a
+`resto.some(f => f.resolucion || f.agregable)`. Sin eso, una visita que todavía no tiene
+ningún ofrecimiento (solo filas del catálogo) no reservaría el slot y no habría dónde
+dibujar el ＋. En la propuesta previa sigue en `false` — ninguna de sus filas es resoluble
+ni agregable — y ese espacio sigue siendo ancho de nombre.
+
 ## `M.Ant` en pantallas angostas
 
 Los nombres de rubro llegaban truncados (`PARRILLAS, BRAZ…`): las tres columnas numéricas

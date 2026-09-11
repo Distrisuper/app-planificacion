@@ -552,3 +552,42 @@ it('los headers numericos no son contenedores flex', () => {
         expect(h.className.split(/\s+/)).not.toContain('flex')
     }
 })
+
+it('una fila agregable lleva un ＋ discreto, y la resoluble un anillo', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    codigo: 'R1',
+                    nombre: 'Amortiguadores',
+                    resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true },
+                }),
+                fila({ codigo: 'R2', nombre: 'Bieletas', destacada: false, agregable: true }),
+            ]}
+            onAgregar={vi.fn()}
+        />,
+    )
+
+    // El ＋ va SOLO en la fila que agrega. Es el verbo correcto para ese glifo, y es la
+    // contracara del chip de la fila resoluble: ahi el rubro ya existe y se carga su
+    // resultado, asi que ese es un anillo (ver ChipEstado).
+    const agregable = screen.getByRole('button', { name: 'Agregar Bieletas' })
+    expect(agregable.querySelector('.lucide-plus')).not.toBeNull()
+
+    const resoluble = screen.getByRole('button', { name: /resolución de amortiguadores/i })
+    expect(resoluble.querySelector('.lucide-plus')).toBeNull()
+    expect(resoluble.querySelector('span[aria-hidden].rounded-full')).not.toBeNull()
+
+    // Discreto a proposito: glifo pelado, sin circulo ni borde — agregar es opcional,
+    // cargar el resultado es lo que bloquea el cierre.
+    const slot = agregable.querySelector('span[aria-hidden]')
+    expect(slot?.className).not.toContain('rounded-full')
+    expect(slot?.className).not.toContain('border')
+})
+
+it('la propuesta previa no reserva el slot del chip: ahi ese espacio es ancho de nombre', () => {
+    render(<OfrecimientoTable filas={[fila()]} />)
+    // Ni resoluble ni agregable => 4 columnas y ningun spacer al principio.
+    expect(screen.getAllByRole('columnheader')).toHaveLength(4)
+    expect(document.querySelector('.lucide-plus')).toBeNull()
+})

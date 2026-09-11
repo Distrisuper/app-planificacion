@@ -337,6 +337,14 @@ Hay **tres capas separadas**, y una operación toca una sola:
   el chip volvió a ser solo un indicador de estado. Anillo `border-2 border-dsnavy` sobre
   blanco (no el hairline `#C9D2E3` original, que era gris sobre gris e invisible) → número
   ámbar → ✓ verde.
+- **El ＋ existe, pero en las filas del CATÁLOGO, no en las de la propuesta.** Tocar una
+  fila de *otros rubros del cliente* **agrega** ese rubro a la visita: ese es el verbo de
+  `＋`, y va en el mismo slot de 26px que el chip de estado, centrado sobre el mismo eje.
+  A propósito es **más discreto** que el chip de arriba — glifo gris pelado, sin círculo ni
+  borde, contra el anillo navy: son dos jerarquías (cargar el resultado bloquea el cierre,
+  agregar un rubro es opcional) y las formas distintas evitan que se lean como el mismo
+  control. `conChip` incluye `|| f.agregable` para que el slot se reserve también cuando la
+  visita todavía no tiene ningún ofrecimiento y lo único que hay son filas del catálogo.
 - **`M.Ant` se esconde abajo de 360px de ancho** (breakpoint `xs`, propio — Tailwind no trae
   nada abajo de `sm`). Es la menos cargada de las tres columnas numéricas: la propuesta se
   arma comparando `ACTUAL` contra `P.6M`, no contra el mes anterior, y esos 54px son la

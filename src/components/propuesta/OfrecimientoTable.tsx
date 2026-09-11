@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Loader2, Search, Trash2 } from 'lucide-react'
+import { Check, Loader2, Plus, Search, Trash2 } from 'lucide-react'
 import { fmtAmount } from '@/lib/fmtAmount'
 import { resumenAlcance } from '@/lib/alcance'
 import { registroDetalleAccion } from './accionDetalle/registro'
@@ -164,6 +164,30 @@ function ChipEstado({ resolucion }: { resolucion: IOfrecimientoFilaResolucion })
     )
 }
 
+/** El ＋ de una fila agregable, en el mismo slot de 26px que `ChipEstado` y centrado
+ *  sobre el mismo eje que sus círculos.
+ *
+ *  Este SÍ es el lugar del ＋: tocar esta fila **agrega** el rubro a la visita. Es la
+ *  contracara del chip de arriba — ahí el rubro ya existe y lo que se carga es su
+ *  resultado, y por eso ese es un anillo y no un ＋ (ver `ChipEstado`).
+ *
+ *  Y va a propósito **más discreto**: glifo pelado en gris, sin círculo ni borde, contra
+ *  el anillo navy de arriba. Son dos jerarquías distintas — cargar el resultado es
+ *  trabajo pendiente (bloquea el cierre), agregar un rubro es opcional — y las formas
+ *  distintas (círculo vs. glifo suelto) evitan que se lean como el mismo control. */
+function ChipAgregar() {
+    return (
+        <div className={`${ANCHO_CHIP} flex justify-start`}>
+            {/* El wrapper de 24px es el que alinea: sin él, un glifo de 15px con
+                `justify-start` queda ~5px a la izquierda del centro de los círculos y las
+                dos mitades de la tabla dejan de compartir eje. */}
+            <span aria-hidden className="grid h-6 w-6 place-items-center">
+                <Plus className="h-[15px] w-[15px] text-[#8A93A6]" strokeWidth={2.5} />
+            </span>
+        </div>
+    )
+}
+
 /** Nombre (+ chip de tipo y alcance si aplica) y las tres columnas numéricas, siempre en
  *  ese orden y con el mismo ancho de columna que el header. El chip no se pinta para
  *  'rubro': es el caso por defecto y repetirlo en cada fila es ruido. "SKF" sin decir
@@ -239,7 +263,13 @@ function FilaOfrecimiento({
     const interior = (
         <>
             {conChip &&
-                (resolucion ? <ChipEstado resolucion={resolucion} /> : <div className={ANCHO_CHIP} />)}
+                (resolucion ? (
+                    <ChipEstado resolucion={resolucion} />
+                ) : fila.agregable ? (
+                    <ChipAgregar />
+                ) : (
+                    <div className={ANCHO_CHIP} />
+                ))}
             <ContenidoFila fila={fila} />
         </>
     )
@@ -317,7 +347,7 @@ function SegmentoOfrecimientos({
 }) {
     if (filas.length === 0) return null
 
-    const conChip = filas.some(f => f.resolucion)
+    const conChip = filas.some(f => f.resolucion || f.agregable)
     const conColumnaQuitar = filas.some(f => f.resolucion && !f.resolucion.esPropuesto)
 
     return (
@@ -390,7 +420,11 @@ export default function OfrecimientoTable({
     // Tabla de una visita ⇒ hay chip de estado, y se reserva su ancho en todas las
     // filas y en el header. En la propuesta (ninguna fila resoluble) no se reserva
     // nada: ahí ese espacio es ancho de nombre.
-    const conChip = resto.some(f => f.resolucion)
+    // `|| f.agregable`: el slot tambien hace falta cuando la visita todavia no tiene
+    // ningun ofrecimiento y lo unico que hay son filas del catalogo — sin esto no habria
+    // donde dibujarles el ＋. En la propuesta previa sigue en false (ninguna de sus filas
+    // es resoluble ni agregable) y ese espacio sigue siendo ancho de nombre.
+    const conChip = resto.some(f => f.resolucion || f.agregable)
     const conColumnaQuitar = resto.some(f => f.resolucion && !f.resolucion.esPropuesto)
 
     const q = normalizar(busqueda.trim())
