@@ -416,7 +416,11 @@ export default function MapaVisita({
                         loading={recalculando}
                         className="h-11 min-w-0 flex-1 text-[13px]"
                     >
-                        <RotateCw className="h-4 w-4 shrink-0" strokeWidth={2.4} />
+                        {/* `Button` ya antepone su propio spinner cuando `loading`. Sin
+                         *  este condicional, el RotateCw estático quedaba al lado del
+                         *  spinner sin moverse — dos íconos a la vez, y el que sí indica
+                         *  "está pasando algo" competía con uno que parece congelado. */}
+                        {!recalculando && <RotateCw className="h-4 w-4 shrink-0" strokeWidth={2.4} />}
                         <span className="truncate">Recalcular posición</span>
                     </Button>
                     <Button

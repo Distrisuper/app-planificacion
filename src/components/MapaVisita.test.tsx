@@ -332,6 +332,33 @@ it('Restablecer vuelve a la coordenada original y avisa onReposicionar(null)', a
     expect(await screen.findByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
 })
 
+it('mientras recalcula, no queda el ícono estático compitiendo con el spinner', async () => {
+    // getCurrentImpl no llama a ningún callback: el botón se queda en `recalculando`
+    // para poder inspeccionar el estado de carga.
+    mockGeolocation(
+        (ok: any) => ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+        () => {},
+    )
+    render(
+        <MapaVisita
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    const boton = screen.getByRole('button', { name: /recalcular/i })
+    await userEvent.click(boton)
+
+    // El spinner de Button (Loader2) ya indica la carga; el RotateCw estático de
+    // este botón no debe quedar al lado sin moverse, dando la sensación de que no
+    // pasó nada al tocarlo.
+    expect(boton.querySelector('.lucide-rotate-cw')).toBeNull()
+})
+
 it('Recalcular posición no exige una lectura estrictamente nueva (maximumAge > 0)', async () => {
     // `maximumAge: 0` prohíbe reusar cualquier fix ya resuelto por el navegador. En
     // equipos sin GPS (una PC de escritorio) el proveedor de ubicación por red resuelve
