@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { distanciaMetros, estaFueraDeRango, RADIO_INICIO_METROS } from '@/lib/distancia'
 import { formatDistancia } from '@/lib/analiticaFormat'
 
-interface IniciarVisitaMapaProps {
+interface MapaVisitaProps {
     open: boolean
     nombreCliente: string
     direccion?: string
@@ -43,7 +43,7 @@ const ICONO_VENDEDOR = L.divIcon({
  * (`watchPosition`), solo visual — no se persiste ni se manda al backend. La coordenada real
  * que sí se guarda se sigue capturando con `capturarUbicacion()` al tocar "Iniciar visita".
  */
-export default function IniciarVisitaMapa({
+export default function MapaVisita({
     open,
     nombreCliente,
     direccion,
@@ -54,7 +54,7 @@ export default function IniciarVisitaMapa({
     onIniciar,
     onCancel,
     onReposicionar,
-}: IniciarVisitaMapaProps) {
+}: MapaVisitaProps) {
     const mapRef = useRef<HTMLDivElement>(null)
     const mapInstance = useRef<L.Map | null>(null)
     const vendedorMarker = useRef<L.Marker | null>(null)

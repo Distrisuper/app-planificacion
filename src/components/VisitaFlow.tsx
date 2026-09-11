@@ -3,7 +3,7 @@ import { Loader2, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PropuestaSheet, { toPropuestaDTO } from './PropuestaSheet'
 import VisitaSheet from './VisitaSheet'
-import IniciarVisitaMapa from './IniciarVisitaMapa'
+import MapaVisita from './MapaVisita'
 import { useCerrarVisita, useIniciarVisita } from '@/hooks/useVisitas'
 import { usePropuesta } from '@/hooks/usePropuesta'
 import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geolocation'
@@ -110,7 +110,7 @@ export default function VisitaFlow({
     // volvería a tocar creyendo que no respondió, y se dispararían llamadas concurrentes.
     const [iniciandoFlujo, setIniciandoFlujo] = useState(false)
     const [cerrandoFlujo, setCerrandoFlujo] = useState(false)
-    // Ajuste efímero del pin del cliente (IniciarVisitaMapa.onReposicionar). Solo
+    // Ajuste efímero del pin del cliente (MapaVisita.onReposicionar). Solo
     // importa para ESTE intento de iniciar: viaja como coordCliente y se usa en la
     // segunda verificación de distancia de acá abajo. Nunca se guarda en ningún otro
     // lado — ver docs/superpowers/specs/2026-09-07-reposicionar-cliente-al-iniciar-visita-design.md.
@@ -359,7 +359,7 @@ export default function VisitaFlow({
                 />
             )}
             {tieneCoords && (
-                <IniciarVisitaMapa
+                <MapaVisita
                     open={propuestaPendiente !== null}
                     nombreCliente={nombre}
                     direccion={direccionTexto}

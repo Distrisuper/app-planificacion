@@ -6,7 +6,7 @@ const PERMISSION_DENIED = 1
 
 // El backend valida el string con una regex que limita a 8 decimales (sobra para GPS, ~1mm
 // de precisión); los doubles crudos de `coords` (y los de `e.latlng` de Leaflet, como el
-// click de IniciarVisitaMapa al reposicionar) traen hasta 15-17, así que hay que truncarlos
+// click de MapaVisita al reposicionar) traen hasta 15-17, así que hay que truncarlos
 // acá o el backend rechaza la coordenada con COORD_REQUERIDA / COORD_CLIENTE_INVALIDA.
 export function formatearCoord(valor: number): string {
     return valor.toFixed(8)

@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import { vi } from 'vitest'
 import { useAlejadoDelCliente } from './useAlejadoDelCliente'
 
-/** Igual patrón que IniciarVisitaMapa.test.tsx: reemplaza `navigator` entero por un mock
+/** Igual patrón que MapaVisita.test.tsx: reemplaza `navigator` entero por un mock
  *  controlable. `wakeLockRequest` es opcional — cuando no se pasa, `navigator.wakeLock`
  *  directamente no existe, para probar el caso "la API no está". */
 function mockNavigator(opts: {

@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
-import IniciarVisitaMapa from './IniciarVisitaMapa'
+import MapaVisita from './MapaVisita'
 
 vi.mock('leaflet', () => {
     const map = {
@@ -37,7 +37,7 @@ beforeEach(() => vi.unstubAllGlobals())
 it('no renderiza nada cuando está cerrado', () => {
     mockGeolocation((ok: any) => ok({ coords: { latitude: -34.6, longitude: -58.4 } }))
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open={false}
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -54,7 +54,7 @@ it('muestra nombre, dirección y dispara onIniciar/onCancel', async () => {
     const onIniciar = vi.fn()
     const onCancel = vi.fn()
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             direccion="Av. Siempre Viva 742"
@@ -78,7 +78,7 @@ it('muestra nombre, dirección y dispara onIniciar/onCancel', async () => {
 it('deshabilita el botón mientras iniciando es true', () => {
     mockGeolocation((ok: any) => ok({ coords: { latitude: -34.6, longitude: -58.4 } }))
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -94,7 +94,7 @@ it('deshabilita el botón mientras iniciando es true', () => {
 it('si falla la ubicación en vivo, avisa que igual se puede iniciar', () => {
     mockGeolocation((_ok: any, fail: any) => fail())
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -111,7 +111,7 @@ it('deshabilita el botón y avisa cuando el fix propio está lejos y es preciso'
         ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
     )
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -129,7 +129,7 @@ it('mientras no llegó el primer fix, el botón queda deshabilitado (no habilita
     // que el GPS todavía está resolviendo (puede durar varios segundos con mala señal).
     mockGeolocation(() => {})
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -147,7 +147,7 @@ it('no bloquea con un fix impreciso aunque marque lejos', () => {
         ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 500 } }),
     )
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -165,7 +165,7 @@ it('si falla el recálculo pero ya había una posición conocida, no muestra el 
         (_ok: any, fail: any) => fail(),
     )
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -193,7 +193,7 @@ it('limpia el watch de geolocalización al desmontar', () => {
     )
     watchPosition.mockReturnValue(42)
     const { unmount } = render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -223,7 +223,7 @@ it('arma el modo reposicionar, deshabilita Iniciar visita, y Cancelar lo desarma
         ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
     )
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -254,7 +254,7 @@ it('reposicionar mueve el pin, recalcula sin esperar un nuevo fix, y avisa el aj
         ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
     )
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -284,7 +284,7 @@ it('un click en el mapa SIN haber armado el modo no mueve nada', async () => {
         ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
     )
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}
@@ -308,7 +308,7 @@ it('Restablecer vuelve a la coordenada original y avisa onReposicionar(null)', a
         ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
     )
     render(
-        <IniciarVisitaMapa
+        <MapaVisita
             open
             nombreCliente="Kiosco Sur"
             latitud={-34.6}

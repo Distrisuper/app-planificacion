@@ -168,7 +168,7 @@ afterEach(() => vi.unstubAllGlobals())
 
 /** jsdom no expone navigator.geolocation por defecto — a diferencia de
  *  capturarUbicacion() (mockeado arriba), acá se necesita el watch EN VIVO que usa
- *  IniciarVisitaMapa para el gate de distancia. Solo hace falta en los tests que
+ *  MapaVisita para el gate de distancia. Solo hace falta en los tests que
  *  verifican ese gate contra la posición reposicionada. */
 function mockGeolocacionEnVivo(coords: { latitude: number; longitude: number; accuracy: number }) {
     const watchPosition = vi.fn((ok: any) => {
@@ -606,7 +606,7 @@ it('con una visita en curso, iniciar en otro cliente queda bloqueado con aviso',
     expect(api.iniciarVisita).toHaveBeenCalledTimes(1)
 })
 
-/** Mismo helper que en IniciarVisitaMapa.test.tsx — necesario acá porque el mapa
+/** Mismo helper que en MapaVisita.test.tsx — necesario acá porque el mapa
  *  real (no mockeado) es parte del árbol que VisitaFlow renderiza. */
 async function getClickHandler() {
     const L = await import('leaflet')

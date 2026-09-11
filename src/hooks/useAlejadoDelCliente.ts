@@ -43,7 +43,7 @@ export function useAlejadoDelCliente({
     const [alejado, setAlejado] = useState(false)
     const [distanciaM, setDistanciaM] = useState<number | null>(null)
     // Los callbacks de watchPosition/visibilitychange se crean una sola vez por montaje
-    // (mismo motivo que posicionRef en IniciarVisitaMapa) y necesitan leer el estado
+    // (mismo motivo que posicionRef en MapaVisita) y necesitan leer el estado
     // VIGENTE de `alejado`, no el del render en que se armaron.
     const alejadoRef = useRef(false)
     const wakeLockRef = useRef<{ release: () => void } | null>(null)
