@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, Loader2, Plus, Search, Trash2 } from 'lucide-react'
+import { Check, Loader2, Search, Trash2 } from 'lucide-react'
 import { fmtAmount } from '@/lib/fmtAmount'
 import { resumenAlcance } from '@/lib/alcance'
 import { registroDetalleAccion } from './accionDetalle/registro'
@@ -53,6 +53,17 @@ const TIPO_LABEL: Record<TipoOfrecimiento, string> = {
 // padding distinto, el número y la etiqueta del header dejan de coincidir en
 // la misma columna aunque el `div` que los contiene mida lo mismo.
 const ANCHO_NUMERICA = 'w-[54px] shrink-0'
+// M.ANT es la unica de las tres columnas numericas que se esconde abajo de 360px: es la
+// menos cargada de las tres (la propuesta se arma comparando ACTUAL contra P.6M, no
+// contra el mes anterior), y esos 54px son la diferencia entre leer "PARRILLAS, BRAZ..."
+// y leer el nombre del rubro completo.
+//
+// Son dos clases y no una porque el header es `block` (alinea con text-right) y la celda
+// es `flex` (alinea con justify-end): meterle `flex` al header haria que su texto pase a
+// ser un item flex y text-right deje de tener efecto. Van siempre de la mano — si solo
+// una de las dos se escondiera, las columnas quedarian corridas entre si.
+const OCULTA_ANGOSTO_CELDA = 'hidden xs:flex'
+const OCULTA_ANGOSTO_HEADER = 'hidden xs:block'
 
 // Slot del chip de estado, al principio de la fila. Se reserva en TODAS las filas de
 // la tabla (y en el header) cuando la tabla es la de una visita: si solo lo llevaran
@@ -68,14 +79,22 @@ function Celda({
     valor,
     promedio6m,
     referencia,
+    ocultaEnAngosto,
 }: {
     valor: number | null
     promedio6m: number | null
     referencia?: boolean
+    /** true = la columna desaparece abajo de 360px. Tiene que ir junto con el mismo flag
+     *  en su header (ver OCULTA_ANGOSTO_CELDA). */
+    ocultaEnAngosto?: boolean
 }) {
     const rojo = !referencia && cae(valor, promedio6m)
     return (
-        <div className={`${ANCHO_NUMERICA} flex justify-end`}>
+        <div
+            className={`${ANCHO_NUMERICA} justify-end ${
+                ocultaEnAngosto ? OCULTA_ANGOSTO_CELDA : 'flex'
+            }`}
+        >
             <span
                 // La celda de referencia (P.6M) lleva la misma pastilla de fondo que las
                 // demás — solo cambia el color de texto — porque sin ese fondo el ojo no
@@ -91,10 +110,19 @@ function Celda({
     )
 }
 
-/** Estado de la resolución del ofrecimiento, en 26px: ＋ (sin cargar), el número de
- *  motivos en ámbar (empezado pero incompleto) o ✓ verde (completo). Reemplaza al
- *  botón "Resolución" de ancho completo que ocupaba una segunda línea por fila: con
- *  5 rubros esa línea costaba ~250px de una pantalla que tiene ~500 útiles. */
+/** Estado de la resolución del ofrecimiento, en 26px: anillo hueco (sin cargar), el
+ *  número de motivos en ámbar (empezado pero incompleto) o un check verde (completo).
+ *  Reemplaza al botón "Resolución" de ancho completo que ocupaba una segunda línea por
+ *  fila: con 5 rubros esa línea costaba ~250px de una pantalla que tiene ~500 útiles.
+ *
+ *  Los tres estados son un CHECKLIST — pendiente, parcial, completo — y por eso el
+ *  pendiente es un anillo hueco y NO un ＋ (que es lo que tuvo un rato).
+ *  `＋` significa "agregar algo nuevo", y acá el rubro ya existe: viene de
+ *  la propuesta congelada y lo que se hace es registrar su resultado. Peor: en ESTA misma
+ *  tabla "agregar" ya es una acción distinta y real (las filas de "Otros rubros del
+ *  cliente · tocá uno para agregarlo"), así que el ＋ quedaba pegado al
+ *  verbo equivocado: en las filas que hay que completar, mientras las que sí agregan no
+ *  llevan ícono. El contraparte natural de un check es una casilla sin tildar. */
 function ChipEstado({ resolucion }: { resolucion: IOfrecimientoFilaResolucion }) {
     const { completo, motivosCargados } = resolucion
     return (
@@ -110,30 +138,27 @@ function ChipEstado({ resolucion }: { resolucion: IOfrecimientoFilaResolucion })
                         ? 'border-[#BFE6CE] bg-[#EAF7EF] text-dsgreen'
                         : motivosCargados > 0
                           ? 'border-[#F0D3A0] bg-[#FDF6EA] text-[#B45309]'
-                          : // Sin cargar lleva ＋: un círculo vacío se lee como "acá no
-                            // hay nada" y no invita a tocarlo.
+                          : // Anillo navy de 2px sobre blanco: una casilla sin tildar.
                             //
-                            // Y lleva navy RELLENO con el ＋ en blanco, no el gris claro
-                            // que tenía antes (`bg-[#F1F4F9]` con borde `#C9D2E3` y el ＋
-                            // en navy): sobre el fondo blanco del sheet ese gris era gris
-                            // sobre gris y se leía como decoración, así que el vendedor
-                            // veía "Cargá 2 rubros más" en el pie sin nada que le dijera
-                            // por dónde. Un círculo oscuro sólido se lee como botón.
+                            // El hairline `#C9D2E3` que tenía originalmente era gris sobre
+                            // gris y se leía como decoración: de ahí venía que el vendedor
+                            // viera "Cargá 2 rubros más" en el pie sin nada que le dijera
+                            // por dónde. El anillo navy conserva toda esa visibilidad.
                             //
-                            // El ✓ verde y el número ámbar siguen en tinte suave a
-                            // propósito: son ESTADOS, no invitaciones. El contraste
-                            // "oscuro sólido = falta tocar / tinte suave = ya está" es
-                            // justamente lo que hace legible qué queda pendiente.
-                            'border-dsnavy bg-dsnavy text-white'
+                            // Y no hace falta que además invite a tocarlo (lo que había
+                            // motivado el ＋, y despues el navy relleno): el
+                            // gesto ahora está escrito en la banda de arriba, "tocá uno
+                            // para cargar el resultado". Con la instrucción presente, el
+                            // chip puede volver a ser lo único que tiene que ser: un
+                            // indicador de estado.
+                            'border-2 border-dsnavy bg-white'
                 }`}
             >
                 {completo ? (
                     <Check className="h-3.5 w-3.5" strokeWidth={3} />
                 ) : motivosCargados > 0 ? (
                     motivosCargados
-                ) : (
-                    <Plus className="h-3.5 w-3.5" strokeWidth={3} />
-                )}
+                ) : null}
             </span>
         </div>
     )
@@ -174,7 +199,7 @@ function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
             {fila.tipo === 'rubro' && (
                 <>
                     <Celda valor={fila.actual} promedio6m={fila.promedio6m} />
-                    <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} />
+                    <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} ocultaEnAngosto />
                     <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia />
                 </>
             )}
@@ -436,7 +461,10 @@ export default function OfrecimientoTable({
                 <div role="columnheader" className={`${ANCHO_NUMERICA} pr-1.5 text-right`}>
                     Actual
                 </div>
-                <div role="columnheader" className={`${ANCHO_NUMERICA} pr-1.5 text-right`}>
+                <div
+                    role="columnheader"
+                    className={`${ANCHO_NUMERICA} ${OCULTA_ANGOSTO_HEADER} pr-1.5 text-right`}
+                >
                     M.Ant
                 </div>
                 <div role="columnheader" className={`${ANCHO_NUMERICA} pr-1.5 text-right`}>

@@ -107,15 +107,27 @@ contra los ~54px del párrafo.
 > el vendedor ya está en el catálogo, donde la instrucción que corresponde es la otra (esa
 > sí es sticky, y por eso lo necesita).
 
-**b. El chip pendiente pasa a navy relleno con el ＋ en blanco** (24px), en lugar del
-`bg-[#F1F4F9]` con borde `#C9D2E3` y ＋ navy. Sobre el fondo blanco del sheet ese gris era
-gris sobre gris. Un círculo oscuro sólido se lee como botón.
+**b. El chip pendiente es un anillo hueco** (`border-2 border-dsnavy` sobre blanco, 24px),
+en lugar del hairline `#C9D2E3` original que era gris sobre gris e invisible.
 
-El ✓ verde y el número ámbar **siguen en tinte suave a propósito**: son *estados*, no
-invitaciones. El contraste "oscuro sólido = falta tocar / tinte suave = ya está" es
-justamente lo que hace legible qué queda pendiente — y es la razón de que el pendiente se
-lleve 24px contra los 22 de los resueltos (entra en `ANCHO_CHIP`, 26px, sin correr ninguna
-columna).
+Los tres estados del chip son un **checklist** — pendiente → parcial → completo — y la
+contraparte natural de un ✓ es una casilla sin tildar.
+
+> **Corrección (mismo día).** Este chip pasó por ＋ gris y después por **navy relleno con
+> ＋ blanco**, y los dos se revirtieron. El problema no era el color: `＋` significa
+> **"agregar algo nuevo"**, y en esa fila el rubro ya existe — viene de la propuesta
+> congelada y lo que se hace es *registrar su resultado*. Y en **esta misma tabla**
+> "agregar" ya es una acción distinta y real: las filas de *"Otros rubros del cliente ·
+> tocá uno para agregarlo"*. O sea que el ＋ estaba pegado al verbo equivocado — en las
+> filas que hay que completar, mientras las que sí agregan no llevan ícono.
+>
+> Lo que el ＋ compensaba era que **nada decía que la fila se toca**. Eso lo dice ahora la
+> banda del punto (a), así que el chip pudo volver a ser lo único que tiene que ser: un
+> indicador de estado. La visibilidad que se había ganado se conserva — un anillo navy de
+> 2px no es el hairline gris de antes.
+
+El ✓ verde y el número ámbar quedan en tinte suave, y el pendiente se lleva 24px contra
+los 22 de los resueltos (entra en `ANCHO_CHIP`, 26px, sin correr ninguna columna).
 
 **c. El botón del pie usa el mismo verbo.** `Completá N rubros más` → `Cargá N rubros más`.
 Chico, pero es lo que cierra el círculo: la banda dice "tocá uno para **cargar** el
@@ -138,7 +150,25 @@ hay que poder leer en ese momento.
 El faltante **sigue adentro del botón**, como estaba documentado en `VisitaSheet.tsx`: lo
 que estaba mal era el color, no el lugar.
 
-El párrafo introductorio **se borra**. Lo único accionable que decía se mudó al header.
+El párrafo introductorio **se borra**. Lo único accionable que decía se mudó a la banda.
+
+## `M.Ant` en pantallas angostas
+
+Los nombres de rubro llegaban truncados (`PARRILLAS, BRAZ…`): las tres columnas numéricas
+se comen 162px de ~284 útiles. `M.Ant` se esconde abajo de **360px** (breakpoint `xs`,
+propio — Tailwind no trae nada abajo de `sm`/640px) y esos 54px vuelven al nombre.
+
+Es la menos cargada de las tres: la propuesta se arma comparando `ACTUAL` contra `P.6M`,
+no contra el mes anterior. Dos reglas que van con esto:
+
+- **El header y la celda se esconden juntos.** Si se escondiera uno solo, las tres columnas
+  quedan corridas entre sí y el número deja de caer bajo su rótulo. Hay un test que fija
+  ese pareo (jsdom no evalúa media queries, así que prueba el pareo, no el corte).
+- **Son dos clases distintas** (`hidden xs:block` para el header, `hidden xs:flex` para la
+  celda) y no una sola. El header es `block` y alinea con `text-right`; meterle `flex` hace
+  que su texto pase a ser un item flex, `justify-content` pase a mandar y `text-right` deje
+  de tener efecto. Pasó en la primera versión de este cambio, los tests no lo vieron (jsdom
+  no aplica CSS) y hay un test nuevo que lo fija.
 
 ### Lo que se perdió y se acepta
 
@@ -157,7 +187,8 @@ el problema real, y la pantalla tiene que priorizar filas de tabla sobre prosa.
 | `src/components/VisitaEnCursoBar.tsx` | color del semáforo + `· visita larga` |
 | `src/components/VisitaSheet.tsx` | prop `alejado`, eyebrow del semáforo, fuera el párrafo, verbo y color del botón |
 | `src/components/VisitaFlow.tsx` | pasa `alejado={esClienteEnCurso && alejado}` |
-| `src/components/propuesta/OfrecimientoTable.tsx` | banda con el gesto, chip pendiente navy relleno |
+| `src/components/propuesta/OfrecimientoTable.tsx` | banda con el gesto, chip pendiente en anillo, `M.Ant` oculta abajo de 360px |
+| `tailwind.config.cjs` | breakpoint `xs: 360px` |
 
 Tests: `estadoDuracion.test.ts` (nuevo, con los bordes exactos 15:00/90:00 y la
 precedencia de `alejado`), más los de `visitaTimer`, `VisitaEnCursoBar`, `VisitaSheet` y

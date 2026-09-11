@@ -326,6 +326,25 @@ Hay **tres capas separadas**, y una operación toca una sola:
   entran 5 filas; con él se fue el único texto que explicaba la convención de **"No lo
   ofrecí"**, y se acepta. El botón del pie dice `Cargá N rubros más` (no "Completá"): mismo
   verbo que la banda, que es lo que conecta la instrucción con el botón que bloquea.
+- **El chip de estado del rubro es un CHECKLIST, y el pendiente es un anillo hueco — no un
+  ＋.** `＋` significa "agregar algo nuevo", y en esa fila el rubro YA existe: viene de la
+  propuesta congelada y lo que se hace es registrar su resultado. Peor: en esa misma tabla
+  "agregar" ya es otra acción real (las filas de *otros rubros del cliente*), así que el
+  ＋ quedaba pegado al verbo equivocado — en las filas que hay que completar, mientras las
+  que sí agregan no llevan ícono. La contraparte natural de un ✓ es una casilla sin tildar.
+  Se probó ＋ gris, y después navy relleno, y se revirtieron los dos: lo que el ＋
+  compensaba — que nada dijera que la fila se toca — hoy lo dice la banda de arriba, así que
+  el chip volvió a ser solo un indicador de estado. Anillo `border-2 border-dsnavy` sobre
+  blanco (no el hairline `#C9D2E3` original, que era gris sobre gris e invisible) → número
+  ámbar → ✓ verde.
+- **`M.Ant` se esconde abajo de 360px de ancho** (breakpoint `xs`, propio — Tailwind no trae
+  nada abajo de `sm`). Es la menos cargada de las tres columnas numéricas: la propuesta se
+  arma comparando `ACTUAL` contra `P.6M`, no contra el mes anterior, y esos 54px son la
+  diferencia entre leer `PARRILLAS, BRAZ…` y leer el nombre completo. **El header y la celda
+  van siempre juntos**: si se escondiera uno solo, las tres columnas quedan corridas entre
+  sí. Y son dos clases distintas (`hidden xs:block` / `hidden xs:flex`) a propósito — el
+  header alinea con `text-right` y es `block`; meterle `flex` hace que su texto pase a ser
+  un item flex y `text-right` deje de tener efecto.
 - **El botón de cerrar visita va gris mientras falten rubros, y naranja solo cuando se
   puede cerrar.** El naranja al 40% que daba el `disabled:` del variant se veía como un CTA
   roto: del tamaño del botón principal, gritando "tocame", con el blanco ilegible sobre
