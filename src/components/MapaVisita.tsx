@@ -264,7 +264,16 @@ export default function MapaVisita({
                 setCalculando(false)
                 marcarFixFallido()
             },
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
+            // `maximumAge: 0` (que tenía este código) exige una lectura estrictamente
+            // nueva: en equipos sin GPS (una PC de escritorio) el proveedor de ubicación
+            // por red resuelve UNA vez y no puede producir otra a pedido, así que el
+            // pedido quedaba esperando hasta agotar el timeout y terminaba siempre en
+            // "No pudimos actualizar tu posición" — mismo motivo, documentado, por el
+            // que `capturarUbicacion()` tampoco usa 0 (ver src/lib/geolocation.ts). Un
+            // margen chico sigue sirviendo como "recalcular": no reusa el fix inicial
+            // del montaje (que ya lleva más de 5 s dando vueltas para cuando el
+            // vendedor llega a tocar el botón), solo tolera un fix genuinamente reciente.
+            { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
         )
     }
 

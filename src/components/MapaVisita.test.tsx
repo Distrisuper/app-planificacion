@@ -332,6 +332,33 @@ it('Restablecer vuelve a la coordenada original y avisa onReposicionar(null)', a
     expect(await screen.findByText(/acercate a menos de 100 m/i)).toBeInTheDocument()
 })
 
+it('Recalcular posición no exige una lectura estrictamente nueva (maximumAge > 0)', async () => {
+    // `maximumAge: 0` prohíbe reusar cualquier fix ya resuelto por el navegador. En
+    // equipos sin GPS (una PC de escritorio) el proveedor de ubicación por red resuelve
+    // UNA vez y no puede producir otra a pedido — mismo motivo por el que
+    // `capturarUbicacion()` tampoco usa 0 (ver src/lib/geolocation.ts). Sin esta
+    // tolerancia, "Recalcular posición" queda cargando hasta agotar el timeout y termina
+    // siempre en "No pudimos actualizar tu posición", aun cuando el vendedor no se movió.
+    const { getCurrentPosition } = mockGeolocation(
+        (ok: any) => ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /recalcular posición/i }))
+
+    const opciones = getCurrentPosition.mock.calls.at(-1)?.[2] as PositionOptions
+    expect(opciones.maximumAge).toBeGreaterThan(0)
+})
+
 it('en modo consulta no ofrece iniciar ni reposicionar', () => {
     mockGeolocation((ok: any) =>
         ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
