@@ -144,3 +144,44 @@ it('limpia el watch y el listener de visibilitychange al desmontarse', () => {
     document.dispatchEvent(new Event('visibilitychange'))
     expect(getCurrentPosition).not.toHaveBeenCalled()
 })
+
+it('descarta un fix más impreciso que el radio: no entra a alejado', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    // ~1.1 km con 150 m de precisión: cumple `d - p > 100`, pero el fix es más impreciso
+    // que el propio radio y no puede concluir nada.
+    act(() => entregar(fix(0.01, 0, 150)))
+
+    expect(result.current.alejado).toBe(false)
+})
+
+it('un fix impreciso no apaga un aviso ya prendido ni mueve la distancia', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    act(() => entregar(fix(0.01, 0, 5)))
+    expect(result.current.alejado).toBe(true)
+    const distanciaAntes = result.current.distanciaM
+
+    act(() => entregar(fix(0.0005, 0, 400)))
+
+    expect(result.current.alejado).toBe(true)
+    expect(result.current.distanciaM).toBe(distanciaAntes)
+})
+
+it('evaluarFix apaga el aviso con un fix fino y cercano', () => {
+    let entregar: any
+    mockNavigator({ watchImpl: ok => (entregar = ok) })
+    const { result } = renderHook(() => useAlejadoDelCliente({ activo: true, ...CLIENTE }))
+
+    act(() => entregar(fix(0.01, 0, 5)))
+    expect(result.current.alejado).toBe(true)
+
+    // ~44 m del cliente con 15 m de precisión: distancia cruda dentro del radio.
+    act(() => result.current.evaluarFix(0.0004, 0, 15))
+
+    expect(result.current.alejado).toBe(false)
+})

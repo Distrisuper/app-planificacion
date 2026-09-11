@@ -12,6 +12,10 @@ interface UseAlejadoDelClienteArgs {
 interface UseAlejadoDelClienteResult {
     alejado: boolean
     distanciaM: number | null
+    /** Entrada externa al mismo criterio que usa el watch interno. La usa MapaVisita en
+     *  modo consulta, cuyo watch SÍ es de alta precisión: es lo que le permite al vendedor
+     *  desmentir el aviso abriendo el mapa. */
+    evaluarFix: (lat: number, lon: number, precisionM: number) => void
 }
 
 /**
@@ -49,6 +53,15 @@ export function useAlejadoDelCliente({
 
     function evaluarFix(lat: number, lon: number, precisionM: number) {
         if (!tieneCoords) return
+        // Puerta de precisión: un fix más impreciso que el propio radio no puede concluir
+        // nada, ni para entrar ni para salir. Sin esto, entrada y salida usan escalas
+        // distintas —entrar descuenta la precisión, salir mide la distancia cruda— y entre
+        // las dos queda una banda muerta (100 < d <= 100 + precisión) donde el fix ni entra
+        // ni sale. Como el watch de acá corre en baja precisión a propósito, casi todos sus
+        // fixes caen en esa banda: se entraba a `alejado` con un fix bueno y después ningún
+        // fix grueso alcanzaba para salir, con el vendedor parado en el local. Ver
+        // docs/superpowers/specs/2026-09-11-ver-mi-posicion-con-visita-abierta-design.md.
+        if (precisionM > RADIO_INICIO_METROS) return
         const d = distanciaMetros(lat, lon, latitud as number, longitud as number)
         setDistanciaM(d)
         if (alejadoRef.current) {
@@ -118,5 +131,9 @@ export function useAlejadoDelCliente({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [habilitado, latitud, longitud])
 
-    return { alejado: habilitado && alejado, distanciaM: habilitado ? distanciaM : null }
+    return {
+        alejado: habilitado && alejado,
+        distanciaM: habilitado ? distanciaM : null,
+        evaluarFix,
+    }
 }
