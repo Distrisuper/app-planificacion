@@ -183,6 +183,16 @@ export default function AgendaSemanaPage() {
         semanaVista ?? ciclo?.semana ?? semanasPendientes?.[0] ?? semanas?.[0]?.semana ?? null
     const operable = ciclo == null || semanaEfectiva === ciclo.semana
 
+    // Se puede AGREGAR en cualquier zona que todavía falte hacer —la en curso incluida—,
+    // y en ninguna de las ya cerradas. No es una restricción de permisos (el backend
+    // acepta cualquier semana del set, y "Reagendar" ya movía filas a donde sea): es que
+    // una fila agregada a una zona hecha no vuelve a aparecer nunca. Su ciclo ya cerró y
+    // `proponerSemana` solo propone entre las pendientes, así que el vendedor programaría
+    // una visita que el sistema no le muestra más. `semanasPendientes` son justamente las
+    // que no tienen ciclo cerrado en esta rotación.
+    const zonaPlanificable =
+        semanaEfectiva !== null && (semanasPendientes ?? []).includes(semanaEfectiva)
+
     // El vendedor no ve "semana": ve la zona por su nombre ("Zárate"). `descripcion` puede
     // ser null (zona sin nombrar todavía) — ahí, y solo ahí, cae al número.
     const nombreZona = semanas?.find(z => z.semana === semanaEfectiva)?.descripcion || null
@@ -509,7 +519,7 @@ export default function AgendaSemanaPage() {
                         hayVisitaEnCurso={visitaEnCurso !== null}
                         reintentandoId={reintentarSeguimiento.isPending ? (reintentarSeguimiento.variables ?? null) : null}
                         onActivoChange={setDiaActivo}
-                        onAgregarCliente={operable && ciclo != null ? setDiaAAgregar : undefined}
+                        onAgregarCliente={zonaPlanificable ? setDiaAAgregar : undefined}
                         onAbrir={abrirPropuesta}
                         onEstadoVisita={setEstadoVisitaCliente}
                         onIniciarVisita={iniciarDirecto}
@@ -594,11 +604,15 @@ export default function AgendaSemanaPage() {
                     onClose={appExterna.ocultar}
                 />
             )}
-            {ciclo != null && diaAAgregar != null && (
+            {/* `semanaEfectiva` y NO `ciclo.semana`: el "+" vive en el encabezado del día de
+                la zona que está EN PANTALLA, y el caso central es planificar la zona que
+                viene. Con la del ciclo, tocar el "+" mirando otra zona escribía la fila en
+                la zona en curso sin avisar. */}
+            {zonaPlanificable && semanaEfectiva != null && diaAAgregar != null && (
                 <BuscadorDiaSheet
                     open
                     onClose={() => setDiaAAgregar(null)}
-                    semana={ciclo.semana}
+                    semana={semanaEfectiva}
                     dia={DIAS.indexOf(diaAAgregar) + 1}
                     onExtraCreada={() => {
                         setDiaActivo(diaAAgregar)
