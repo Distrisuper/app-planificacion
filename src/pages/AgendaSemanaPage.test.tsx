@@ -813,7 +813,7 @@ it('con el cliente en curso, "No visité" va al endpoint de la visita abierta', 
     fireEvent.click(await screen.findByText('No visité'))
     fireEvent.click(screen.getByText('Registrar No visité'))
     fireEvent.click(await screen.findByText('Cerrado'))
-    fireEvent.click(screen.getByText('Registrar'))
+    fireEvent.click(screen.getByText('Cerrar visita'))
 
     await waitFor(() =>
         expect(api.noVisitaSobreVisitaAbierta).toHaveBeenCalledWith(7, [1]),

@@ -402,22 +402,26 @@ export default function AgendaSemanaPage() {
         setNoVisitaCliente(cliente)
     }
 
+    // El visitaId no puede salir sólo del snapshot de la agenda: si la visita se inició en
+    // esta sesión, la card todavía puede decir `pendiente`. `visitaEnCurso` es la fuente
+    // de verdad para ese caso (mismo criterio que VisitaFlow). Devuelve null cuando no hay
+    // visita abierta que convertir — ahí "No visité" registra un hecho nuevo, no cierra
+    // nada.
+    function visitaAbiertaDe(cliente: IAgendaClient): number | null {
+        if (visitaEnCurso?.cliente.rotacionClienteId === cliente.rotacionClienteId) {
+            return visitaEnCurso.visitaId
+        }
+        return cliente.estado === 'en_curso' ? cliente.visitaId : null
+    }
+
     async function onConfirmNoVisita(motivoIds: number[]) {
         const cliente = noVisitaCliente
         setNoVisitaCliente(null)
         if (!cliente) return
         // La visita abierta NO se puede registrar con el endpoint de siempre: la fila ya
         // tiene resolución y el backend rebota con VISITA_ACTIVA_EXISTENTE — que es lo que
-        // hasta ahora le mostraba al vendedor un "No se pudo registrar" genérico. El
-        // visitaId no puede salir sólo del snapshot de la agenda: si la visita se inició en
-        // esta sesión, la card todavía puede decir `pendiente`. `visitaEnCurso` es la
-        // fuente de verdad para ese caso (mismo criterio que VisitaFlow).
-        const enCurso =
-            visitaEnCurso?.cliente.rotacionClienteId === cliente.rotacionClienteId
-                ? visitaEnCurso.visitaId
-                : cliente.estado === 'en_curso'
-                  ? cliente.visitaId
-                  : null
+        // hasta ahora le mostraba al vendedor un "No se pudo registrar" genérico.
+        const enCurso = visitaAbiertaDe(cliente)
         try {
             if (enCurso !== null) {
                 await noVisitaAbierta.mutateAsync({ visitaId: enCurso, motivoIds })
@@ -592,7 +596,14 @@ export default function AgendaSemanaPage() {
             <ResolucionSheet
                 open={!!noVisitaCliente}
                 motivos={motivosVisita}
-                confirmLabel="Registrar"
+                // "Cerrar visita" cuando hay una visita abierta de por medio (se está
+                // convirtiendo esa resolución) — "Registrar" cuando el cliente sigue
+                // pendiente y esto es la primera declaración del hecho, no un cierre.
+                confirmLabel={
+                    noVisitaCliente && visitaAbiertaDe(noVisitaCliente) !== null
+                        ? 'Cerrar visita'
+                        : 'Registrar'
+                }
                 eyebrow="No visité"
                 submitting={noVisita.isPending || noVisitaAbierta.isPending}
                 onConfirm={motivoIds => onConfirmNoVisita(motivoIds)}
