@@ -20,8 +20,11 @@ interface AgendaBoardProps {
     reintentandoId?: number | null
     onActivoChange: (dia: Dia) => void
     /** Si se pasa, cada encabezado de día muestra un "+" que abre el buscador con ESE
-     *  día como destino. Sin la prop no se pinta: en preview de otra zona no hay dónde
-     *  agregar (la extra y el reacomodar van contra la zona en curso). */
+     *  día —de la zona que se está mirando— como destino. Se pinta en TODA zona de la
+     *  rotación, no solo en la del ciclo: el caso que lo pidió es el vendedor
+     *  planificando la zona siguiente, que ve que le faltan clientes y los agrega
+     *  desde ahí. La prop sigue siendo opcional para que el board pueda montarse sin
+     *  escritura si algún día hace falta. */
     onAgregarCliente?: (dia: Dia) => void
     onAbrir: (cliente: IAgendaClient) => void
     onEstadoVisita: (cliente: IAgendaClient) => void

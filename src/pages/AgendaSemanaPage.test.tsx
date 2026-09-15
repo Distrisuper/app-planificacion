@@ -373,6 +373,72 @@ it('con vuelta abierta muestra la agenda operable, sin preview', async () => {
     expect(api.previewSemana).not.toHaveBeenCalled()
 })
 
+// El caso que lo pidió: el vendedor mira la zona que viene, ve que le faltan clientes y
+// los va agregando desde el "+". Antes el "+" ni se pintaba fuera de la zona del ciclo
+// (y el backend, además, forzaba la celda a la zona del ciclo).
+it('el "+" está en toda zona de la rotación y escribe en la zona que se está mirando', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO) // ciclo en la 3
+    ;(api.buscarEnCartera as any).mockResolvedValue([
+        {
+            codigoParticularCliente: '4412',
+            nombreCliente: 'ALMACEN LOPEZ',
+            estado: 'sin_plan',
+            semana: null,
+            dia: null,
+            descripcionZona: null,
+            fecha: null,
+            motivo: null,
+        },
+    ])
+    ;(api.consultarBuscador as any).mockResolvedValue({
+        estado: 'sin_fila_disponible',
+        filaExistente: null,
+        otraZona: null,
+    })
+    ;(api.confirmarExtra as any).mockResolvedValue(clienteLunes)
+    renderPage()
+    await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
+    await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4))
+
+    fireEvent.click(await screen.findByRole('button', { name: /agregar cliente al lunes/i }))
+    fireEvent.change(screen.getByPlaceholderText(/nombre o código/i), {
+        target: { value: 'lopez' },
+    })
+    fireEvent.click(await screen.findByText('ALMACEN LOPEZ'))
+
+    await waitFor(() => expect(api.consultarBuscador).toHaveBeenCalledWith('4412', 4))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Agregar' }))
+
+    await waitFor(() => expect(api.confirmarExtra).toHaveBeenCalledWith('4412', 4, 1))
+})
+
+it('la zona en curso tiene "+" en cada día', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO) // ciclo en la 3
+    renderPage()
+
+    // Un "+" por columna de día, no uno flotante: el board es swipeable y un botón fijo
+    // no podría decir a qué día agrega.
+    expect(await screen.findByRole('button', { name: /agregar cliente al lunes/i })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /agregar cliente al/i })).toHaveLength(5)
+})
+
+// El "+" no llega a las zonas ya hechas: su ciclo cerró, `proponerSemana` solo propone
+// entre las pendientes, así que una fila agregada ahí no vuelve a aparecer en la agenda
+// en toda la vuelta — el vendedor programaría una visita que el sistema no le muestra más.
+it('en una zona ya cerrada no hay "+"', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO) // pendientes: [3, 4]
+    renderPage()
+    await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: /zona anterior/i })) // 3 -> 2, cerrada
+    await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(2))
+
+    expect(screen.queryByRole('button', { name: /agregar cliente al lunes/i })).not.toBeInTheDocument()
+})
+
 it('con vuelta abierta se puede espiar otra semana en solo lectura', async () => {
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage()
