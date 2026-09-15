@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, WifiOff } from 'lucide-react'
+import { Loader2, WifiOff, X } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -382,16 +382,23 @@ export default function VisitaSheet({
     // un toque de más a algo que el vendedor necesita encontrar rápido, parado en la
     // puerta de un local cerrado. Tampoco en el pie: es el recurso más escaso del sheet
     // (entran 5 filas de rubros), y una segunda salida del tamaño de un CTA al lado de
-    // "Cerrar visita" se lee como el atajo para no cargar rubros. Por eso un chip chico
-    // — visible de entrada, pero sin pelearle protagonismo al título ni al cronómetro. El
-    // sheet de una visita cerrada es de consulta, así que ahí no va nada.
+    // "Cerrar visita" se lee como el atajo para no cargar rubros. El sheet de una visita
+    // cerrada es de consulta, así que ahí no va nada.
+    //
+    // Mismas proporciones que el botón "Reagendar" de ClienteCard (rectángulo
+    // `rounded-lg` con ícono + texto, NO píldora redondeada): una píldora rellena de
+    // color se lee como ESTADO en esta app (así son los badges de "Visitado" o
+    // seguimiento pendiente) — probado y descartado, se leía como una etiqueta, no como
+    // algo tocable. El rectángulo gris-rojizo es el mismo lenguaje que ya usa Reagendar,
+    // sólo que en rojo para distinguirlo como la salida negativa.
     const acciones =
         !visitaCerrada && onNoVisita ? (
             <button
                 type="button"
                 onClick={() => onNoVisita(completos)}
-                className="rounded-full border border-dsred/30 bg-dsred/5 px-2 py-0.5 text-[10.5px] font-bold text-dsred"
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-dsred/25 bg-dsred/8 px-2 text-[11px] font-bold text-dsred"
             >
+                <X className="h-[12px] w-[12px]" strokeWidth={2.6} />
                 No visité
             </button>
         ) : undefined
