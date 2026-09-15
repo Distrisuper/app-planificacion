@@ -43,6 +43,9 @@ interface VisitaSheetProps {
     open: boolean
     visitaId: number
     nombreCliente: string
+    /** Línea de identidad bajo el título: `#10034 · DERQUI AUTOPARTES SRL`. La arma
+     *  `identidadCliente` en VisitaFlow — ver ahí por qué la razón social no siempre va. */
+    identidad?: string
     /** true = la visita ya está cerrada y el sheet es de CONSULTA: no se puede resolver
      *  ni agregar nada (ver `esEditable`). Los rubros se cargan durante la visita; una vez
      *  cerrada no hay forma de completar los que quedaron pendientes. */
@@ -84,6 +87,7 @@ export default function VisitaSheet({
     open,
     visitaId,
     nombreCliente,
+    identidad,
     visitaCerrada,
     enCurso,
     alejado,
@@ -597,6 +601,7 @@ export default function VisitaSheet({
                 onClose={onClose}
                 onMinimize={enCurso ? onMinimize : undefined}
                 title={nombreCliente}
+                subtitle={identidad}
                 eyebrow={
                     enCurso
                         ? `● ${ROTULO_VISITA_VIVO[estadoVivo]} · ${formatearDuracion(segundos)}`

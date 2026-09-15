@@ -13,6 +13,9 @@ interface PropuestaSheetProps {
     open: boolean
     codigoCliente: string | null
     nombreCliente: string
+    /** Línea de identidad bajo el título: `#10034 · DERQUI AUTOPARTES SRL`. La arma
+     *  `identidadCliente` en VisitaFlow — ver ahí por qué la razón social no siempre va. */
+    identidad?: string
     /** Manda la propuesta tal como se mostró, para que el back la congele. */
     onIniciarVisita: (propuesta: IPropuestaRubroDTO[]) => void
     onClose: () => void
@@ -47,6 +50,7 @@ export default function PropuestaSheet({
     open,
     codigoCliente,
     nombreCliente,
+    identidad,
     onIniciarVisita,
     onClose,
     iniciando,
@@ -75,6 +79,7 @@ export default function PropuestaSheet({
             open={open}
             onClose={onClose}
             title={nombreCliente}
+            subtitle={identidad}
             altura="completa"
             footer={
                 <>

@@ -53,3 +53,35 @@ export function initialsOfCliente(nombre: string): string {
         .join('')
     return initials || '?'
 }
+
+/**
+ * La línea de identidad que va bajo el nombre del cliente en el header de la propuesta,
+ * la visita y el mapa: `#10034 · DERQUI AUTOPARTES SRL`.
+ *
+ * El título de arriba muestra `nombreFantasia || nombreCliente` (el cartel, que es lo que
+ * el vendedor ve en la puerta), así que la razón social se agrega SOLO cuando el título
+ * está mostrando el cartel. Si no hay cartel —o si el cartel es la misma razón social—
+ * el título ya cayó a la razón social y repetirla acá sería el mismo nombre en dos
+ * renglones seguidos: queda solo el código.
+ *
+ * La comparación va normalizada (trim + mayúsculas) porque el warehouse manda espacios
+ * de más y no es consistente con el casing entre los dos campos.
+ *
+ * No aplica `titleCaseNombre` a propósito: los headers de estas tres pantallas muestran
+ * los nombres en mayúsculas como los manda el backend. Es una decisión tomada, no una
+ * inconsistencia pendiente con `ClienteCard` — no "unificarla" sin pedirlo.
+ */
+export function identidadCliente(cliente: {
+    codigoParticularCliente: string
+    nombreCliente: string
+    nombreFantasia?: string
+}): string {
+    const codigo = `#${cliente.codigoParticularCliente}`
+    const normalizar = (t: string) => t.trim().toUpperCase()
+    const fantasia = cliente.nombreFantasia?.trim()
+    const razonSocial = cliente.nombreCliente.trim()
+    if (!fantasia || !razonSocial || normalizar(fantasia) === normalizar(razonSocial)) {
+        return codigo
+    }
+    return `${codigo} · ${razonSocial}`
+}

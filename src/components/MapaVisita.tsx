@@ -14,6 +14,11 @@ interface MapaVisitaProps {
      *  docs/superpowers/specs/2026-09-11-ver-mi-posicion-con-visita-abierta-design.md. */
     modo?: 'iniciar' | 'consulta'
     nombreCliente: string
+    /** Línea de identidad bajo el título: `#10034 · DERQUI AUTOPARTES SRL`. La arma
+     *  `identidadCliente` en VisitaFlow — ver ahí por qué la razón social no siempre va.
+     *  Este header no es el de BottomSheet, así que la línea se dibuja acá a mano con
+     *  las mismas clases que el `subtitle` de allá. */
+    identidad?: string
     direccion?: string
     latitud: number
     longitud: number
@@ -57,6 +62,7 @@ export default function MapaVisita({
     open,
     modo = 'iniciar',
     nombreCliente,
+    identidad,
     direccion,
     latitud,
     longitud,
@@ -320,6 +326,11 @@ export default function MapaVisita({
                         {esConsulta ? 'Tu posición' : 'Iniciar visita'}
                     </span>
                     <h2 className="truncate text-[16px] font-extrabold text-[#182645]">{nombreCliente}</h2>
+                    {identidad && (
+                        <p className="truncate text-[11.5px] font-semibold leading-tight text-dsmuted">
+                            {identidad}
+                        </p>
+                    )}
                 </div>
                 <Button
                     variant="ghost"
