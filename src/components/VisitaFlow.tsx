@@ -420,7 +420,10 @@ export default function VisitaFlow({
             <ResolucionSheet
                 open={noVisitaRubros !== null}
                 motivos={motivosVisita}
-                confirmLabel="Registrar"
+                // Este sheet SIEMPRE cuelga de una visita ya abierta (onNoVisita sólo se
+                // ofrece con !visitaCerrada) — "Registrar" confundía porque lo que en
+                // realidad pasa es que la visita en curso se cierra como no_visita.
+                confirmLabel="Cerrar visita"
                 eyebrow="No visité"
                 title={nombre}
                 submitting={noVisitaAbierta.isPending}

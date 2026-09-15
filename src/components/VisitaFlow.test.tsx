@@ -838,7 +838,9 @@ describe('No visité con la visita ya abierta', () => {
 
         fireEvent.click(await screen.findByText('No visité'))
         fireEvent.click(await screen.findByText('Cerrado'))
-        fireEvent.click(screen.getByText('Registrar'))
+        // Dos sheets apiladas comparten el mismo texto de botón (el de VisitaSheet
+        // sigue montado detrás): el de ResolucionSheet es el último en el DOM.
+        fireEvent.click(screen.getAllByText('Cerrar visita').at(-1)!)
 
         await waitFor(() =>
             expect(api.noVisitaSobreVisitaAbierta).toHaveBeenCalledWith(7, [1]),
@@ -890,7 +892,9 @@ describe('No visité con la visita ya abierta', () => {
 
         fireEvent.click(await screen.findByText('No visité'))
         fireEvent.click(await screen.findByText('Cerrado'))
-        fireEvent.click(screen.getByText('Registrar'))
+        // Dos sheets apiladas comparten el mismo texto de botón (el de VisitaSheet
+        // sigue montado detrás): el de ResolucionSheet es el último en el DOM.
+        fireEvent.click(screen.getAllByText('Cerrar visita').at(-1)!)
 
         await waitFor(() =>
             expect(onAviso).toHaveBeenCalledWith('info', expect.stringMatching(/ya estaba resuelto/i)),
