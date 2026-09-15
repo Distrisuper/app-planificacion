@@ -115,6 +115,19 @@ export const registrarNoVisita = async (dto: INoVisitaDTO): Promise<INoVisitaRes
     return res.data.data
 }
 
+/** "No visité" sobre una visita YA INICIADA: convierte la resolución abierta en vez de
+ *  crear una nueva. El endpoint de arriba (`/visitas/no-visita`) no sirve para este caso —
+ *  rebota con VISITA_ACTIVA_EXISTENTE porque la fila ya tiene resolución. */
+export const noVisitaSobreVisitaAbierta = async (
+    visitaId: number,
+    motivoIds: number[],
+): Promise<INoVisitaResult> => {
+    const res = await apiClient.post(`/planificacion/visitas/${visitaId}/no-visita`, {
+        motivoIds,
+    })
+    return res.data.data
+}
+
 /** Reintento manual del aviso a Cromo. `resolucionId` es `IAgendaClient.visitaId` — el
  *  mismo endpoint ya trae todos sus guards del lado del backend (pertenencia, 409 si ya
  *  se envió, resolución completa); acá no se valida nada más. */
