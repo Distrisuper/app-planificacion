@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, WifiOff } from 'lucide-react'
+import { Loader2, WifiOff, X } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -81,6 +81,10 @@ interface VisitaSheetProps {
     onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
     /** Abre MapaVisita en modo consulta. Sólo tiene sentido junto con `alejado`. */
     onVerPosicion?: () => void
+    /** Si se pasa y la visita está abierta, el menú `⋯` del header ofrece "No visité".
+     *  Recibe cuántos rubros llevaba completos, para que el llamador pueda avisarle al
+     *  vendedor que esos no van a contar. */
+    onNoVisita?: (rubrosCargados: number) => void
 }
 
 export default function VisitaSheet({
@@ -99,6 +103,7 @@ export default function VisitaSheet({
     cliente,
     onAbrirAppExterna,
     onVerPosicion,
+    onNoVisita,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
     const estadoVivo = estadoVisitaVivo(segundos, alejado)
@@ -372,6 +377,22 @@ export default function VisitaSheet({
     const minimoRequerido = Math.min(2, ofrecimientos.length)
     const faltanParaMinimo = Math.max(0, minimoRequerido - completos)
 
+    // En el menú del header y NO en el pie: el pie es el recurso más escaso del sheet
+    // (entran 5 filas de rubros), y una segunda salida del tamaño de un CTA al lado de
+    // "Cerrar visita" se lee como el atajo para no cargar rubros. El sheet de una visita
+    // cerrada es de consulta, así que ahí no va nada.
+    const acciones =
+        !visitaCerrada && onNoVisita ? (
+            <button
+                type="button"
+                onClick={() => onNoVisita(completos)}
+                className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13.5px] font-semibold text-[#182645]"
+            >
+                <X className="h-[14px] w-[14px] text-dsred" strokeWidth={2.4} />
+                No visité
+            </button>
+        ) : undefined
+
     const estadosResolucion: Record<number, { motivosCargados: number; completo: boolean }> = {}
     for (const r of ofrecimientos) {
         estadosResolucion[r.id] = {
@@ -600,6 +621,7 @@ export default function VisitaSheet({
                 open={open}
                 onClose={onClose}
                 onMinimize={enCurso ? onMinimize : undefined}
+                acciones={acciones}
                 title={nombreCliente}
                 subtitle={identidad}
                 eyebrow={
