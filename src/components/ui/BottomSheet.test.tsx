@@ -53,3 +53,36 @@ it('renders nothing when closed', () => {
     render(<BottomSheet open={false} onClose={() => {}} title="X"><div>c</div></BottomSheet>)
     expect(screen.queryByText('c')).not.toBeInTheDocument()
 })
+
+it('sin `acciones` no dibuja el botón de menú', () => {
+    render(<BottomSheet open onClose={() => {}} title="X"><div>contenido</div></BottomSheet>)
+    expect(screen.queryByLabelText('Más acciones')).not.toBeInTheDocument()
+})
+
+it('con `acciones` abre el popover al tocar el menú', async () => {
+    render(
+        <BottomSheet open onClose={() => {}} title="X" acciones={<button>No visité</button>}>
+            <div>contenido</div>
+        </BottomSheet>,
+    )
+    expect(screen.queryByText('No visité')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByLabelText('Más acciones'))
+    expect(screen.getByText('No visité')).toBeInTheDocument()
+})
+
+// El overlay del sheet cierra EL SHEET al click. Sin stopPropagation en el catcher del
+// popover, tocar afuera del menú cerraría la visita entera.
+it('tocar fuera del popover lo cierra sin cerrar el sheet', async () => {
+    const onClose = vi.fn()
+    render(
+        <BottomSheet open onClose={onClose} title="X" acciones={<button>No visité</button>}>
+            <div>contenido</div>
+        </BottomSheet>,
+    )
+    await userEvent.click(screen.getByLabelText('Más acciones'))
+    await userEvent.click(screen.getByTestId('cerrar-menu-acciones'))
+
+    expect(screen.queryByText('No visité')).not.toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+})

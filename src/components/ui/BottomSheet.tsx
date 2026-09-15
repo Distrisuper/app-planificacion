@@ -1,5 +1,5 @@
-import { ChevronDown, X } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { ChevronDown, MoreVertical, X } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { Button } from './button'
 import { useAlturaTeclado } from '@/hooks/useAlturaTeclado'
 
@@ -15,6 +15,10 @@ interface BottomSheetProps {
     subtitle?: string
     /** Si se pasa, aparece un botón de minimizar al lado de la X. */
     onMinimize?: () => void
+    /** Si se pasa, aparece un botón `⋯` en el header que abre un popover con este
+     *  contenido. Pensado para acciones secundarias que no pueden gastar alto del pie
+     *  (ej. "No visité" durante la visita). El sheet no sabe qué son: sólo las muestra. */
+    acciones?: ReactNode
     /**
      * Cuánto alto toma el sheet. Los tres modos dejan siempre una franja arriba
      * para que se siga leyendo como modal; lo que cambia es qué manda, si el
@@ -47,6 +51,7 @@ export default function BottomSheet({
     eyebrowClassName,
     subtitle,
     onMinimize,
+    acciones,
     altura = 'auto',
     footer,
     children,
@@ -55,7 +60,11 @@ export default function BottomSheet({
     // adentro se gatea con `open` para no dejar un listener de por vida en un sheet
     // cerrado. Ver el porqué completo en useAlturaTeclado.
     const alturaTeclado = useAlturaTeclado(open)
-    if (!open) return null
+    const [menuAbierto, setMenuAbierto] = useState(false)
+    if (!open) {
+        if (menuAbierto) setMenuAbierto(false)
+        return null
+    }
     return (
         // `paddingBottom` empuja el sheet (alineado `items-end`) hacia arriba, tanto
         // como lo tapa el teclado — así el pie fijo (observaciones, Cerrar visita) no
@@ -102,6 +111,40 @@ export default function BottomSheet({
                             )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
+                            {acciones && (
+                                <div className="relative">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Más acciones"
+                                        onClick={() => setMenuAbierto(a => !a)}
+                                        className="h-[30px] w-[30px] bg-[#F0F2F7] text-dsmuted hover:bg-[#e3e6ee]"
+                                    >
+                                        <MoreVertical className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                                    </Button>
+                                    {menuAbierto && (
+                                        <>
+                                            {/* Catcher propio: el overlay del sheet cierra EL SHEET
+                                                al click, así que sin stopPropagation tocar afuera
+                                                del menú cerraría la visita entera. */}
+                                            <div
+                                                data-testid="cerrar-menu-acciones"
+                                                className="fixed inset-0 z-[60]"
+                                                onClick={e => {
+                                                    e.stopPropagation()
+                                                    setMenuAbierto(false)
+                                                }}
+                                            />
+                                            <div
+                                                className="absolute right-0 top-[34px] z-[61] min-w-[210px] rounded-xl border border-[#E4E8F0] bg-white py-1 shadow-[0_8px_24px_rgba(10,15,30,.16)]"
+                                                onClick={() => setMenuAbierto(false)}
+                                            >
+                                                {acciones}
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            )}
                             {onMinimize && (
                                 <Button
                                     variant="ghost"
