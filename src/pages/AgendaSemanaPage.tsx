@@ -14,7 +14,7 @@ import { BuscadorGeneralPanel } from '@/components/buscador/BuscadorGeneralPanel
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
-import { useNoVisita, useReintentarSeguimiento } from '@/hooks/useVisitas'
+import { useNoVisita, useNoVisitaSobreVisitaAbierta, useReintentarSeguimiento } from '@/hooks/useVisitas'
 import { useNotificacion } from '@/hooks/useNotificacion'
 import { useAppExterna } from '@/hooks/useAppExterna'
 import { abrirAppExternaEnPestana } from '@/lib/appsExternas'
@@ -23,6 +23,7 @@ import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
 import { leerVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
+import { limpiarInicioVisita } from '@/lib/visitaTimer'
 import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
@@ -70,6 +71,7 @@ export default function AgendaSemanaPage() {
     const sincronizar = useSincronizar()
     const reacomodar = useReacomodar()
     const noVisita = useNoVisita()
+    const noVisitaAbierta = useNoVisitaSobreVisitaAbierta()
     const reintentarSeguimiento = useReintentarSeguimiento()
     const { data: motivosVisita = [] } = useMotivos('visita')
     const { notificacion, mostrar, ocultar } = useNotificacion()
@@ -404,14 +406,37 @@ export default function AgendaSemanaPage() {
         const cliente = noVisitaCliente
         setNoVisitaCliente(null)
         if (!cliente) return
+        // La visita abierta NO se puede registrar con el endpoint de siempre: la fila ya
+        // tiene resolución y el backend rebota con VISITA_ACTIVA_EXISTENTE — que es lo que
+        // hasta ahora le mostraba al vendedor un "No se pudo registrar" genérico. El
+        // visitaId no puede salir sólo del snapshot de la agenda: si la visita se inició en
+        // esta sesión, la card todavía puede decir `pendiente`. `visitaEnCurso` es la
+        // fuente de verdad para ese caso (mismo criterio que VisitaFlow).
+        const enCurso =
+            visitaEnCurso?.cliente.rotacionClienteId === cliente.rotacionClienteId
+                ? visitaEnCurso.visitaId
+                : cliente.estado === 'en_curso'
+                  ? cliente.visitaId
+                  : null
         try {
-            await noVisita.mutateAsync({
-                rotacionClienteId: cliente.rotacionClienteId,
-                motivoIds,
-            })
+            if (enCurso !== null) {
+                await noVisitaAbierta.mutateAsync({ visitaId: enCurso, motivoIds })
+                limpiarInicioVisita(enCurso)
+                limpiarVisitaEnCurso()
+                if (visitaEnCurso) {
+                    rotacionesClienteSueltas.current.add(visitaEnCurso.cliente.rotacionClienteId)
+                    setVisitaEnCurso(null)
+                }
+            } else {
+                await noVisita.mutateAsync({
+                    rotacionClienteId: cliente.rotacionClienteId,
+                    motivoIds,
+                })
+            }
             mostrar('exito', 'Registrado')
         } catch (err) {
-            const yaResuelto = errorCode(err) === 'CICLO_CLIENTE_YA_RESUELTO'
+            const code = errorCode(err)
+            const yaResuelto = code === 'CICLO_CLIENTE_YA_RESUELTO' || code === 'VISITA_YA_CERRADA'
             mostrar(
                 yaResuelto ? 'info' : 'error',
                 yaResuelto
@@ -569,7 +594,7 @@ export default function AgendaSemanaPage() {
                 motivos={motivosVisita}
                 confirmLabel="Registrar"
                 eyebrow="No visité"
-                submitting={noVisita.isPending}
+                submitting={noVisita.isPending || noVisitaAbierta.isPending}
                 onConfirm={motivoIds => onConfirmNoVisita(motivoIds)}
                 onClose={() => setNoVisitaCliente(null)}
             />
