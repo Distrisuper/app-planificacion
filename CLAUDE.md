@@ -192,6 +192,18 @@ Hay **tres capas separadas**, y una operación toca una sola:
 - **La "semana actual" la resuelve el backend, no el front.** Es el ciclo abierto del vendedor
   (`GET /planificacion/ciclo/actual`). Se descartó el cálculo mod-5 sobre un ancla local porque se
   desincroniza al reinstalar la app o cambiar de dispositivo, sin que nadie lo detecte.
+- **"No visité" también se puede registrar con la visita YA ABIERTA**, y es el mismo hecho
+  por dos puertas: el menú `⋯` de `VisitaSheet` y el "Reagendar → No visité" de la card
+  (que se ve con el cliente `en_curso`). Las dos llaman a
+  `POST /planificacion/visitas/:id/no-visita`, que **convierte** la resolución abierta en
+  vez de crear una nueva — el `UNIQUE (rotacion_cliente_id)` ya está ocupado y
+  `/visitas/no-visita` rebota con `VISITA_ACTIVA_EXISTENTE`. Existe porque el gate de los
+  100 m empuja a iniciar en la vereda, y adentro aparece el local cerrado: sin esta salida
+  la única era cerrar una visita falsa que infla la cobertura. **No captura ubicación** a
+  propósito (es la salida de emergencia; un fix de GPS que tarda ~23s reintroduce el
+  bloqueo), y **no borra los rubros ya cargados**: la analítica sólo lee ofrecimientos de
+  filas `tipo='visita'`, así que no ensucian nada. Detalle en
+  [`docs/dominio/modelo.md`](docs/dominio/modelo.md), sección "Los tres valores del hecho".
 - **El vendedor no cierra la semana: el cierre es automático, no bloquea, y es invisible para él.**
   No existe `CerrarSemanaSheet` ni ninguna llamada a `ciclo/cerrar` en el front, y desde el spec
   `2026-08-12-semana-hecha-cierre-invisible-design.md` tampoco existe el 409 `CAMBIO_DE_SEMANA`:

@@ -5,6 +5,7 @@ import {
     useIniciarVisita,
     useCerrarVisita,
     useNoVisita,
+    useNoVisitaSobreVisitaAbierta,
     useReintentarSeguimiento,
 } from './useVisitas'
 import * as api from '@/api/planificacion'
@@ -65,6 +66,17 @@ it('useNoVisita calls registrarNoVisita with rotacionClienteId and motivoIds', a
         rotacionClienteId: 42,
         motivoIds: [1, 4],
     })
+    expect(out.rotacionClienteId).toBe(42)
+})
+
+it('useNoVisitaSobreVisitaAbierta manda visitaId y motivoIds al endpoint de la visita abierta', async () => {
+    ;(api.noVisitaSobreVisitaAbierta as any).mockResolvedValue({ rotacionClienteId: 42 })
+    const { result } = renderHook(() => useNoVisitaSobreVisitaAbierta(), { wrapper })
+    let out: any
+    await waitFor(async () => {
+        out = await result.current.mutateAsync({ visitaId: 5, motivoIds: [1, 2] })
+    })
+    expect(api.noVisitaSobreVisitaAbierta).toHaveBeenCalledWith(5, [1, 2])
     expect(out.rotacionClienteId).toBe(42)
 })
 

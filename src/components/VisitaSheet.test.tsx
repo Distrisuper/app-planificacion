@@ -931,3 +931,35 @@ it('visita cerrada sin observación: no muestra el bloque', async () => {
 
     expect(screen.queryByText(/observaciones/i)).not.toBeInTheDocument()
 })
+
+describe('No visité (chip de la visita abierta)', () => {
+    it('con la visita abierta ofrece "No visité" visible de entrada, sin menú', async () => {
+        const onNoVisita = vi.fn()
+        renderSheet({ onNoVisita })
+        await screen.findByText('Amortiguadores')
+
+        fireEvent.click(screen.getByText('No visité'))
+
+        expect(onNoVisita).toHaveBeenCalled()
+    })
+
+    // El sheet de una visita cerrada es de CONSULTA: pl_resolucion es inmutable.
+    it('con la visita cerrada no ofrece el chip', async () => {
+        renderSheet({ visitaCerrada: true, onNoVisita: vi.fn() })
+        await screen.findByText('Amortiguadores')
+
+        expect(screen.queryByText('No visité')).not.toBeInTheDocument()
+    })
+
+    it('informa cuántos rubros llevaba cargados', async () => {
+        const onNoVisita = vi.fn()
+        // El mock de ofrecimientos del archivo ya trae uno completo (id 8, "Filtros",
+        // con un motivo cargado): completos = 1.
+        renderSheet({ onNoVisita })
+        await screen.findByText('Amortiguadores')
+
+        fireEvent.click(screen.getByText('No visité'))
+
+        expect(onNoVisita).toHaveBeenCalledWith(1)
+    })
+})

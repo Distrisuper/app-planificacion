@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, WifiOff } from 'lucide-react'
+import { Loader2, WifiOff, X } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -81,6 +81,10 @@ interface VisitaSheetProps {
     onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
     /** Abre MapaVisita en modo consulta. Sólo tiene sentido junto con `alejado`. */
     onVerPosicion?: () => void
+    /** Si se pasa y la visita está abierta, el menú `⋯` del header ofrece "No visité".
+     *  Recibe cuántos rubros llevaba completos, para que el llamador pueda avisarle al
+     *  vendedor que esos no van a contar. */
+    onNoVisita?: (rubrosCargados: number) => void
 }
 
 export default function VisitaSheet({
@@ -99,6 +103,7 @@ export default function VisitaSheet({
     cliente,
     onAbrirAppExterna,
     onVerPosicion,
+    onNoVisita,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
     const estadoVivo = estadoVisitaVivo(segundos, alejado)
@@ -372,6 +377,32 @@ export default function VisitaSheet({
     const minimoRequerido = Math.min(2, ofrecimientos.length)
     const faltanParaMinimo = Math.max(0, minimoRequerido - completos)
 
+    // En la línea de identidad del header (junto a `#10034 · FERNANDEZ MARIA ISABEL`) y
+    // NO detrás de un menú: un control de un solo ítem escondido atrás de un "⋯" le suma
+    // un toque de más a algo que el vendedor necesita encontrar rápido, parado en la
+    // puerta de un local cerrado. Tampoco en el pie: es el recurso más escaso del sheet
+    // (entran 5 filas de rubros), y una segunda salida del tamaño de un CTA al lado de
+    // "Cerrar visita" se lee como el atajo para no cargar rubros. El sheet de una visita
+    // cerrada es de consulta, así que ahí no va nada.
+    //
+    // Mismas proporciones que el botón "Reagendar" de ClienteCard (rectángulo
+    // `rounded-lg` con ícono + texto, NO píldora redondeada): una píldora rellena de
+    // color se lee como ESTADO en esta app (así son los badges de "Visitado" o
+    // seguimiento pendiente) — probado y descartado, se leía como una etiqueta, no como
+    // algo tocable. El rectángulo gris-rojizo es el mismo lenguaje que ya usa Reagendar,
+    // sólo que en rojo para distinguirlo como la salida negativa.
+    const acciones =
+        !visitaCerrada && onNoVisita ? (
+            <button
+                type="button"
+                onClick={() => onNoVisita(completos)}
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-dsred/25 bg-dsred/8 px-2 text-[11px] font-bold text-dsred"
+            >
+                <X className="h-[12px] w-[12px]" strokeWidth={2.6} />
+                No visité
+            </button>
+        ) : undefined
+
     const estadosResolucion: Record<number, { motivosCargados: number; completo: boolean }> = {}
     for (const r of ofrecimientos) {
         estadosResolucion[r.id] = {
@@ -600,6 +631,7 @@ export default function VisitaSheet({
                 open={open}
                 onClose={onClose}
                 onMinimize={enCurso ? onMinimize : undefined}
+                acciones={acciones}
                 title={nombreCliente}
                 subtitle={identidad}
                 eyebrow={

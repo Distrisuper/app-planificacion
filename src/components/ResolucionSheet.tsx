@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Check } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
@@ -13,6 +13,9 @@ interface ResolucionSheetProps {
     submitting?: boolean
     title?: string
     eyebrow?: string
+    /** Aviso opcional arriba de la lista de motivos. Se usa para decirle al vendedor que
+     *  los rubros que ya cargó no van a contar como visita. */
+    aviso?: ReactNode
 }
 
 export default function ResolucionSheet({
@@ -24,6 +27,7 @@ export default function ResolucionSheet({
     submitting,
     title = 'Resolución',
     eyebrow = 'Propuesta comercial',
+    aviso,
 }: ResolucionSheetProps) {
     const [selected, setSelected] = useState<number[]>([])
 
@@ -57,6 +61,14 @@ export default function ResolucionSheet({
                 </Button>
             }
         >
+            {aviso && (
+                <div
+                    data-testid="resolucion-aviso"
+                    className="mb-3 rounded-md border border-[#FCD9A5] bg-[#FFF7EC] px-3 py-2 text-[12.5px] font-semibold leading-snug text-[#8A5A12]"
+                >
+                    {aviso}
+                </div>
+            )}
             <div className="flex flex-col gap-2">
                 {motivos.map(m => {
                     const on = selected.includes(m.motivoId)

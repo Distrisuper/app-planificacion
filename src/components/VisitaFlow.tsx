@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button'
 import PropuestaSheet, { toPropuestaDTO } from './PropuestaSheet'
 import VisitaSheet from './VisitaSheet'
 import MapaVisita from './MapaVisita'
-import { useCerrarVisita, useIniciarVisita } from '@/hooks/useVisitas'
+import ResolucionSheet from './ResolucionSheet'
+import { useCerrarVisita, useIniciarVisita, useNoVisitaSobreVisitaAbierta } from '@/hooks/useVisitas'
 import { usePropuesta } from '@/hooks/usePropuesta'
+import { useMotivos } from '@/hooks/useMotivos'
 import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geolocation'
 import { distanciaMetros, estaFueraDeRango } from '@/lib/distancia'
 import { errorCode } from '@/lib/apiError'
@@ -72,6 +74,10 @@ export default function VisitaFlow({
 }: VisitaFlowProps) {
     const iniciar = useIniciarVisita()
     const cerrar = useCerrarVisita()
+    const noVisitaAbierta = useNoVisitaSobreVisitaAbierta()
+    const { data: motivosVisita = [] } = useMotivos('visita')
+    // Cuántos rubros llevaba cargados cuando pidió "No visité". null = sheet cerrado.
+    const [noVisitaRubros, setNoVisitaRubros] = useState<number | null>(null)
 
     // Coordenadas del cliente de LA VISITA EN CURSO, no del `cliente` que esté abierto en
     // pantalla — el vendedor puede estar mirando la propuesta de otro cliente mientras la
@@ -128,6 +134,7 @@ export default function VisitaFlow({
         setPropuestaPendiente(null)
         setErrorIniciar(null)
         setClienteOverride(null)
+        setNoVisitaRubros(null)
     }, [cliente?.rotacionClienteId])
 
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
@@ -319,6 +326,37 @@ export default function VisitaFlow({
         }
     }
 
+    /**
+     * "No visité" con la visita YA ABIERTA: el vendedor inició en la vereda y adentro se
+     * encontró con el local cerrado. NO captura ubicación a propósito — es la salida de
+     * emergencia, y un fix de GPS que tarda ~23s y puede fallar reintroduciría el bloqueo
+     * que esto viene a resolver.
+     */
+    async function onConfirmarNoVisita(motivoIds: number[]) {
+        if (visitaId === null) return
+        try {
+            await noVisitaAbierta.mutateAsync({ visitaId, motivoIds })
+            // Mismas anclas que un cierre: la visita dejó de estar en curso, así que la
+            // barra flotante tiene que irse y el cliente quedar vetado de re-adopción.
+            limpiarInicioVisita(visitaId)
+            limpiarVisitaEnCurso()
+            setNoVisitaRubros(null)
+            onAviso?.('exito', 'Registrado')
+            onVisitaCerrada()
+            cerrarFlujo()
+        } catch (err) {
+            const code = errorCode(err)
+            if (code === 'VISITA_YA_CERRADA' || code === 'RESOLUCION_NO_ES_VISITA') {
+                setNoVisitaRubros(null)
+                onAviso?.('info', 'Este cliente ya estaba resuelto. Actualizamos tu agenda.')
+                onVisitaCerrada()
+                cerrarFlujo()
+                return
+            }
+            onAviso?.('error', 'No se pudo registrar. Volvé a intentar.')
+        }
+    }
+
     // Cierra (o minimiza) el SHEET, no la visita: si `cliente` es el de la visita en curso,
     // `visitaEnCurso` la sigue sosteniendo en el padre y la barra flotante aparece sola.
     function cerrarFlujo() {
@@ -376,8 +414,24 @@ export default function VisitaFlow({
                     // local que no es el que está mirando.
                     alejado={alejado && esClienteEnCurso}
                     onVerPosicion={() => setVerPosicion(true)}
+                    onNoVisita={rubros => setNoVisitaRubros(rubros)}
                 />
             )}
+            <ResolucionSheet
+                open={noVisitaRubros !== null}
+                motivos={motivosVisita}
+                confirmLabel="Registrar"
+                eyebrow="No visité"
+                title={nombre}
+                submitting={noVisitaAbierta.isPending}
+                aviso={
+                    noVisitaRubros && noVisitaRubros > 0
+                        ? `Cargaste ${noVisitaRubros} ${noVisitaRubros === 1 ? 'rubro' : 'rubros'}. Al registrar «No visité» esta visita no cuenta como hecha.`
+                        : undefined
+                }
+                onConfirm={onConfirmarNoVisita}
+                onClose={() => setNoVisitaRubros(null)}
+            />
             {tieneCoords && (
                 <MapaVisita
                     open={propuestaPendiente !== null}

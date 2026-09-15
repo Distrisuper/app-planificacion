@@ -15,6 +15,13 @@ interface BottomSheetProps {
     subtitle?: string
     /** Si se pasa, aparece un botón de minimizar al lado de la X. */
     onMinimize?: () => void
+    /** Si se pasa, se pinta en el renglón del `subtitle`, empujado con `ml-auto` hasta el
+     *  borde derecho del header (a la altura de minimizar/cerrar) — sin menú intermedio:
+     *  un solo control secundario visible de entrada, sin gastar alto del pie. Pensado
+     *  para acciones que necesitan encontrarse rápido (ej. "No visité" durante la
+     *  visita) — un menú de un solo ítem agrega un toque de más sin ganar nada a cambio.
+     *  El sheet no sabe qué es: sólo lo muestra. */
+    acciones?: ReactNode
     /**
      * Cuánto alto toma el sheet. Los tres modos dejan siempre una franja arriba
      * para que se siga leyendo como modal; lo que cambia es qué manda, si el
@@ -47,6 +54,7 @@ export default function BottomSheet({
     eyebrowClassName,
     subtitle,
     onMinimize,
+    acciones,
     altura = 'auto',
     footer,
     children,
@@ -85,44 +93,59 @@ export default function BottomSheet({
                 {/* Header — fijo, no scrollea con el contenido. */}
                 <div className="shrink-0 px-[18px] pt-3.5">
                     <div className="mx-auto mb-4 h-1 w-[38px] rounded-full bg-[#DBE0EB]" />
-                    <div className="mb-4 flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 flex-col gap-0.5">
-                            {eyebrow && (
-                                <span
-                                    className={`text-[11px] font-extrabold uppercase tracking-wide ${eyebrowClassName ?? 'text-dsgreen'}`}
-                                >
-                                    {eyebrow}
-                                </span>
-                            )}
-                            <h2 className="truncate text-[17px] font-extrabold leading-tight text-[#182645]">{title}</h2>
-                            {subtitle && (
-                                <span className="truncate text-[11.5px] font-semibold leading-tight text-dsmuted">
-                                    {subtitle}
-                                </span>
-                            )}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-1.5">
-                            {onMinimize && (
+                    {/* `mb-4` en el contenedor, no en la fila del título: así la fila de
+                        subtitle/acciones queda DENTRO del mismo bloque pero es su propio
+                        renglón de ancho completo — no encajonado en la columna angosta del
+                        título — y `acciones` puede empujarse hasta el borde derecho, a la
+                        altura de minimizar/cerrar, en vez de quedar pegado al subtitle. */}
+                    <div className="mb-4 flex flex-col gap-0.5">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 flex-col gap-0.5">
+                                {eyebrow && (
+                                    <span
+                                        className={`text-[11px] font-extrabold uppercase tracking-wide ${eyebrowClassName ?? 'text-dsgreen'}`}
+                                    >
+                                        {eyebrow}
+                                    </span>
+                                )}
+                                <h2 className="truncate text-[17px] font-extrabold leading-tight text-[#182645]">{title}</h2>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                                {onMinimize && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        aria-label="Minimizar"
+                                        onClick={onMinimize}
+                                        className="h-[30px] w-[30px] bg-[#F0F2F7] text-dsmuted hover:bg-[#e3e6ee]"
+                                    >
+                                        <ChevronDown className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                                    </Button>
+                                )}
                                 <Button
                                     variant="ghost"
                                     size="icon"
-                                    aria-label="Minimizar"
-                                    onClick={onMinimize}
+                                    aria-label="Cerrar"
+                                    onClick={onClose}
                                     className="h-[30px] w-[30px] bg-[#F0F2F7] text-dsmuted hover:bg-[#e3e6ee]"
                                 >
-                                    <ChevronDown className="h-[15px] w-[15px]" strokeWidth={2.4} />
+                                    <X className="h-[15px] w-[15px]" strokeWidth={2.4} />
                                 </Button>
-                            )}
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="Cerrar"
-                                onClick={onClose}
-                                className="h-[30px] w-[30px] bg-[#F0F2F7] text-dsmuted hover:bg-[#e3e6ee]"
-                            >
-                                <X className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                            </Button>
+                            </div>
                         </div>
+                        {/* Renglón propio, ancho completo: `acciones` se empuja con
+                            `ml-auto` hasta el borde derecho (a la altura de cerrar/minimizar),
+                            no hasta donde termina el subtitle. */}
+                        {(subtitle || acciones) && (
+                            <div className="flex items-center gap-2">
+                                {subtitle && (
+                                    <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold leading-tight text-dsmuted">
+                                        {subtitle}
+                                    </span>
+                                )}
+                                {acciones && <div className="ml-auto shrink-0">{acciones}</div>}
+                            </div>
+                        )}
                     </div>
                 </div>
 

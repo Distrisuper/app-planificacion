@@ -795,3 +795,53 @@ it('volver a la semana abierta devuelve el modo operable', async () => {
 
     await waitFor(() => expect(screen.queryByText(/vista previa/i)).not.toBeInTheDocument())
 })
+
+it('con el cliente en curso, "No visité" va al endpoint de la visita abierta', async () => {
+    fijarLunes()
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteLunes, estado: 'en_curso', visitaId: 7 }],
+    })
+    ;(api.getMotivos as any).mockResolvedValue([
+        { motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] },
+    ])
+    ;(api.noVisitaSobreVisitaAbierta as any).mockResolvedValue({ rotacionClienteId: 42 })
+    renderPage()
+
+    fireEvent.click(await screen.findByText('Reagendar'))
+    fireEvent.click(await screen.findByText('No visité'))
+    fireEvent.click(screen.getByText('Registrar No visité'))
+    fireEvent.click(await screen.findByText('Cerrado'))
+    fireEvent.click(screen.getByText('Registrar'))
+
+    await waitFor(() =>
+        expect(api.noVisitaSobreVisitaAbierta).toHaveBeenCalledWith(7, [1]),
+    )
+    expect(api.registrarNoVisita).not.toHaveBeenCalled()
+})
+
+it('con el cliente pendiente sigue usando el endpoint de siempre', async () => {
+    fijarLunes()
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    ;(api.getMotivos as any).mockResolvedValue([
+        { motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] },
+    ])
+    ;(api.registrarNoVisita as any).mockResolvedValue({ rotacionClienteId: 42 })
+    renderPage()
+
+    fireEvent.click(await screen.findByText('Reagendar'))
+    fireEvent.click(await screen.findByText('No visité'))
+    fireEvent.click(screen.getByText('Registrar No visité'))
+    fireEvent.click(await screen.findByText('Cerrado'))
+    fireEvent.click(screen.getByText('Registrar'))
+
+    await waitFor(() =>
+        expect(api.registrarNoVisita).toHaveBeenCalledWith({
+            rotacionClienteId: 42,
+            motivoIds: [1],
+        }),
+    )
+    expect(api.noVisitaSobreVisitaAbierta).not.toHaveBeenCalled()
+})

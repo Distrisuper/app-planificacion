@@ -53,3 +53,31 @@ it('renders nothing when closed', () => {
     render(<BottomSheet open={false} onClose={() => {}} title="X"><div>c</div></BottomSheet>)
     expect(screen.queryByText('c')).not.toBeInTheDocument()
 })
+
+it('sin `acciones` no agrega nada a la línea del subtitle', () => {
+    render(
+        <BottomSheet open onClose={() => {}} title="X" subtitle="#10034">
+            <div>contenido</div>
+        </BottomSheet>,
+    )
+    expect(screen.queryByText('No visité')).not.toBeInTheDocument()
+})
+
+// Sin menú intermedio: visible de entrada, un solo toque.
+it('con `acciones` lo pinta directo, sin popover', () => {
+    render(
+        <BottomSheet open onClose={() => {}} title="X" subtitle="#10034" acciones={<button>No visité</button>}>
+            <div>contenido</div>
+        </BottomSheet>,
+    )
+    expect(screen.getByText('No visité')).toBeInTheDocument()
+})
+
+it('`acciones` funciona también sin `subtitle`', () => {
+    render(
+        <BottomSheet open onClose={() => {}} title="X" acciones={<button>No visité</button>}>
+            <div>contenido</div>
+        </BottomSheet>,
+    )
+    expect(screen.getByText('No visité')).toBeInTheDocument()
+})

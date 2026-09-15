@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
     cerrarVisita,
     iniciarVisita,
+    noVisitaSobreVisitaAbierta,
     registrarNoVisita,
     reintentarSeguimiento,
 } from '@/api/planificacion'
@@ -42,6 +43,14 @@ export function useCerrarVisita() {
 
 export function useNoVisita() {
     return useMutacionDeVisita((dto: INoVisitaDTO) => registrarNoVisita(dto))
+}
+
+/** Ver noVisitaSobreVisitaAbierta: mismo hecho que useNoVisita, otra puerta — acá la fila
+ *  ya tiene una resolución abierta y lo que se hace es convertirla. */
+export function useNoVisitaSobreVisitaAbierta() {
+    return useMutacionDeVisita((args: { visitaId: number; motivoIds: number[] }) =>
+        noVisitaSobreVisitaAbierta(args.visitaId, args.motivoIds),
+    )
 }
 
 /** Reintento manual del aviso a Cromo desde la agenda (botón "Reintentar sincronización",
