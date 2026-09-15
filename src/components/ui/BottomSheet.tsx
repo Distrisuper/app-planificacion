@@ -9,6 +9,10 @@ interface BottomSheetProps {
     title: string
     eyebrow?: string
     eyebrowClassName?: string
+    /** Línea chica BAJO el título (ej. `#10034 · DERQUI AUTOPARTES SRL`). Va acá y no en
+     *  el `eyebrow` porque en VisitaSheet ese slot ya lo ocupa el semáforo + cronómetro
+     *  de la visita en curso. */
+    subtitle?: string
     /** Si se pasa, aparece un botón de minimizar al lado de la X. */
     onMinimize?: () => void
     /**
@@ -41,6 +45,7 @@ export default function BottomSheet({
     title,
     eyebrow,
     eyebrowClassName,
+    subtitle,
     onMinimize,
     altura = 'auto',
     footer,
@@ -90,6 +95,11 @@ export default function BottomSheet({
                                 </span>
                             )}
                             <h2 className="truncate text-[17px] font-extrabold leading-tight text-[#182645]">{title}</h2>
+                            {subtitle && (
+                                <span className="truncate text-[11.5px] font-semibold leading-tight text-dsmuted">
+                                    {subtitle}
+                                </span>
+                            )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
                             {onMinimize && (

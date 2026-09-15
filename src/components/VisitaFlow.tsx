@@ -9,6 +9,7 @@ import { usePropuesta } from '@/hooks/usePropuesta'
 import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geolocation'
 import { distanciaMetros, estaFueraDeRango } from '@/lib/distancia'
 import { errorCode } from '@/lib/apiError'
+import { identidadCliente } from '@/lib/textFormat'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
 import { guardarVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
@@ -328,6 +329,9 @@ export default function VisitaFlow({
     }
 
     const nombre = cliente.nombreFantasia || cliente.nombreCliente
+    // `nombre` de arriba es el CARTEL; esta es la línea chica de abajo, que suma el código
+    // particular y —solo si el título está mostrando el cartel— la razón social.
+    const identidad = identidadCliente(cliente)
     const direccionTexto = cliente.direccion || cliente.barrio
     const nombreOtraVisita = bloqueadoPorOtraVisita
         ? visitaEnCurso!.cliente.nombreFantasia || visitaEnCurso!.cliente.nombreCliente
@@ -342,6 +346,7 @@ export default function VisitaFlow({
                 open={!mostrarRubros && propuestaPendiente === null && !cargandoDirecto}
                 codigoCliente={cliente.codigoParticularCliente}
                 nombreCliente={nombre}
+                identidad={identidad}
                 iniciando={iniciandoFlujo}
                 deshabilitado={bloqueadoPorOtraVisita}
                 error={errorIniciar ?? mensajeBloqueo}
@@ -355,6 +360,7 @@ export default function VisitaFlow({
                     open={mostrarRubros}
                     visitaId={visitaId}
                     nombreCliente={nombre}
+                    identidad={identidad}
                     visitaCerrada={cliente.estado === 'visitada'}
                     enCurso={enCurso}
                     codigoParticularCliente={cliente.codigoParticularCliente}
@@ -376,6 +382,7 @@ export default function VisitaFlow({
                 <MapaVisita
                     open={propuestaPendiente !== null}
                     nombreCliente={nombre}
+                    identidad={identidad}
                     direccion={direccionTexto}
                     latitud={cliente.latitud as number}
                     longitud={cliente.longitud as number}
@@ -410,6 +417,7 @@ export default function VisitaFlow({
                             visitaEnCurso.cliente.nombreFantasia ||
                             visitaEnCurso.cliente.nombreCliente
                         }
+                        identidad={identidadCliente(visitaEnCurso.cliente)}
                         direccion={visitaEnCurso.cliente.direccion || visitaEnCurso.cliente.barrio}
                         latitud={visitaEnCurso.cliente.latitud}
                         longitud={visitaEnCurso.cliente.longitud}

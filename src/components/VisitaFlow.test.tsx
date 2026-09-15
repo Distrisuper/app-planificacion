@@ -821,3 +821,20 @@ it('la barra flotante pasa a rojo mientras el vendedor está alejado', async () 
 
     expect(await screen.findByText(/te alejaste de almacen don jose/i)).toBeInTheDocument()
 })
+
+describe('identidad del cliente en el header', () => {
+    it('muestra código y razón social bajo el cartel', async () => {
+        renderFlow({
+            cliente: { ...cliente, nombreFantasia: 'AUTOPIEZAS DERQUI' },
+        })
+        // El título sigue siendo el cartel: es lo que el vendedor ve en la puerta.
+        expect(await screen.findByText('AUTOPIEZAS DERQUI')).toBeInTheDocument()
+        expect(screen.getByText('#10034 · ALMACEN DON JOSE')).toBeInTheDocument()
+    })
+
+    it('sin cartel deja solo el código: el título ya es la razón social', async () => {
+        renderFlow()
+        expect(await screen.findByText('ALMACEN DON JOSE')).toBeInTheDocument()
+        expect(screen.getByText('#10034')).toBeInTheDocument()
+    })
+})
