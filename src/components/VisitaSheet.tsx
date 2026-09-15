@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, WifiOff, X } from 'lucide-react'
+import { Loader2, WifiOff } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -377,18 +377,21 @@ export default function VisitaSheet({
     const minimoRequerido = Math.min(2, ofrecimientos.length)
     const faltanParaMinimo = Math.max(0, minimoRequerido - completos)
 
-    // En el menú del header y NO en el pie: el pie es el recurso más escaso del sheet
+    // En la línea de identidad del header (junto a `#10034 · FERNANDEZ MARIA ISABEL`) y
+    // NO detrás de un menú: un control de un solo ítem escondido atrás de un "⋯" le suma
+    // un toque de más a algo que el vendedor necesita encontrar rápido, parado en la
+    // puerta de un local cerrado. Tampoco en el pie: es el recurso más escaso del sheet
     // (entran 5 filas de rubros), y una segunda salida del tamaño de un CTA al lado de
-    // "Cerrar visita" se lee como el atajo para no cargar rubros. El sheet de una visita
-    // cerrada es de consulta, así que ahí no va nada.
+    // "Cerrar visita" se lee como el atajo para no cargar rubros. Por eso un chip chico
+    // — visible de entrada, pero sin pelearle protagonismo al título ni al cronómetro. El
+    // sheet de una visita cerrada es de consulta, así que ahí no va nada.
     const acciones =
         !visitaCerrada && onNoVisita ? (
             <button
                 type="button"
                 onClick={() => onNoVisita(completos)}
-                className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left text-[13.5px] font-semibold text-[#182645]"
+                className="rounded-full border border-dsred/30 bg-dsred/5 px-2 py-0.5 text-[10.5px] font-bold text-dsred"
             >
-                <X className="h-[14px] w-[14px] text-dsred" strokeWidth={2.4} />
                 No visité
             </button>
         ) : undefined

@@ -836,8 +836,7 @@ describe('No visité con la visita ya abierta', () => {
             cliente: { ...cliente, estado: 'en_curso', visitaId: 7 },
         })
 
-        fireEvent.click(await screen.findByLabelText('Más acciones'))
-        fireEvent.click(screen.getByText('No visité'))
+        fireEvent.click(await screen.findByText('No visité'))
         fireEvent.click(await screen.findByText('Cerrado'))
         fireEvent.click(screen.getByText('Registrar'))
 
@@ -869,7 +868,6 @@ describe('No visité con la visita ya abierta', () => {
         // todavía es 0 (el mismo gap que ya advierte el comentario de `ofrecimientosCargados`
         // en VisitaSheet).
         await screen.findByText('Filtros')
-        fireEvent.click(screen.getByLabelText('Más acciones'))
         fireEvent.click(screen.getByText('No visité'))
 
         expect(await screen.findByText(/Cargaste 1 rubro/)).toBeInTheDocument()
@@ -890,8 +888,7 @@ describe('No visité con la visita ya abierta', () => {
             cliente: { ...cliente, estado: 'en_curso', visitaId: 7 },
         })
 
-        fireEvent.click(await screen.findByLabelText('Más acciones'))
-        fireEvent.click(screen.getByText('No visité'))
+        fireEvent.click(await screen.findByText('No visité'))
         fireEvent.click(await screen.findByText('Cerrado'))
         fireEvent.click(screen.getByText('Registrar'))
 

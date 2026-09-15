@@ -54,35 +54,30 @@ it('renders nothing when closed', () => {
     expect(screen.queryByText('c')).not.toBeInTheDocument()
 })
 
-it('sin `acciones` no dibuja el botón de menú', () => {
-    render(<BottomSheet open onClose={() => {}} title="X"><div>contenido</div></BottomSheet>)
-    expect(screen.queryByLabelText('Más acciones')).not.toBeInTheDocument()
+it('sin `acciones` no agrega nada a la línea del subtitle', () => {
+    render(
+        <BottomSheet open onClose={() => {}} title="X" subtitle="#10034">
+            <div>contenido</div>
+        </BottomSheet>,
+    )
+    expect(screen.queryByText('No visité')).not.toBeInTheDocument()
 })
 
-it('con `acciones` abre el popover al tocar el menú', async () => {
+// Sin menú intermedio: visible de entrada, un solo toque.
+it('con `acciones` lo pinta directo, sin popover', () => {
+    render(
+        <BottomSheet open onClose={() => {}} title="X" subtitle="#10034" acciones={<button>No visité</button>}>
+            <div>contenido</div>
+        </BottomSheet>,
+    )
+    expect(screen.getByText('No visité')).toBeInTheDocument()
+})
+
+it('`acciones` funciona también sin `subtitle`', () => {
     render(
         <BottomSheet open onClose={() => {}} title="X" acciones={<button>No visité</button>}>
             <div>contenido</div>
         </BottomSheet>,
     )
-    expect(screen.queryByText('No visité')).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByLabelText('Más acciones'))
     expect(screen.getByText('No visité')).toBeInTheDocument()
-})
-
-// El overlay del sheet cierra EL SHEET al click. Sin stopPropagation en el catcher del
-// popover, tocar afuera del menú cerraría la visita entera.
-it('tocar fuera del popover lo cierra sin cerrar el sheet', async () => {
-    const onClose = vi.fn()
-    render(
-        <BottomSheet open onClose={onClose} title="X" acciones={<button>No visité</button>}>
-            <div>contenido</div>
-        </BottomSheet>,
-    )
-    await userEvent.click(screen.getByLabelText('Más acciones'))
-    await userEvent.click(screen.getByTestId('cerrar-menu-acciones'))
-
-    expect(screen.queryByText('No visité')).not.toBeInTheDocument()
-    expect(onClose).not.toHaveBeenCalled()
 })

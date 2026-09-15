@@ -1,5 +1,5 @@
-import { ChevronDown, MoreVertical, X } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { ChevronDown, X } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { Button } from './button'
 import { useAlturaTeclado } from '@/hooks/useAlturaTeclado'
 
@@ -15,9 +15,11 @@ interface BottomSheetProps {
     subtitle?: string
     /** Si se pasa, aparece un botón de minimizar al lado de la X. */
     onMinimize?: () => void
-    /** Si se pasa, aparece un botón `⋯` en el header que abre un popover con este
-     *  contenido. Pensado para acciones secundarias que no pueden gastar alto del pie
-     *  (ej. "No visité" durante la visita). El sheet no sabe qué son: sólo las muestra. */
+    /** Si se pasa, se pinta al final de la línea del `subtitle` (empujado a la derecha
+     *  con `ml-auto`), sin menú intermedio: un solo control secundario visible de
+     *  entrada, sin gastar alto del pie. Pensado para acciones que necesitan encontrarse
+     *  rápido (ej. "No visité" durante la visita) — un menú de un solo ítem agrega un
+     *  toque de más sin ganar nada a cambio. El sheet no sabe qué es: sólo lo muestra. */
     acciones?: ReactNode
     /**
      * Cuánto alto toma el sheet. Los tres modos dejan siempre una franja arriba
@@ -60,11 +62,7 @@ export default function BottomSheet({
     // adentro se gatea con `open` para no dejar un listener de por vida en un sheet
     // cerrado. Ver el porqué completo en useAlturaTeclado.
     const alturaTeclado = useAlturaTeclado(open)
-    const [menuAbierto, setMenuAbierto] = useState(false)
-    if (!open) {
-        if (menuAbierto) setMenuAbierto(false)
-        return null
-    }
+    if (!open) return null
     return (
         // `paddingBottom` empuja el sheet (alineado `items-end`) hacia arriba, tanto
         // como lo tapa el teclado — así el pie fijo (observaciones, Cerrar visita) no
@@ -104,47 +102,21 @@ export default function BottomSheet({
                                 </span>
                             )}
                             <h2 className="truncate text-[17px] font-extrabold leading-tight text-[#182645]">{title}</h2>
-                            {subtitle && (
-                                <span className="truncate text-[11.5px] font-semibold leading-tight text-dsmuted">
-                                    {subtitle}
-                                </span>
+                            {(subtitle || acciones) && (
+                                <div className="flex items-center gap-2">
+                                    {subtitle && (
+                                        <span className="truncate text-[11.5px] font-semibold leading-tight text-dsmuted">
+                                            {subtitle}
+                                        </span>
+                                    )}
+                                    {/* `ml-auto` y no un segundo hijo de un `justify-between`: así
+                                        funciona también sin `subtitle` (un solo hijo, empujado
+                                        igual a la derecha). */}
+                                    {acciones && <div className="ml-auto shrink-0">{acciones}</div>}
+                                </div>
                             )}
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                            {acciones && (
-                                <div className="relative">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label="Más acciones"
-                                        onClick={() => setMenuAbierto(a => !a)}
-                                        className="h-[30px] w-[30px] bg-[#F0F2F7] text-dsmuted hover:bg-[#e3e6ee]"
-                                    >
-                                        <MoreVertical className="h-[15px] w-[15px]" strokeWidth={2.4} />
-                                    </Button>
-                                    {menuAbierto && (
-                                        <>
-                                            {/* Catcher propio: el overlay del sheet cierra EL SHEET
-                                                al click, así que sin stopPropagation tocar afuera
-                                                del menú cerraría la visita entera. */}
-                                            <div
-                                                data-testid="cerrar-menu-acciones"
-                                                className="fixed inset-0 z-[60]"
-                                                onClick={e => {
-                                                    e.stopPropagation()
-                                                    setMenuAbierto(false)
-                                                }}
-                                            />
-                                            <div
-                                                className="absolute right-0 top-[34px] z-[61] min-w-[210px] rounded-xl border border-[#E4E8F0] bg-white py-1 shadow-[0_8px_24px_rgba(10,15,30,.16)]"
-                                                onClick={() => setMenuAbierto(false)}
-                                            >
-                                                {acciones}
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            )}
                             {onMinimize && (
                                 <Button
                                     variant="ghost"
