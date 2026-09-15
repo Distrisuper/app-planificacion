@@ -49,6 +49,26 @@ fila sale sola de `en_curso` y entra en `no_visita` sin tocar una línea de SQL.
 `AnaliticaService` sólo pide ofrecimientos de las filas con `tipo === 'visita'`, así que los
 `pl_visita_rubro` que hayan quedado colgando no contaminan ningún indicador.
 
+**Por qué el `UPDATE` es la operación correcta, no sólo la más práctica:** la fila ya es
+mutable por diseño — `ResolucionRepository.cerrarVisita` hace exactamente esto, un `UPDATE`
+sobre la misma fila abierta, para escribirle `fecha_fin`/`coord_final`/`observaciones`.
+`pl_resolucion` nace abierta y se termina de escribir después; la inmutabilidad empieza
+recién cuando `fecha_fin` deja de ser `NULL`. Convertir a `no_visita` es esa misma escritura
+de cierre, hacia el otro estado terminal — no una excepción al modelo. Las alternativas
+pierden en la comparación: borrar+recrear es igual de mutación (un `DELETE`, peor) y pierde
+`coord_inicio`; una columna nueva de "anulada" en vez de tocar `tipo` obliga a que
+`findCobertura`, `AgendaService`, `estadoCicloCliente` y la vista de actividad —los cuatro
+bucketizan por `tipo`— aprendan a filtrarla, y el que se olvide cuenta una visita que no
+existió.
+
+**Costo a tener presente, no a resolver ahora:** en un `no_visita` convertido,
+`fecha_inicio` y `fecha_fin` ya no son el mismo instante (a diferencia del que nace de
+cero, donde si acaso son ambos "ahora"). Hoy nada mide duración sobre filas `no_visita`
+—`AnaliticaService` sólo lee ofrecimientos de `tipo === 'visita'`—, así que no rompe nada
+existente. Pero el dato queda ahí: si el día de mañana se quiere medir "cuánto tardó en
+darse cuenta de que estaba cerrado", hay que saber que sólo tiene sentido para los
+convertidos, no para los `no_visita` que nacieron sin haber iniciado.
+
 ## 3. Backend (`api-vendedores`)
 
 ### 3.1 Endpoint
