@@ -97,6 +97,19 @@ zona equivocada y se pierde la línea de base de qué estaba planificado.
 (`EstadoCicloCliente`) tiene cuatro valores —`pendiente | en_curso | visitada | no_visita`— y
 `pendiente` se deriva de no tener resolución. **No existe un estado `reagendada`.**
 
+**La inmutabilidad de `pl_resolucion` es de la resolución CERRADA, no de la fila desde que
+nace.** Una visita todavía abierta (`fecha_fin NULL`) se puede convertir en `no_visita` con
+sus motivos: es el vendedor que inició la visita —típicamente empujado a hacerlo lejos del
+mostrador, por el gate de cercanía— y adentro se encontró con el local cerrado
+(`POST /planificacion/visitas/:id/no-visita`). No es una corrección de un hecho anterior: es
+la primera y única declaración del hecho, igual que `cerrarVisita` (que también hace un
+`UPDATE` sobre la fila abierta). La resolución **cerrada** —cualquiera sea su tipo— no se
+toca nunca más. Un `no_visita` convertido conserva el `coord_inicio` de la visita que llegó a
+arrancar, a diferencia del que nace de cero (que nunca captura ubicación); y como
+`fecha_inicio` sigue siendo la del arranque real, en un convertido `fecha_inicio` y
+`fecha_fin` ya no son el mismo instante — nada mide eso hoy, pero conviene saberlo si algún
+día se quiere medir cuánto tardó el vendedor en darse cuenta.
+
 ## Cómo se mide
 
 **La unidad de medida es la rotación, no la semana.** El denominador son las filas de
