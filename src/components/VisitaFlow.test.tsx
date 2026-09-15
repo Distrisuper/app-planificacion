@@ -822,6 +822,85 @@ it('la barra flotante pasa a rojo mientras el vendedor está alejado', async () 
     expect(await screen.findByText(/te alejaste de almacen don jose/i)).toBeInTheDocument()
 })
 
+describe('No visité con la visita ya abierta', () => {
+    it('registra No visité y suelta la visita en curso', async () => {
+        ;(api.noVisitaSobreVisitaAbierta as any).mockResolvedValue({ rotacionClienteId: 42 })
+        ;(api.getMotivos as any).mockImplementation((nivel: string) =>
+            Promise.resolve(
+                nivel === 'visita'
+                    ? [{ motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] }]
+                    : [],
+            ),
+        )
+        const { onVisitaCerrada } = renderFlow({
+            cliente: { ...cliente, estado: 'en_curso', visitaId: 7 },
+        })
+
+        fireEvent.click(await screen.findByLabelText('Más acciones'))
+        fireEvent.click(screen.getByText('No visité'))
+        fireEvent.click(await screen.findByText('Cerrado'))
+        fireEvent.click(screen.getByText('Registrar'))
+
+        await waitFor(() =>
+            expect(api.noVisitaSobreVisitaAbierta).toHaveBeenCalledWith(7, [1]),
+        )
+        await waitFor(() => expect(onVisitaCerrada).toHaveBeenCalled())
+        expect(leerVisitaEnCurso()).toBeNull()
+    })
+
+    it('avisa que los rubros cargados no van a contar', async () => {
+        ;(api.getMotivos as any).mockImplementation((nivel: string) =>
+            Promise.resolve(
+                nivel === 'visita'
+                    ? [{ motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] }]
+                    : [],
+            ),
+        )
+        ;(api.getOfrecimientos as any).mockResolvedValue([
+            {
+                id: 8, resolucionId: 7, tipo: 'rubro', codigo: 'FILT', descripcion: 'Filtros',
+                gapUnits: null, esPropuesto: false, resuelto: true,
+                motivos: [{ motivoId: 10, valores: {} }], alcance: [],
+            },
+        ])
+        renderFlow({ cliente: { ...cliente, estado: 'en_curso', visitaId: 7 } })
+
+        // Esperar a que los ofrecimientos hayan cargado: si se clickea antes, `completos`
+        // todavía es 0 (el mismo gap que ya advierte el comentario de `ofrecimientosCargados`
+        // en VisitaSheet).
+        await screen.findByText('Filtros')
+        fireEvent.click(screen.getByLabelText('Más acciones'))
+        fireEvent.click(screen.getByText('No visité'))
+
+        expect(await screen.findByText(/Cargaste 1 rubro/)).toBeInTheDocument()
+    })
+
+    it('un cliente ya resuelto en el servidor cierra el flujo con aviso informativo', async () => {
+        ;(api.noVisitaSobreVisitaAbierta as any).mockRejectedValue({
+            response: { data: { code: 'VISITA_YA_CERRADA' } },
+        })
+        ;(api.getMotivos as any).mockImplementation((nivel: string) =>
+            Promise.resolve(
+                nivel === 'visita'
+                    ? [{ motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] }]
+                    : [],
+            ),
+        )
+        const { onAviso } = renderFlow({
+            cliente: { ...cliente, estado: 'en_curso', visitaId: 7 },
+        })
+
+        fireEvent.click(await screen.findByLabelText('Más acciones'))
+        fireEvent.click(screen.getByText('No visité'))
+        fireEvent.click(await screen.findByText('Cerrado'))
+        fireEvent.click(screen.getByText('Registrar'))
+
+        await waitFor(() =>
+            expect(onAviso).toHaveBeenCalledWith('info', expect.stringMatching(/ya estaba resuelto/i)),
+        )
+    })
+})
+
 describe('identidad del cliente en el header', () => {
     it('muestra código y razón social bajo el cartel', async () => {
         renderFlow({
