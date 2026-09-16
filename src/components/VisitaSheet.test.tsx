@@ -66,7 +66,7 @@ beforeEach(() => {
     ;(api.getMotivos as any).mockResolvedValue(motivos)
     ;(api.resolverOfrecimiento as any).mockResolvedValue({ ofrecimientosPendientes: 0 })
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
     ])
     ;(api.agregarOfrecimiento as any).mockResolvedValue({ ofrecimientoId: 99 })
     ;(api.eliminarOfrecimiento as any).mockResolvedValue(undefined)
@@ -396,7 +396,7 @@ it('con codigoParticularCliente, los números de rubroStatus aparecen en la tabl
 it('visita sin rubros pero con otros rubros del cliente: la tabla se ve de una', async () => {
     ;(api.getOfrecimientos as any).mockResolvedValue([])
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     renderSheet({ codigoParticularCliente: '10034' })
 
@@ -406,8 +406,8 @@ it('visita sin rubros pero con otros rubros del cliente: la tabla se ve de una',
 
 it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de arriba con su botón de Resolución', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
@@ -424,9 +424,9 @@ it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de 
 
 it('agregar dos rubros distintos en simultáneo deshabilita cada fila por separado, sin que la segunda apague el spinner de la primera', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
-        { rubroCode: 'FOCO', nombre: 'Focos', actual: 200_000, mesAnterior: 150_000, promedio6m: 180_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
+        { rubroCode: 'FOCO', nombre: 'Focos', actual: 200_000, mesAnterior: 150_000, promedio6m: 180_000, marcas: [] },
     ])
     const resolvers: Record<string, (v: { ofrecimientoId: number }) => void> = {}
     ;(api.agregarOfrecimiento as any).mockImplementation((_visitaId: number, dto: { codigo: string }) =>
@@ -455,8 +455,8 @@ it('agregar dos rubros distintos en simultáneo deshabilita cada fila por separa
 
 it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaban', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
         ...ofrecimientos,
@@ -482,8 +482,8 @@ it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaba
 
 it('agregar un rubro del catálogo abre su resolución de una, sin volver a la lista', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
         ...ofrecimientos,
@@ -504,8 +504,8 @@ it('agregar un rubro del catálogo abre su resolución de una, sin volver a la l
 
 it('un rubro agregado se mantiene arriba aunque se resuelva (no se reordena por estado)', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
         ...ofrecimientos,
@@ -554,8 +554,8 @@ it('si getRubroStatus falla, la tabla igual lista los ofrecimientos de la visita
 
 it('con la visita cerrada, "otros rubros del cliente" no son tocables para agregar', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     renderSheet({ visitaCerrada: true, codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
@@ -771,7 +771,7 @@ it('no muestra el párrafo introductorio: la instrucción vive en el header de l
     await screen.findByText('Amortiguadores')
 
     expect(screen.queryByText(/cargá el resultado de cada rubro/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/tu propuesta · tocá uno para cargar el resultado/i)).toBeInTheDocument()
+    expect(screen.getByText(/tu propuesta · tocá el rubro para cargar el resultado/i)).toBeInTheDocument()
 })
 
 // El naranja es de "ya podés cerrar". Mientras falten rubros el botón va gris con

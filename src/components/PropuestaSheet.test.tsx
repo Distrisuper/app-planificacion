@@ -56,7 +56,7 @@ function mockPropuesta() {
 beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'R1', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
+        { rubroCode: 'R1', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000, marcas: [] },
     ])
 })
 
@@ -144,8 +144,8 @@ it('un rubro de relleno con dropPct positivo (creció, no cayó) se manda como 0
 it('muestra de una los rubros que no están en la propuesta, sin "Ver más"', async () => {
     mockPropuesta()
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'R1', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
-        { rubroCode: 'R9', nombre: 'Baterías', actual: 100_000, mesAnterior: 100_000, promedio6m: 100_000 },
+        { rubroCode: 'R1', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000, marcas: [] },
+        { rubroCode: 'R9', nombre: 'Baterías', actual: 100_000, mesAnterior: 100_000, promedio6m: 100_000, marcas: [] },
     ])
     render(
         wrap(
@@ -226,7 +226,7 @@ it('propuesta vacía con otros rubros del cliente: la tabla se ve de una', async
         rubros: [],
     })
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'R9', nombre: 'Baterías', actual: 100_000, mesAnterior: 100_000, promedio6m: 100_000 },
+        { rubroCode: 'R9', nombre: 'Baterías', actual: 100_000, mesAnterior: 100_000, promedio6m: 100_000, marcas: [] },
     ])
     render(
         wrap(

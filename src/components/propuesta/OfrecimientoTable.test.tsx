@@ -506,13 +506,13 @@ it('en la tabla de una visita, una banda propia dice el gesto de cargar', () => 
             filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
         />,
     )
-    expect(screen.getByText(/tocá uno para cargar el resultado/i)).toBeInTheDocument()
+    expect(screen.getByText(/tocá el rubro para cargar el resultado/i)).toBeInTheDocument()
     expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Rubro')
 })
 
 it('en la propuesta (sin filas resolubles) no hay banda de cargar', () => {
     render(<OfrecimientoTable filas={[fila()]} />)
-    expect(screen.queryByText(/tocá uno para cargar el resultado/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/tocá el rubro para cargar el resultado/i)).not.toBeInTheDocument()
     expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Rubro')
 })
 
@@ -591,4 +591,90 @@ it('la propuesta previa no reserva el slot del chip: ahi ese espacio es ancho de
     // Ni resoluble ni agregable => 4 columnas y ningun spacer al principio.
     expect(screen.getAllByRole('columnheader')).toHaveLength(4)
     expect(document.querySelector('.lucide-plus')).toBeNull()
+})
+
+const fremax = { code: 'B1', nombre: 'FREMAX', actual: 0, mesAnterior: 54_000, promedio6m: 61_000, dejo: false }
+const corven = { code: 'B2', nombre: 'CORVEN', actual: 0, mesAnterior: 0, promedio6m: 22_000, dejo: true }
+const marcas5 = [fremax, corven, { ...fremax, code: 'B3', nombre: 'M3' }, { ...fremax, code: 'B4', nombre: 'M4' }, { ...fremax, code: 'B5', nombre: 'M5' }]
+const resol = { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true }
+
+describe('dos zonas en la fila de la visita', () => {
+    it('tocar el nombre abre la resolución y NO despliega', () => {
+        const onResolucion = vi.fn()
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [fremax] })]} onResolucion={onResolucion} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+        expect(onResolucion).toHaveBeenCalledWith(7)
+        expect(screen.queryByText('FREMAX')).not.toBeInTheDocument()
+    })
+
+    it('tocar los números despliega las marcas con sus tres números y NO abre la resolución', () => {
+        const onResolucion = vi.fn()
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [fremax, corven] })]} onResolucion={onResolucion} />)
+        const zona = screen.getByRole('button', { name: 'Marcas de Amortiguadores' })
+        expect(zona).toHaveAttribute('aria-expanded', 'false')
+        fireEvent.click(zona)
+        expect(onResolucion).not.toHaveBeenCalled()
+        expect(zona).toHaveAttribute('aria-expanded', 'true')
+        expect(screen.getByText('FREMAX')).toBeInTheDocument()
+        expect(screen.getByText('CORVEN')).toBeInTheDocument()
+        expect(screen.getByText('61')).toBeInTheDocument()
+        expect(screen.getByText(/dejó/i)).toBeInTheDocument()
+    })
+
+    it('tocar de nuevo cierra', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [fremax] })]} />)
+        const zona = screen.getByRole('button', { name: 'Marcas de Amortiguadores' })
+        fireEvent.click(zona)
+        fireEvent.click(zona)
+        expect(screen.queryByText('FREMAX')).not.toBeInTheDocument()
+    })
+
+    it('una sola abierta a la vez', () => {
+        render(
+            <OfrecimientoTable
+                filas={[
+                    fila({ codigo: 'R1', resolucion: resol, marcas: [fremax] }),
+                    fila({ codigo: 'R2', nombre: 'Filtros', resolucion: { ...resol, ofrecimientoId: 8 }, marcas: [corven] }),
+                ]}
+            />,
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Filtros' }))
+        expect(screen.queryByText('FREMAX')).not.toBeInTheDocument()
+        expect(screen.getByText('CORVEN')).toBeInTheDocument()
+    })
+
+    it('sin marcas, la zona de números no es un botón', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [] })]} />)
+        expect(screen.queryByRole('button', { name: 'Marcas de Amortiguadores' })).not.toBeInTheDocument()
+    })
+
+    it('muestra hasta 3 marcas y colapsa el resto en "+N marcas más"', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: marcas5 })]} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        expect(screen.getByText('FREMAX')).toBeInTheDocument()
+        expect(screen.getByText('M3')).toBeInTheDocument()
+        expect(screen.queryByText('M4')).not.toBeInTheDocument()
+        expect(screen.getByText('+2 marcas más')).toBeInTheDocument()
+    })
+
+    it('las filas del catálogo (agregable) no se parten: toda la fila agrega', () => {
+        const onAgregar = vi.fn()
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [] }), fila({ codigo: 'R2', nombre: 'Filtros', destacada: false, agregable: true, marcas: [fremax] })]} onAgregar={onAgregar} />)
+        expect(screen.queryByRole('button', { name: 'Marcas de Filtros' })).not.toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: 'Agregar Filtros' }))
+        expect(onAgregar).toHaveBeenCalledWith('R2')
+    })
+
+    it('en la propuesta (sin resolucion) toda la fila despliega', () => {
+        render(<OfrecimientoTable filas={[fila({ marcas: [fremax] })]} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        expect(screen.getByText('FREMAX')).toBeInTheDocument()
+    })
+
+    it('la banda explica las dos acciones', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [] })]} />)
+        expect(screen.getByText(/tocá el rubro para cargar el resultado/i)).toBeInTheDocument()
+        expect(screen.getByText(/los números, para ver sus marcas/i)).toBeInTheDocument()
+    })
 })

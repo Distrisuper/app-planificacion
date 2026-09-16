@@ -4,7 +4,7 @@ import { fmtAmount } from '@/lib/fmtAmount'
 import { resumenAlcance } from '@/lib/alcance'
 import { registroDetalleAccion } from './accionDetalle/registro'
 import { separarSegmentos } from './filas'
-import type { TipoOfrecimiento } from '@/types/planificacion'
+import type { IMarcaEstado, TipoOfrecimiento } from '@/types/planificacion'
 import type { IOfrecimientoFila, IOfrecimientoFilaResolucion } from './filas'
 
 interface OfrecimientoTableProps {
@@ -80,6 +80,8 @@ function Celda({
     promedio6m,
     referencia,
     ocultaEnAngosto,
+    abierta,
+    compacta,
 }: {
     valor: number | null
     promedio6m: number | null
@@ -87,6 +89,11 @@ function Celda({
     /** true = la columna desaparece abajo de 360px. Tiene que ir junto con el mismo flag
      *  en su header (ver OCULTA_ANGOSTO_CELDA). */
     ocultaEnAngosto?: boolean
+    /** true mientras la zona de marcas de esta fila está desplegada: la pastilla pasa a
+     *  blanco para no competir con el tinte navy claro del botón que la contiene. */
+    abierta?: boolean
+    /** true en las sub-filas de marca: pastilla más chica que la del rubro. */
+    compacta?: boolean
 }) {
     const rojo = !referencia && cae(valor, promedio6m)
     return (
@@ -100,8 +107,16 @@ function Celda({
                 // demás — solo cambia el color de texto — porque sin ese fondo el ojo no
                 // tiene con qué anclar su posición y la columna parece corrida, aunque el
                 // ancho sea idéntico al de ACTUAL/M.ANT.
-                className={`inline-block rounded-md px-1.5 py-0.5 lining-nums tabular-nums slashed-zero whitespace-nowrap text-[12.5px] font-semibold ${
-                    referencia ? 'bg-[#F1F3F8] text-dsmuted' : rojo ? 'bg-[#FEECEC] text-dsred' : 'bg-[#F1F3F8] text-[#182645]'
+                className={`inline-block rounded-md lining-nums tabular-nums slashed-zero whitespace-nowrap font-semibold ${
+                    compacta ? 'px-1 py-0 text-[10.5px]' : 'px-1.5 py-0.5 text-[12.5px]'
+                } ${
+                    referencia
+                        ? 'bg-[#F1F3F8] text-dsmuted'
+                        : rojo
+                          ? 'bg-[#FEECEC] text-dsred'
+                          : abierta
+                            ? 'bg-white text-[#182645]'
+                            : 'bg-[#F1F3F8] text-[#182645]'
                 }`}
             >
                 {fmtCelda(valor)}
@@ -188,57 +203,132 @@ function ChipAgregar() {
     )
 }
 
-/** Nombre (+ chip de tipo y alcance si aplica) y las tres columnas numéricas, siempre en
- *  ese orden y con el mismo ancho de columna que el header. El chip no se pinta para
+/** Nombre + chip de tipo y alcance/detalle si aplica. El chip de tipo no se pinta para
  *  'rubro': es el caso por defecto y repetirlo en cada fila es ruido. "SKF" sin decir
  *  que es una marca sí es ambiguo, y esa es la razón del chip. */
-function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
+function NombreFila({ fila }: { fila: IOfrecimientoFila }) {
     const moduloDetalle = registroDetalleAccion[fila.codigo]
     return (
-        <>
-            <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#182645]">{fila.nombre}</span>
-                    {fila.tipo !== 'rubro' && (
-                        <span className="shrink-0 rounded-full bg-[#EEF3FB] px-1.5 py-0.5 text-[10px] font-bold text-[#213D82]">
-                            {TIPO_LABEL[fila.tipo]}
-                        </span>
-                    )}
-                </div>
-                {fila.alcance.length > 0 && (
-                    <div className="truncate text-[11px] font-semibold text-dsmuted">
-                        {resumenAlcance(fila.alcance)}
-                    </div>
-                )}
-                {fila.detalle != null && moduloDetalle && (
-                    <div className="truncate text-[11px] font-semibold text-dsmuted">
-                        {moduloDetalle.resumen(fila.detalle)}
-                    </div>
+        <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+                <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#182645]">{fila.nombre}</span>
+                {fila.tipo !== 'rubro' && (
+                    <span className="shrink-0 rounded-full bg-[#EEF3FB] px-1.5 py-0.5 text-[10px] font-bold text-[#213D82]">
+                        {TIPO_LABEL[fila.tipo]}
+                    </span>
                 )}
             </div>
-            {/* `rubroStatus` (de donde salen estos tres números) está indexado por
-             *  código de RUBRO — una acción o una marca nunca matchean ahí, así que
-             *  mostrar las tres celdas en guiones se lee como "falta cargar" cuando en
-             *  realidad ese dato no existe para estos tipos de ofrecimiento. */}
-            {fila.tipo === 'rubro' && (
-                <>
-                    <Celda valor={fila.actual} promedio6m={fila.promedio6m} />
-                    <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} ocultaEnAngosto />
-                    <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia />
-                </>
+            {fila.alcance.length > 0 && (
+                <div className="truncate text-[11px] font-semibold text-dsmuted">
+                    {resumenAlcance(fila.alcance)}
+                </div>
             )}
+            {fila.detalle != null && moduloDetalle && (
+                <div className="truncate text-[11px] font-semibold text-dsmuted">
+                    {moduloDetalle.resumen(fila.detalle)}
+                </div>
+            )}
+        </div>
+    )
+}
+
+/** Las tres columnas numéricas, siempre en ese orden y con el mismo ancho que el
+ *  header. `rubroStatus` (de donde salen estos números) está indexado por código de
+ *  RUBRO — una acción o una marca nunca matchean ahí, así que mostrar las tres celdas
+ *  en guiones se lee como "falta cargar" cuando en realidad ese dato no existe para
+ *  estos tipos de ofrecimiento. */
+function CeldasFila({ fila, abierta }: { fila: IOfrecimientoFila; abierta?: boolean }) {
+    if (fila.tipo !== 'rubro') return null
+    return (
+        <>
+            <Celda valor={fila.actual} promedio6m={fila.promedio6m} abierta={abierta} />
+            <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} ocultaEnAngosto abierta={abierta} />
+            <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia abierta={abierta} />
         </>
     )
 }
 
-/** Una fila completa, siempre de UNA sola línea. Las tres variantes (read-only,
- *  resoluble, agregable) comparten la misma altura y las mismas columnas — lo único
- *  que cambia es qué pasa al tocarla y qué muestra el chip del principio. */
+/** Nombre + las tres columnas numéricas. Usado por las variantes que NO parten la
+ *  fila en dos zonas (read-only, agregable, o resoluble sin marcas para desplegar). */
+function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
+    return (
+        <>
+            <NombreFila fila={fila} />
+            <CeldasFila fila={fila} />
+        </>
+    )
+}
+
+const MAX_SUBFILAS = 3
+
+/** Las marcas del cliente en este rubro, desplegadas debajo de la fila. Máximo 3, el
+ *  resto colapsado en "+N marcas más" — el bloque de arriba son ~5 filas en pantalla y
+ *  quince sub-filas lo harían ilegible. */
+function SubFilasMarcas({
+    marcas,
+    conChip,
+    conColumnaQuitar,
+}: {
+    marcas: IMarcaEstado[]
+    conChip: boolean
+    conColumnaQuitar: boolean
+}) {
+    const visibles = marcas.slice(0, MAX_SUBFILAS)
+    const ocultas = marcas.length - visibles.length
+    return (
+        <div className="bg-[#F7F8FB]">
+            {visibles.map((m, i) => (
+                <div
+                    key={m.code}
+                    role="row"
+                    data-marca={m.code}
+                    className="flex min-h-[30px] items-center gap-1 pl-2.5 pr-1.5 text-[11.5px] font-semibold text-[#3B4761]"
+                >
+                    {conChip && (
+                        <div className={`${ANCHO_CHIP} flex justify-center`}>
+                            <span aria-hidden className={`h-[13px] w-[3px] rounded-sm ${i === 0 ? 'bg-dsnavy' : 'bg-[#C9D2E3]'}`} />
+                        </div>
+                    )}
+                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                        <span className="min-w-0 truncate">{m.nombre}</span>
+                        {m.dejo && (
+                            <span className="shrink-0 rounded bg-[#FDECEA] px-1 text-[8.5px] font-extrabold uppercase leading-[14px] text-dsred">
+                                dejó
+                            </span>
+                        )}
+                    </div>
+                    <Celda valor={m.actual} promedio6m={m.promedio6m} compacta />
+                    <Celda valor={m.mesAnterior} promedio6m={m.promedio6m} ocultaEnAngosto compacta />
+                    <Celda valor={m.promedio6m} promedio6m={m.promedio6m} referencia compacta />
+                    {conColumnaQuitar && <div className={ANCHO_QUITAR} />}
+                </div>
+            ))}
+            {ocultas > 0 && (
+                <div className={`py-1.5 ${conChip ? 'pl-[42px]' : 'pl-2.5'} text-[11px] font-semibold text-[#8A93A6]`}>
+                    +{ocultas} marcas más
+                </div>
+            )}
+        </div>
+    )
+}
+
+/** Una fila completa, siempre de UNA sola línea (más las sub-filas de marca cuando está
+ *  desplegada). Las variantes (read-only, resoluble, agregable) comparten la misma
+ *  altura y las mismas columnas — lo único que cambia es qué pasa al tocarla y qué
+ *  muestra el chip del principio.
+ *
+ *  Una fila resoluble con marcas se parte en DOS zonas: el nombre carga el resultado
+ *  (es donde vive el estado), los números despliegan las marcas del cliente en ese
+ *  rubro. Una fila agregable no se parte (toda la fila agrega); una fila de la
+ *  propuesta previa (ni resoluble ni agregable) despliega con toda la fila, porque ahí
+ *  no hay otra acción que compita por el toque. */
 function FilaOfrecimiento({
     fila,
     conBorde,
     conChip,
     conColumnaQuitar,
+    abierta = false,
+    onToggleMarcas,
     onResolucion,
     onAgregar,
     onEliminar,
@@ -249,6 +339,8 @@ function FilaOfrecimiento({
     conBorde: boolean
     conChip: boolean
     conColumnaQuitar: boolean
+    abierta?: boolean
+    onToggleMarcas?: (codigo: string) => void
     onResolucion?: (ofrecimientoId: number) => void
     onAgregar?: (codigo: string) => void
     onEliminar?: (ofrecimientoId: number) => void
@@ -260,64 +352,112 @@ function FilaOfrecimiento({
     const eliminando = resolucion ? (eliminandoIds?.has(resolucion.ofrecimientoId) ?? false) : false
     const clasesFila = 'flex min-w-0 flex-1 items-center gap-1 px-2.5 py-2 text-left'
 
+    const tieneMarcas = fila.tipo === 'rubro' && fila.marcas.length > 0
+    const dosZonas = !!resolucion && tieneMarcas
+    const filaEnteraDespliega = !resolucion && !fila.agregable && tieneMarcas
+
+    const chip =
+        conChip &&
+        (resolucion ? (
+            <ChipEstado resolucion={resolucion} />
+        ) : fila.agregable ? (
+            <ChipAgregar />
+        ) : (
+            <div className={ANCHO_CHIP} />
+        ))
+
     const interior = (
         <>
-            {conChip &&
-                (resolucion ? (
-                    <ChipEstado resolucion={resolucion} />
-                ) : fila.agregable ? (
-                    <ChipAgregar />
-                ) : (
-                    <div className={ANCHO_CHIP} />
-                ))}
+            {chip}
             <ContenidoFila fila={fila} />
         </>
     )
 
     return (
-        <div className={`flex items-center ${conBorde ? 'border-b border-dsline' : ''}`}>
-            {resolucion || fila.agregable ? (
-                <button
-                    type="button"
-                    aria-label={
-                        resolucion ? `Resolución de ${fila.nombre}` : `Agregar ${fila.nombre}`
-                    }
-                    disabled={agregando}
-                    onClick={() =>
-                        resolucion
-                            ? onResolucion?.(resolucion.ofrecimientoId)
-                            : onAgregar?.(fila.codigo)
-                    }
-                    className={`${clasesFila} active:bg-[#F7F8FB] disabled:opacity-50`}
-                >
-                    {interior}
-                </button>
-            ) : (
-                <div className={clasesFila}>{interior}</div>
-            )}
-            {/* Solo para ofrecimientos agregados dinámicamente — los de la propuesta
-             *  congelada no se pueden borrar (el backend responde
-             *  OFRECIMIENTO_DE_PROPUESTA); si el vendedor no lo ofreció, se resuelve
-             *  con "No lo ofrecí" en vez de borrarlo. La columna se reserva en toda la
-             *  tabla (ver ANCHO_QUITAR) para que las filas sin ✕ no corran sus números. */}
-            {conColumnaQuitar && (
-                <div className={`${ANCHO_QUITAR} flex justify-center`}>
-                    {resolucion && !resolucion.esPropuesto && (
+        <div className={conBorde ? 'border-b border-dsline' : ''}>
+            <div className="flex items-stretch">
+                {dosZonas ? (
+                    <>
                         <button
                             type="button"
-                            aria-label={`Quitar ${fila.nombre}`}
-                            onClick={() => onEliminar?.(resolucion.ofrecimientoId)}
-                            disabled={eliminando}
-                            className="grid h-7 w-7 place-items-center rounded-md text-dsred disabled:opacity-50"
+                            aria-label={`Resolución de ${fila.nombre}`}
+                            disabled={agregando}
+                            onClick={() => onResolucion?.(resolucion.ofrecimientoId)}
+                            className="flex min-w-0 flex-1 items-center gap-1 py-2 pl-2.5 text-left active:bg-[#F7F8FB]"
                         >
-                            {eliminando ? (
-                                <Loader2 className="h-[15px] w-[15px] animate-spin" strokeWidth={2.4} />
-                            ) : (
-                                <Trash2 className="h-[15px] w-[15px]" strokeWidth={2} />
-                            )}
+                            {chip}
+                            <NombreFila fila={fila} />
                         </button>
-                    )}
-                </div>
+                        <button
+                            type="button"
+                            aria-label={`Marcas de ${fila.nombre}`}
+                            aria-expanded={abierta}
+                            onClick={() => onToggleMarcas?.(fila.codigo)}
+                            className={`flex shrink-0 items-center gap-1 py-2 pr-1.5 ${
+                                abierta ? 'bg-[#EEF3FB]' : 'active:bg-[#F7F8FB]'
+                            }`}
+                        >
+                            <CeldasFila fila={fila} abierta={abierta} />
+                        </button>
+                    </>
+                ) : filaEnteraDespliega ? (
+                    <button
+                        type="button"
+                        aria-label={`Marcas de ${fila.nombre}`}
+                        aria-expanded={abierta}
+                        onClick={() => onToggleMarcas?.(fila.codigo)}
+                        className={`${clasesFila} ${abierta ? 'bg-[#EEF3FB]' : 'active:bg-[#F7F8FB]'}`}
+                    >
+                        {chip}
+                        <NombreFila fila={fila} />
+                        <CeldasFila fila={fila} abierta={abierta} />
+                    </button>
+                ) : resolucion || fila.agregable ? (
+                    <button
+                        type="button"
+                        aria-label={
+                            resolucion ? `Resolución de ${fila.nombre}` : `Agregar ${fila.nombre}`
+                        }
+                        disabled={agregando}
+                        onClick={() =>
+                            resolucion
+                                ? onResolucion?.(resolucion.ofrecimientoId)
+                                : onAgregar?.(fila.codigo)
+                        }
+                        className={`${clasesFila} active:bg-[#F7F8FB] disabled:opacity-50`}
+                    >
+                        {interior}
+                    </button>
+                ) : (
+                    <div className={clasesFila}>{interior}</div>
+                )}
+                {/* Solo para ofrecimientos agregados dinámicamente — los de la propuesta
+                 *  congelada no se pueden borrar (el backend responde
+                 *  OFRECIMIENTO_DE_PROPUESTA); si el vendedor no lo ofreció, se resuelve
+                 *  con "No lo ofrecí" en vez de borrarlo. La columna se reserva en toda la
+                 *  tabla (ver ANCHO_QUITAR) para que las filas sin ✕ no corran sus números. */}
+                {conColumnaQuitar && (
+                    <div className={`${ANCHO_QUITAR} flex justify-center`}>
+                        {resolucion && !resolucion.esPropuesto && (
+                            <button
+                                type="button"
+                                aria-label={`Quitar ${fila.nombre}`}
+                                onClick={() => onEliminar?.(resolucion.ofrecimientoId)}
+                                disabled={eliminando}
+                                className="grid h-7 w-7 place-items-center rounded-md text-dsred disabled:opacity-50"
+                            >
+                                {eliminando ? (
+                                    <Loader2 className="h-[15px] w-[15px] animate-spin" strokeWidth={2.4} />
+                                ) : (
+                                    <Trash2 className="h-[15px] w-[15px]" strokeWidth={2} />
+                                )}
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+            {abierta && tieneMarcas && (
+                <SubFilasMarcas marcas={fila.marcas} conChip={conChip} conColumnaQuitar={conColumnaQuitar} />
             )}
         </div>
     )
@@ -403,6 +543,11 @@ export default function OfrecimientoTable({
     eliminandoIds,
 }: OfrecimientoTableProps) {
     const [busqueda, setBusqueda] = useState('')
+    // Una sola fila desplegada a la vez: abrir otra cierra la anterior.
+    const [abiertaCodigo, setAbiertaCodigo] = useState<string | null>(null)
+    function toggleMarcas(codigo: string) {
+        setAbiertaCodigo(prev => (prev === codigo ? null : codigo))
+    }
 
     // Ninguna acción ni marca tiene venta histórica por rubro: cada una vive en su
     // propia sección, arriba de todo, afuera de la tabla RUBRO·ACTUAL·M.ANT·P.6M — el
@@ -465,8 +610,9 @@ export default function OfrecimientoTable({
             Solo en la tabla de una visita (`conChip`): en la propuesta previa no hay nada
             que cargar. */}
         {conChip && (
-            <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
-                Tu propuesta · tocá uno para cargar el resultado
+            <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted leading-[1.35]">
+                Tu propuesta · tocá el rubro para cargar el resultado{' '}
+                <span className="text-[#8A93A6]">· los números, para ver sus marcas</span>
             </p>
         )}
         {/* Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
@@ -518,6 +664,8 @@ export default function OfrecimientoTable({
                         conBorde={i < bloqueArriba.length - 1}
                         conChip={conChip}
                         conColumnaQuitar={conColumnaQuitar}
+                        abierta={abiertaCodigo === fila.codigo}
+                        onToggleMarcas={toggleMarcas}
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}
                         onEliminar={onEliminar}
@@ -559,6 +707,8 @@ export default function OfrecimientoTable({
                         conBorde={i < bloqueAbajoFiltrado.length - 1}
                         conChip={conChip}
                         conColumnaQuitar={conColumnaQuitar}
+                        abierta={abiertaCodigo === fila.codigo}
+                        onToggleMarcas={toggleMarcas}
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}
                         onEliminar={onEliminar}
