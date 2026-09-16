@@ -1,4 +1,4 @@
-import type { IAlcance, IOfrecimiento, IRubroEstado, IRubroPropuesta, TipoOfrecimiento } from '@/types/planificacion'
+import type { IAlcance, IMarcaEstado, IOfrecimiento, IRubroEstado, IRubroPropuesta, TipoOfrecimiento } from '@/types/planificacion'
 import { ordenar80_20 } from '@/lib/ordenRubros'
 
 /** Presente ⇒ segunda línea con el botón de resolución. Sólo en la visita. */
@@ -29,6 +29,9 @@ export interface IOfrecimientoFila {
     tipo: TipoOfrecimiento
     alcance: IAlcance[]
     detalle?: unknown
+    /** Marcas que el cliente compra en este rubro (contexto vivo, no se congela).
+     *  [] para tipos que no son rubro. */
+    marcas: IMarcaEstado[]
 }
 
 export interface IOfrecimientoFilaTotales {
@@ -81,6 +84,7 @@ export function construirFilasPropuesta(
             destacada: true,
             tipo: 'rubro',
             alcance: [],
+            marcas: s?.marcas ?? [],
         }
     })
 
@@ -101,6 +105,7 @@ export function construirFilasPropuesta(
         destacada: false,
         tipo: 'rubro',
         alcance: [],
+        marcas: s.marcas,
     }))
 
     return [...bloqueArriba, ...bloqueAbajo]
@@ -138,6 +143,7 @@ export function construirFilasVisita(
             tipo: r.tipo,
             alcance: r.alcance,
             detalle: r.detalle,
+            marcas: r.tipo === 'rubro' ? (s?.marcas ?? []) : [],
             resolucion:
                 editable && estado
                     ? {
@@ -167,6 +173,7 @@ export function construirFilasVisita(
         agregable: editable || undefined,
         tipo: 'rubro',
         alcance: [],
+        marcas: s.marcas,
     }))
 
     return [...bloqueArriba, ...bloqueAbajo]

@@ -20,6 +20,7 @@ function estado(over: Partial<IRubroEstado> = {}): IRubroEstado {
         actual: 600_000,
         mesAnterior: 800_000,
         promedio6m: 1_000_000,
+        marcas: [],
         ...over,
     }
 }
@@ -78,6 +79,7 @@ describe('construirFilasPropuesta', () => {
                 destacada: true,
                 tipo: 'rubro',
                 alcance: [],
+                marcas: [],
             },
         ])
     })
@@ -104,7 +106,7 @@ describe('construirFilasPropuesta', () => {
 
     it('los totales suman sólo las filas visibles (colapsada vs. expandida)', () => {
         const propuestaRubros = [propuesta({ rubroCode: 'R1' })]
-        const status = [estado({ rubroCode: 'R1' }), estado({ rubroCode: 'R2', nombre: 'Filtros', actual: 100_000, mesAnterior: 200_000, promedio6m: 300_000 })]
+        const status = [estado({ rubroCode: 'R1' }), estado({ rubroCode: 'R2', nombre: 'Filtros', actual: 100_000, mesAnterior: 200_000, promedio6m: 300_000, marcas: [] })]
 
         const colapsada = construirFilasPropuesta(propuestaRubros, status, false)
         expect(totalesDe(colapsada)).toEqual({ actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 })
@@ -157,8 +159,8 @@ describe('construirFilasVisita', () => {
         const filas = construirFilasVisita(
             [ofrecimiento({ id: 7, codigo: 'AMORT' })],
             [
-                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
-                { rubroCode: 'BAT', nombre: 'Baterías', actual: 0, mesAnterior: 200_000, promedio6m: 100_000 },
+                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000, marcas: [] },
+                { rubroCode: 'BAT', nombre: 'Baterías', actual: 0, mesAnterior: 200_000, promedio6m: 100_000, marcas: [] },
             ],
             { 7: { motivosCargados: 0, completo: false } },
             true,
@@ -173,10 +175,10 @@ describe('construirFilasVisita', () => {
         const filas = construirFilasVisita(
             [ofrecimiento({ id: 7, codigo: 'AMORT' })],
             [
-                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
-                { rubroCode: '331', nombre: 'Bieletas', actual: 0, mesAnterior: 0, promedio6m: 0 },
-                { rubroCode: '335', nombre: 'Parrillas', actual: 0, mesAnterior: 0, promedio6m: 0 },
-                { rubroCode: '322', nombre: 'Amortiguadores', actual: 0, mesAnterior: 0, promedio6m: 0 },
+                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000, marcas: [] },
+                { rubroCode: '331', nombre: 'Bieletas', actual: 0, mesAnterior: 0, promedio6m: 0, marcas: [] },
+                { rubroCode: '335', nombre: 'Parrillas', actual: 0, mesAnterior: 0, promedio6m: 0, marcas: [] },
+                { rubroCode: '322', nombre: 'Amortiguadores', actual: 0, mesAnterior: 0, promedio6m: 0, marcas: [] },
             ],
             { 7: { motivosCargados: 0, completo: false } },
             true,
@@ -189,8 +191,8 @@ describe('construirFilasVisita', () => {
         const filas = construirFilasVisita(
             [ofrecimiento({ id: 7, codigo: 'AMORT' })],
             [
-                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000 },
-                { rubroCode: 'BAT', nombre: 'Baterías', actual: 0, mesAnterior: 200_000, promedio6m: 100_000 },
+                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000, marcas: [] },
+                { rubroCode: 'BAT', nombre: 'Baterías', actual: 0, mesAnterior: 200_000, promedio6m: 100_000, marcas: [] },
             ],
             { 7: { motivosCargados: 1, completo: true } },
             true,
@@ -269,6 +271,7 @@ describe('separarSegmentos', () => {
             destacada: true,
             tipo: 'rubro' as const,
             alcance: [],
+            marcas: [],
             ...over,
         }
     }
@@ -317,5 +320,39 @@ describe('separarSegmentos', () => {
         expect(acciones).toEqual([cupo, descuento])
         expect(marcas).toEqual([ag, skf])
         expect(resto).toEqual([rubro1, rubro2])
+    })
+})
+
+const marcaFremax = { code: 'B1', nombre: 'FREMAX', actual: 0, mesAnterior: 54, promedio6m: 61, dejo: false }
+
+describe('marcas en la fila', () => {
+    it('construirFilasPropuesta pasa las marcas del rubroStatus a la fila destacada y a las del catálogo', () => {
+        const filas = construirFilasPropuesta(
+            [propuesta({ rubroCode: 'R1' })],
+            [estado({ rubroCode: 'R1', marcas: [marcaFremax] }), estado({ rubroCode: 'R2', nombre: 'Filtros', marcas: [] })],
+            true,
+        )
+        expect(filas[0].marcas).toEqual([marcaFremax])
+        expect(filas[1].marcas).toEqual([])
+    })
+
+    it('un rubro de la propuesta sin rubroStatus lleva marcas: []', () => {
+        const filas = construirFilasPropuesta([propuesta({ rubroCode: 'R1' })], [], false)
+        expect(filas[0].marcas).toEqual([])
+    })
+
+    it('construirFilasVisita pasa las marcas al ofrecimiento tipo rubro y [] a los demás tipos', () => {
+        const filas = construirFilasVisita(
+            [
+                { id: 1, resolucionId: 1, tipo: 'rubro', codigo: 'R1', descripcion: 'A', gapUnits: null, esPropuesto: true, resuelto: false, motivos: [], alcance: [] },
+                { id: 2, resolucionId: 1, tipo: 'accion', codigo: 'CUPO', descripcion: 'Plan cupo', gapUnits: null, esPropuesto: false, resuelto: false, motivos: [], alcance: [] },
+            ],
+            [estado({ rubroCode: 'R1', marcas: [marcaFremax] })],
+            {},
+            false,
+            true,
+        )
+        expect(filas[0].marcas).toEqual([marcaFremax])
+        expect(filas[1].marcas).toEqual([])
     })
 })

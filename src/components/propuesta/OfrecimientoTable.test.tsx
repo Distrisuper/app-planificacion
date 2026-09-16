@@ -13,6 +13,7 @@ function fila(over: Partial<IOfrecimientoFila> = {}): IOfrecimientoFila {
         destacada: true,
         tipo: 'rubro',
         alcance: [],
+        marcas: [],
         ...over,
     }
 }
