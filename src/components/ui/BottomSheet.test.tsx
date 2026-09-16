@@ -2,6 +2,15 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import BottomSheet from './BottomSheet'
+import { useViewportTeclado } from '@/hooks/useViewportTeclado'
+
+vi.mock('@/hooks/useViewportTeclado', () => ({
+    useViewportTeclado: vi.fn(() => ({ tapado: 0, desplazado: 0 })),
+}))
+
+beforeEach(() => {
+    vi.mocked(useViewportTeclado).mockReturnValue({ tapado: 0, desplazado: 0 })
+})
 
 it('renders children when open and fires onClose', async () => {
     const onClose = vi.fn()
@@ -16,37 +25,64 @@ it('renders children when open and fires onClose', async () => {
 })
 
 /** Clases del panel (el hijo del overlay, que es quien lleva las de altura), como
- *  lista: `max-h-[96dvh]` CONTIENE a `h-[96dvh]` como substring, así que un
+ *  lista: `max-h-[96%]` CONTIENE a `h-[96%]` como substring, así que un
  *  `toContain` sobre el string entero da falsos positivos al negar. */
 function clasesPanel() {
     return screen.getByText('contenido').closest('.animate-sheet-up')!.className.split(' ')
 }
 
-it('auto: el sheet mide lo que mide su contenido, hasta 85vh', () => {
+function overlay() {
+    return screen.getByText('contenido').closest('.animate-fade-in') as HTMLElement
+}
+
+/* Las tres alturas van en % del overlay —no en dvh/vh— porque el overlay se achica
+   con el teclado (padding) y el viewport de iOS no. Ver el comentario en BottomSheet. */
+
+it('auto: el sheet mide lo que mide su contenido, hasta el 85% de la franja visible', () => {
     render(<BottomSheet open onClose={() => {}} title="X"><div>contenido</div></BottomSheet>)
-    expect(clasesPanel()).toContain('max-h-[85vh]')
-    expect(clasesPanel()).not.toContain('h-[96dvh]')
+    expect(clasesPanel()).toContain('max-h-[85%]')
+    expect(clasesPanel()).not.toContain('h-[96%]')
 })
 
-it('hasta-completa: crece con el contenido y recién se corta en 90dvh (sin alto fijo)', () => {
+it('hasta-completa: crece con el contenido y recién se corta en 90% (sin alto fijo)', () => {
     render(
         <BottomSheet open onClose={() => {}} title="X" altura="hasta-completa">
             <div>contenido</div>
         </BottomSheet>,
     )
-    expect(clasesPanel()).toContain('max-h-[90dvh]')
+    expect(clasesPanel()).toContain('max-h-[90%]')
     // Sin `h` fija: es lo que evita el hueco blanco cuando el contenido es corto.
-    expect(clasesPanel()).not.toContain('h-[96dvh]')
+    expect(clasesPanel()).not.toContain('h-[96%]')
 })
 
-it('completa: alto fijo de 96dvh, con tope en vh por si el navegador no entiende dvh', () => {
+it('completa: alto fijo del 96% de la franja visible', () => {
     render(
         <BottomSheet open onClose={() => {}} title="X" altura="completa">
             <div>contenido</div>
         </BottomSheet>,
     )
-    expect(clasesPanel()).toContain('h-[96dvh]')
-    expect(clasesPanel()).toContain('max-h-[96vh]')
+    expect(clasesPanel()).toContain('h-[96%]')
+})
+
+// Ninguna de las tres puede volver a expresarse en viewport units: son lo que hacía
+// que el sheet se desbordara por arriba con el teclado de iOS abierto (el layout
+// viewport no se achica, así que 96dvh seguía siendo 96% de la pantalla ENTERA).
+it.each(['auto', 'hasta-completa', 'completa'] as const)('%s: ninguna altura en dvh/vh', altura => {
+    render(
+        <BottomSheet open onClose={() => {}} title="X" altura={altura}>
+            <div>contenido</div>
+        </BottomSheet>,
+    )
+    expect(clasesPanel().filter(c => /^(max-)?h-\[.*(dvh|vh)\]$/.test(c))).toEqual([])
+})
+
+// El overlay es `fixed`, o sea anclado al LAYOUT viewport: los dos padding son lo que
+// lo recorta a la franja que el usuario realmente ve.
+it('el overlay se recorta a la franja visible: padding abajo por el teclado y arriba por el paneo', () => {
+    vi.mocked(useViewportTeclado).mockReturnValue({ tapado: 300, desplazado: 20 })
+    render(<BottomSheet open onClose={() => {}} title="X"><div>contenido</div></BottomSheet>)
+    expect(overlay().style.paddingBottom).toBe('300px')
+    expect(overlay().style.paddingTop).toBe('20px')
 })
 
 it('renders nothing when closed', () => {
