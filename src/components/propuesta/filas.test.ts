@@ -51,9 +51,14 @@ describe('construirFilasPropuesta', () => {
             [estado({ rubroCode: 'R1' }), estado({ rubroCode: 'R2', nombre: 'Filtros', actual: 100 })],
             true,
         )
-        expect(filas.map(f => f.codigo)).toEqual(['R1', 'R2'])
+        const codigos = filas.map(f => f.codigo)
+        // Abajo va el 80/20 completo (ver `otrosRubros`), así que se chequea el contrato:
+        // R1 arriba una vez, R2 abajo una vez.
+        expect(codigos[0]).toBe('R1')
+        expect(codigos.filter(c => c === 'R1')).toHaveLength(1)
+        expect(codigos.filter(c => c === 'R2')).toHaveLength(1)
         expect(filas[0].destacada).toBe(true)
-        expect(filas[1].destacada).toBe(false)
+        expect(filas.find(f => f.codigo === 'R2')!.destacada).toBe(false)
     })
 
     it('un rubro propuesto ausente de rubroStatus usa su propio fallback (current/prev/baseline)', () => {
@@ -101,7 +106,9 @@ describe('construirFilasPropuesta', () => {
             ],
             true,
         )
-        expect(filas.map(f => f.codigo)).toEqual(['R1', '322', '335', '331'])
+        const codigos = filas.map(f => f.codigo)
+        expect(codigos[0]).toBe('R1')
+        expect(codigos.filter(c => ['322', '335', '331'].includes(c))).toEqual(['322', '335', '331'])
     })
 
     it('los totales suman sólo las filas visibles (colapsada vs. expandida)', () => {
@@ -166,8 +173,10 @@ describe('construirFilasVisita', () => {
             true,
             true,
         )
-        expect(filas.map(f => f.codigo)).toEqual(['AMORT', 'BAT'])
-        expect(filas[1]).toMatchObject({ destacada: false, agregable: true })
+        const codigos = filas.map(f => f.codigo)
+        expect(codigos[0]).toBe('AMORT')
+        expect(codigos.filter(c => c === 'BAT')).toHaveLength(1)
+        expect(filas.find(f => f.codigo === 'BAT')).toMatchObject({ destacada: false, agregable: true })
         expect(filas[0].agregable).toBeUndefined()
     })
 
@@ -184,7 +193,9 @@ describe('construirFilasVisita', () => {
             true,
             true,
         )
-        expect(filas.map(f => f.codigo)).toEqual(['AMORT', '322', '335', '331'])
+        const codigos = filas.map(f => f.codigo)
+        expect(codigos[0]).toBe('AMORT')
+        expect(codigos.filter(c => ['322', '335', '331'].includes(c))).toEqual(['322', '335', '331'])
     })
 
     it('con la visita cerrada, ninguna fila trae resolucion ni agregable', () => {
@@ -259,24 +270,22 @@ describe('construirFilasVisita', () => {
         expect(filas[0].detalle).toEqual({ tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] })
     })
 
-    // Cliente sin movimientos: client-context devuelve `rubros: []` (y está bien —
-    // nunca compró). Sin el catálogo, el bloque de abajo quedaba vacío y el vendedor
-    // no tenía NADA para agregar. Ver spec 2026-09-16-rubros-agregables-desde-el-catalogo.
-    it('sin historial, el catálogo puebla el bloque de abajo con filas agregables en –', () => {
+    // Cliente sin movimientos: client-context devuelve `rubros: []` (y está bien — nunca
+    // compró). Sin mezclar la lista 80/20, el bloque de abajo quedaba vacío y el vendedor
+    // no tenía NADA para ofrecer.
+    it('sin historial, el bloque de abajo es la lista 80/20 con los números en –', () => {
         const filas = construirFilasVisita(
-            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
+            [ofrecimiento({ id: 7, codigo: '322' })],
             [],
             { 7: { motivosCargados: 0, completo: false } },
             true,
             true,
-            [
-                { code: 'BAT', description: 'Baterías' },
-                { code: 'FILT', description: 'Filtros' },
-            ],
         )
-        expect(filas.map(f => f.codigo)).toEqual(['AMORT', 'BAT', 'FILT'])
+        // El 80/20 arranca en TOTALES · 322 (AMORTIGUADORES) · 363 (KIT DISTRIBUCION):
+        // TOTALES no es un rubro y 322 ya está en la visita.
+        expect(filas.map(f => f.codigo).slice(0, 2)).toEqual(['322', '363'])
         expect(filas[1]).toMatchObject({
-            nombre: 'Baterías',
+            nombre: 'KIT DISTRIBUCION',
             actual: null,
             mesAnterior: null,
             promedio6m: null,
@@ -287,53 +296,52 @@ describe('construirFilasVisita', () => {
         })
     })
 
-    it('el catálogo va después del historial y no duplica ni la visita ni el historial', () => {
-        const filas = construirFilasVisita(
-            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
-            [
-                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000, marcas: [] },
-                { rubroCode: 'BAT', nombre: 'Baterías', actual: 300_000, mesAnterior: 0, promedio6m: 100_000, marcas: [] },
-            ],
+    it('no lista TOTALES ni OTROS ni SIN SUPERRUBRO: no son rubros ofrecibles', () => {
+        const codigos = construirFilasVisita(
+            [ofrecimiento({ id: 7, codigo: '322' })],
+            [],
             { 7: { motivosCargados: 0, completo: false } },
             true,
             true,
-            [
-                { code: 'AMORT', description: 'Amortiguadores' },
-                { code: 'BAT', description: 'Baterías' },
-                { code: 'FILT', description: 'Filtros' },
-            ],
-        )
-        expect(filas.map(f => f.codigo)).toEqual(['AMORT', 'BAT', 'FILT'])
-        // BAT conserva sus números: el que manda es el historial, el catálogo solo suma
-        // los que faltan.
-        expect(filas[1]).toMatchObject({ actual: 300_000, agregable: true })
-        expect(filas[2]).toMatchObject({ actual: null, agregable: true })
+        ).map(f => f.codigo)
+        expect(codigos).not.toContain('TOTALES')
+        expect(codigos).not.toContain('OTROS')
+        expect(codigos).not.toContain('-1')
     })
 
-    it('colapsada no trae el catálogo', () => {
+    it('el historial manda los números y el nombre; el 80/20 sólo suma los que faltan', () => {
         const filas = construirFilasVisita(
-            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
+            [ofrecimiento({ id: 7, codigo: '322' })],
+            [{ rubroCode: '363', nombre: 'Kit distribución', actual: 300_000, mesAnterior: 0, promedio6m: 100_000, marcas: [] }],
+            { 7: { motivosCargados: 0, completo: false } },
+            true,
+            true,
+        )
+        const kit = filas.filter(f => f.codigo === '363')
+        expect(kit).toHaveLength(1)
+        expect(kit[0]).toMatchObject({ nombre: 'Kit distribución', actual: 300_000, agregable: true })
+    })
+
+    it('un rubro que el cliente compra y no está en el 80/20 no se pierde: va al final', () => {
+        const filas = construirFilasVisita(
+            [ofrecimiento({ id: 7, codigo: '322' })],
+            [{ rubroCode: 'ZZZ', nombre: 'Rubro nuevo', actual: 100, mesAnterior: 0, promedio6m: 0, marcas: [] }],
+            { 7: { motivosCargados: 0, completo: false } },
+            true,
+            true,
+        )
+        expect(filas[filas.length - 1].codigo).toBe('ZZZ')
+    })
+
+    it('colapsada no trae los otros rubros', () => {
+        const filas = construirFilasVisita(
+            [ofrecimiento({ id: 7, codigo: '322' })],
             [],
             { 7: { motivosCargados: 0, completo: false } },
             false,
             true,
-            [{ code: 'BAT', description: 'Baterías' }],
         )
-        expect(filas.map(f => f.codigo)).toEqual(['AMORT'])
-    })
-
-    // La visita cerrada es de consulta: no hay nada que agregar, así que listar el
-    // catálogo entero sería decenas de filas muertas.
-    it('con la visita cerrada, el catálogo no aparece', () => {
-        const filas = construirFilasVisita(
-            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
-            [],
-            { 7: { motivosCargados: 1, completo: true } },
-            true,
-            false,
-            [{ code: 'BAT', description: 'Baterías' }],
-        )
-        expect(filas.map(f => f.codigo)).toEqual(['AMORT'])
+        expect(filas.map(f => f.codigo)).toEqual(['322'])
     })
 })
 

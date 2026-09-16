@@ -71,7 +71,6 @@ beforeEach(() => {
     ;(api.agregarOfrecimiento as any).mockResolvedValue({ ofrecimientoId: 99 })
     ;(api.eliminarOfrecimiento as any).mockResolvedValue(undefined)
     ;(api.getBrandCatalog as any).mockResolvedValue([{ code: 'FR', description: 'Fric-Rot' }])
-    ;(api.getRubroCatalog as any).mockResolvedValue([{ code: 'BUJ', description: 'Bujes' }])
     ;(api.getAcciones as any).mockResolvedValue([{ codigo: 'CUPO', descripcion: 'Plan cupo' }])
 })
 
@@ -417,9 +416,8 @@ it('visita sin rubros pero con otros rubros del cliente: la tabla se ve de una',
 })
 
 // Cliente sin movimientos: client-context devuelve `rubros: []` y antes el bloque de
-// abajo quedaba vacío — el vendedor no tenía NADA para agregar (visita de #11251,
-// spec 2026-09-16-rubros-agregables-desde-el-catalogo).
-it('un cliente sin historial igual puede agregar un rubro: el catálogo puebla el bloque de abajo', async () => {
+// abajo quedaba vacío — el vendedor no tenía NADA para ofrecer (visita de #11251).
+it('un cliente sin historial igual puede agregar un rubro de la lista 80/20', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([])
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
@@ -428,27 +426,18 @@ it('un cliente sin historial igual puede agregar un rubro: el catálogo puebla e
     await waitFor(() =>
         expect(api.agregarOfrecimiento).toHaveBeenCalledWith(42, {
             tipo: 'rubro',
-            codigo: 'BUJ',
-            descripcion: 'Bujes',
+            codigo: '329',
+            descripcion: 'BUJES',
         }),
     )
 })
 
-it('el catálogo no duplica un rubro que ya tiene historial', async () => {
+it('un rubro con historial no se duplica con su fila del 80/20', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'BUJ', nombre: 'Bujes', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
+        { rubroCode: '329', nombre: 'Bujes', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     renderSheet({ codigoParticularCliente: '10034' })
     expect(await screen.findAllByText('Bujes')).toHaveLength(1)
-})
-
-// La visita cerrada es de consulta: no hay ＋, así que listar el catálogo entero serían
-// decenas de filas muertas — y el pedido es puro gasto de datos móviles.
-it('con la visita cerrada no se pide el catálogo de rubros', async () => {
-    renderSheet({ codigoParticularCliente: '10034', visitaCerrada: true })
-    await screen.findByText('Amortiguadores')
-    expect(api.getRubroCatalog).not.toHaveBeenCalled()
-    expect(screen.queryByText('Bujes')).not.toBeInTheDocument()
 })
 
 it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de arriba con su botón de Resolución', async () => {

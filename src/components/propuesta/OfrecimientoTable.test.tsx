@@ -54,7 +54,7 @@ it('P.6M nunca se pinta de rojo (es la referencia)', () => {
 
 it('sin filas fuera de la propuesta/visita, no muestra separador de sección', () => {
     render(<OfrecimientoTable filas={[fila({ destacada: true })]} />)
-    expect(screen.queryByText(/otros rubros del cliente/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/del cliente/i)).not.toBeInTheDocument()
 })
 
 it('con filas destacadas y no destacadas mezcladas, separa con una etiqueta', () => {
@@ -66,7 +66,7 @@ it('con filas destacadas y no destacadas mezcladas, separa con una etiqueta', ()
             ]}
         />,
     )
-    expect(screen.getByText(/otros rubros del cliente/i)).toBeInTheDocument()
+    expect(screen.getByText(/otros rubros/i)).toBeInTheDocument()
 })
 
 it('si el bloque de otros rubros es agregable, la etiqueta invita a tocar', () => {
@@ -81,10 +81,9 @@ it('si el bloque de otros rubros es agregable, la etiqueta invita a tocar', () =
     expect(screen.getByText(/tocá uno para agregarlo/i)).toBeInTheDocument()
 })
 
-// Con filas agregables, abajo también están los rubros del catálogo que el cliente nunca
-// compró (ver spec 2026-09-16-rubros-agregables-desde-el-catalogo): la etiqueta no puede
-// seguir diciendo que la lista es "del cliente".
-it('la etiqueta del bloque agregable no dice "del cliente"', () => {
+// Abajo va el 80/20 completo mezclado con el historial, así que hay rubros que el cliente
+// nunca compró: la etiqueta no puede decir que la lista es "del cliente".
+it('la etiqueta del bloque de otros rubros no dice "del cliente"', () => {
     render(
         <OfrecimientoTable
             filas={[
@@ -93,7 +92,7 @@ it('la etiqueta del bloque agregable no dice "del cliente"', () => {
             ]}
         />,
     )
-    expect(screen.queryByText(/otros rubros del cliente/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/del cliente/i)).not.toBeInTheDocument()
     expect(screen.getByText(/^otros rubros ·/i)).toBeInTheDocument()
 })
 

@@ -185,7 +185,10 @@ it('con getRubroStatus caído se ve la tabla con los números de la propuesta y 
     await waitFor(() => expect(onIniciarVisita).toHaveBeenCalled())
 })
 
-it('propuesta vacía sin otros rubros: solo el mensaje, sin botón Ver más', async () => {
+// Un cliente sin propuesta y sin historial YA NO deja la pantalla vacía: abajo va la
+// lista 80/20 completa en '–' (ver `otrosRubros` en filas.ts). Ese es el punto — es el
+// cliente donde más importa tener algo para ofrecer.
+it('propuesta vacía y sin historial: igual lista los rubros del 80/20', async () => {
     ;(api.getPropuesta as any).mockResolvedValue({
         particularCode: '10034',
         clientName: 'Don José',
@@ -209,7 +212,9 @@ it('propuesta vacía sin otros rubros: solo el mensaje, sin botón Ver más', as
             />,
         ),
     )
-    expect(await screen.findByText('Sin oportunidades destacadas.')).toBeInTheDocument()
+    expect(await screen.findByText('AMORTIGUADORES')).toBeInTheDocument()
+    expect(screen.getByText('KIT DISTRIBUCION')).toBeInTheDocument()
+    expect(screen.queryByText('Sin oportunidades destacadas.')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /ver más/i })).not.toBeInTheDocument()
 })
 

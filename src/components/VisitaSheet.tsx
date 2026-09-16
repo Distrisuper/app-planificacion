@@ -7,7 +7,7 @@ import ResolucionWizardAcciones from './propuesta/ResolucionWizardAcciones'
 import OfrecimientoTable from './propuesta/OfrecimientoTable'
 import AgregarOfrecimientoSheet from './propuesta/AgregarOfrecimientoSheet'
 import AccionesExternas from './AccionesExternas'
-import { construirFilasVisita } from './propuesta/filas'
+import { construirFilasVisita, rubrosElegibles } from './propuesta/filas'
 import { useMotivos } from '@/hooks/useMotivos'
 import {
     useOfrecimientos,
@@ -15,7 +15,7 @@ import {
     useAgregarOfrecimiento,
     useEliminarOfrecimiento,
 } from '@/hooks/useOfrecimientos'
-import { useBrandCatalog, useRubroCatalog } from '@/hooks/useCatalogos'
+import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
 import { formatearDuracion } from '@/lib/visitaTimer'
@@ -184,19 +184,10 @@ export default function VisitaSheet({
     // los números en las dos pantallas y en los dos estados (colapsada/expandida).
     const { data: rubroStatus = [] } = useRubroStatus(open ? (codigoParticularCliente ?? null) : null)
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(open)
-    // Los rubros AGREGABLES no salen del historial del cliente: uno sin movimientos no
-    // tiene ninguno y se quedaba sin una sola fila que ofrecer. Sólo con la visita
-    // abierta — cerrada no hay nada que agregar, y el vendedor está con datos móviles.
-    const { data: catalogoRubros = [] } = useRubroCatalog(open && !visitaCerrada)
-    // Unión y no reemplazo: el catálogo es la lista completa de rubros válidos, pero un
-    // rubro con venta que su filtro excluya no tiene que desaparecer del buscador. El
-    // historial pisa al catálogo (mismo código ⇒ misma descripción, así que da igual cuál
-    // gana; lo que importa es no listarlo dos veces).
-    const rubrosCatalogo = useMemo(() => {
-        const porCode = new Map(catalogoRubros.map(c => [c.code, c]))
-        for (const s of rubroStatus) porCode.set(s.rubroCode, { code: s.rubroCode, description: s.nombre })
-        return [...porCode.values()]
-    }, [catalogoRubros, rubroStatus])
+    // El mismo universo que las filas de la tabla (el 80/20 mezclado con el historial),
+    // y no `rubroStatus`: un cliente sin movimientos no tiene historial, y derivar de ahí
+    // los rubros elegibles dejaba el buscador vacío justo donde más importa ofrecer algo.
+    const rubrosCatalogo = useMemo(() => rubrosElegibles(rubroStatus), [rubroStatus])
 
     useEffect(() => {
         if (!open) {
@@ -462,7 +453,6 @@ export default function VisitaSheet({
         estadosResolucion,
         true,
         !visitaCerrada,
-        catalogoRubros,
     )
     // Por código de rubro, para precargar los chips de "¿Qué marca ofreciste?" en el
     // wizard con el mismo desglose que ya muestra la tabla.

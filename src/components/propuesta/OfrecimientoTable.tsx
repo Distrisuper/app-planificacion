@@ -757,16 +757,13 @@ export default function OfrecimientoTable({
                     // scrollea con ella hay que volver hasta arriba para usarlo — que es
                     // justo lo que uno quiere evitar cuando ya scrolleó mucho.
                     <div className="sticky top-8 z-10 border-y border-dsline bg-[#FAFBFD] px-2.5 py-2">
-                        {/* "del cliente" sólo cuando la lista ES del cliente. Con filas
-                            agregables (visita abierta) abajo también están los rubros del
-                            catálogo que nunca compró — son justamente los que hacen que un
-                            cliente sin movimientos tenga algo que ofrecer, y llamarlos "del
-                            cliente" sería falso. Ver spec
-                            2026-09-16-rubros-agregables-desde-el-catalogo. */}
+                        {/* "Otros rubros" y no "otros rubros del cliente": abajo está el
+                            80/20 completo mezclado con su historial, así que ahí también
+                            hay rubros que el cliente nunca compró (es lo que hace que un
+                            cliente sin movimientos tenga algo que ofrecer). */}
                         <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
-                            {bloqueExtraEsAgregable
-                                ? 'Otros rubros · tocá uno para agregarlo'
-                                : 'Otros rubros del cliente'}
+                            Otros rubros
+                            {bloqueExtraEsAgregable && ' · tocá uno para agregarlo'}
                         </p>
                         <div className="relative">
                             <Search
