@@ -286,11 +286,9 @@ function ContenidoFila({ fila, modo }: { fila: IOfrecimientoFila; modo?: ModoVal
     )
 }
 
-const MAX_SUBFILAS = 3
-
-/** Las marcas del cliente en este rubro, desplegadas debajo de la fila. Máximo 3, el
- *  resto colapsado en "+N marcas más" — el bloque de arriba son ~5 filas en pantalla y
- *  quince sub-filas lo harían ilegible. */
+/** Las marcas del cliente en este rubro, desplegadas debajo de la fila. Todas, sin
+ *  recorte: son las que explican el total de ACTUAL/M.ANT/P.6M del rubro — mostrar
+ *  solo 3 y colapsar el resto dejaba el total sin justificar a simple vista. */
 function SubFilasMarcas({
     marcas,
     conChip,
@@ -302,11 +300,9 @@ function SubFilasMarcas({
     conColumnaQuitar: boolean
     modo?: ModoValor
 }) {
-    const visibles = marcas.slice(0, MAX_SUBFILAS)
-    const ocultas = marcas.length - visibles.length
     return (
         <div className="bg-[#F7F8FB]">
-            {visibles.map((m, i) => {
+            {marcas.map((m, i) => {
                 const actual = modo === 'unidades' ? (m.actualUnidades ?? null) : m.actual
                 const mesAnterior = modo === 'unidades' ? (m.mesAnteriorUnidades ?? null) : m.mesAnterior
                 const promedio6m = modo === 'unidades' ? (m.promedio6mUnidades ?? null) : m.promedio6m
@@ -324,11 +320,6 @@ function SubFilasMarcas({
                         )}
                         <div className="flex min-w-0 flex-1 items-center gap-1.5">
                             <span className="min-w-0 truncate">{m.nombre}</span>
-                            {m.dejo && (
-                                <span className="shrink-0 rounded bg-[#FDECEA] px-1 text-[8.5px] font-extrabold uppercase leading-[14px] text-dsred">
-                                    dejó
-                                </span>
-                            )}
                         </div>
                         <Celda valor={actual} promedio6m={promedio6m} compacta modo={modo} />
                         <Celda valor={mesAnterior} promedio6m={promedio6m} ocultaEnAngosto compacta modo={modo} />
@@ -337,11 +328,6 @@ function SubFilasMarcas({
                     </div>
                 )
             })}
-            {ocultas > 0 && (
-                <div className={`py-1.5 ${conChip ? 'pl-[42px]' : 'pl-2.5'} text-[11px] font-semibold text-[#8A93A6]`}>
-                    +{ocultas} marcas más
-                </div>
-            )}
         </div>
     )
 }

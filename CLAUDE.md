@@ -351,7 +351,8 @@ Hay **tres capas separadas**, y una operación toca una sola:
   ámbar → ✓ verde.
 - **La fila del rubro tiene DOS zonas, sin ícono.** Chip + nombre carga el resultado (es donde
   vive el estado); los tres números despliegan las marcas del cliente en ese rubro (sub-filas,
-  máximo 3 + `+N marcas más`, una sola abierta). Se probaron y descartaron: chevron al lado del
+  todas — sin recorte ni "+N marcas más" — porque son las que justifican el total de
+  ACTUAL/M.ANT/P.6M del rubro; una sola abierta). Se probaron y descartaron: chevron al lado del
   nombre (target chico pegado al grande), botón "Cargar resultado" dentro del despliegue (le
   cuesta un toque a la acción más repetida), columna "Marcas" con contador (una columna más en
   una fila que ya no tiene ancho), y siempre desplegado (15 filas donde entran 5). Las filas del

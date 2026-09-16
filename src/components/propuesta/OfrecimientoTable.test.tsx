@@ -618,7 +618,13 @@ describe('dos zonas en la fila de la visita', () => {
         expect(screen.getByText('FREMAX')).toBeInTheDocument()
         expect(screen.getByText('CORVEN')).toBeInTheDocument()
         expect(screen.getByText('61')).toBeInTheDocument()
-        expect(screen.getByText(/dejó/i)).toBeInTheDocument()
+    })
+
+    it('no etiqueta las marcas que dejaron de comprar (dejo no se muestra en la sub-fila)', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [corven] })]} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        expect(screen.getByText('CORVEN')).toBeInTheDocument()
+        expect(screen.queryByText(/dejó/i)).not.toBeInTheDocument()
     })
 
     it('tocar de nuevo cierra', () => {
@@ -649,13 +655,14 @@ describe('dos zonas en la fila de la visita', () => {
         expect(screen.queryByRole('button', { name: 'Marcas de Amortiguadores' })).not.toBeInTheDocument()
     })
 
-    it('muestra hasta 3 marcas y colapsa el resto en "+N marcas más"', () => {
+    it('muestra todas las marcas, sin recortar: son las que justifican el total del rubro', () => {
         render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: marcas5 })]} />)
         fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
         expect(screen.getByText('FREMAX')).toBeInTheDocument()
         expect(screen.getByText('M3')).toBeInTheDocument()
-        expect(screen.queryByText('M4')).not.toBeInTheDocument()
-        expect(screen.getByText('+2 marcas más')).toBeInTheDocument()
+        expect(screen.getByText('M4')).toBeInTheDocument()
+        expect(screen.getByText('M5')).toBeInTheDocument()
+        expect(screen.queryByText(/marcas más/i)).not.toBeInTheDocument()
     })
 
     it('las filas del catálogo (agregable) no se parten: toda la fila agrega', () => {
