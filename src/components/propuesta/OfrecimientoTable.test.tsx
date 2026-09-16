@@ -10,6 +10,13 @@ function fila(over: Partial<IOfrecimientoFila> = {}): IOfrecimientoFila {
         actual: 600_000,
         mesAnterior: 800_000,
         promedio6m: 1_000_000,
+        // El default de la tabla es "unidades" (ver `modo`): estos valores reproducen el
+        // mismo texto que `fmtAmount` mostraba para los pesos de arriba (que divide por
+        // mil), así los tests que no le prestan atención al interruptor siguen viendo
+        // "600"/"800"/"1.000" sin tener que saber que existe.
+        actualUnidades: 600,
+        mesAnteriorUnidades: 800,
+        promedio6mUnidades: 1_000,
         destacada: true,
         tipo: 'rubro',
         alcance: [],
@@ -34,7 +41,7 @@ it('pinta de rojo ACTUAL y M.ANT cuando caen bajo P.6M', () => {
 })
 
 it('no pinta de rojo cuando el valor es –', () => {
-    render(<OfrecimientoTable filas={[fila({ actual: null, promedio6m: 1_000_000 })]} />)
+    render(<OfrecimientoTable filas={[fila({ actual: null, actualUnidades: undefined, promedio6m: 1_000_000 })]} />)
     const celdas = screen.getAllByText('–')
     expect(celdas.some(c => c.closest('span')?.classList.contains('text-dsred'))).toBe(false)
 })
@@ -594,8 +601,16 @@ it('la propuesta previa no reserva el slot del chip: ahi ese espacio es ancho de
     expect(document.querySelector('.lucide-plus')).toBeNull()
 })
 
-const fremax = { code: 'B1', nombre: 'FREMAX', actual: 0, mesAnterior: 54_000, promedio6m: 61_000, dejo: false }
-const corven = { code: 'B2', nombre: 'CORVEN', actual: 0, mesAnterior: 0, promedio6m: 22_000, dejo: true }
+// Unidades = pesos / 1000, mismo criterio que en `fila()`: reproduce el mismo texto
+// ("61", "22", etc.) sea cual sea el modo con el que arranque la tabla.
+const fremax = {
+    code: 'B1', nombre: 'FREMAX', actual: 0, mesAnterior: 54_000, promedio6m: 61_000,
+    actualUnidades: 0, mesAnteriorUnidades: 54, promedio6mUnidades: 61, dejo: false,
+}
+const corven = {
+    code: 'B2', nombre: 'CORVEN', actual: 0, mesAnterior: 0, promedio6m: 22_000,
+    actualUnidades: 0, mesAnteriorUnidades: 0, promedio6mUnidades: 22, dejo: true,
+}
 const marcas5 = [fremax, corven, { ...fremax, code: 'B3', nombre: 'M3' }, { ...fremax, code: 'B4', nombre: 'M4' }, { ...fremax, code: 'B5', nombre: 'M5' }]
 const resol = { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true }
 
@@ -701,23 +716,23 @@ describe('interruptor $/U', () => {
         promedio6mUnidades: 10,
     })
 
-    it('arranca en pesos, mostrando "$" sin apretar', () => {
+    it('arranca en unidades, mostrando "U" sin apretar', () => {
         render(<OfrecimientoTable filas={[conUnidades]} />)
         const boton = screen.getByRole('button', { name: /mostrar en pesos o en unidades/i })
-        expect(boton).toHaveTextContent('$')
-        expect(boton).toHaveAttribute('aria-pressed', 'false')
-        expect(screen.getByText('600')).toBeInTheDocument()
+        expect(boton).toHaveTextContent('U')
+        expect(boton).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.getByText('12')).toBeInTheDocument()
+        expect(screen.getByText('10')).toBeInTheDocument()
     })
 
-    it('tocarlo cambia las tres columnas a unidades y pasa a mostrar "U"', () => {
+    it('tocarlo cambia las tres columnas a pesos y pasa a mostrar "$"', () => {
         render(<OfrecimientoTable filas={[conUnidades]} />)
         const boton = screen.getByRole('button', { name: /mostrar en pesos o en unidades/i })
         fireEvent.click(boton)
-        expect(boton).toHaveTextContent('U')
-        expect(boton).toHaveAttribute('aria-pressed', 'true')
-        expect(screen.queryByText('600')).not.toBeInTheDocument()
-        expect(screen.getByText('12')).toBeInTheDocument()
-        expect(screen.getByText('10')).toBeInTheDocument()
+        expect(boton).toHaveTextContent('$')
+        expect(boton).toHaveAttribute('aria-pressed', 'false')
+        expect(screen.queryByText('12')).not.toBeInTheDocument()
+        expect(screen.getByText('600')).toBeInTheDocument()
     })
 
     it('el modo también alcanza a las sub-filas de marca', () => {
@@ -728,7 +743,6 @@ describe('interruptor $/U', () => {
         }
         render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [conMarcaUnidades] })]} />)
         fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
-        fireEvent.click(screen.getByRole('button', { name: /mostrar en pesos o en unidades/i }))
         expect(screen.getByText('7')).toBeInTheDocument()
     })
 })

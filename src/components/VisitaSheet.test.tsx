@@ -384,6 +384,17 @@ it('sin codigoParticularCliente no hay bloque de otros rubros del cliente', asyn
 })
 
 it('con codigoParticularCliente, los números de rubroStatus aparecen en la tabla sin navegar', async () => {
+    // La tabla arranca en modo "unidades" (ver `modo` en OfrecimientoTable): se
+    // completan también los campos en unidades para poder verificar que rubroStatus
+    // llegó, sin acoplar este test al interruptor $/U (que se prueba aparte).
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        {
+            rubroCode: 'AMORT', nombre: 'Amortiguadores',
+            actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000,
+            actualUnidades: 1_940, mesAnteriorUnidades: 2_600, promedio6mUnidades: 3_100,
+            marcas: [],
+        },
+    ])
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
     await waitFor(() => expect(api.getRubroStatus).toHaveBeenCalledWith('10034'))

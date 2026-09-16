@@ -601,7 +601,7 @@ export default function OfrecimientoTable({
     const [busqueda, setBusqueda] = useState('')
     // Una sola fila desplegada a la vez: abrir otra cierra la anterior.
     const [abiertaCodigo, setAbiertaCodigo] = useState<string | null>(null)
-    const [modo, setModo] = useState<ModoValor>('pesos')
+    const [modo, setModo] = useState<ModoValor>('unidades')
     function toggleMarcas(codigo: string) {
         setAbiertaCodigo(prev => (prev === codigo ? null : codigo))
     }
