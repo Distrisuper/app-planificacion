@@ -563,7 +563,14 @@ function SegmentoOfrecimientos({
 /** Interruptor $ / U de las tres columnas numéricas: un solo botón que alterna, en el
  *  slot de 26px del header de columnas — arriba de donde cae `ChipEstado` en cada fila,
  *  mismo eje. Un botón que cambia de letra (no dos pastillas lado a lado) porque ahí
- *  no entran dos etiquetas sin angostar la columna Rubro. */
+ *  no entran dos etiquetas sin angostar la columna Rubro.
+ *
+ *  Pastilla tenue (mismo lenguaje que "No visité" en el header de la visita: borde y
+ *  fondo al 20-ish% del color, texto sólido), no un círculo relleno. Un relleno sólido
+ *  navy en el header, arriba de una columna de anillos y checks también navy/verde,
+ *  competía con esos indicadores en vez de leerse como un control aparte — "llamaba
+ *  demasiado la atención". El cuadrado redondeado (contra los círculos de las filas)
+ *  ya alcanza para diferenciarlo por forma; no hace falta además ganarles en peso. */
 function ModoValorBoton({ modo, onChange }: { modo: ModoValor; onChange: (modo: ModoValor) => void }) {
     return (
         <button
@@ -571,7 +578,7 @@ function ModoValorBoton({ modo, onChange }: { modo: ModoValor; onChange: (modo: 
             aria-label="Mostrar en pesos o en unidades"
             aria-pressed={modo === 'unidades'}
             onClick={() => onChange(modo === 'pesos' ? 'unidades' : 'pesos')}
-            className="grid h-5 w-5 place-items-center rounded-full border-2 border-dsnavy bg-white text-[10px] font-extrabold normal-case text-dsnavy"
+            className="grid h-5 w-5 place-items-center rounded-md border border-dsnavy/25 bg-dsnavy/8 text-[10px] font-extrabold normal-case text-dsnavy active:bg-dsnavy/15"
         >
             {modo === 'pesos' ? '$' : 'U'}
         </button>
