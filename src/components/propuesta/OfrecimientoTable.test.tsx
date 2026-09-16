@@ -364,6 +364,30 @@ it('una fila de rubro sigue mostrando sus tres columnas numéricas', () => {
     expect(screen.getByText('1.000')).toBeInTheDocument()
 })
 
+it('un rubro sin datos en unidades (fallback de la propuesta, sin match en rubroStatus) no desaparece: cae a pesos', () => {
+    // Ver construirFilasPropuesta: un rubro propuesto ausente de rubroStatus usa su
+    // fallback en pesos (current/prev/baseline), que no tiene equivalente en unidades.
+    // Con el default de la tabla en "unidades", esa fila mostraba "–" en las tres
+    // columnas — exactamente lo que ese fallback existe para evitar.
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    actual: 500_000,
+                    mesAnterior: 700_000,
+                    promedio6m: 900_000,
+                    actualUnidades: undefined,
+                    mesAnteriorUnidades: undefined,
+                    promedio6mUnidades: undefined,
+                }),
+            ]}
+        />,
+    )
+    expect(screen.getByText('500')).toBeInTheDocument()
+    expect(screen.getByText('700')).toBeInTheDocument()
+    expect(screen.getByText('900')).toBeInTheDocument()
+})
+
 it('una fila de Cupo con detalle muestra el resumen de tramos', () => {
     render(
         <OfrecimientoTable

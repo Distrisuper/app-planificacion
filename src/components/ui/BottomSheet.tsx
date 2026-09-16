@@ -132,7 +132,12 @@ export default function BottomSheet({
                                 )}
                                 <h2 className="truncate text-[17px] font-extrabold leading-tight text-[#182645]">{title}</h2>
                             </div>
-                            <div className="flex shrink-0 items-center gap-1.5">
+                            {/* `relative z-30`: sin ser un elemento posicionado, Minimizar y
+                                Cerrar pintan ANTES que la capa de ayuda (`z-20`, sí
+                                posicionada) sin importar el orden en el DOM — quedaban
+                                tapados mientras el popover estaba abierto, y el primer toque
+                                solo cerraba la ayuda en vez de cerrar/minimizar el sheet. */}
+                            <div className="relative z-30 flex shrink-0 items-center gap-1.5">
                                 {/* `relative` acá (no en todo el header): el popover ancla
                                     justo debajo de ESTE botón, sin importar cuánto mida el
                                     resto del header (eyebrow/subtitle varían de sheet a

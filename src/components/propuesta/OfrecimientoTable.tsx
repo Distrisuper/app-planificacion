@@ -263,14 +263,23 @@ function CeldasFila({
     modo?: ModoValor
 }) {
     if (fila.tipo !== 'rubro') return null
-    const actual = modo === 'unidades' ? (fila.actualUnidades ?? null) : fila.actual
-    const mesAnterior = modo === 'unidades' ? (fila.mesAnteriorUnidades ?? null) : fila.mesAnterior
-    const promedio6m = modo === 'unidades' ? (fila.promedio6mUnidades ?? null) : fila.promedio6m
+    // Un rubro de la propuesta ausente de rubroStatus usa su propio fallback en pesos
+    // (current/prev/baseline, ver construirFilasPropuesta) — pero ESE fallback no tiene
+    // unidades, porque el endpoint de caídas no las expone. Sin esto, esa fila mostraba
+    // "–" en las tres columnas apenas la tabla arranca en modo unidades (default), que es
+    // justo lo que el fallback en pesos existe para evitar. Si la fila no tiene NINGÚN
+    // dato en unidades, esta fila puntual cae a pesos aunque el resto de la tabla esté en
+    // unidades — no al revés (mezclar pesos crudos bajo el rótulo "unidades" sería peor).
+    const sinUnidades = fila.actualUnidades == null && fila.mesAnteriorUnidades == null && fila.promedio6mUnidades == null
+    const modoEfectivo: ModoValor = modo === 'unidades' && sinUnidades ? 'pesos' : modo
+    const actual = modoEfectivo === 'unidades' ? (fila.actualUnidades ?? null) : fila.actual
+    const mesAnterior = modoEfectivo === 'unidades' ? (fila.mesAnteriorUnidades ?? null) : fila.mesAnterior
+    const promedio6m = modoEfectivo === 'unidades' ? (fila.promedio6mUnidades ?? null) : fila.promedio6m
     return (
         <>
-            <Celda valor={actual} promedio6m={promedio6m} abierta={abierta} modo={modo} />
-            <Celda valor={mesAnterior} promedio6m={promedio6m} ocultaEnAngosto abierta={abierta} modo={modo} />
-            <Celda valor={promedio6m} promedio6m={promedio6m} referencia abierta={abierta} modo={modo} />
+            <Celda valor={actual} promedio6m={promedio6m} abierta={abierta} modo={modoEfectivo} />
+            <Celda valor={mesAnterior} promedio6m={promedio6m} ocultaEnAngosto abierta={abierta} modo={modoEfectivo} />
+            <Celda valor={promedio6m} promedio6m={promedio6m} referencia abierta={abierta} modo={modoEfectivo} />
         </>
     )
 }

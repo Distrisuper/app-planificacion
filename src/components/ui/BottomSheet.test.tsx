@@ -149,4 +149,20 @@ describe('botón de ayuda ("?")', () => {
         render(<BottomSheet open onClose={() => {}} onHelp={() => {}} title="X"><div>contenido</div></BottomSheet>)
         expect(screen.queryByTestId('overlay-ayuda')).not.toBeInTheDocument()
     })
+
+    // La capa de "tocar afuera cierra la ayuda" es `absolute` (posicionada) y pinta por
+    // encima de cualquier caja estática del mismo nivel, sin importar el orden en el DOM
+    // — así que Minimizar/Cerrar necesitan estar TAMBIÉN posicionados (mismo `z-30` que el
+    // popover) para no quedar tapados debajo mientras la ayuda está abierta. RTL no hace
+    // hit-testing real, así que esto se verifica por clase en vez de simulando el click.
+    it('Minimizar/Cerrar viven en un contenedor posicionado por encima de la capa de ayuda (z-30 vs. z-20)', () => {
+        render(
+            <BottomSheet open onClose={() => {}} onMinimize={() => {}} onHelp={() => {}} title="X">
+                <div>contenido</div>
+            </BottomSheet>,
+        )
+        const fila = screen.getByLabelText('Cerrar').closest('div')!
+        expect(fila.className).toContain('relative')
+        expect(fila.className).toContain('z-30')
+    })
 })
