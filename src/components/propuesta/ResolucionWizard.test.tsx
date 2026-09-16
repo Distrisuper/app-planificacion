@@ -39,6 +39,7 @@ function setup(over: Record<string, unknown> = {}) {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onCambiarBorrador = vi.fn()
     const onVolver = vi.fn()
+    const onCambiarMarcasOfrecidas = vi.fn()
     render(
         <QueryClientProvider client={qc}>
             <ResolucionWizard
@@ -50,12 +51,15 @@ function setup(over: Record<string, unknown> = {}) {
                 onCambiarBorrador={onCambiarBorrador}
                 detalles={{}}
                 onCambiarAccion={vi.fn()}
+                marcasPorRubro={{}}
+                marcasOfrecidas={{}}
+                onCambiarMarcasOfrecidas={onCambiarMarcasOfrecidas}
                 onVolver={onVolver}
                 {...over}
             />
         </QueryClientProvider>,
     )
-    return { onCambiarBorrador, onVolver }
+    return { onCambiarBorrador, onVolver, onCambiarMarcasOfrecidas }
 }
 
 /** Igual que `setup`, pero deja mover el índice como lo hace el pie del wizard: la
@@ -73,6 +77,9 @@ function setupNavegable() {
                 onCambiarBorrador={vi.fn()}
                 detalles={{}}
                 onCambiarAccion={vi.fn()}
+                marcasPorRubro={{}}
+                marcasOfrecidas={{}}
+                onCambiarMarcasOfrecidas={vi.fn()}
                 onVolver={vi.fn()}
             />
         </QueryClientProvider>
@@ -148,20 +155,10 @@ it('Volver dispara onVolver', () => {
     expect(onVolver).toHaveBeenCalled()
 })
 
-it('no pide el catálogo de marcas si ningún motivo tildado lo necesita', () => {
+it('pide el catálogo de marcas siempre que el wizard está abierto', async () => {
+    // Los chips de "¿Qué marca ofreciste?" lo necesitan para "+ Otra", tenga o no
+    // tildado un motivo con detalle (antes solo pedía el catálogo por PRECIO).
     setup()
-    // Son vendedores en la calle: no se paga un catálogo de cientos de marcas hasta
-    // que alguien tilda un motivo que pide detalle.
-    expect(api.getBrandCatalog).not.toHaveBeenCalled()
-})
-
-it('pide el catálogo de marcas cuando hay tildado un motivo con detalle', async () => {
-    setup({
-        borradores: {
-            7: [{ motivoId: 13, valores: {} }],
-            8: [],
-        },
-    })
     await waitFor(() => expect(api.getBrandCatalog).toHaveBeenCalled())
 })
 
@@ -190,39 +187,31 @@ it('si falla el borrado, muestra el error y no vuelve a la lista', async () => {
     expect(onVolver).not.toHaveBeenCalled()
 })
 
-it('sin acción ni marca cargada, no ofrece ningún check de aplicar a restantes', () => {
-    // Con motivos tildados pero SIN acción/marca tampoco se ofrece: lo que se replica
-    // es acción o marca, nunca la resolución.
-    setup({ borradores: { 7: [{ motivoId: 10, valores: {} }], 8: [] } })
-    expect(screen.queryByText('Aplicar a restantes')).not.toBeInTheDocument()
+const fremax = { code: 'B1', nombre: 'FREMAX', actual: 0, mesAnterior: 54, promedio6m: 61, dejo: false }
+
+it('muestra los chips del rubro actual y tildar uno escribe el borrador de marcas', async () => {
+    const { onCambiarMarcasOfrecidas } = setup({ marcasPorRubro: { AMORT: [fremax] } })
+    fireEvent.click(await screen.findByRole('button', { name: /FREMAX/ }))
+    expect(onCambiarMarcasOfrecidas).toHaveBeenCalledWith(7, [{ codigo: 'B1', descripcion: 'FREMAX' }])
 })
 
-it('con acción cargada pero sin marca, no ofrece ningún check (ya no hay UI de acción)', () => {
-    setup({ detalles: { 7: { accion: 'CUPO', marca: null } } })
-    expect(screen.queryByText('Aplicar a restantes')).not.toBeInTheDocument()
+it('sin nada tildado no ofrece Aplicar a restantes', () => {
+    setup({ marcasPorRubro: { AMORT: [fremax] } })
+    expect(screen.queryByText(/aplicar a restantes/i)).not.toBeInTheDocument()
 })
 
-it('con acción y marca cargadas, ofrece un único check (el de Marca)', () => {
-    setup({ detalles: { 7: { accion: 'CUPO', marca: 'AG' } } })
-    expect(screen.getAllByText('Aplicar a restantes')).toHaveLength(1)
-})
-
-it('tildar el check de Marca copia solo la marca, sin tocar la acción ya cargada del otro rubro', () => {
-    const onCambiarAccion = vi.fn()
-    setup({
-        detalles: { 7: { accion: 'CUPO', marca: 'AG' }, 8: { accion: 'DESCUENTO', marca: null } },
-        onCambiarAccion,
+it('aplicar copia las marcas a los rubros restantes SIN marcas, sin tocar los que ya tienen', () => {
+    const { onCambiarMarcasOfrecidas } = setup({
+        ofrecimientos: [...ofrecimientos, { ...ofrecimientos[1], id: 9, codigo: 'ROD', descripcion: 'Rod rueda' }],
+        marcasOfrecidas: { 7: [{ codigo: 'B1', descripcion: 'FREMAX' }], 8: [], 9: [{ codigo: 'B9', descripcion: 'SKF' }] },
     })
-
-    fireEvent.click(screen.getAllByRole('checkbox')[0])
-
-    expect(onCambiarAccion).toHaveBeenCalledWith(8, { accion: 'DESCUENTO', marca: 'AG' })
+    fireEvent.click(screen.getByLabelText(/aplicar a restantes/i))
+    expect(onCambiarMarcasOfrecidas).toHaveBeenCalledTimes(1)
+    expect(onCambiarMarcasOfrecidas).toHaveBeenCalledWith(8, [{ codigo: 'B1', descripcion: 'FREMAX' }])
 })
 
-it('con un solo rubro en el wizard, no ofrece ningún check: no hay restantes', () => {
-    setup({
-        ofrecimientos: [ofrecimientos[0]],
-        detalles: { 7: { accion: 'CUPO', marca: 'AG' } },
-    })
-    expect(screen.queryByText('Aplicar a restantes')).not.toBeInTheDocument()
+it('Limpiar vacía también las marcas', () => {
+    const { onCambiarMarcasOfrecidas } = setup({ marcasOfrecidas: { 7: [{ codigo: 'B1', descripcion: 'FREMAX' }] } })
+    fireEvent.click(screen.getByLabelText(/limpiar lo cargado/i))
+    expect(onCambiarMarcasOfrecidas).toHaveBeenCalledWith(7, [])
 })
