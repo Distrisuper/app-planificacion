@@ -383,7 +383,11 @@ function FilaOfrecimiento({
                             aria-label={`Resolución de ${fila.nombre}`}
                             disabled={agregando}
                             onClick={() => onResolucion?.(resolucion.ofrecimientoId)}
-                            className="flex min-w-0 flex-1 items-center gap-1 py-2 pl-2.5 text-left active:bg-[#F7F8FB]"
+                            // max-w-[50%]: sin este tope el nombre se comía todo el espacio
+                            // sobrante y la zona de números (abajo) quedaba angosta y con un
+                            // hueco en blanco entre las dos — el tope libera ese espacio para
+                            // que lo ocupe la zona de números, que crece con flex-1 abajo.
+                            className="flex min-w-0 max-w-[50%] items-center gap-1 py-2 pl-2.5 text-left active:bg-[#F7F8FB]"
                         >
                             {chip}
                             <NombreFila fila={fila} />
@@ -393,8 +397,13 @@ function FilaOfrecimiento({
                             aria-label={`Marcas de ${fila.nombre}`}
                             aria-expanded={abierta}
                             onClick={() => onToggleMarcas?.(fila.codigo)}
-                            className={`flex shrink-0 items-center gap-1 py-2 pr-1.5 ${
-                                abierta ? 'bg-[#EEF3FB]' : 'active:bg-[#F7F8FB]'
+                            className={`flex flex-1 items-center justify-end gap-1 py-2 pr-1.5 ${
+                                // Tinte parejo aun sin tocar: marca la zona de números como
+                                // su propio control, distinto del nombre (sin fondo). Solo
+                                // cuando hay dos zonas — la fila de una sola zona no lo lleva.
+                                // flex-1 (en vez de shrink-0) para que el tinte llegue hasta
+                                // el borde del botón de al lado, sin dejar blanco de por medio.
+                                abierta ? 'bg-[#EEF3FB]' : 'bg-[#FAFBFD] active:bg-[#F1F3F8]'
                             }`}
                         >
                             <CeldasFila fila={fila} abierta={abierta} />
