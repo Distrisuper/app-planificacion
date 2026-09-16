@@ -18,6 +18,10 @@ export interface IOfrecimientoFila {
     actual: number | null
     mesAnterior: number | null
     promedio6m: number | null
+    /** Mismos tres, en unidades — ver `IRubroEstado.actualUnidades`. */
+    actualUnidades?: number | null
+    mesAnteriorUnidades?: number | null
+    promedio6mUnidades?: number | null
     /** Barra navy + negrita: está en la propuesta, o en la visita. */
     destacada: boolean
     /** Presente ⇒ segunda línea con el botón de resolución. Sólo en la visita. */
@@ -81,6 +85,9 @@ export function construirFilasPropuesta(
             actual: s ? s.actual : (r.current?.actual ?? null),
             mesAnterior: s ? s.mesAnterior : (r.prev?.actual ?? null),
             promedio6m: s ? s.promedio6m : (r.current?.baseline ?? null),
+            actualUnidades: s?.actualUnidades,
+            mesAnteriorUnidades: s?.mesAnteriorUnidades,
+            promedio6mUnidades: s?.promedio6mUnidades,
             destacada: true,
             tipo: 'rubro',
             alcance: [],
@@ -102,6 +109,9 @@ export function construirFilasPropuesta(
         actual: s.actual,
         mesAnterior: s.mesAnterior,
         promedio6m: s.promedio6m,
+        actualUnidades: s.actualUnidades,
+        mesAnteriorUnidades: s.mesAnteriorUnidades,
+        promedio6mUnidades: s.promedio6mUnidades,
         destacada: false,
         tipo: 'rubro',
         alcance: [],
@@ -139,6 +149,9 @@ export function construirFilasVisita(
             actual: s?.actual ?? null,
             mesAnterior: s?.mesAnterior ?? null,
             promedio6m: s?.promedio6m ?? null,
+            actualUnidades: s?.actualUnidades,
+            mesAnteriorUnidades: s?.mesAnteriorUnidades,
+            promedio6mUnidades: s?.promedio6mUnidades,
             destacada: true,
             tipo: r.tipo,
             alcance: r.alcance,
@@ -169,6 +182,9 @@ export function construirFilasVisita(
         actual: s.actual,
         mesAnterior: s.mesAnterior,
         promedio6m: s.promedio6m,
+        actualUnidades: s.actualUnidades,
+        mesAnteriorUnidades: s.mesAnteriorUnidades,
+        promedio6mUnidades: s.promedio6mUnidades,
         destacada: false,
         agregable: editable || undefined,
         tipo: 'rubro',

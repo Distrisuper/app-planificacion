@@ -203,6 +203,9 @@ export const getRubroStatus = async (
         actual: t.thisMonth?.amount ?? 0,
         mesAnterior: t.lastMonth?.amount ?? 0,
         promedio6m: (t.last6Months?.amount ?? 0) / 6,
+        actualUnidades: t.thisMonth?.units ?? 0,
+        mesAnteriorUnidades: t.lastMonth?.units ?? 0,
+        promedio6mUnidades: (t.last6Months?.units ?? 0) / 6,
     })
 
     return (data.rubros ?? []).map(r => ({

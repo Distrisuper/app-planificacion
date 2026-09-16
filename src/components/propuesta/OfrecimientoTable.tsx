@@ -32,8 +32,22 @@ function normalizar(texto: string): string {
         .toLowerCase()
 }
 
-function fmtCelda(valor: number | null) {
-    return valor == null ? '–' : fmtAmount(valor)
+/** 'pesos' (default) o 'unidades' — interruptor de todo lo que muestra `OfrecimientoTable`.
+ *  El endpoint ya manda ambos períodos (spec 2026-09-16 §3.2); esto es el "front-only". */
+export type ModoValor = 'pesos' | 'unidades'
+
+const FMT_UNIDADES = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
+
+/** Igual criterio que `fmtAmount` para el cero (0 unidades no es dato, es "no compró"),
+ *  pero sin el "$" ni la escala a miles: una unidad es una unidad. */
+function fmtUnidades(valor: number): string {
+    const rounded = Math.round(valor)
+    return rounded === 0 ? '–' : FMT_UNIDADES.format(rounded)
+}
+
+function fmtCelda(valor: number | null, modo: ModoValor) {
+    if (valor == null) return '–'
+    return modo === 'unidades' ? fmtUnidades(valor) : fmtAmount(valor)
 }
 
 function cae(valor: number | null, promedio6m: number | null): boolean {
@@ -82,6 +96,7 @@ function Celda({
     ocultaEnAngosto,
     abierta,
     compacta,
+    modo = 'pesos',
 }: {
     valor: number | null
     promedio6m: number | null
@@ -94,6 +109,7 @@ function Celda({
     abierta?: boolean
     /** true en las sub-filas de marca: pastilla más chica que la del rubro. */
     compacta?: boolean
+    modo?: ModoValor
 }) {
     const rojo = !referencia && cae(valor, promedio6m)
     return (
@@ -119,7 +135,7 @@ function Celda({
                             : 'bg-[#F1F3F8] text-[#182645]'
                 }`}
             >
-                {fmtCelda(valor)}
+                {fmtCelda(valor, modo)}
             </span>
         </div>
     )
@@ -237,24 +253,35 @@ function NombreFila({ fila }: { fila: IOfrecimientoFila }) {
  *  RUBRO — una acción o una marca nunca matchean ahí, así que mostrar las tres celdas
  *  en guiones se lee como "falta cargar" cuando en realidad ese dato no existe para
  *  estos tipos de ofrecimiento. */
-function CeldasFila({ fila, abierta }: { fila: IOfrecimientoFila; abierta?: boolean }) {
+function CeldasFila({
+    fila,
+    abierta,
+    modo = 'pesos',
+}: {
+    fila: IOfrecimientoFila
+    abierta?: boolean
+    modo?: ModoValor
+}) {
     if (fila.tipo !== 'rubro') return null
+    const actual = modo === 'unidades' ? (fila.actualUnidades ?? null) : fila.actual
+    const mesAnterior = modo === 'unidades' ? (fila.mesAnteriorUnidades ?? null) : fila.mesAnterior
+    const promedio6m = modo === 'unidades' ? (fila.promedio6mUnidades ?? null) : fila.promedio6m
     return (
         <>
-            <Celda valor={fila.actual} promedio6m={fila.promedio6m} abierta={abierta} />
-            <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} ocultaEnAngosto abierta={abierta} />
-            <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia abierta={abierta} />
+            <Celda valor={actual} promedio6m={promedio6m} abierta={abierta} modo={modo} />
+            <Celda valor={mesAnterior} promedio6m={promedio6m} ocultaEnAngosto abierta={abierta} modo={modo} />
+            <Celda valor={promedio6m} promedio6m={promedio6m} referencia abierta={abierta} modo={modo} />
         </>
     )
 }
 
 /** Nombre + las tres columnas numéricas. Usado por las variantes que NO parten la
  *  fila en dos zonas (read-only, agregable, o resoluble sin marcas para desplegar). */
-function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
+function ContenidoFila({ fila, modo }: { fila: IOfrecimientoFila; modo?: ModoValor }) {
     return (
         <>
             <NombreFila fila={fila} />
-            <CeldasFila fila={fila} />
+            <CeldasFila fila={fila} modo={modo} />
         </>
     )
 }
@@ -268,41 +295,48 @@ function SubFilasMarcas({
     marcas,
     conChip,
     conColumnaQuitar,
+    modo = 'pesos',
 }: {
     marcas: IMarcaEstado[]
     conChip: boolean
     conColumnaQuitar: boolean
+    modo?: ModoValor
 }) {
     const visibles = marcas.slice(0, MAX_SUBFILAS)
     const ocultas = marcas.length - visibles.length
     return (
         <div className="bg-[#F7F8FB]">
-            {visibles.map((m, i) => (
-                <div
-                    key={m.code}
-                    role="row"
-                    data-marca={m.code}
-                    className="flex min-h-[30px] items-center gap-1 pl-2.5 pr-1.5 text-[11.5px] font-semibold text-[#3B4761]"
-                >
-                    {conChip && (
-                        <div className={`${ANCHO_CHIP} flex justify-center`}>
-                            <span aria-hidden className={`h-[13px] w-[3px] rounded-sm ${i === 0 ? 'bg-dsnavy' : 'bg-[#C9D2E3]'}`} />
-                        </div>
-                    )}
-                    <div className="flex min-w-0 flex-1 items-center gap-1.5">
-                        <span className="min-w-0 truncate">{m.nombre}</span>
-                        {m.dejo && (
-                            <span className="shrink-0 rounded bg-[#FDECEA] px-1 text-[8.5px] font-extrabold uppercase leading-[14px] text-dsred">
-                                dejó
-                            </span>
+            {visibles.map((m, i) => {
+                const actual = modo === 'unidades' ? (m.actualUnidades ?? null) : m.actual
+                const mesAnterior = modo === 'unidades' ? (m.mesAnteriorUnidades ?? null) : m.mesAnterior
+                const promedio6m = modo === 'unidades' ? (m.promedio6mUnidades ?? null) : m.promedio6m
+                return (
+                    <div
+                        key={m.code}
+                        role="row"
+                        data-marca={m.code}
+                        className="flex min-h-[30px] items-center gap-1 pl-2.5 pr-1.5 text-[11.5px] font-semibold text-[#3B4761]"
+                    >
+                        {conChip && (
+                            <div className={`${ANCHO_CHIP} flex justify-center`}>
+                                <span aria-hidden className={`h-[13px] w-[3px] rounded-sm ${i === 0 ? 'bg-dsnavy' : 'bg-[#C9D2E3]'}`} />
+                            </div>
                         )}
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                            <span className="min-w-0 truncate">{m.nombre}</span>
+                            {m.dejo && (
+                                <span className="shrink-0 rounded bg-[#FDECEA] px-1 text-[8.5px] font-extrabold uppercase leading-[14px] text-dsred">
+                                    dejó
+                                </span>
+                            )}
+                        </div>
+                        <Celda valor={actual} promedio6m={promedio6m} compacta modo={modo} />
+                        <Celda valor={mesAnterior} promedio6m={promedio6m} ocultaEnAngosto compacta modo={modo} />
+                        <Celda valor={promedio6m} promedio6m={promedio6m} referencia compacta modo={modo} />
+                        {conColumnaQuitar && <div className={ANCHO_QUITAR} />}
                     </div>
-                    <Celda valor={m.actual} promedio6m={m.promedio6m} compacta />
-                    <Celda valor={m.mesAnterior} promedio6m={m.promedio6m} ocultaEnAngosto compacta />
-                    <Celda valor={m.promedio6m} promedio6m={m.promedio6m} referencia compacta />
-                    {conColumnaQuitar && <div className={ANCHO_QUITAR} />}
-                </div>
-            ))}
+                )
+            })}
             {ocultas > 0 && (
                 <div className={`py-1.5 ${conChip ? 'pl-[42px]' : 'pl-2.5'} text-[11px] font-semibold text-[#8A93A6]`}>
                     +{ocultas} marcas más
@@ -328,6 +362,7 @@ function FilaOfrecimiento({
     conChip,
     conColumnaQuitar,
     abierta = false,
+    modo = 'pesos',
     onToggleMarcas,
     onResolucion,
     onAgregar,
@@ -340,6 +375,7 @@ function FilaOfrecimiento({
     conChip: boolean
     conColumnaQuitar: boolean
     abierta?: boolean
+    modo?: ModoValor
     onToggleMarcas?: (codigo: string) => void
     onResolucion?: (ofrecimientoId: number) => void
     onAgregar?: (codigo: string) => void
@@ -369,7 +405,7 @@ function FilaOfrecimiento({
     const interior = (
         <>
             {chip}
-            <ContenidoFila fila={fila} />
+            <ContenidoFila fila={fila} modo={modo} />
         </>
     )
 
@@ -406,7 +442,7 @@ function FilaOfrecimiento({
                                 abierta ? 'bg-[#EEF3FB]' : 'bg-[#FAFBFD] active:bg-[#F1F3F8]'
                             }`}
                         >
-                            <CeldasFila fila={fila} abierta={abierta} />
+                            <CeldasFila fila={fila} abierta={abierta} modo={modo} />
                         </button>
                     </>
                 ) : filaEnteraDespliega ? (
@@ -419,7 +455,7 @@ function FilaOfrecimiento({
                     >
                         {chip}
                         <NombreFila fila={fila} />
-                        <CeldasFila fila={fila} abierta={abierta} />
+                        <CeldasFila fila={fila} abierta={abierta} modo={modo} />
                     </button>
                 ) : resolucion || fila.agregable ? (
                     <button
@@ -466,7 +502,7 @@ function FilaOfrecimiento({
                 )}
             </div>
             {abierta && tieneMarcas && (
-                <SubFilasMarcas marcas={fila.marcas} conChip={conChip} conColumnaQuitar={conColumnaQuitar} />
+                <SubFilasMarcas marcas={fila.marcas} conChip={conChip} conColumnaQuitar={conColumnaQuitar} modo={modo} />
             )}
         </div>
     )
@@ -524,6 +560,24 @@ function SegmentoOfrecimientos({
     )
 }
 
+/** Interruptor $ / U de las tres columnas numéricas: un solo botón que alterna, en el
+ *  slot de 26px del header de columnas — arriba de donde cae `ChipEstado` en cada fila,
+ *  mismo eje. Un botón que cambia de letra (no dos pastillas lado a lado) porque ahí
+ *  no entran dos etiquetas sin angostar la columna Rubro. */
+function ModoValorBoton({ modo, onChange }: { modo: ModoValor; onChange: (modo: ModoValor) => void }) {
+    return (
+        <button
+            type="button"
+            aria-label="Mostrar en pesos o en unidades"
+            aria-pressed={modo === 'unidades'}
+            onClick={() => onChange(modo === 'pesos' ? 'unidades' : 'pesos')}
+            className="grid h-5 w-5 place-items-center rounded-full border-2 border-dsnavy bg-white text-[10px] font-extrabold normal-case text-dsnavy"
+        >
+            {modo === 'pesos' ? '$' : 'U'}
+        </button>
+    )
+}
+
 /** Lista RUBRO · ACTUAL · M.ANT · P.6M compartida por la propuesta y la visita.
  *  Presentacional pura: no conoce visitas ni mutaciones, solo `filas` (ver
  *  `filas.ts`) y callbacks. El buscador es la única excepción a "pura": es un
@@ -554,6 +608,7 @@ export default function OfrecimientoTable({
     const [busqueda, setBusqueda] = useState('')
     // Una sola fila desplegada a la vez: abrir otra cierra la anterior.
     const [abiertaCodigo, setAbiertaCodigo] = useState<string | null>(null)
+    const [modo, setModo] = useState<ModoValor>('pesos')
     function toggleMarcas(codigo: string) {
         setAbiertaCodigo(prev => (prev === codigo ? null : codigo))
     }
@@ -633,7 +688,15 @@ export default function OfrecimientoTable({
                 a la vista, las tres columnas de números quedan sin identificar apenas se
                 scrollea (ACTUAL vs. M.ANT vs. P.6M no se adivinan por el valor). */}
             <div className="sticky top-0 z-20 flex h-8 items-center gap-1 border-y border-dsline bg-[#F7F8FB] px-2.5 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
-                {conChip && <div className={ANCHO_CHIP} />}
+                {/* El interruptor $/U vive en el mismo slot de 26px que `ChipEstado`: es
+                    la primera opción del header, justo arriba de los ✓/anillos de la
+                    columna. Solo cuando hay chip (tabla de una visita) — en la propuesta
+                    previa ese slot no se reserva y el interruptor no tiene dónde ir. */}
+                {conChip && (
+                    <div className={`${ANCHO_CHIP} flex justify-start`}>
+                        <ModoValorBoton modo={modo} onChange={setModo} />
+                    </div>
+                )}
                 {/* Solo "Rubro". La instrucción de tocar la fila vivió acá un rato y fue un
                     error: esta columna es la que absorbe lo que sobra después de los 26px
                     del chip y los 3×54px de números, así que en mobile mide ~60-100px y
@@ -675,6 +738,7 @@ export default function OfrecimientoTable({
                         conChip={conChip}
                         conColumnaQuitar={conColumnaQuitar}
                         abierta={abiertaCodigo === fila.codigo}
+                        modo={modo}
                         onToggleMarcas={toggleMarcas}
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}
@@ -718,6 +782,7 @@ export default function OfrecimientoTable({
                         conChip={conChip}
                         conColumnaQuitar={conColumnaQuitar}
                         abierta={abiertaCodigo === fila.codigo}
+                        modo={modo}
                         onToggleMarcas={toggleMarcas}
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}

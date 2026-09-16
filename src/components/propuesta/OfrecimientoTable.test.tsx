@@ -678,3 +678,49 @@ describe('dos zonas en la fila de la visita', () => {
         expect(screen.getByText(/los números, para ver sus marcas/i)).toBeInTheDocument()
     })
 })
+
+describe('interruptor $/U', () => {
+    // Solo aparece cuando hay chip (tabla de una visita): comparte el mismo slot de
+    // 26px que `ChipEstado`, así que necesita una fila con `resolucion` para tener
+    // dónde pararse (ver el guard `conChip` en el header).
+    const conUnidades = fila({
+        resolucion: resol,
+        actual: 600_000,
+        mesAnterior: 800_000,
+        promedio6m: 1_000_000,
+        actualUnidades: 12,
+        mesAnteriorUnidades: 8,
+        promedio6mUnidades: 10,
+    })
+
+    it('arranca en pesos, mostrando "$" sin apretar', () => {
+        render(<OfrecimientoTable filas={[conUnidades]} />)
+        const boton = screen.getByRole('button', { name: /mostrar en pesos o en unidades/i })
+        expect(boton).toHaveTextContent('$')
+        expect(boton).toHaveAttribute('aria-pressed', 'false')
+        expect(screen.getByText('600')).toBeInTheDocument()
+    })
+
+    it('tocarlo cambia las tres columnas a unidades y pasa a mostrar "U"', () => {
+        render(<OfrecimientoTable filas={[conUnidades]} />)
+        const boton = screen.getByRole('button', { name: /mostrar en pesos o en unidades/i })
+        fireEvent.click(boton)
+        expect(boton).toHaveTextContent('U')
+        expect(boton).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.queryByText('600')).not.toBeInTheDocument()
+        expect(screen.getByText('12')).toBeInTheDocument()
+        expect(screen.getByText('10')).toBeInTheDocument()
+    })
+
+    it('el modo también alcanza a las sub-filas de marca', () => {
+        const conMarcaUnidades = {
+            ...fremax,
+            actual: 900_000,
+            actualUnidades: 7,
+        }
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [conMarcaUnidades] })]} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        fireEvent.click(screen.getByRole('button', { name: /mostrar en pesos o en unidades/i }))
+        expect(screen.getByText('7')).toBeInTheDocument()
+    })
+})

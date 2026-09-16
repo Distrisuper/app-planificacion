@@ -375,9 +375,18 @@ describe('getRubroStatus', () => {
                 actual: 0,
                 mesAnterior: 54,
                 promedio6m: 83,
+                actualUnidades: 0,
+                mesAnteriorUnidades: 1,
+                promedio6mUnidades: 1.5,
                 marcas: [
-                    { code: 'B1', nombre: 'FREMAX', actual: 0, mesAnterior: 54, promedio6m: 61, dejo: false },
-                    { code: 'B2', nombre: 'CORVEN', actual: 0, mesAnterior: 0, promedio6m: 22, dejo: true },
+                    {
+                        code: 'B1', nombre: 'FREMAX', actual: 0, mesAnterior: 54, promedio6m: 61,
+                        actualUnidades: 0, mesAnteriorUnidades: 1, promedio6mUnidades: 1, dejo: false,
+                    },
+                    {
+                        code: 'B2', nombre: 'CORVEN', actual: 0, mesAnterior: 0, promedio6m: 22,
+                        actualUnidades: 0, mesAnteriorUnidades: 0, promedio6mUnidades: 0.5, dejo: true,
+                    },
                 ],
             },
         ])

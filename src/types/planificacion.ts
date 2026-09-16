@@ -315,6 +315,12 @@ export interface IMarcaEstado {
     actual: number
     mesAnterior: number
     promedio6m: number
+    /** Mismos tres períodos, en unidades — alimenta el interruptor pesos/unidades
+     *  (front-only, spec 2026-09-16 §3.2). Opcionales para no romper los fixtures
+     *  existentes que no los necesitan. */
+    actualUnidades?: number
+    mesAnteriorUnidades?: number
+    promedio6mUnidades?: number
     dejo: boolean
 }
 
@@ -327,6 +333,10 @@ export interface IRubroEstado {
     mesAnterior: number
     /** Promedio mensual de los últimos 6 meses cerrados. */
     promedio6m: number
+    /** Mismos tres períodos, en unidades — ver `IMarcaEstado.actualUnidades`. */
+    actualUnidades?: number
+    mesAnteriorUnidades?: number
+    promedio6mUnidades?: number
     /** [] cuando el rubro no tiene historial de marca. */
     marcas: IMarcaEstado[]
 }
