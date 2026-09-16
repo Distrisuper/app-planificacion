@@ -1,4 +1,4 @@
-import type { IVisitClientCard } from '@/types/planificacion'
+import type { IRubroEstado, IVisitClientCard } from '@/types/planificacion'
 
 /** Los dos valores de `bonificacion` que marcan a un cliente suscriptor. Salen de
  *  `MapaCalorService.js:362` de api-node-lupa, el único lugar del ecosistema que se
@@ -90,4 +90,32 @@ export function listaDescuentos(
         })
         .filter((d): d is IDescuentoMarca => d !== null)
         .sort((a, b) => b.valor - a.valor)
+}
+
+/**
+ * Pega el descuento del cliente a cada marca de `rubroStatus`, **antes** de que
+ * `filas.ts` construya las filas.
+ *
+ * Es acá y no en un prop de `OfrecimientoTable` porque el descuento tendría que bajar
+ * cuatro niveles (`OfrecimientoTable` → `SegmentoOfrecimientos`/tabla → `FilaOfrecimiento`
+ * → `SubFilasMarcas`) atravesando tres componentes a los que no les importa. Viajando
+ * dentro de la marca aprovecha el pass-through que los builders ya hacen
+ * (`marcas: s?.marcas ?? []`), y `filas.ts` no se toca.
+ */
+export function conDescuentos(
+    rubroStatus: IRubroEstado[],
+    cliente: IVisitClientCard | null | undefined,
+): IRubroEstado[] {
+    const descuentos = descuentosPorCodigo(cliente)
+    // Identidad referencial cuando no hay nada que pegar: `useMemo` en el llamador no
+    // recalcula, y las filas no se reconstruyen por gusto.
+    if (descuentos.size === 0) return rubroStatus
+
+    return rubroStatus.map(r => ({
+        ...r,
+        marcas: r.marcas.map(m => {
+            const descuento = descuentos.get(m.code?.trim())
+            return descuento === undefined ? m : { ...m, descuento }
+        }),
+    }))
 }

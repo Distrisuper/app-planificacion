@@ -4,8 +4,9 @@ import {
     descuentosPorCodigo,
     nombreDescuento,
     listaDescuentos,
+    conDescuentos,
 } from './descuentosMarca'
-import type { IVisitClientCard } from '@/types/planificacion'
+import type { IRubroEstado, IVisitClientCard } from '@/types/planificacion'
 
 function cliente(over: Partial<IVisitClientCard> = {}): IVisitClientCard {
     return {
@@ -16,6 +17,21 @@ function cliente(over: Partial<IVisitClientCard> = {}): IVisitClientCard {
         brandDiscounts: [
             { code: '141', value: 15, description: 'COBREQ # LIQUIDOS FRENO #' },
             { code: '039', value: 23, description: 'AG # RESORTES #' },
+        ],
+        ...over,
+    }
+}
+
+function rubro(over: Partial<IRubroEstado> = {}): IRubroEstado {
+    return {
+        rubroCode: 'SR-14',
+        nombre: 'PARRILLAS',
+        actual: 120_000,
+        mesAnterior: 98_000,
+        promedio6m: 140_000,
+        marcas: [
+            { code: '141', nombre: 'COBREQ', actual: 80_000, mesAnterior: 70_000, promedio6m: 95_000, dejo: false },
+            { code: '999', nombre: 'FERODO', actual: 40_000, mesAnterior: 28_000, promedio6m: 45_000, dejo: false },
         ],
         ...over,
     }
@@ -127,5 +143,43 @@ describe('listaDescuentos', () => {
 
     it('el suscriptor devuelve lista vacía', () => {
         expect(listaDescuentos(cliente({ bonusDiscount: 45 }))).toEqual([])
+    })
+})
+
+describe('conDescuentos', () => {
+    it('pega el descuento a la marca que lo tiene y deja la otra sin campo', () => {
+        const [r] = conDescuentos([rubro()], cliente())
+        expect(r.marcas[0].descuento).toBe(15)
+        expect(r.marcas[1].descuento).toBeUndefined()
+    })
+
+    it('no toca el resto de la marca ni del rubro', () => {
+        const [r] = conDescuentos([rubro()], cliente())
+        expect(r.rubroCode).toBe('SR-14')
+        expect(r.marcas[0].nombre).toBe('COBREQ')
+        expect(r.marcas[0].actual).toBe(80_000)
+        expect(r.marcas).toHaveLength(2)
+    })
+
+    it('el suscriptor no recibe ningún descuento', () => {
+        const [r] = conDescuentos([rubro()], cliente({ bonusDiscount: 45 }))
+        expect(r.marcas.every(m => m.descuento === undefined)).toBe(true)
+    })
+
+    it('sin cliente devuelve el mismo array, sin recorrerlo', () => {
+        const entrada = [rubro()]
+        expect(conDescuentos(entrada, null)).toBe(entrada)
+    })
+
+    // Las filas del catálogo (spec de "otros rubros 80/20") llegan con marcas: [].
+    it('un rubro sin marcas no rompe', () => {
+        const [r] = conDescuentos([rubro({ marcas: [] })], cliente())
+        expect(r.marcas).toEqual([])
+    })
+
+    it('no muta la entrada', () => {
+        const entrada = [rubro()]
+        conDescuentos(entrada, cliente())
+        expect(entrada[0].marcas[0].descuento).toBeUndefined()
     })
 })
