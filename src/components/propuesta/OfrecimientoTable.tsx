@@ -52,10 +52,10 @@ const TIPO_LABEL: Record<TipoOfrecimiento, string> = {
 // span interno) en el header y en cada celda: si alguno de los dos tuviera un
 // padding distinto, el número y la etiqueta del header dejan de coincidir en
 // la misma columna aunque el `div` que los contiene mida lo mismo.
-const ANCHO_NUMERICA = 'w-[54px] shrink-0'
+const ANCHO_NUMERICA = 'w-[48px] shrink-0'
 // M.ANT es la unica de las tres columnas numericas que se esconde abajo de 360px: es la
 // menos cargada de las tres (la propuesta se arma comparando ACTUAL contra P.6M, no
-// contra el mes anterior), y esos 54px son la diferencia entre leer "PARRILLAS, BRAZ..."
+// contra el mes anterior), y esos 48px son la diferencia entre leer "PARRILLAS, BRAZ..."
 // y leer el nombre del rubro completo.
 //
 // Son dos clases y no una porque el header es `block` (alinea con text-right) y la celda
@@ -108,7 +108,7 @@ function Celda({
                 // tiene con qué anclar su posición y la columna parece corrida, aunque el
                 // ancho sea idéntico al de ACTUAL/M.ANT.
                 className={`inline-block rounded-md lining-nums tabular-nums slashed-zero whitespace-nowrap font-semibold ${
-                    compacta ? 'px-1 py-0 text-[10.5px]' : 'px-1.5 py-0.5 text-[12.5px]'
+                    compacta ? 'px-1 py-0 text-[10.5px]' : 'px-1 py-0.5 text-[12px] tracking-[-0.01em]'
                 } ${
                     referencia
                         ? 'bg-[#F1F3F8] text-dsmuted'
@@ -609,20 +609,21 @@ export default function OfrecimientoTable({
 
             Solo en la tabla de una visita (`conChip`): en la propuesta previa no hay nada
             que cargar. */}
+        {/* Margen negativo: el BottomSheet da px-[18px], y esto compensa para que la
+            tabla quede al borde (12px del borde del sheet) en vez de encajonada. No toca
+            el padding del sheet — lo usan otras pantallas. */}
+        <div className="-mx-1.5">
         {conChip && (
             <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted leading-[1.35]">
                 Tu propuesta · tocá el rubro para cargar el resultado{' '}
                 <span className="text-[#8A93A6]">· los números, para ver sus marcas</span>
             </p>
         )}
-        {/* Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
-            overflow oculto anula el `position: sticky` de adentro contra el scroll del
-            sheet. Las esquinas de arriba las redondea el propio header. */}
-        <div className="w-full rounded-xl border border-dsline">
+        <div className="w-full">
             {/* Sticky: con el catálogo abierto la lista pasa de 25 filas y, sin el rótulo
                 a la vista, las tres columnas de números quedan sin identificar apenas se
                 scrollea (ACTUAL vs. M.ANT vs. P.6M no se adivinan por el valor). */}
-            <div className="sticky top-0 z-20 flex h-8 items-center gap-1 rounded-t-[11px] border-b border-dsline bg-[#F7F8FB] px-2.5 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
+            <div className="sticky top-0 z-20 flex h-8 items-center gap-1 border-y border-dsline bg-[#F7F8FB] px-2.5 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
                 {conChip && <div className={ANCHO_CHIP} />}
                 {/* Solo "Rubro". La instrucción de tocar la fila vivió acá un rato y fue un
                     error: esta columna es la que absorbe lo que sobra después de los 26px
@@ -723,6 +724,7 @@ export default function OfrecimientoTable({
                     </div>
                 )}
             </div>
+        </div>
         </div>
         </>
     )
