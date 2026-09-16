@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react'
-import { Percent } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { esSuscriptor, listaDescuentos } from '@/lib/descuentosMarca'
 import type { IVisitClientCard } from '@/types/planificacion'
@@ -24,8 +23,7 @@ export function ChipDescuentos({ onAbrir }: { onAbrir: () => void }) {
             onClick={onAbrir}
             className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 text-[11px] font-bold text-violet-700"
         >
-            <Percent className="h-[12px] w-[12px]" strokeWidth={2.6} />
-            Descuentos
+            % Desc.
         </button>
     )
 }

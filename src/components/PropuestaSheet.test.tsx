@@ -312,12 +312,12 @@ function renderPropuesta(cliente?: IVisitClientCard) {
 
 it('ofrece el chip de descuentos antes de iniciar la visita', async () => {
     renderPropuesta({ ...CLIENTE, brandDiscounts: CON_DESCUENTO })
-    expect(await screen.findByRole('button', { name: /descuentos/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /% desc\./i })).toBeInTheDocument()
 })
 
 it('el chip abre el sheet con la lista', async () => {
     renderPropuesta({ ...CLIENTE, brandDiscounts: CON_DESCUENTO })
-    fireEvent.click(await screen.findByRole('button', { name: /descuentos/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /% desc\./i }))
     expect(screen.getByText('Descuentos por marca')).toBeInTheDocument()
     expect(screen.getByText(/COBREQ · LIQUIDOS FRENO/)).toBeInTheDocument()
 })
@@ -325,16 +325,16 @@ it('el chip abre el sheet con la lista', async () => {
 it('no ofrece el chip si no hay descuentos y no es suscriptor', async () => {
     renderPropuesta({ ...CLIENTE, brandDiscounts: [], bonusDiscount: 0 })
     await screen.findByText('Amortiguadores')
-    expect(screen.queryByRole('button', { name: /descuentos/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /% desc\./i })).not.toBeInTheDocument()
 })
 
 it('ofrece el chip al suscriptor aunque no tenga descuentos por marca', async () => {
     renderPropuesta({ ...CLIENTE, brandDiscounts: [], bonusDiscount: 45 })
-    expect(await screen.findByRole('button', { name: /descuentos/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /% desc\./i })).toBeInTheDocument()
 })
 
 it('sin cliente no rompe ni ofrece el chip', async () => {
     renderPropuesta(undefined)
     await screen.findByText('Amortiguadores')
-    expect(screen.queryByRole('button', { name: /descuentos/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /% desc\./i })).not.toBeInTheDocument()
 })
