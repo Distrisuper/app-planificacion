@@ -1054,3 +1054,41 @@ describe('No visité (chip de la visita abierta)', () => {
         expect(onNoVisita).toHaveBeenCalledWith(1)
     })
 })
+
+// ── Descuentos por marca (spec 2026-09-16) ────────────────────────────────────
+
+const CON_DESCUENTO = [{ code: '141', value: 15, description: 'COBREQ # LIQUIDOS FRENO #' }]
+
+// El chip vive en el header junto a "No visité", no en la fila de AccionesExternas: esos
+// chips llevan AFUERA de la app y lo dicen con el ↗. Éste es contenido propio.
+it('ofrece el chip de descuentos cuando el cliente tiene descuentos por marca', () => {
+    renderSheet({ cliente: { ...CLIENTE, brandDiscounts: CON_DESCUENTO } })
+    expect(screen.getByRole('button', { name: /% desc\./i })).toBeInTheDocument()
+})
+
+it('el chip abre el sheet con la lista', () => {
+    renderSheet({ cliente: { ...CLIENTE, brandDiscounts: CON_DESCUENTO } })
+    fireEvent.click(screen.getByRole('button', { name: /% desc\./i }))
+    expect(screen.getByText('Descuentos por marca')).toBeInTheDocument()
+    expect(screen.getByText(/COBREQ · LIQUIDOS FRENO/)).toBeInTheDocument()
+})
+
+// Un botón que abre una pantalla vacía es peor que no tenerlo.
+it('no ofrece el chip si no hay descuentos y no es suscriptor', () => {
+    renderSheet({ cliente: { ...CLIENTE, brandDiscounts: [], bonusDiscount: 0 } })
+    expect(screen.queryByRole('button', { name: /% desc\./i })).not.toBeInTheDocument()
+})
+
+// El suscriptor SÍ lo ve, aunque su lista esté vacía: el sheet es donde se entera de por
+// qué, y de que tiene el mejor descuento de todos.
+it('ofrece el chip al suscriptor aunque no tenga descuentos por marca', () => {
+    renderSheet({ cliente: { ...CLIENTE, brandDiscounts: [], bonusDiscount: 45 } })
+    expect(screen.getByRole('button', { name: /% desc\./i })).toBeInTheDocument()
+})
+
+// A diferencia de "No visité": el sheet es consulta, no edición.
+it('el chip sigue estando con la visita cerrada', () => {
+    renderSheet({ visitaCerrada: true, cliente: { ...CLIENTE, brandDiscounts: CON_DESCUENTO } })
+    expect(screen.getByRole('button', { name: /% desc\./i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /no visité/i })).not.toBeInTheDocument()
+})

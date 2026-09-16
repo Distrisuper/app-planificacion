@@ -8,6 +8,8 @@ import OfrecimientoTable from './propuesta/OfrecimientoTable'
 import AgregarOfrecimientoSheet from './propuesta/AgregarOfrecimientoSheet'
 import AccionesExternas from './AccionesExternas'
 import { construirFilasVisita, rubrosElegibles } from './propuesta/filas'
+import { conDescuentos, hayDescuentosParaMostrar } from '@/lib/descuentosMarca'
+import DescuentosMarcaSheet, { ChipDescuentos } from './DescuentosMarcaSheet'
 import { useMotivos } from '@/hooks/useMotivos'
 import {
     useOfrecimientos,
@@ -155,6 +157,7 @@ export default function VisitaSheet({
     const [marcasOfrecidas, setMarcasOfrecidas] = useState<Record<number, IMarcaOfrecida[]>>({})
     const [observaciones, setObservaciones] = useState('')
     const [borradorListo, setBorradorListo] = useState(false)
+    const [descuentosAbierto, setDescuentosAbierto] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
     const [altaAbierta, setAltaAbierta] = useState(false)
@@ -425,7 +428,16 @@ export default function VisitaSheet({
     // seguimiento pendiente) — probado y descartado, se leía como una etiqueta, no como
     // algo tocable. El rectángulo gris-rojizo es el mismo lenguaje que ya usa Reagendar,
     // sólo que en rojo para distinguirlo como la salida negativa.
-    const acciones =
+    // Va en la línea de identidad del header por la misma razón que "No visité": es donde
+    // el vendedor lo encuentra rápido, parado en el local. Pero a diferencia de "No
+    // visité", se muestra TAMBIÉN con la visita cerrada — es consulta, no edición, y el
+    // sheet de una visita cerrada es justamente de consulta. El resto del criterio
+    // (cuándo aparece, por qué no va en AccionesExternas) vive en `ChipDescuentos`.
+    const chipDescuentos = hayDescuentosParaMostrar(cliente) ? (
+        <ChipDescuentos onAbrir={() => setDescuentosAbierto(true)} />
+    ) : null
+
+    const botonNoVisita =
         !visitaCerrada && onNoVisita ? (
             <button
                 type="button"
@@ -435,6 +447,15 @@ export default function VisitaSheet({
                 <X className="h-[12px] w-[12px]" strokeWidth={2.6} />
                 No visité
             </button>
+        ) : null
+
+    // El de descuentos primero: es el de consulta, y la salida negativa queda al borde.
+    const acciones =
+        chipDescuentos || botonNoVisita ? (
+            <div className="flex items-center gap-1.5">
+                {chipDescuentos}
+                {botonNoVisita}
+            </div>
         ) : undefined
 
     const estadosResolucion: Record<number, { motivosCargados: number; completo: boolean }> = {}
@@ -449,7 +470,7 @@ export default function VisitaSheet({
     // de la tabla que iba a mostrar.
     const filas = construirFilasVisita(
         conNuevosArriba(ofrecimientos),
-        rubroStatus,
+        conDescuentos(rubroStatus, cliente),
         estadosResolucion,
         true,
         !visitaCerrada,
@@ -792,6 +813,14 @@ export default function VisitaSheet({
                     marcasLoading={marcasLoading}
                 />
             </BottomSheet>
+
+            {cliente && (
+                <DescuentosMarcaSheet
+                    open={descuentosAbierto}
+                    onClose={() => setDescuentosAbierto(false)}
+                    cliente={cliente}
+                />
+            )}
         </>
     )
 }

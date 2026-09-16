@@ -321,6 +321,10 @@ export interface IMarcaEstado {
     actualUnidades?: number
     mesAnteriorUnidades?: number
     promedio6mUnidades?: number
+    /** % de descuento que este cliente tiene para esta marca. `undefined` = no tiene, o
+     *  es suscriptor (el 45% global no se acumula). NO viene del endpoint: lo pega
+     *  `conDescuentos` desde `cliente.brandDiscounts` antes de construir las filas. */
+    descuento?: number
     dejo: boolean
 }
 

@@ -287,3 +287,54 @@ it('no muestra apps externas si no se le pasa el callback', async () => {
     await screen.findByText('Amortiguadores')
     expect(screen.queryByRole('button', { name: 'Pagos' })).not.toBeInTheDocument()
 })
+
+// ── Descuentos por marca (spec 2026-09-16 §7) ─────────────────────────────────
+
+// La propuesta es cuando el vendedor decide QUÉ ofrecer: es el momento donde el
+// descuento más pesa, antes de entrar. Mismo chip que en VisitaSheet.
+const CON_DESCUENTO = [{ code: '141', value: 15, description: 'COBREQ # LIQUIDOS FRENO #' }]
+
+function renderPropuesta(cliente?: IVisitClientCard) {
+    mockPropuesta()
+    render(
+        wrap(
+            <PropuestaSheet
+                open
+                codigoCliente="10034"
+                nombreCliente="Don José"
+                cliente={cliente}
+                onIniciarVisita={vi.fn()}
+                onClose={vi.fn()}
+            />,
+        ),
+    )
+}
+
+it('ofrece el chip de descuentos antes de iniciar la visita', async () => {
+    renderPropuesta({ ...CLIENTE, brandDiscounts: CON_DESCUENTO })
+    expect(await screen.findByRole('button', { name: /% desc\./i })).toBeInTheDocument()
+})
+
+it('el chip abre el sheet con la lista', async () => {
+    renderPropuesta({ ...CLIENTE, brandDiscounts: CON_DESCUENTO })
+    fireEvent.click(await screen.findByRole('button', { name: /% desc\./i }))
+    expect(screen.getByText('Descuentos por marca')).toBeInTheDocument()
+    expect(screen.getByText(/COBREQ · LIQUIDOS FRENO/)).toBeInTheDocument()
+})
+
+it('no ofrece el chip si no hay descuentos y no es suscriptor', async () => {
+    renderPropuesta({ ...CLIENTE, brandDiscounts: [], bonusDiscount: 0 })
+    await screen.findByText('Amortiguadores')
+    expect(screen.queryByRole('button', { name: /% desc\./i })).not.toBeInTheDocument()
+})
+
+it('ofrece el chip al suscriptor aunque no tenga descuentos por marca', async () => {
+    renderPropuesta({ ...CLIENTE, brandDiscounts: [], bonusDiscount: 45 })
+    expect(await screen.findByRole('button', { name: /% desc\./i })).toBeInTheDocument()
+})
+
+it('sin cliente no rompe ni ofrece el chip', async () => {
+    renderPropuesta(undefined)
+    await screen.findByText('Amortiguadores')
+    expect(screen.queryByRole('button', { name: /% desc\./i })).not.toBeInTheDocument()
+})
