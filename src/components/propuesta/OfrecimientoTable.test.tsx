@@ -1,7 +1,8 @@
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { vi } from 'vitest'
 import OfrecimientoTable from './OfrecimientoTable'
 import type { IOfrecimientoFila } from './filas'
+import type { IMarcaEstado } from '@/types/planificacion'
 
 function fila(over: Partial<IOfrecimientoFila> = {}): IOfrecimientoFila {
     return {
@@ -784,4 +785,66 @@ describe('interruptor $/U', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
         expect(screen.getByText('7')).toBeInTheDocument()
     })
+})
+
+function marca(over: Partial<IMarcaEstado> = {}): IMarcaEstado {
+    return {
+        code: '141',
+        nombre: 'COBREQ',
+        actual: 80_000,
+        mesAnterior: 70_000,
+        promedio6m: 95_000,
+        actualUnidades: 80,
+        mesAnteriorUnidades: 70,
+        promedio6mUnidades: 95,
+        dejo: false,
+        ...over,
+    }
+}
+
+/** Despliega las marcas de la primera fila: el gesto es tocar la zona de números. */
+function desplegarMarcas() {
+    fireEvent.click(screen.getByText('600'))
+}
+
+it('la marca con descuento muestra su %', () => {
+    render(<OfrecimientoTable filas={[fila({ marcas: [marca({ descuento: 15 })] })]} />)
+    desplegarMarcas()
+    expect(screen.getByText('15%')).toBeInTheDocument()
+})
+
+it('la marca sin descuento no dibuja badge', () => {
+    render(<OfrecimientoTable filas={[fila({ marcas: [marca()] })]} />)
+    desplegarMarcas()
+    expect(screen.queryByText(/%$/)).not.toBeInTheDocument()
+})
+
+it('convive con otra marca sin descuento en el mismo rubro', () => {
+    render(
+        <OfrecimientoTable
+            filas={[fila({ marcas: [marca({ descuento: 15 }), marca({ code: '999', nombre: 'FERODO' })] })]}
+        />,
+    )
+    desplegarMarcas()
+    expect(screen.getByText('15%')).toBeInTheDocument()
+    expect(screen.getByText('FERODO')).toBeInTheDocument()
+})
+
+// El badge no puede empujar ni esconder ninguna de las tres columnas: vive dentro del
+// flex-1 del nombre.
+it('el badge no altera las tres celdas numéricas de la marca', () => {
+    render(<OfrecimientoTable filas={[fila({ marcas: [marca({ descuento: 15 })] })]} />)
+    desplegarMarcas()
+    const subfila = screen.getByText('COBREQ').closest('[data-marca]') as HTMLElement
+    expect(subfila).toBeTruthy()
+    expect(within(subfila).getByText('80')).toBeInTheDocument()
+    expect(within(subfila).getByText('70')).toBeInTheDocument()
+    expect(within(subfila).getByText('95')).toBeInTheDocument()
+})
+
+it('el badge no es un control: no hay botón dentro de la sub-fila', () => {
+    render(<OfrecimientoTable filas={[fila({ marcas: [marca({ descuento: 15 })] })]} />)
+    desplegarMarcas()
+    const subfila = screen.getByText('COBREQ').closest('[data-marca]') as HTMLElement
+    expect(within(subfila).queryByRole('button')).not.toBeInTheDocument()
 })

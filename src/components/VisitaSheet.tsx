@@ -8,6 +8,7 @@ import OfrecimientoTable from './propuesta/OfrecimientoTable'
 import AgregarOfrecimientoSheet from './propuesta/AgregarOfrecimientoSheet'
 import AccionesExternas from './AccionesExternas'
 import { construirFilasVisita, rubrosElegibles } from './propuesta/filas'
+import { conDescuentos } from '@/lib/descuentosMarca'
 import { useMotivos } from '@/hooks/useMotivos'
 import {
     useOfrecimientos,
@@ -449,7 +450,7 @@ export default function VisitaSheet({
     // de la tabla que iba a mostrar.
     const filas = construirFilasVisita(
         conNuevosArriba(ofrecimientos),
-        rubroStatus,
+        conDescuentos(rubroStatus, cliente),
         estadosResolucion,
         true,
         !visitaCerrada,

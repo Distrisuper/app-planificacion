@@ -329,6 +329,29 @@ function SubFilasMarcas({
                         )}
                         <div className="flex min-w-0 flex-1 items-center gap-1.5">
                             <span className="min-w-0 truncate">{m.nombre}</span>
+                            {/* Dentro del flex-1 del nombre, NO como cuarta columna: se probó
+                                una columna "DTO" (la que tiene app-vendedores en el rubro
+                                expandido) y dejaba el nombre en ~55px — `PARRI…` — en un
+                                iPhone SE. Acá sólo cuesta ancho en las marcas que sí tienen
+                                descuento, que son minoría.
+
+                                `shrink-0` + el `truncate` del nombre: cuando no entra todo,
+                                se corta `COBREQ # LIQUIDOS FRENO #` y nunca el número, que
+                                es el dato que el vendedor está buscando.
+
+                                Violeta y no verde/ámbar: en esta misma tabla, a 26px de
+                                distancia, el chip de estado ya usa ámbar para "a medio
+                                cargar" y verde para "✓ completo". Un tercer significado
+                                sobre esos colores rompe ese semáforo. Es además el violeta
+                                que ya usa `DiscountBadge` en app-vendedores. Sin tramos de
+                                color por valor (≥18 verde, ≥15 azul…, como
+                                `V2ClientDiscountsPanel`): esos cortes no están documentados
+                                en ningún lado. */}
+                            {m.descuento !== undefined && (
+                                <span className="shrink-0 rounded-full border border-violet-200 bg-violet-50 px-1.5 py-px text-[10px] font-bold tabular-nums text-violet-700">
+                                    {Math.round(m.descuento)}%
+                                </span>
+                            )}
                         </div>
                         <Celda valor={actual} promedio6m={promedio6m} compacta modo={modo} />
                         <Celda valor={mesAnterior} promedio6m={promedio6m} ocultaEnAngosto compacta modo={modo} />
