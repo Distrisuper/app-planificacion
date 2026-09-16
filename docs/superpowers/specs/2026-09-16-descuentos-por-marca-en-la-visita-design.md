@@ -255,13 +255,27 @@ el `↗` (`AccionesExternas.tsx:8-9`: "las tres son consultas del contexto del c
 afuera"). Éste es contenido propio; mezclarlo rompe esa convención y le saca al `↗` su
 significado.
 
-Va en la **línea de identidad del header de `VisitaSheet`** (`VisitaSheet.tsx:407-430`), el
-mismo slot donde ya vive "No visité" — que es exactamente donde ese comentario argumenta que
-van las acciones que el vendedor necesita encontrar rápido, parado en la puerta. Chip `%`
-violeta, a la izquierda del rojo, mismas proporciones (`h-7`, `rounded-lg`, ícono + texto).
+Va en la **línea de identidad del header**, el mismo slot donde ya vive "No visité" — que es
+exactamente donde ese comentario argumenta que van las acciones que el vendedor necesita
+encontrar rápido, parado en la puerta. Chip `%` violeta, a la izquierda del rojo, mismas
+proporciones (`h-7`, `rounded-lg`, ícono + texto).
 
-Se muestra **también con la visita cerrada**, a diferencia de "No visité": es consulta, no
-edición, y el sheet de una visita cerrada es justamente de consulta.
+**En las DOS pantallas del cliente**: `PropuestaSheet` (antes de entrar) y `VisitaSheet`
+(adentro). La propuesta es cuando el vendedor decide **qué** ofrecer, así que es el momento
+donde el descuento más pesa — dejarlo sólo adentro obligaría a entrar para consultarlo. Y el
+control no se muda de lugar entre una pantalla y la otra.
+
+El botón vive en `ChipDescuentos` (exportado de `DescuentosMarcaSheet.tsx`) y el predicado en
+`hayDescuentosParaMostrar` (en `src/lib/descuentosMarca.ts`, no en el componente: es
+derivación pura).
+
+En `VisitaSheet` se muestra **también con la visita cerrada**, a diferencia de "No visité": es
+consulta, no edición, y el sheet de una visita cerrada es justamente de consulta.
+
+**El sheet se monta en la raíz de cada pantalla, no al lado del botón.** El panel del
+`BottomSheet` que contiene el header se anima con `transform` (`animate-sheet-up`), y un
+ancestro con `transform` se vuelve el bloque contenedor de sus descendientes `fixed`: el
+overlay del sheet anidado quedaría encerrado dentro del header en vez de cubrir la pantalla.
 
 Si el cliente no tiene ningún descuento por marca **y** no es suscriptor, el chip no se
 renderiza: un botón que abre una pantalla vacía es peor que no tenerlo.
