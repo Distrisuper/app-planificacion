@@ -364,6 +364,18 @@ Hay **tres capas separadas**, y una operación toca una sola:
 - **`getRubroStatus` pega a `POST /sale/rubro/client-context`**, no al listado paginado de
   Versus. Devuelve rubros con marcas anidadas y `amount`+`units` por período (el toggle
   pesos/unidades futuro es sólo front).
+- **El descuento por marca sale de `cliente.brandDiscounts`, no de un endpoint.** Ya viaja en
+  el card de la agenda (`fct_clients.brand_discounts`) y toda la derivación vive en
+  `src/lib/descuentosMarca.ts`, que lo pega a cada marca de `rubroStatus` (`conDescuentos`)
+  **antes** de que `filas.ts` arme las filas — así no baja cuatro niveles de props. **Un
+  cliente suscriptor no ve descuentos por marca**: `bonusDiscount ∈ {45, 49}` significa 45%
+  de bonificación global a cambio de un fee, y el descuento por marca NO se acumula con eso
+  (el motor de precios de Lupa lo neutraliza). **No copiar el `general_discount <> 45` de
+  `clientService.getBrandDiscounts`**: esa columna vale 0 para todos, porque dbt lee
+  `discounts->>'byGeneral'` y client-service nunca emite esa clave — el filtro de
+  app-vendedores es un no-op. El suscriptor ve un chip que lo explica, porque una lista
+  vacía se lee como "no tiene ningún descuento" cuando tiene el mejor de todos. Detalle en
+  [`docs/superpowers/specs/2026-09-16-descuentos-por-marca-en-la-visita-design.md`](docs/superpowers/specs/2026-09-16-descuentos-por-marca-en-la-visita-design.md).
 - **El ＋ existe, pero en las filas del CATÁLOGO, no en las de la propuesta.** Tocar una
   fila de *otros rubros del cliente* **agrega** ese rubro a la visita: ese es el verbo de
   `＋`, y va en el mismo slot de 26px que el chip de estado, centrado sobre el mismo eje.
