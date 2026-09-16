@@ -15,7 +15,7 @@ import {
     useAgregarOfrecimiento,
     useEliminarOfrecimiento,
 } from '@/hooks/useOfrecimientos'
-import { useBrandCatalog } from '@/hooks/useCatalogos'
+import { useBrandCatalog, useRubroCatalog } from '@/hooks/useCatalogos'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
 import { formatearDuracion } from '@/lib/visitaTimer'
@@ -184,6 +184,19 @@ export default function VisitaSheet({
     // los números en las dos pantallas y en los dos estados (colapsada/expandida).
     const { data: rubroStatus = [] } = useRubroStatus(open ? (codigoParticularCliente ?? null) : null)
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(open)
+    // Los rubros AGREGABLES no salen del historial del cliente: uno sin movimientos no
+    // tiene ninguno y se quedaba sin una sola fila que ofrecer. Sólo con la visita
+    // abierta — cerrada no hay nada que agregar, y el vendedor está con datos móviles.
+    const { data: catalogoRubros = [] } = useRubroCatalog(open && !visitaCerrada)
+    // Unión y no reemplazo: el catálogo es la lista completa de rubros válidos, pero un
+    // rubro con venta que su filtro excluya no tiene que desaparecer del buscador. El
+    // historial pisa al catálogo (mismo código ⇒ misma descripción, así que da igual cuál
+    // gana; lo que importa es no listarlo dos veces).
+    const rubrosCatalogo = useMemo(() => {
+        const porCode = new Map(catalogoRubros.map(c => [c.code, c]))
+        for (const s of rubroStatus) porCode.set(s.rubroCode, { code: s.rubroCode, description: s.nombre })
+        return [...porCode.values()]
+    }, [catalogoRubros, rubroStatus])
 
     useEffect(() => {
         if (!open) {
@@ -307,16 +320,19 @@ export default function VisitaSheet({
     // la primera antes de que termine, y su "en vuelo" queda deshabilitado para
     // siempre. mutateAsync devuelve una promesa propia de CADA llamada, así que el
     // try/finally de acá sí queda atado a la request correcta.
+    // Contra `rubrosCatalogo` y no contra `rubroStatus`: las filas agregables ya no son
+    // sólo las del historial del cliente, y resolver la descripción ahí dejaba el ＋ de
+    // una fila del catálogo como un botón muerto (el `return` de abajo).
     async function agregarDesdeTabla(rubroCode: string) {
-        const item = rubroStatus.find(s => s.rubroCode === rubroCode)
+        const item = rubrosCatalogo.find(c => c.code === rubroCode)
         if (!item) return
         const clave = `rubro:${rubroCode}`
         setAgregandoCodes(prev => new Set(prev).add(clave))
         try {
             const result = await agregar.mutateAsync({
                 tipo: 'rubro',
-                codigo: item.rubroCode,
-                descripcion: item.nombre,
+                codigo: item.code,
+                descripcion: item.description,
             })
             setAgregadosIds(prev => [result.ofrecimientoId, ...prev])
             setAbrirAlLlegar(result.ofrecimientoId)
@@ -446,8 +462,8 @@ export default function VisitaSheet({
         estadosResolucion,
         true,
         !visitaCerrada,
+        catalogoRubros,
     )
-    const rubrosCatalogo = rubroStatus.map(s => ({ code: s.rubroCode, description: s.nombre }))
     // Por código de rubro, para precargar los chips de "¿Qué marca ofreciste?" en el
     // wizard con el mismo desglose que ya muestra la tabla.
     const marcasPorRubro = useMemo(

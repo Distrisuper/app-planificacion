@@ -258,6 +258,83 @@ describe('construirFilasVisita', () => {
         )
         expect(filas[0].detalle).toEqual({ tramos: [{ umbral: 2_500_000, descuentoPct: 3 }] })
     })
+
+    // Cliente sin movimientos: client-context devuelve `rubros: []` (y está bien —
+    // nunca compró). Sin el catálogo, el bloque de abajo quedaba vacío y el vendedor
+    // no tenía NADA para agregar. Ver spec 2026-09-16-rubros-agregables-desde-el-catalogo.
+    it('sin historial, el catálogo puebla el bloque de abajo con filas agregables en –', () => {
+        const filas = construirFilasVisita(
+            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
+            [],
+            { 7: { motivosCargados: 0, completo: false } },
+            true,
+            true,
+            [
+                { code: 'BAT', description: 'Baterías' },
+                { code: 'FILT', description: 'Filtros' },
+            ],
+        )
+        expect(filas.map(f => f.codigo)).toEqual(['AMORT', 'BAT', 'FILT'])
+        expect(filas[1]).toMatchObject({
+            nombre: 'Baterías',
+            actual: null,
+            mesAnterior: null,
+            promedio6m: null,
+            destacada: false,
+            agregable: true,
+            tipo: 'rubro',
+            marcas: [],
+        })
+    })
+
+    it('el catálogo va después del historial y no duplica ni la visita ni el historial', () => {
+        const filas = construirFilasVisita(
+            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
+            [
+                { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 600_000, mesAnterior: 800_000, promedio6m: 1_000_000, marcas: [] },
+                { rubroCode: 'BAT', nombre: 'Baterías', actual: 300_000, mesAnterior: 0, promedio6m: 100_000, marcas: [] },
+            ],
+            { 7: { motivosCargados: 0, completo: false } },
+            true,
+            true,
+            [
+                { code: 'AMORT', description: 'Amortiguadores' },
+                { code: 'BAT', description: 'Baterías' },
+                { code: 'FILT', description: 'Filtros' },
+            ],
+        )
+        expect(filas.map(f => f.codigo)).toEqual(['AMORT', 'BAT', 'FILT'])
+        // BAT conserva sus números: el que manda es el historial, el catálogo solo suma
+        // los que faltan.
+        expect(filas[1]).toMatchObject({ actual: 300_000, agregable: true })
+        expect(filas[2]).toMatchObject({ actual: null, agregable: true })
+    })
+
+    it('colapsada no trae el catálogo', () => {
+        const filas = construirFilasVisita(
+            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
+            [],
+            { 7: { motivosCargados: 0, completo: false } },
+            false,
+            true,
+            [{ code: 'BAT', description: 'Baterías' }],
+        )
+        expect(filas.map(f => f.codigo)).toEqual(['AMORT'])
+    })
+
+    // La visita cerrada es de consulta: no hay nada que agregar, así que listar el
+    // catálogo entero sería decenas de filas muertas.
+    it('con la visita cerrada, el catálogo no aparece', () => {
+        const filas = construirFilasVisita(
+            [ofrecimiento({ id: 7, codigo: 'AMORT' })],
+            [],
+            { 7: { motivosCargados: 1, completo: true } },
+            true,
+            false,
+            [{ code: 'BAT', description: 'Baterías' }],
+        )
+        expect(filas.map(f => f.codigo)).toEqual(['AMORT'])
+    })
 })
 
 describe('separarSegmentos', () => {

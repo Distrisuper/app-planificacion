@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { getBrandCatalog } from '@/api/planificacion'
+import { getBrandCatalog, getRubroCatalog } from '@/api/planificacion'
 
 export const catalogoKeys = {
+    rubros: ['catalogo', 'rubros'] as const,
     marcas: ['catalogo', 'marcas'] as const,
 }
 
-/** Es un catálogo: se recalcula sobre 12 meses de ventas. Del lado del server ya
- *  viene cacheado en Redis, así que refetchear cada 5 minutos (el default de
- *  queryClient) sería puro ruido. */
+/** Son catálogos: el de rubros cambia de mes a mes y el de marcas se recalcula sobre
+ *  12 meses de ventas. Del lado del server ya vienen cacheados en Redis, así que
+ *  refetchear cada 5 minutos (el default de queryClient) sería puro ruido. */
 const CATALOGO_STALE_MS = 30 * 60 * 1000
 
 /**
@@ -30,6 +31,19 @@ const MARCAS_EXCLUIDAS = new Set([
     'OPERACION ESPECIAL',
     'Z OPERACION ESPECIAL',
 ])
+
+/** Catálogo de rubros válidos: de dónde salen las filas agregables de la visita y los
+ *  resultados de rubro del buscador de "Agregar ofrecimiento". `enabled` existe para no
+ *  pagarlo donde no se usa (visita cerrada, propuesta previa): son vendedores en la calle
+ *  con datos móviles. */
+export function useRubroCatalog(enabled = true) {
+    return useQuery({
+        queryKey: catalogoKeys.rubros,
+        queryFn: getRubroCatalog,
+        staleTime: CATALOGO_STALE_MS,
+        enabled,
+    })
+}
 
 export function useBrandCatalog(enabled = true) {
     return useQuery({

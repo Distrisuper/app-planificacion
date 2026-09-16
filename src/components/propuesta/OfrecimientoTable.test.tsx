@@ -81,6 +81,22 @@ it('si el bloque de otros rubros es agregable, la etiqueta invita a tocar', () =
     expect(screen.getByText(/tocá uno para agregarlo/i)).toBeInTheDocument()
 })
 
+// Con filas agregables, abajo también están los rubros del catálogo que el cliente nunca
+// compró (ver spec 2026-09-16-rubros-agregables-desde-el-catalogo): la etiqueta no puede
+// seguir diciendo que la lista es "del cliente".
+it('la etiqueta del bloque agregable no dice "del cliente"', () => {
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({ codigo: 'R1', destacada: true }),
+                fila({ codigo: 'R2', nombre: 'Filtros', destacada: false, agregable: true }),
+            ]}
+        />,
+    )
+    expect(screen.queryByText(/otros rubros del cliente/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/^otros rubros ·/i)).toBeInTheDocument()
+})
+
 it('si el bloque de otros rubros es de solo lectura, la etiqueta no invita a tocar', () => {
     render(
         <OfrecimientoTable

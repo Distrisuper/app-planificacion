@@ -150,8 +150,8 @@ function Celda({
  *  pendiente es un anillo hueco y NO un ＋ (que es lo que tuvo un rato).
  *  `＋` significa "agregar algo nuevo", y acá el rubro ya existe: viene de
  *  la propuesta congelada y lo que se hace es registrar su resultado. Peor: en ESTA misma
- *  tabla "agregar" ya es una acción distinta y real (las filas de "Otros rubros del
- *  cliente · tocá uno para agregarlo"), así que el ＋ quedaba pegado al
+ *  tabla "agregar" ya es una acción distinta y real (las filas de "Otros rubros ·
+ *  tocá uno para agregarlo"), así que el ＋ quedaba pegado al
  *  verbo equivocado: en las filas que hay que completar, mientras las que sí agregan no
  *  llevan ícono. El contraparte natural de un check es una casilla sin tildar. */
 function ChipEstado({ resolucion }: { resolucion: IOfrecimientoFilaResolucion }) {
@@ -661,7 +661,7 @@ export default function OfrecimientoTable({
             agregandoCodes={agregandoCodes}
             eliminandoIds={eliminandoIds}
         />
-        {/* La gemela de "Otros rubros del cliente · tocá uno para agregarlo": dos bandas,
+        {/* La gemela de "Otros rubros · tocá uno para agregarlo": dos bandas,
             misma gramática, verbos opuestos — arriba se CARGA el resultado, abajo se
             AGREGA un rubro. Ese contraste es lo que hace que la pantalla se explique sola,
             y reemplaza al párrafo de tres líneas que vivía arriba del sheet (~54px contra
@@ -757,9 +757,16 @@ export default function OfrecimientoTable({
                     // scrollea con ella hay que volver hasta arriba para usarlo — que es
                     // justo lo que uno quiere evitar cuando ya scrolleó mucho.
                     <div className="sticky top-8 z-10 border-y border-dsline bg-[#FAFBFD] px-2.5 py-2">
+                        {/* "del cliente" sólo cuando la lista ES del cliente. Con filas
+                            agregables (visita abierta) abajo también están los rubros del
+                            catálogo que nunca compró — son justamente los que hacen que un
+                            cliente sin movimientos tenga algo que ofrecer, y llamarlos "del
+                            cliente" sería falso. Ver spec
+                            2026-09-16-rubros-agregables-desde-el-catalogo. */}
                         <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
-                            Otros rubros del cliente
-                            {bloqueExtraEsAgregable && ' · tocá uno para agregarlo'}
+                            {bloqueExtraEsAgregable
+                                ? 'Otros rubros · tocá uno para agregarlo'
+                                : 'Otros rubros del cliente'}
                         </p>
                         <div className="relative">
                             <Search

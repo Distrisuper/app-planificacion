@@ -1,4 +1,4 @@
-import type { IAlcance, IMarcaEstado, IOfrecimiento, IRubroEstado, IRubroPropuesta, TipoOfrecimiento } from '@/types/planificacion'
+import type { IAlcance, ICatalogoItem, IMarcaEstado, IOfrecimiento, IRubroEstado, IRubroPropuesta, TipoOfrecimiento } from '@/types/planificacion'
 import { ordenar80_20 } from '@/lib/ordenRubros'
 
 /** Presente ⇒ segunda línea con el botón de resolución. Sólo en la visita. */
@@ -129,13 +129,21 @@ export interface IEstadoResolucionOfrecimiento {
 /** Colapsada: los ofrecimientos de la visita, en el orden que los devuelve el backend —
  *  no se reordena al resolver (ver spec: reordenar dejando pendientes arriba haría
  *  saltar la fila que el vendedor acaba de tocar). Expandida: agrega el resto de los
- *  rubros del cliente, marcados `agregable` cuando la visita es editable. */
+ *  rubros del cliente, marcados `agregable` cuando la visita es editable, y después
+ *  `catalogoRubros` — los rubros válidos que el cliente NO compra, sin números.
+ *
+ *  El catálogo existe porque lo agregable NO puede derivarse del historial: un cliente
+ *  sin movimientos tiene `rubroStatus` vacío (client-context devuelve `rubros: []`, y es
+ *  correcto), y sin él el vendedor se queda sin una sola fila para ofrecer. Sólo se suma
+ *  con la visita editable: cerrada es de consulta, y ahí serían decenas de filas muertas
+ *  (ver spec 2026-09-16-rubros-agregables-desde-el-catalogo). */
 export function construirFilasVisita(
     ofrecimientosVisita: IOfrecimiento[],
     rubroStatus: IRubroEstado[],
     estados: Record<number, IEstadoResolucionOfrecimiento>,
     expandido: boolean,
     editable: boolean,
+    catalogoRubros: ICatalogoItem[] = [],
 ): IOfrecimientoFila[] {
     const status = porCode(rubroStatus)
     const codesVisita = new Set(ofrecimientosVisita.map(r => r.codigo))
@@ -192,7 +200,28 @@ export function construirFilasVisita(
         marcas: s.marcas,
     }))
 
-    return [...bloqueArriba, ...bloqueAbajo]
+    // El catálogo va DESPUÉS del historial y sin reordenar: el endpoint ya lo devuelve
+    // alfabético, y el 80/20 no aplica a filas sin venta (ordenarlas por un total que es
+    // null las mezclaría entre sí sin criterio). Los que ya tienen historial ganan: sus
+    // números son el dato que el vendedor necesita para decidir.
+    const bloqueCatalogo: IOfrecimientoFila[] = editable
+        ? catalogoRubros
+              .filter(c => !codesVisita.has(c.code) && !status.has(c.code))
+              .map(c => ({
+                  codigo: c.code,
+                  nombre: c.description,
+                  actual: null,
+                  mesAnterior: null,
+                  promedio6m: null,
+                  destacada: false,
+                  agregable: true,
+                  tipo: 'rubro',
+                  alcance: [],
+                  marcas: [],
+              }))
+        : []
+
+    return [...bloqueArriba, ...bloqueAbajo, ...bloqueCatalogo]
 }
 
 /** Separa las filas de acción (Plan cupo, etc.) y de marca del resto: ninguna de las
