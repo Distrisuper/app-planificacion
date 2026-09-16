@@ -1,9 +1,17 @@
 import { useState } from 'react'
 import { Check } from 'lucide-react'
-import MarcaOfrecimientoPicker from './MarcaOfrecimientoPicker'
+import MarcasOfrecidasChips from './MarcasOfrecidasChips'
 import DetalleMotivo from './detalleMotivo/DetalleMotivo'
 import { esValidoSegunDeclaracion } from './detalleMotivo/validadores'
-import type { ICatalogoItem, IAccionComercial, IMotivo, IOfrecimientoMotivo, ResultadoMotivo } from '@/types/planificacion'
+import type {
+    ICatalogoItem,
+    IAccionComercial,
+    IMarcaEstado,
+    IMarcaOfrecida,
+    IMotivo,
+    IOfrecimientoMotivo,
+    ResultadoMotivo,
+} from '@/types/planificacion'
 
 interface ResolucionOfrecimientoProps {
     /** Catálogo de nivel `ofrecimiento`. Nunca se hardcodea: agregar un motivo es un INSERT. */
@@ -12,19 +20,24 @@ interface ResolucionOfrecimientoProps {
      *  columna `marca`: con texto libre conviven "Fric Rot", "fricrot" y "FRIC-ROT". */
     marcas: ICatalogoItem[]
     marcasLoading?: boolean
-    /** La marca de este ofrecimiento viaja en `accion.marca` — el campo `accion.accion`
-     *  ya no es seteable desde este formulario (se sacó Acción Comercial), pero el tipo
-     *  se mantiene porque otras partes del código (useOfrecimientos, OfrecimientoTable)
-     *  siguen leyendo el mismo objeto. */
+    /** El desglose del cliente en este rubro (mismo dato que la tabla), para precargar
+     *  los chips de "¿Qué marca ofreciste?". */
+    marcasDelRubro: IMarcaEstado[]
+    /** Las marcas ya declaradas para este ofrecimiento. */
+    marcasOfrecidas: IMarcaOfrecida[]
+    onChangeMarcasOfrecidas: (marcas: IMarcaOfrecida[]) => void
+    /** La acción comercial (Plan cupo, Descuento). `marca` ya no se escribe desde acá —
+     *  el tipo se mantiene porque otras partes del código (useOfrecimientos,
+     *  OfrecimientoTable) siguen leyendo el mismo objeto. */
     accion: IAccionComercial | null
     onChangeAccion: (accion: IAccionComercial | null) => void
     value: IOfrecimientoMotivo[]
     onChange: (motivos: IOfrecimientoMotivo[]) => void
     /** Cuántos rubros quedan por resolver además de este. 0 = no se ofrece el check de
-     *  "aplicar a restantes" de Marca. */
+     *  "aplicar a restantes" de las marcas ofrecidas. */
     rubrosRestantes?: number
-    /** Copia esta marca a los rubros restantes — una sola vez, al tildar SU check. */
-    onAplicarMarca?: () => void
+    /** Copia las marcas tildadas a los rubros restantes — una sola vez, al tildar SU check. */
+    onAplicarMarcas?: () => void
 }
 
 /** Color del motivo tildado, según qué tan buena/mala es esa resolución — no según su
@@ -82,23 +95,18 @@ export default function ResolucionOfrecimiento({
     motivos,
     marcas,
     marcasLoading,
-    accion,
-    onChangeAccion,
+    marcasDelRubro,
+    marcasOfrecidas,
+    onChangeMarcasOfrecidas,
+    accion: _accion,
+    onChangeAccion: _onChangeAccion,
     value,
     onChange,
     rubrosRestantes = 0,
-    onAplicarMarca,
+    onAplicarMarcas,
 }: ResolucionOfrecimientoProps) {
     const porId = new Map(value.map(m => [m.motivoId, m]))
     const resultadoPorId = new Map(motivos.map(m => [m.motivoId, m.resultado]))
-
-    function onChangeMarcaChip(marca: string | null) {
-        if (!accion?.accion && !marca) {
-            onChangeAccion(null)
-        } else {
-            onChangeAccion({ accion: accion?.accion ?? null, marca, params: accion?.params })
-        }
-    }
 
     // Qué lado del segmentado se está viendo. Arranca donde ya hay carga (al retomar un
     // borrador, abrir en Objeción cuando lo tildado es un Cierre obligaría a buscarlo);
@@ -220,13 +228,14 @@ export default function ResolucionOfrecimiento({
 
     return (
         <div>
-            <MarcaOfrecimientoPicker
-                marcas={marcas}
-                marcasLoading={marcasLoading}
-                value={accion?.marca ?? null}
-                onChange={onChangeMarcaChip}
+            <MarcasOfrecidasChips
+                marcasDelRubro={marcasDelRubro}
+                catalogo={marcas}
+                catalogoLoading={marcasLoading}
+                value={marcasOfrecidas}
+                onChange={onChangeMarcasOfrecidas}
                 rubrosRestantes={rubrosRestantes}
-                onAplicarATodos={onAplicarMarca}
+                onAplicarATodos={onAplicarMarcas}
             />
 
             {bloques.length > 0 && (

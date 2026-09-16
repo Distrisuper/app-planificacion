@@ -15,6 +15,17 @@ interface BottomSheetProps {
     subtitle?: string
     /** Si se pasa, aparece un botón de minimizar al lado de la X. */
     onMinimize?: () => void
+    /** Si se pasa, aparece un botón de ayuda (círculo "?"), primero de los tres — antes
+     *  de minimizar y cerrar. La pantalla es la dueña del contenido (qué explica); acá
+     *  solo vive el botón, con el mismo lenguaje visual que minimizar/cerrar. */
+    onHelp?: () => void
+    /** Para el `aria-expanded` del botón de ayuda: la pantalla es la que sabe si el
+     *  panel de ayuda está abierto. */
+    ayudaAbierta?: boolean
+    /** Contenido del panel flotante que abre "?" (ver `onHelp`). Vive en `BottomSheet`,
+     *  no en el contenido del sheet: un bloque en el flujo normal empujaba toda la
+     *  lista de abajo cada vez que se abría — acá flota, anclado al botón. */
+    ayudaContenido?: ReactNode
     /** Si se pasa, se pinta en el renglón del `subtitle`, empujado con `ml-auto` hasta el
      *  borde derecho del header (a la altura de minimizar/cerrar) — sin menú intermedio:
      *  un solo control secundario visible de entrada, sin gastar alto del pie. Pensado
@@ -54,6 +65,9 @@ export default function BottomSheet({
     eyebrowClassName,
     subtitle,
     onMinimize,
+    onHelp,
+    ayudaAbierta,
+    ayudaContenido,
     acciones,
     altura = 'auto',
     footer,
@@ -75,7 +89,7 @@ export default function BottomSheet({
             onClick={onClose}
         >
             <div
-                className={`animate-sheet-up flex w-full flex-col rounded-t-[24px] bg-white shadow-[0_-10px_34px_rgba(10,15,30,.22)] ${
+                className={`animate-sheet-up relative flex w-full flex-col rounded-t-[24px] bg-white shadow-[0_-10px_34px_rgba(10,15,30,.22)] ${
                     // En 'completa', el max-h no llega a aplicar nunca con dvh soportado
                     // (96dvh <= 96vh): está para que, si no lo estuviera, el sheet quede
                     // acotado a la pantalla en vez de crecer con el contenido y empujar
@@ -90,6 +104,14 @@ export default function BottomSheet({
                 }`}
                 onClick={e => e.stopPropagation()}
             >
+                {/* Capa para cerrar la ayuda tocando afuera: cubre todo el sheet (header +
+                    contenido + pie), por debajo del popover (z-30) pero por encima de todo
+                    lo demás. No compite con el cierre del sheet: ese backdrop vive AFUERA de
+                    este `div` relative, y los clicks adentro ya paran acá con
+                    `stopPropagation`. */}
+                {ayudaAbierta && onHelp && (
+                    <div data-testid="overlay-ayuda" className="absolute inset-0 z-20" onClick={onHelp} />
+                )}
                 {/* Header — fijo, no scrollea con el contenido. */}
                 <div className="shrink-0 px-[18px] pt-3.5">
                     <div className="mx-auto mb-4 h-1 w-[38px] rounded-full bg-[#DBE0EB]" />
@@ -110,7 +132,43 @@ export default function BottomSheet({
                                 )}
                                 <h2 className="truncate text-[17px] font-extrabold leading-tight text-[#182645]">{title}</h2>
                             </div>
-                            <div className="flex shrink-0 items-center gap-1.5">
+                            {/* `relative z-30`: sin ser un elemento posicionado, Minimizar y
+                                Cerrar pintan ANTES que la capa de ayuda (`z-20`, sí
+                                posicionada) sin importar el orden en el DOM — quedaban
+                                tapados mientras el popover estaba abierto, y el primer toque
+                                solo cerraba la ayuda en vez de cerrar/minimizar el sheet. */}
+                            <div className="relative z-30 flex shrink-0 items-center gap-1.5">
+                                {/* `relative` acá (no en todo el header): el popover ancla
+                                    justo debajo de ESTE botón, sin importar cuánto mida el
+                                    resto del header (eyebrow/subtitle varían de sheet a
+                                    sheet). */}
+                                {onHelp && (
+                                    <div className="relative">
+                                        {/* Mismo círculo gris que Minimizar/Cerrar, pero con el
+                                            signo "?" solo — no el ícono `CircleHelp`, que trae
+                                            su propio círculo dibujado adentro del SVG: puesto
+                                            sobre el círculo del botón quedaba un círculo dentro
+                                            de otro círculo. */}
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label="Cómo funciona esta pantalla"
+                                            aria-expanded={ayudaAbierta}
+                                            onClick={onHelp}
+                                            className="h-[30px] w-[30px] bg-[#F0F2F7] text-[15px] font-extrabold text-dsmuted hover:bg-[#e3e6ee]"
+                                        >
+                                            ?
+                                        </Button>
+                                        {/* Flota, no empuja: antes vivía en el flujo normal del
+                                            contenido y cada apertura corría toda la lista de
+                                            rubros hacia abajo. */}
+                                        {ayudaAbierta && ayudaContenido && (
+                                            <div className="absolute right-0 top-[calc(100%+8px)] z-30 w-64 rounded-xl border border-dsline bg-white p-3 text-[12px] font-semibold leading-snug text-[#3B4761] shadow-[0_8px_24px_rgba(10,15,30,.16)]">
+                                                {ayudaContenido}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                                 {onMinimize && (
                                     <Button
                                         variant="ghost"

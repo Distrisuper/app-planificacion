@@ -307,8 +307,25 @@ export interface IRubroDropsResponse {
     rubros: IDroppedRubro[]
 }
 
-/** Fila de la tabla "Ver más" (cómo viene comprando el cliente, TODOS los
- *  rubros — a diferencia de la propuesta, que solo trae los caídos/relleno). */
+/** Una marca dentro de un rubro, con la misma forma que el rubro. `dejo`: tenía promedio
+ *  y no compra hace dos meses (lo calcula el server, spec 2026-09-16 §3.3). */
+export interface IMarcaEstado {
+    code: string
+    nombre: string
+    actual: number
+    mesAnterior: number
+    promedio6m: number
+    /** Mismos tres períodos, en unidades — alimenta el interruptor pesos/unidades
+     *  (front-only, spec 2026-09-16 §3.2). Opcionales para no romper los fixtures
+     *  existentes que no los necesitan. */
+    actualUnidades?: number
+    mesAnteriorUnidades?: number
+    promedio6mUnidades?: number
+    dejo: boolean
+}
+
+/** Fila de "cómo viene comprando el cliente": TODOS sus rubros con Actual/M.Ant/Prom.6M
+ *  y las marcas anidadas. Sale de POST /sale/rubro/client-context. */
 export interface IRubroEstado {
     rubroCode: string
     nombre: string
@@ -316,29 +333,38 @@ export interface IRubroEstado {
     mesAnterior: number
     /** Promedio mensual de los últimos 6 meses cerrados. */
     promedio6m: number
+    /** Mismos tres períodos, en unidades — ver `IMarcaEstado.actualUnidades`. */
+    actualUnidades?: number
+    mesAnteriorUnidades?: number
+    promedio6mUnidades?: number
+    /** [] cuando el rubro no tiene historial de marca. */
+    marcas: IMarcaEstado[]
 }
 
-// ── Raw shape of POST /sale/rubro/clients (RubroClientsService, api-vendedores)
-// — solo los campos que se leen acá. Ver getRubroStatus. ──
-export interface IRubroClientsPeriodMetrics {
+// ── Raw shape of POST /sale/rubro/client-context (ClientContextService, api-vendedores).
+// Períodos crudos: last6Months es la SUMA de 6 meses cerrados, acá se divide. ──
+export type ClientContextPeriodKey = 'thisMonth' | 'lastMonth' | 'last6Months'
+export interface IClientContextPeriod {
     amount: number
+    units: number
 }
-
-export interface IRubroClientsBreakdownItem {
-    kind: string
-    code: string
-    name: string
-    totalsByPeriod: Record<string, IRubroClientsPeriodMetrics | undefined>
+export interface IClientContextBrand {
+    brandCode: string
+    brandName: string
+    totalsByPeriod: Record<ClientContextPeriodKey, IClientContextPeriod>
+    dropped: boolean
 }
-
-export interface IRubroClientsEntity {
-    code: string
-    particularCode?: string
-    breakdown?: { items: IRubroClientsBreakdownItem[] }
+export interface IClientContextRubro {
+    rubroCode: string
+    rubroDescription: string
+    totalsByPeriod: Record<ClientContextPeriodKey, IClientContextPeriod>
+    brands: IClientContextBrand[]
 }
-
-export interface IRubroClientsPageResponse {
-    entities: IRubroClientsEntity[]
+export interface IClientContextResponse {
+    particularCode: string
+    clientName: string
+    currentYM: string
+    rubros: IClientContextRubro[]
 }
 
 export interface IIniciarVisitaDTO {
@@ -391,10 +417,19 @@ export interface IAccionComercial {
     params?: unknown
 }
 
+/** Marca que el vendedor declaró haber ofrecido. Va al alcance del ofrecimiento
+ *  (tipo='marca'). `codigo` = code del catálogo/warehouse, `descripcion` = nombre. */
+export interface IMarcaOfrecida {
+    codigo: string
+    descripcion: string
+}
+
 export interface IResolverOfrecimientoDTO {
     motivos: IOfrecimientoMotivo[]
     /** `undefined` = no se toca lo guardado. `null` = se sacó la acción. */
     detalle?: IAccionComercial | null
+    /** `undefined` = no se toca el alcance. `[]` = se borran las marcas ofrecidas. */
+    marcas?: IMarcaOfrecida[]
 }
 
 export interface IResolverOfrecimientoResult {

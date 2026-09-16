@@ -10,9 +10,17 @@ function fila(over: Partial<IOfrecimientoFila> = {}): IOfrecimientoFila {
         actual: 600_000,
         mesAnterior: 800_000,
         promedio6m: 1_000_000,
+        // El default de la tabla es "unidades" (ver `modo`): estos valores reproducen el
+        // mismo texto que `fmtAmount` mostraba para los pesos de arriba (que divide por
+        // mil), así los tests que no le prestan atención al interruptor siguen viendo
+        // "600"/"800"/"1.000" sin tener que saber que existe.
+        actualUnidades: 600,
+        mesAnteriorUnidades: 800,
+        promedio6mUnidades: 1_000,
         destacada: true,
         tipo: 'rubro',
         alcance: [],
+        marcas: [],
         ...over,
     }
 }
@@ -33,7 +41,7 @@ it('pinta de rojo ACTUAL y M.ANT cuando caen bajo P.6M', () => {
 })
 
 it('no pinta de rojo cuando el valor es –', () => {
-    render(<OfrecimientoTable filas={[fila({ actual: null, promedio6m: 1_000_000 })]} />)
+    render(<OfrecimientoTable filas={[fila({ actual: null, actualUnidades: undefined, promedio6m: 1_000_000 })]} />)
     const celdas = screen.getAllByText('–')
     expect(celdas.some(c => c.closest('span')?.classList.contains('text-dsred'))).toBe(false)
 })
@@ -356,6 +364,30 @@ it('una fila de rubro sigue mostrando sus tres columnas numéricas', () => {
     expect(screen.getByText('1.000')).toBeInTheDocument()
 })
 
+it('un rubro sin datos en unidades (fallback de la propuesta, sin match en rubroStatus) no desaparece: cae a pesos', () => {
+    // Ver construirFilasPropuesta: un rubro propuesto ausente de rubroStatus usa su
+    // fallback en pesos (current/prev/baseline), que no tiene equivalente en unidades.
+    // Con el default de la tabla en "unidades", esa fila mostraba "–" en las tres
+    // columnas — exactamente lo que ese fallback existe para evitar.
+    render(
+        <OfrecimientoTable
+            filas={[
+                fila({
+                    actual: 500_000,
+                    mesAnterior: 700_000,
+                    promedio6m: 900_000,
+                    actualUnidades: undefined,
+                    mesAnteriorUnidades: undefined,
+                    promedio6mUnidades: undefined,
+                }),
+            ]}
+        />,
+    )
+    expect(screen.getByText('500')).toBeInTheDocument()
+    expect(screen.getByText('700')).toBeInTheDocument()
+    expect(screen.getByText('900')).toBeInTheDocument()
+})
+
 it('una fila de Cupo con detalle muestra el resumen de tramos', () => {
     render(
         <OfrecimientoTable
@@ -497,21 +529,22 @@ it('con acción y marca a la vez, cada una aparece en su propia sección', () =>
     expect(screen.getByText('Marcas')).toBeInTheDocument()
 })
 
-// El gesto va en una banda de ancho completo y NO en la columna Rubro: ahí mide
-// ~60-100px en mobile y el texto salía truncado.
-it('en la tabla de una visita, una banda propia dice el gesto de cargar', () => {
+// La banda de ancho completo (arriba de la tabla) es solo el rótulo de sección: el
+// gesto se explica en el "?" del header del sheet (ver BottomSheet.onHelp), NO en la
+// columna Rubro — ahí mide ~60-100px en mobile y el texto salía truncado.
+it('en la tabla de una visita, una banda propia rotula la sección', () => {
     render(
         <OfrecimientoTable
             filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
         />,
     )
-    expect(screen.getByText(/tocá uno para cargar el resultado/i)).toBeInTheDocument()
+    expect(screen.getByText('Tu propuesta')).toBeInTheDocument()
     expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Rubro')
 })
 
 it('en la propuesta (sin filas resolubles) no hay banda de cargar', () => {
     render(<OfrecimientoTable filas={[fila()]} />)
-    expect(screen.queryByText(/tocá uno para cargar el resultado/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/tocá el rubro para cargar el resultado/i)).not.toBeInTheDocument()
     expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Rubro')
 })
 
@@ -590,4 +623,150 @@ it('la propuesta previa no reserva el slot del chip: ahi ese espacio es ancho de
     // Ni resoluble ni agregable => 4 columnas y ningun spacer al principio.
     expect(screen.getAllByRole('columnheader')).toHaveLength(4)
     expect(document.querySelector('.lucide-plus')).toBeNull()
+})
+
+// Unidades = pesos / 1000, mismo criterio que en `fila()`: reproduce el mismo texto
+// ("61", "22", etc.) sea cual sea el modo con el que arranque la tabla.
+const fremax = {
+    code: 'B1', nombre: 'FREMAX', actual: 0, mesAnterior: 54_000, promedio6m: 61_000,
+    actualUnidades: 0, mesAnteriorUnidades: 54, promedio6mUnidades: 61, dejo: false,
+}
+const corven = {
+    code: 'B2', nombre: 'CORVEN', actual: 0, mesAnterior: 0, promedio6m: 22_000,
+    actualUnidades: 0, mesAnteriorUnidades: 0, promedio6mUnidades: 22, dejo: true,
+}
+const marcas5 = [fremax, corven, { ...fremax, code: 'B3', nombre: 'M3' }, { ...fremax, code: 'B4', nombre: 'M4' }, { ...fremax, code: 'B5', nombre: 'M5' }]
+const resol = { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true }
+
+describe('dos zonas en la fila de la visita', () => {
+    it('tocar el nombre abre la resolución y NO despliega', () => {
+        const onResolucion = vi.fn()
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [fremax] })]} onResolucion={onResolucion} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+        expect(onResolucion).toHaveBeenCalledWith(7)
+        expect(screen.queryByText('FREMAX')).not.toBeInTheDocument()
+    })
+
+    it('tocar los números despliega las marcas con sus tres números y NO abre la resolución', () => {
+        const onResolucion = vi.fn()
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [fremax, corven] })]} onResolucion={onResolucion} />)
+        const zona = screen.getByRole('button', { name: 'Marcas de Amortiguadores' })
+        expect(zona).toHaveAttribute('aria-expanded', 'false')
+        fireEvent.click(zona)
+        expect(onResolucion).not.toHaveBeenCalled()
+        expect(zona).toHaveAttribute('aria-expanded', 'true')
+        expect(screen.getByText('FREMAX')).toBeInTheDocument()
+        expect(screen.getByText('CORVEN')).toBeInTheDocument()
+        expect(screen.getByText('61')).toBeInTheDocument()
+    })
+
+    it('no etiqueta las marcas que dejaron de comprar (dejo no se muestra en la sub-fila)', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [corven] })]} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        expect(screen.getByText('CORVEN')).toBeInTheDocument()
+        expect(screen.queryByText(/dejó/i)).not.toBeInTheDocument()
+    })
+
+    it('tocar de nuevo cierra', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [fremax] })]} />)
+        const zona = screen.getByRole('button', { name: 'Marcas de Amortiguadores' })
+        fireEvent.click(zona)
+        fireEvent.click(zona)
+        expect(screen.queryByText('FREMAX')).not.toBeInTheDocument()
+    })
+
+    it('una sola abierta a la vez', () => {
+        render(
+            <OfrecimientoTable
+                filas={[
+                    fila({ codigo: 'R1', resolucion: resol, marcas: [fremax] }),
+                    fila({ codigo: 'R2', nombre: 'Filtros', resolucion: { ...resol, ofrecimientoId: 8 }, marcas: [corven] }),
+                ]}
+            />,
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Filtros' }))
+        expect(screen.queryByText('FREMAX')).not.toBeInTheDocument()
+        expect(screen.getByText('CORVEN')).toBeInTheDocument()
+    })
+
+    it('sin marcas, la zona de números no es un botón', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [] })]} />)
+        expect(screen.queryByRole('button', { name: 'Marcas de Amortiguadores' })).not.toBeInTheDocument()
+    })
+
+    it('muestra todas las marcas, sin recortar: son las que justifican el total del rubro', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: marcas5 })]} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        expect(screen.getByText('FREMAX')).toBeInTheDocument()
+        expect(screen.getByText('M3')).toBeInTheDocument()
+        expect(screen.getByText('M4')).toBeInTheDocument()
+        expect(screen.getByText('M5')).toBeInTheDocument()
+        expect(screen.queryByText(/marcas más/i)).not.toBeInTheDocument()
+    })
+
+    it('las filas del catálogo (agregable) no se parten: toda la fila agrega', () => {
+        const onAgregar = vi.fn()
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [] }), fila({ codigo: 'R2', nombre: 'Filtros', destacada: false, agregable: true, marcas: [fremax] })]} onAgregar={onAgregar} />)
+        expect(screen.queryByRole('button', { name: 'Marcas de Filtros' })).not.toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: 'Agregar Filtros' }))
+        expect(onAgregar).toHaveBeenCalledWith('R2')
+    })
+
+    it('en la propuesta (sin resolucion) toda la fila despliega', () => {
+        render(<OfrecimientoTable filas={[fila({ marcas: [fremax] })]} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        expect(screen.getByText('FREMAX')).toBeInTheDocument()
+    })
+
+    it('la banda es solo el rótulo de sección: la explicación vive en el "?" del sheet', () => {
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [] })]} />)
+        expect(screen.getByText('Tu propuesta')).toBeInTheDocument()
+        expect(screen.queryByText(/tocá el rubro para cargar el resultado/i)).not.toBeInTheDocument()
+    })
+})
+
+describe('interruptor $/U', () => {
+    // Solo aparece cuando hay chip (tabla de una visita): comparte el mismo slot de
+    // 26px que `ChipEstado`, así que necesita una fila con `resolucion` para tener
+    // dónde pararse (ver el guard `conChip` en el header).
+    const conUnidades = fila({
+        resolucion: resol,
+        actual: 600_000,
+        mesAnterior: 800_000,
+        promedio6m: 1_000_000,
+        actualUnidades: 12,
+        mesAnteriorUnidades: 8,
+        promedio6mUnidades: 10,
+    })
+
+    it('arranca en unidades, mostrando "U" sin apretar', () => {
+        render(<OfrecimientoTable filas={[conUnidades]} />)
+        const boton = screen.getByRole('button', { name: /mostrar en pesos o en unidades/i })
+        expect(boton).toHaveTextContent('U')
+        expect(boton).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.getByText('12')).toBeInTheDocument()
+        expect(screen.getByText('10')).toBeInTheDocument()
+    })
+
+    it('tocarlo cambia las tres columnas a pesos y pasa a mostrar "$"', () => {
+        render(<OfrecimientoTable filas={[conUnidades]} />)
+        const boton = screen.getByRole('button', { name: /mostrar en pesos o en unidades/i })
+        fireEvent.click(boton)
+        expect(boton).toHaveTextContent('$')
+        expect(boton).toHaveAttribute('aria-pressed', 'false')
+        expect(screen.queryByText('12')).not.toBeInTheDocument()
+        expect(screen.getByText('600')).toBeInTheDocument()
+    })
+
+    it('el modo también alcanza a las sub-filas de marca', () => {
+        const conMarcaUnidades = {
+            ...fremax,
+            actual: 900_000,
+            actualUnidades: 7,
+        }
+        render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [conMarcaUnidades] })]} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Marcas de Amortiguadores' }))
+        expect(screen.getByText('7')).toBeInTheDocument()
+    })
 })

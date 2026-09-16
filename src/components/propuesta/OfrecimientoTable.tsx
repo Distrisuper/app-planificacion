@@ -4,7 +4,7 @@ import { fmtAmount } from '@/lib/fmtAmount'
 import { resumenAlcance } from '@/lib/alcance'
 import { registroDetalleAccion } from './accionDetalle/registro'
 import { separarSegmentos } from './filas'
-import type { TipoOfrecimiento } from '@/types/planificacion'
+import type { IMarcaEstado, TipoOfrecimiento } from '@/types/planificacion'
 import type { IOfrecimientoFila, IOfrecimientoFilaResolucion } from './filas'
 
 interface OfrecimientoTableProps {
@@ -32,8 +32,22 @@ function normalizar(texto: string): string {
         .toLowerCase()
 }
 
-function fmtCelda(valor: number | null) {
-    return valor == null ? '–' : fmtAmount(valor)
+/** 'pesos' (default) o 'unidades' — interruptor de todo lo que muestra `OfrecimientoTable`.
+ *  El endpoint ya manda ambos períodos (spec 2026-09-16 §3.2); esto es el "front-only". */
+export type ModoValor = 'pesos' | 'unidades'
+
+const FMT_UNIDADES = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
+
+/** Igual criterio que `fmtAmount` para el cero (0 unidades no es dato, es "no compró"),
+ *  pero sin el "$" ni la escala a miles: una unidad es una unidad. */
+function fmtUnidades(valor: number): string {
+    const rounded = Math.round(valor)
+    return rounded === 0 ? '–' : FMT_UNIDADES.format(rounded)
+}
+
+function fmtCelda(valor: number | null, modo: ModoValor) {
+    if (valor == null) return '–'
+    return modo === 'unidades' ? fmtUnidades(valor) : fmtAmount(valor)
 }
 
 function cae(valor: number | null, promedio6m: number | null): boolean {
@@ -52,10 +66,10 @@ const TIPO_LABEL: Record<TipoOfrecimiento, string> = {
 // span interno) en el header y en cada celda: si alguno de los dos tuviera un
 // padding distinto, el número y la etiqueta del header dejan de coincidir en
 // la misma columna aunque el `div` que los contiene mida lo mismo.
-const ANCHO_NUMERICA = 'w-[54px] shrink-0'
+const ANCHO_NUMERICA = 'w-[48px] shrink-0'
 // M.ANT es la unica de las tres columnas numericas que se esconde abajo de 360px: es la
 // menos cargada de las tres (la propuesta se arma comparando ACTUAL contra P.6M, no
-// contra el mes anterior), y esos 54px son la diferencia entre leer "PARRILLAS, BRAZ..."
+// contra el mes anterior), y esos 48px son la diferencia entre leer "PARRILLAS, BRAZ..."
 // y leer el nombre del rubro completo.
 //
 // Son dos clases y no una porque el header es `block` (alinea con text-right) y la celda
@@ -80,6 +94,9 @@ function Celda({
     promedio6m,
     referencia,
     ocultaEnAngosto,
+    abierta,
+    compacta,
+    modo = 'pesos',
 }: {
     valor: number | null
     promedio6m: number | null
@@ -87,6 +104,12 @@ function Celda({
     /** true = la columna desaparece abajo de 360px. Tiene que ir junto con el mismo flag
      *  en su header (ver OCULTA_ANGOSTO_CELDA). */
     ocultaEnAngosto?: boolean
+    /** true mientras la zona de marcas de esta fila está desplegada: la pastilla pasa a
+     *  blanco para no competir con el tinte navy claro del botón que la contiene. */
+    abierta?: boolean
+    /** true en las sub-filas de marca: pastilla más chica que la del rubro. */
+    compacta?: boolean
+    modo?: ModoValor
 }) {
     const rojo = !referencia && cae(valor, promedio6m)
     return (
@@ -100,11 +123,19 @@ function Celda({
                 // demás — solo cambia el color de texto — porque sin ese fondo el ojo no
                 // tiene con qué anclar su posición y la columna parece corrida, aunque el
                 // ancho sea idéntico al de ACTUAL/M.ANT.
-                className={`inline-block rounded-md px-1.5 py-0.5 lining-nums tabular-nums slashed-zero whitespace-nowrap text-[12.5px] font-semibold ${
-                    referencia ? 'bg-[#F1F3F8] text-dsmuted' : rojo ? 'bg-[#FEECEC] text-dsred' : 'bg-[#F1F3F8] text-[#182645]'
+                className={`inline-block rounded-md lining-nums tabular-nums slashed-zero whitespace-nowrap font-semibold ${
+                    compacta ? 'px-1 py-0 text-[10.5px]' : 'px-1 py-0.5 text-[12px] tracking-[-0.01em]'
+                } ${
+                    referencia
+                        ? 'bg-[#F1F3F8] text-dsmuted'
+                        : rojo
+                          ? 'bg-[#FEECEC] text-dsred'
+                          : abierta
+                            ? 'bg-white text-[#182645]'
+                            : 'bg-[#F1F3F8] text-[#182645]'
                 }`}
             >
-                {fmtCelda(valor)}
+                {fmtCelda(valor, modo)}
             </span>
         </div>
     )
@@ -188,57 +219,146 @@ function ChipAgregar() {
     )
 }
 
-/** Nombre (+ chip de tipo y alcance si aplica) y las tres columnas numéricas, siempre en
- *  ese orden y con el mismo ancho de columna que el header. El chip no se pinta para
+/** Nombre + chip de tipo y alcance/detalle si aplica. El chip de tipo no se pinta para
  *  'rubro': es el caso por defecto y repetirlo en cada fila es ruido. "SKF" sin decir
  *  que es una marca sí es ambiguo, y esa es la razón del chip. */
-function ContenidoFila({ fila }: { fila: IOfrecimientoFila }) {
+function NombreFila({ fila }: { fila: IOfrecimientoFila }) {
     const moduloDetalle = registroDetalleAccion[fila.codigo]
     return (
-        <>
-            <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#182645]">{fila.nombre}</span>
-                    {fila.tipo !== 'rubro' && (
-                        <span className="shrink-0 rounded-full bg-[#EEF3FB] px-1.5 py-0.5 text-[10px] font-bold text-[#213D82]">
-                            {TIPO_LABEL[fila.tipo]}
-                        </span>
-                    )}
-                </div>
-                {fila.alcance.length > 0 && (
-                    <div className="truncate text-[11px] font-semibold text-dsmuted">
-                        {resumenAlcance(fila.alcance)}
-                    </div>
-                )}
-                {fila.detalle != null && moduloDetalle && (
-                    <div className="truncate text-[11px] font-semibold text-dsmuted">
-                        {moduloDetalle.resumen(fila.detalle)}
-                    </div>
+        <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+                <span className="min-w-0 flex-1 truncate text-[13px] font-bold text-[#182645]">{fila.nombre}</span>
+                {fila.tipo !== 'rubro' && (
+                    <span className="shrink-0 rounded-full bg-[#EEF3FB] px-1.5 py-0.5 text-[10px] font-bold text-[#213D82]">
+                        {TIPO_LABEL[fila.tipo]}
+                    </span>
                 )}
             </div>
-            {/* `rubroStatus` (de donde salen estos tres números) está indexado por
-             *  código de RUBRO — una acción o una marca nunca matchean ahí, así que
-             *  mostrar las tres celdas en guiones se lee como "falta cargar" cuando en
-             *  realidad ese dato no existe para estos tipos de ofrecimiento. */}
-            {fila.tipo === 'rubro' && (
-                <>
-                    <Celda valor={fila.actual} promedio6m={fila.promedio6m} />
-                    <Celda valor={fila.mesAnterior} promedio6m={fila.promedio6m} ocultaEnAngosto />
-                    <Celda valor={fila.promedio6m} promedio6m={fila.promedio6m} referencia />
-                </>
+            {fila.alcance.length > 0 && (
+                <div className="truncate text-[11px] font-semibold text-dsmuted">
+                    {resumenAlcance(fila.alcance)}
+                </div>
             )}
+            {fila.detalle != null && moduloDetalle && (
+                <div className="truncate text-[11px] font-semibold text-dsmuted">
+                    {moduloDetalle.resumen(fila.detalle)}
+                </div>
+            )}
+        </div>
+    )
+}
+
+/** Las tres columnas numéricas, siempre en ese orden y con el mismo ancho que el
+ *  header. `rubroStatus` (de donde salen estos números) está indexado por código de
+ *  RUBRO — una acción o una marca nunca matchean ahí, así que mostrar las tres celdas
+ *  en guiones se lee como "falta cargar" cuando en realidad ese dato no existe para
+ *  estos tipos de ofrecimiento. */
+function CeldasFila({
+    fila,
+    abierta,
+    modo = 'pesos',
+}: {
+    fila: IOfrecimientoFila
+    abierta?: boolean
+    modo?: ModoValor
+}) {
+    if (fila.tipo !== 'rubro') return null
+    // Un rubro de la propuesta ausente de rubroStatus usa su propio fallback en pesos
+    // (current/prev/baseline, ver construirFilasPropuesta) — pero ESE fallback no tiene
+    // unidades, porque el endpoint de caídas no las expone. Sin esto, esa fila mostraba
+    // "–" en las tres columnas apenas la tabla arranca en modo unidades (default), que es
+    // justo lo que el fallback en pesos existe para evitar. Si la fila no tiene NINGÚN
+    // dato en unidades, esta fila puntual cae a pesos aunque el resto de la tabla esté en
+    // unidades — no al revés (mezclar pesos crudos bajo el rótulo "unidades" sería peor).
+    const sinUnidades = fila.actualUnidades == null && fila.mesAnteriorUnidades == null && fila.promedio6mUnidades == null
+    const modoEfectivo: ModoValor = modo === 'unidades' && sinUnidades ? 'pesos' : modo
+    const actual = modoEfectivo === 'unidades' ? (fila.actualUnidades ?? null) : fila.actual
+    const mesAnterior = modoEfectivo === 'unidades' ? (fila.mesAnteriorUnidades ?? null) : fila.mesAnterior
+    const promedio6m = modoEfectivo === 'unidades' ? (fila.promedio6mUnidades ?? null) : fila.promedio6m
+    return (
+        <>
+            <Celda valor={actual} promedio6m={promedio6m} abierta={abierta} modo={modoEfectivo} />
+            <Celda valor={mesAnterior} promedio6m={promedio6m} ocultaEnAngosto abierta={abierta} modo={modoEfectivo} />
+            <Celda valor={promedio6m} promedio6m={promedio6m} referencia abierta={abierta} modo={modoEfectivo} />
         </>
     )
 }
 
-/** Una fila completa, siempre de UNA sola línea. Las tres variantes (read-only,
- *  resoluble, agregable) comparten la misma altura y las mismas columnas — lo único
- *  que cambia es qué pasa al tocarla y qué muestra el chip del principio. */
+/** Nombre + las tres columnas numéricas. Usado por las variantes que NO parten la
+ *  fila en dos zonas (read-only, agregable, o resoluble sin marcas para desplegar). */
+function ContenidoFila({ fila, modo }: { fila: IOfrecimientoFila; modo?: ModoValor }) {
+    return (
+        <>
+            <NombreFila fila={fila} />
+            <CeldasFila fila={fila} modo={modo} />
+        </>
+    )
+}
+
+/** Las marcas del cliente en este rubro, desplegadas debajo de la fila. Todas, sin
+ *  recorte: son las que explican el total de ACTUAL/M.ANT/P.6M del rubro — mostrar
+ *  solo 3 y colapsar el resto dejaba el total sin justificar a simple vista. */
+function SubFilasMarcas({
+    marcas,
+    conChip,
+    conColumnaQuitar,
+    modo = 'pesos',
+}: {
+    marcas: IMarcaEstado[]
+    conChip: boolean
+    conColumnaQuitar: boolean
+    modo?: ModoValor
+}) {
+    return (
+        <div className="bg-[#F7F8FB]">
+            {marcas.map((m, i) => {
+                const actual = modo === 'unidades' ? (m.actualUnidades ?? null) : m.actual
+                const mesAnterior = modo === 'unidades' ? (m.mesAnteriorUnidades ?? null) : m.mesAnterior
+                const promedio6m = modo === 'unidades' ? (m.promedio6mUnidades ?? null) : m.promedio6m
+                return (
+                    <div
+                        key={m.code}
+                        role="row"
+                        data-marca={m.code}
+                        className="flex min-h-[30px] items-center gap-1 pl-2.5 pr-1.5 text-[11.5px] font-semibold text-[#3B4761]"
+                    >
+                        {conChip && (
+                            <div className={`${ANCHO_CHIP} flex justify-center`}>
+                                <span aria-hidden className={`h-[13px] w-[3px] rounded-sm ${i === 0 ? 'bg-dsnavy' : 'bg-[#C9D2E3]'}`} />
+                            </div>
+                        )}
+                        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+                            <span className="min-w-0 truncate">{m.nombre}</span>
+                        </div>
+                        <Celda valor={actual} promedio6m={promedio6m} compacta modo={modo} />
+                        <Celda valor={mesAnterior} promedio6m={promedio6m} ocultaEnAngosto compacta modo={modo} />
+                        <Celda valor={promedio6m} promedio6m={promedio6m} referencia compacta modo={modo} />
+                        {conColumnaQuitar && <div className={ANCHO_QUITAR} />}
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
+/** Una fila completa, siempre de UNA sola línea (más las sub-filas de marca cuando está
+ *  desplegada). Las variantes (read-only, resoluble, agregable) comparten la misma
+ *  altura y las mismas columnas — lo único que cambia es qué pasa al tocarla y qué
+ *  muestra el chip del principio.
+ *
+ *  Una fila resoluble con marcas se parte en DOS zonas: el nombre carga el resultado
+ *  (es donde vive el estado), los números despliegan las marcas del cliente en ese
+ *  rubro. Una fila agregable no se parte (toda la fila agrega); una fila de la
+ *  propuesta previa (ni resoluble ni agregable) despliega con toda la fila, porque ahí
+ *  no hay otra acción que compita por el toque. */
 function FilaOfrecimiento({
     fila,
     conBorde,
     conChip,
     conColumnaQuitar,
+    abierta = false,
+    modo = 'pesos',
+    onToggleMarcas,
     onResolucion,
     onAgregar,
     onEliminar,
@@ -249,6 +369,9 @@ function FilaOfrecimiento({
     conBorde: boolean
     conChip: boolean
     conColumnaQuitar: boolean
+    abierta?: boolean
+    modo?: ModoValor
+    onToggleMarcas?: (codigo: string) => void
     onResolucion?: (ofrecimientoId: number) => void
     onAgregar?: (codigo: string) => void
     onEliminar?: (ofrecimientoId: number) => void
@@ -260,64 +383,121 @@ function FilaOfrecimiento({
     const eliminando = resolucion ? (eliminandoIds?.has(resolucion.ofrecimientoId) ?? false) : false
     const clasesFila = 'flex min-w-0 flex-1 items-center gap-1 px-2.5 py-2 text-left'
 
+    const tieneMarcas = fila.tipo === 'rubro' && fila.marcas.length > 0
+    const dosZonas = !!resolucion && tieneMarcas
+    const filaEnteraDespliega = !resolucion && !fila.agregable && tieneMarcas
+
+    const chip =
+        conChip &&
+        (resolucion ? (
+            <ChipEstado resolucion={resolucion} />
+        ) : fila.agregable ? (
+            <ChipAgregar />
+        ) : (
+            <div className={ANCHO_CHIP} />
+        ))
+
     const interior = (
         <>
-            {conChip &&
-                (resolucion ? (
-                    <ChipEstado resolucion={resolucion} />
-                ) : fila.agregable ? (
-                    <ChipAgregar />
-                ) : (
-                    <div className={ANCHO_CHIP} />
-                ))}
-            <ContenidoFila fila={fila} />
+            {chip}
+            <ContenidoFila fila={fila} modo={modo} />
         </>
     )
 
     return (
-        <div className={`flex items-center ${conBorde ? 'border-b border-dsline' : ''}`}>
-            {resolucion || fila.agregable ? (
-                <button
-                    type="button"
-                    aria-label={
-                        resolucion ? `Resolución de ${fila.nombre}` : `Agregar ${fila.nombre}`
-                    }
-                    disabled={agregando}
-                    onClick={() =>
-                        resolucion
-                            ? onResolucion?.(resolucion.ofrecimientoId)
-                            : onAgregar?.(fila.codigo)
-                    }
-                    className={`${clasesFila} active:bg-[#F7F8FB] disabled:opacity-50`}
-                >
-                    {interior}
-                </button>
-            ) : (
-                <div className={clasesFila}>{interior}</div>
-            )}
-            {/* Solo para ofrecimientos agregados dinámicamente — los de la propuesta
-             *  congelada no se pueden borrar (el backend responde
-             *  OFRECIMIENTO_DE_PROPUESTA); si el vendedor no lo ofreció, se resuelve
-             *  con "No lo ofrecí" en vez de borrarlo. La columna se reserva en toda la
-             *  tabla (ver ANCHO_QUITAR) para que las filas sin ✕ no corran sus números. */}
-            {conColumnaQuitar && (
-                <div className={`${ANCHO_QUITAR} flex justify-center`}>
-                    {resolucion && !resolucion.esPropuesto && (
+        <div className={conBorde ? 'border-b border-dsline' : ''}>
+            <div className="flex items-stretch">
+                {dosZonas ? (
+                    <>
                         <button
                             type="button"
-                            aria-label={`Quitar ${fila.nombre}`}
-                            onClick={() => onEliminar?.(resolucion.ofrecimientoId)}
-                            disabled={eliminando}
-                            className="grid h-7 w-7 place-items-center rounded-md text-dsred disabled:opacity-50"
+                            aria-label={`Resolución de ${fila.nombre}`}
+                            disabled={agregando}
+                            onClick={() => onResolucion?.(resolucion.ofrecimientoId)}
+                            // max-w-[50%]: sin este tope el nombre se comía todo el espacio
+                            // sobrante y la zona de números (abajo) quedaba angosta y con un
+                            // hueco en blanco entre las dos — el tope libera ese espacio para
+                            // que lo ocupe la zona de números, que crece con flex-1 abajo.
+                            className="flex min-w-0 max-w-[50%] items-center gap-1 py-2 pl-2.5 text-left active:bg-[#F7F8FB]"
                         >
-                            {eliminando ? (
-                                <Loader2 className="h-[15px] w-[15px] animate-spin" strokeWidth={2.4} />
-                            ) : (
-                                <Trash2 className="h-[15px] w-[15px]" strokeWidth={2} />
-                            )}
+                            {chip}
+                            <NombreFila fila={fila} />
                         </button>
-                    )}
-                </div>
+                        <button
+                            type="button"
+                            aria-label={`Marcas de ${fila.nombre}`}
+                            aria-expanded={abierta}
+                            onClick={() => onToggleMarcas?.(fila.codigo)}
+                            className={`flex flex-1 items-center justify-end gap-1 py-2 pr-1.5 ${
+                                // Tinte parejo aun sin tocar: marca la zona de números como
+                                // su propio control, distinto del nombre (sin fondo). Solo
+                                // cuando hay dos zonas — la fila de una sola zona no lo lleva.
+                                // flex-1 (en vez de shrink-0) para que el tinte llegue hasta
+                                // el borde del botón de al lado, sin dejar blanco de por medio.
+                                abierta ? 'bg-[#EEF3FB]' : 'bg-[#FAFBFD] active:bg-[#F1F3F8]'
+                            }`}
+                        >
+                            <CeldasFila fila={fila} abierta={abierta} modo={modo} />
+                        </button>
+                    </>
+                ) : filaEnteraDespliega ? (
+                    <button
+                        type="button"
+                        aria-label={`Marcas de ${fila.nombre}`}
+                        aria-expanded={abierta}
+                        onClick={() => onToggleMarcas?.(fila.codigo)}
+                        className={`${clasesFila} ${abierta ? 'bg-[#EEF3FB]' : 'active:bg-[#F7F8FB]'}`}
+                    >
+                        {chip}
+                        <NombreFila fila={fila} />
+                        <CeldasFila fila={fila} abierta={abierta} modo={modo} />
+                    </button>
+                ) : resolucion || fila.agregable ? (
+                    <button
+                        type="button"
+                        aria-label={
+                            resolucion ? `Resolución de ${fila.nombre}` : `Agregar ${fila.nombre}`
+                        }
+                        disabled={agregando}
+                        onClick={() =>
+                            resolucion
+                                ? onResolucion?.(resolucion.ofrecimientoId)
+                                : onAgregar?.(fila.codigo)
+                        }
+                        className={`${clasesFila} active:bg-[#F7F8FB] disabled:opacity-50`}
+                    >
+                        {interior}
+                    </button>
+                ) : (
+                    <div className={clasesFila}>{interior}</div>
+                )}
+                {/* Solo para ofrecimientos agregados dinámicamente — los de la propuesta
+                 *  congelada no se pueden borrar (el backend responde
+                 *  OFRECIMIENTO_DE_PROPUESTA); si el vendedor no lo ofreció, se resuelve
+                 *  con "No lo ofrecí" en vez de borrarlo. La columna se reserva en toda la
+                 *  tabla (ver ANCHO_QUITAR) para que las filas sin ✕ no corran sus números. */}
+                {conColumnaQuitar && (
+                    <div className={`${ANCHO_QUITAR} flex justify-center`}>
+                        {resolucion && !resolucion.esPropuesto && (
+                            <button
+                                type="button"
+                                aria-label={`Quitar ${fila.nombre}`}
+                                onClick={() => onEliminar?.(resolucion.ofrecimientoId)}
+                                disabled={eliminando}
+                                className="grid h-7 w-7 place-items-center rounded-md text-dsred disabled:opacity-50"
+                            >
+                                {eliminando ? (
+                                    <Loader2 className="h-[15px] w-[15px] animate-spin" strokeWidth={2.4} />
+                                ) : (
+                                    <Trash2 className="h-[15px] w-[15px]" strokeWidth={2} />
+                                )}
+                            </button>
+                        )}
+                    </div>
+                )}
+            </div>
+            {abierta && tieneMarcas && (
+                <SubFilasMarcas marcas={fila.marcas} conChip={conChip} conColumnaQuitar={conColumnaQuitar} modo={modo} />
             )}
         </div>
     )
@@ -375,6 +555,31 @@ function SegmentoOfrecimientos({
     )
 }
 
+/** Interruptor $ / U de las tres columnas numéricas: un solo botón que alterna, en el
+ *  slot de 26px del header de columnas — arriba de donde cae `ChipEstado` en cada fila,
+ *  mismo eje. Un botón que cambia de letra (no dos pastillas lado a lado) porque ahí
+ *  no entran dos etiquetas sin angostar la columna Rubro.
+ *
+ *  Pastilla tenue (mismo lenguaje que "No visité" en el header de la visita: borde y
+ *  fondo al 20-ish% del color, texto sólido), no un círculo relleno. Un relleno sólido
+ *  navy en el header, arriba de una columna de anillos y checks también navy/verde,
+ *  competía con esos indicadores en vez de leerse como un control aparte — "llamaba
+ *  demasiado la atención". El cuadrado redondeado (contra los círculos de las filas)
+ *  ya alcanza para diferenciarlo por forma; no hace falta además ganarles en peso. */
+function ModoValorBoton({ modo, onChange }: { modo: ModoValor; onChange: (modo: ModoValor) => void }) {
+    return (
+        <button
+            type="button"
+            aria-label="Mostrar en pesos o en unidades"
+            aria-pressed={modo === 'unidades'}
+            onClick={() => onChange(modo === 'pesos' ? 'unidades' : 'pesos')}
+            className="grid h-5 w-5 place-items-center rounded-md border border-dsnavy/25 bg-dsnavy/8 text-[10px] font-extrabold normal-case text-dsnavy active:bg-dsnavy/15"
+        >
+            {modo === 'pesos' ? '$' : 'U'}
+        </button>
+    )
+}
+
 /** Lista RUBRO · ACTUAL · M.ANT · P.6M compartida por la propuesta y la visita.
  *  Presentacional pura: no conoce visitas ni mutaciones, solo `filas` (ver
  *  `filas.ts`) y callbacks. El buscador es la única excepción a "pura": es un
@@ -403,6 +608,12 @@ export default function OfrecimientoTable({
     eliminandoIds,
 }: OfrecimientoTableProps) {
     const [busqueda, setBusqueda] = useState('')
+    // Una sola fila desplegada a la vez: abrir otra cierra la anterior.
+    const [abiertaCodigo, setAbiertaCodigo] = useState<string | null>(null)
+    const [modo, setModo] = useState<ModoValor>('unidades')
+    function toggleMarcas(codigo: string) {
+        setAbiertaCodigo(prev => (prev === codigo ? null : codigo))
+    }
 
     // Ninguna acción ni marca tiene venta histórica por rubro: cada una vive en su
     // propia sección, arriba de todo, afuera de la tabla RUBRO·ACTUAL·M.ANT·P.6M — el
@@ -464,20 +675,31 @@ export default function OfrecimientoTable({
 
             Solo en la tabla de una visita (`conChip`): en la propuesta previa no hay nada
             que cargar. */}
+        {/* Margen negativo: el BottomSheet da px-[18px], y esto compensa para que la
+            tabla quede al borde (12px del borde del sheet) en vez de encajonada. No toca
+            el padding del sheet — lo usan otras pantallas. */}
+        <div className="-mx-1.5">
+        {/* El gesto se explica en el "?" del header del sheet (`BottomSheet.onHelp` +
+            `ayudaContenido`), no acá: esta banda es solo el rótulo de sección. */}
         {conChip && (
-            <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
-                Tu propuesta · tocá uno para cargar el resultado
+            <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted leading-[1.35]">
+                Tu propuesta
             </p>
         )}
-        {/* Sin `overflow-hidden`: recortaba las esquinas del header, pero un ancestro con
-            overflow oculto anula el `position: sticky` de adentro contra el scroll del
-            sheet. Las esquinas de arriba las redondea el propio header. */}
-        <div className="w-full rounded-xl border border-dsline">
+        <div className="w-full">
             {/* Sticky: con el catálogo abierto la lista pasa de 25 filas y, sin el rótulo
                 a la vista, las tres columnas de números quedan sin identificar apenas se
                 scrollea (ACTUAL vs. M.ANT vs. P.6M no se adivinan por el valor). */}
-            <div className="sticky top-0 z-20 flex h-8 items-center gap-1 rounded-t-[11px] border-b border-dsline bg-[#F7F8FB] px-2.5 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
-                {conChip && <div className={ANCHO_CHIP} />}
+            <div className="sticky top-0 z-20 flex h-8 items-center gap-1 border-y border-dsline bg-[#F7F8FB] px-2.5 text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">
+                {/* El interruptor $/U vive en el mismo slot de 26px que `ChipEstado`: es
+                    la primera opción del header, justo arriba de los ✓/anillos de la
+                    columna. Solo cuando hay chip (tabla de una visita) — en la propuesta
+                    previa ese slot no se reserva y el interruptor no tiene dónde ir. */}
+                {conChip && (
+                    <div className={`${ANCHO_CHIP} flex justify-start`}>
+                        <ModoValorBoton modo={modo} onChange={setModo} />
+                    </div>
+                )}
                 {/* Solo "Rubro". La instrucción de tocar la fila vivió acá un rato y fue un
                     error: esta columna es la que absorbe lo que sobra después de los 26px
                     del chip y los 3×54px de números, así que en mobile mide ~60-100px y
@@ -518,6 +740,9 @@ export default function OfrecimientoTable({
                         conBorde={i < bloqueArriba.length - 1}
                         conChip={conChip}
                         conColumnaQuitar={conColumnaQuitar}
+                        abierta={abiertaCodigo === fila.codigo}
+                        modo={modo}
+                        onToggleMarcas={toggleMarcas}
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}
                         onEliminar={onEliminar}
@@ -559,6 +784,9 @@ export default function OfrecimientoTable({
                         conBorde={i < bloqueAbajoFiltrado.length - 1}
                         conChip={conChip}
                         conColumnaQuitar={conColumnaQuitar}
+                        abierta={abiertaCodigo === fila.codigo}
+                        modo={modo}
+                        onToggleMarcas={toggleMarcas}
                         onResolucion={onResolucion}
                         onAgregar={onAgregar}
                         onEliminar={onEliminar}
@@ -573,6 +801,7 @@ export default function OfrecimientoTable({
                     </div>
                 )}
             </div>
+        </div>
         </div>
         </>
     )

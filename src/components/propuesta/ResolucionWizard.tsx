@@ -4,7 +4,14 @@ import { Button } from '@/components/ui/button'
 import ResolucionOfrecimiento from './ResolucionOfrecimiento'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { useEliminarOfrecimiento } from '@/hooks/useOfrecimientos'
-import type { IAccionComercial, IMotivo, IOfrecimiento, IOfrecimientoMotivo } from '@/types/planificacion'
+import type {
+    IAccionComercial,
+    IMarcaEstado,
+    IMarcaOfrecida,
+    IMotivo,
+    IOfrecimiento,
+    IOfrecimientoMotivo,
+} from '@/types/planificacion'
 
 interface ResolucionWizardProps {
     visitaId: number
@@ -19,6 +26,12 @@ interface ResolucionWizardProps {
     /** Acción comercial por ofrecimientoId — borrador paralelo al de motivos. */
     detalles: Record<number, IAccionComercial | null>
     onCambiarAccion: (ofrecimientoId: number, accion: IAccionComercial | null) => void
+    /** Desglose del cliente por código de rubro (del rubroStatus), para precargar los
+     *  chips de "¿Qué marca ofreciste?". */
+    marcasPorRubro: Record<string, IMarcaEstado[]>
+    /** Borrador de marcas ofrecidas por ofrecimientoId. */
+    marcasOfrecidas: Record<number, IMarcaOfrecida[]>
+    onCambiarMarcasOfrecidas: (ofrecimientoId: number, marcas: IMarcaOfrecida[]) => void
     onVolver: () => void
 }
 
@@ -34,10 +47,15 @@ export default function ResolucionWizard({
     onCambiarBorrador,
     detalles,
     onCambiarAccion,
+    marcasPorRubro,
+    marcasOfrecidas,
+    onCambiarMarcasOfrecidas,
     onVolver,
 }: ResolucionWizardProps) {
     const ofrecimiento = ofrecimientos[index]
     const accion = detalles[ofrecimiento.id] ?? null
+    const marcasDelRubro = marcasPorRubro[ofrecimiento.codigo] ?? []
+    const marcasActuales = marcasOfrecidas[ofrecimiento.id] ?? []
 
     // Sentido del último movimiento, para que la entrada acompañe a la navegación. Se lee
     // en el render (no en el efecto) porque la clase tiene que salir en el MISMO render en
@@ -51,16 +69,12 @@ export default function ResolucionWizard({
     // El catálogo de marcas se pide desde acá y no desde ResolucionOfrecimiento: el wizard
     // es el ancestro más cercano que ve a la vez el catálogo de motivos y el borrador, así
     // que puede pedirlo SOLO cuando hace falta — y deja a ResolucionOfrecimiento
-    // presentacional puro, sin React Query en su test. Solo PRECIO usa el catálogo (su
-    // marca sale de ahí); los demás módulos de detalle no lo tocan.
-    const necesitaMarcas =
-        accion !== null ||
-        (borradores[ofrecimiento.id] ?? []).some(
-            m => motivos.find(cat => cat.motivoId === m.motivoId)?.codigo === 'PRECIO',
-        )
-    const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(necesitaMarcas)
+    // presentacional puro, sin React Query en su test. Se pide SIEMPRE que el wizard esté
+    // abierto: los chips de "¿Qué marca ofreciste?" lo necesitan para "+ Otra", además de
+    // PRECIO (su marca sale de ahí).
+    const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(true)
 
-    // Replica SOLO acción o SOLO marca del rubro actual al resto — nunca juntas y nunca
+    // Replica SOLO acción o SOLO marcas del rubro actual al resto — nunca juntas y nunca
     // la resolución: qué pasó con cada rubro es suyo, y la evidencia de seguimientos
     // muestra que el desenlace puede variar rubro a rubro aunque la acción sea la misma
     // (un cupo se acepta pero un kit puntual se rechaza). Cada check copia SU campo sin
@@ -68,24 +82,24 @@ export default function ResolucionWizard({
     // un vínculo: cada rubro sigue editable después.
     const restantes = ofrecimientos.filter((_, i) => i !== index)
 
-    function aplicarMarca() {
+    // Copia las marcas tildadas SOLO a los restantes que todavía no tienen ninguna: es una
+    // copia de una sola vez, no un vínculo, y no pisa lo que el vendedor ya eligió en otro
+    // rubro.
+    function aplicarMarcas() {
         for (const r of restantes) {
-            const actual = detalles[r.id] ?? null
-            onCambiarAccion(r.id, {
-                accion: actual?.accion ?? null,
-                marca: accion?.marca ?? null,
-                params: actual?.params,
-            })
+            if ((marcasOfrecidas[r.id] ?? []).length === 0) onCambiarMarcasOfrecidas(r.id, marcasActuales)
         }
     }
 
-    // Limpia SOLO el borrador en pantalla de este rubro (acción + marca + motivos) — no
+    // Limpia SOLO el borrador en pantalla de este rubro (acción + marcas + motivos) — no
     // toca el backend ni los demás rubros. Vuelve a "sin nada cargado", como si recién
     // se hubiera entrado a resolverlo.
-    const hayAlgoQueLimpiar = accion !== null || (borradores[ofrecimiento.id]?.length ?? 0) > 0
+    const hayAlgoQueLimpiar =
+        accion !== null || (borradores[ofrecimiento.id]?.length ?? 0) > 0 || marcasActuales.length > 0
     function limpiarBorrador() {
         onCambiarAccion(ofrecimiento.id, null)
         onCambiarBorrador(ofrecimiento.id, [])
+        onCambiarMarcasOfrecidas(ofrecimiento.id, [])
     }
 
     const eliminar = useEliminarOfrecimiento(visitaId)
@@ -175,12 +189,15 @@ export default function ResolucionWizard({
                     motivos={motivos}
                     marcas={marcas}
                     marcasLoading={marcasLoading}
+                    marcasDelRubro={marcasDelRubro}
+                    marcasOfrecidas={marcasActuales}
+                    onChangeMarcasOfrecidas={m => onCambiarMarcasOfrecidas(ofrecimiento.id, m)}
                     accion={accion}
                     onChangeAccion={a => onCambiarAccion(ofrecimiento.id, a)}
                     value={borradores[ofrecimiento.id] ?? []}
                     onChange={m => onCambiarBorrador(ofrecimiento.id, m)}
                     rubrosRestantes={restantes.length}
-                    onAplicarMarca={aplicarMarca}
+                    onAplicarMarcas={aplicarMarcas}
                 />
             </div>
         </div>

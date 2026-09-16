@@ -81,3 +81,88 @@ it('`acciones` funciona también sin `subtitle`', () => {
     )
     expect(screen.getByText('No visité')).toBeInTheDocument()
 })
+
+describe('botón de ayuda ("?")', () => {
+    it('sin onHelp, no aparece', () => {
+        render(<BottomSheet open onClose={() => {}} title="X"><div>contenido</div></BottomSheet>)
+        expect(screen.queryByLabelText(/cómo funciona esta pantalla/i)).not.toBeInTheDocument()
+    })
+
+    it('con onHelp, aparece primero (antes de Minimizar y Cerrar)', () => {
+        render(
+            <BottomSheet open onClose={() => {}} onMinimize={() => {}} onHelp={() => {}} title="X">
+                <div>contenido</div>
+            </BottomSheet>,
+        )
+        const botones = screen.getAllByRole('button').filter(b => ['Cómo funciona esta pantalla', 'Minimizar', 'Cerrar'].includes(b.getAttribute('aria-label') ?? ''))
+        expect(botones.map(b => b.getAttribute('aria-label'))).toEqual(['Cómo funciona esta pantalla', 'Minimizar', 'Cerrar'])
+    })
+
+    it('tocarlo llama a onHelp', async () => {
+        const onHelp = vi.fn()
+        render(<BottomSheet open onClose={() => {}} onHelp={onHelp} title="X"><div>contenido</div></BottomSheet>)
+        await userEvent.click(screen.getByLabelText(/cómo funciona esta pantalla/i))
+        expect(onHelp).toHaveBeenCalled()
+    })
+
+    it('sin ayudaAbierta, el panel no se ve aunque haya ayudaContenido', () => {
+        render(
+            <BottomSheet open onClose={() => {}} onHelp={() => {}} ayudaContenido={<span>Tocá el rubro</span>} title="X">
+                <div>contenido</div>
+            </BottomSheet>,
+        )
+        expect(screen.queryByText('Tocá el rubro')).not.toBeInTheDocument()
+    })
+
+    it('con ayudaAbierta, flota el panel — no empuja el contenido de abajo', () => {
+        render(
+            <BottomSheet
+                open
+                onClose={() => {}}
+                onHelp={() => {}}
+                ayudaAbierta
+                ayudaContenido={<span>Tocá el rubro</span>}
+                title="X"
+            >
+                <div>contenido</div>
+            </BottomSheet>,
+        )
+        const panel = screen.getByText('Tocá el rubro').closest('div')!
+        expect(panel.className).toContain('absolute')
+        expect(screen.getByText('contenido')).toBeInTheDocument()
+    })
+
+    it('tocar afuera del panel (pero dentro del sheet) llama a onHelp para cerrarlo, sin cerrar el sheet', async () => {
+        const onHelp = vi.fn()
+        const onClose = vi.fn()
+        render(
+            <BottomSheet open onClose={onClose} onHelp={onHelp} ayudaAbierta ayudaContenido={<span>Tocá el rubro</span>} title="X">
+                <div>contenido</div>
+            </BottomSheet>,
+        )
+        await userEvent.click(screen.getByTestId('overlay-ayuda'))
+        expect(onHelp).toHaveBeenCalled()
+        expect(onClose).not.toHaveBeenCalled()
+    })
+
+    it('sin ayudaAbierta, no hay capa que intercepte los clicks del contenido', () => {
+        render(<BottomSheet open onClose={() => {}} onHelp={() => {}} title="X"><div>contenido</div></BottomSheet>)
+        expect(screen.queryByTestId('overlay-ayuda')).not.toBeInTheDocument()
+    })
+
+    // La capa de "tocar afuera cierra la ayuda" es `absolute` (posicionada) y pinta por
+    // encima de cualquier caja estática del mismo nivel, sin importar el orden en el DOM
+    // — así que Minimizar/Cerrar necesitan estar TAMBIÉN posicionados (mismo `z-30` que el
+    // popover) para no quedar tapados debajo mientras la ayuda está abierta. RTL no hace
+    // hit-testing real, así que esto se verifica por clase en vez de simulando el click.
+    it('Minimizar/Cerrar viven en un contenedor posicionado por encima de la capa de ayuda (z-30 vs. z-20)', () => {
+        render(
+            <BottomSheet open onClose={() => {}} onMinimize={() => {}} onHelp={() => {}} title="X">
+                <div>contenido</div>
+            </BottomSheet>,
+        )
+        const fila = screen.getByLabelText('Cerrar').closest('div')!
+        expect(fila.className).toContain('relative')
+        expect(fila.className).toContain('z-30')
+    })
+})

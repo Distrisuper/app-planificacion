@@ -66,7 +66,7 @@ beforeEach(() => {
     ;(api.getMotivos as any).mockResolvedValue(motivos)
     ;(api.resolverOfrecimiento as any).mockResolvedValue({ ofrecimientosPendientes: 0 })
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
     ])
     ;(api.agregarOfrecimiento as any).mockResolvedValue({ ofrecimientoId: 99 })
     ;(api.eliminarOfrecimiento as any).mockResolvedValue(undefined)
@@ -384,6 +384,17 @@ it('sin codigoParticularCliente no hay bloque de otros rubros del cliente', asyn
 })
 
 it('con codigoParticularCliente, los números de rubroStatus aparecen en la tabla sin navegar', async () => {
+    // La tabla arranca en modo "unidades" (ver `modo` en OfrecimientoTable): se
+    // completan también los campos en unidades para poder verificar que rubroStatus
+    // llegó, sin acoplar este test al interruptor $/U (que se prueba aparte).
+    ;(api.getRubroStatus as any).mockResolvedValue([
+        {
+            rubroCode: 'AMORT', nombre: 'Amortiguadores',
+            actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000,
+            actualUnidades: 1_940, mesAnteriorUnidades: 2_600, promedio6mUnidades: 3_100,
+            marcas: [],
+        },
+    ])
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
     await waitFor(() => expect(api.getRubroStatus).toHaveBeenCalledWith('10034'))
@@ -396,7 +407,7 @@ it('con codigoParticularCliente, los números de rubroStatus aparecen en la tabl
 it('visita sin rubros pero con otros rubros del cliente: la tabla se ve de una', async () => {
     ;(api.getOfrecimientos as any).mockResolvedValue([])
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     renderSheet({ codigoParticularCliente: '10034' })
 
@@ -406,8 +417,8 @@ it('visita sin rubros pero con otros rubros del cliente: la tabla se ve de una',
 
 it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de arriba con su botón de Resolución', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     renderSheet({ codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
@@ -424,9 +435,9 @@ it('el ＋ de un rubro fuera de la visita lo agrega y la fila sube al bloque de 
 
 it('agregar dos rubros distintos en simultáneo deshabilita cada fila por separado, sin que la segunda apague el spinner de la primera', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
-        { rubroCode: 'FOCO', nombre: 'Focos', actual: 200_000, mesAnterior: 150_000, promedio6m: 180_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
+        { rubroCode: 'FOCO', nombre: 'Focos', actual: 200_000, mesAnterior: 150_000, promedio6m: 180_000, marcas: [] },
     ])
     const resolvers: Record<string, (v: { ofrecimientoId: number }) => void> = {}
     ;(api.agregarOfrecimiento as any).mockImplementation((_visitaId: number, dto: { codigo: string }) =>
@@ -455,8 +466,8 @@ it('agregar dos rubros distintos en simultáneo deshabilita cada fila por separa
 
 it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaban', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
         ...ofrecimientos,
@@ -482,8 +493,8 @@ it('el rubro recién agregado aparece arriba de todo, antes de los que ya estaba
 
 it('agregar un rubro del catálogo abre su resolución de una, sin volver a la lista', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
         ...ofrecimientos,
@@ -504,8 +515,8 @@ it('agregar un rubro del catálogo abre su resolución de una, sin volver a la l
 
 it('un rubro agregado se mantiene arriba aunque se resuelva (no se reordena por estado)', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     ;(api.getOfrecimientos as any).mockResolvedValueOnce(ofrecimientos).mockResolvedValue([
         ...ofrecimientos,
@@ -554,8 +565,8 @@ it('si getRubroStatus falla, la tabla igual lista los ofrecimientos de la visita
 
 it('con la visita cerrada, "otros rubros del cliente" no son tocables para agregar', async () => {
     ;(api.getRubroStatus as any).mockResolvedValue([
-        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000 },
-        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000 },
+        { rubroCode: 'AMORT', nombre: 'Amortiguadores', actual: 1_940_000, mesAnterior: 2_600_000, promedio6m: 3_100_000, marcas: [] },
+        { rubroCode: 'BAT', nombre: 'Baterías', actual: 500_000, mesAnterior: 400_000, promedio6m: 300_000, marcas: [] },
     ])
     renderSheet({ visitaCerrada: true, codigoParticularCliente: '10034' })
     await screen.findByText('Amortiguadores')
@@ -653,17 +664,16 @@ it('no ofrece ver la posición con la visita ya cerrada', async () => {
     expect(screen.queryByRole('button', { name: 'Ver mi posición' })).not.toBeInTheDocument()
 })
 
-// Acción Comercial se sacó del formulario de resolución (spec 2026-08-19): en la práctica
-// `accion` siempre es null, así que `detalle` solo existe para llevar la marca. El backend
-// la acepta sin acción desde el fix de 2026-08-21 (validarDetalleAccion ya no exige
-// `accion`) — antes de ese fix la marca se descartaba en silencio porque este formulario
-// nunca la mandaba.
-describe('la marca se manda en `detalle`, sin acción comercial', () => {
-    it('con marca cargada, el batch manda motivos + detalle con la marca', async () => {
+// La marca ofrecida ya no viaja en `detalle.marca` (spec 2026-09-16): va al alcance del
+// ofrecimiento, como `marcas` en el PUT de resolver. Acción Comercial sigue sin UI en
+// este formulario (spec 2026-08-19), así que `detalle` solo existiría para una acción
+// que este formulario no administra.
+describe('las marcas ofrecidas se mandan en `marcas`, vía el alcance', () => {
+    it('al cerrar, manda las marcas ofrecidas del rubro en el PUT', async () => {
         const { onCerrarVisita } = renderSheet()
         fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
 
-        fireEvent.click(await screen.findByLabelText('Marca del ofrecimiento'))
+        fireEvent.click(await screen.findByRole('button', { name: /otra/i }))
         fireEvent.click(await screen.findByText('Fric-Rot'))
         await tildarSaquePedido()
         fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
@@ -672,25 +682,26 @@ describe('la marca se manda en `detalle`, sin acción comercial', () => {
         fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
 
         await waitFor(() =>
-            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
-                motivos: [{ motivoId: 10, valores: {} }],
-                detalle: { accion: null, marca: 'Fric-Rot' },
-            }),
+            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(
+                42,
+                7,
+                expect.objectContaining({ marcas: [{ codigo: 'FR', descripcion: 'Fric-Rot' }] }),
+            ),
         )
         expect(onCerrarVisita).toHaveBeenCalled()
     })
 
     // Antes de este fix, tocar SOLO la marca no generaba ningún request para ese rubro
-    // (`esPersistible` exigía `accion`, que el formulario ya no administra) y la marca se
+    // (`esPersistible` exigía `accion`, y las marcas no se comparaban) y la marca se
     // perdía en silencio. Ahora sí entra al batch, con motivos vacíos si el rubro no tenía
     // ninguno tildado.
-    it('tocar SOLO la marca sí genera un request con el detalle, aunque los motivos no cambien', async () => {
+    it('tocar SOLO la marca sí genera un request, aunque los motivos no cambien', async () => {
         renderSheet()
 
         // Filtros (id 8) ya viene resuelto con motivoId 10: su borrador arranca igual a lo
         // guardado, así que solo se le cambia la marca.
         fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Filtros' }))
-        fireEvent.click(await screen.findByLabelText('Marca del ofrecimiento'))
+        fireEvent.click(await screen.findByRole('button', { name: /otra/i }))
         fireEvent.click(await screen.findByText('Fric-Rot'))
         fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
@@ -703,10 +714,11 @@ describe('la marca se manda en `detalle`, sin acción comercial', () => {
         fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
 
         await waitFor(() =>
-            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 8, {
-                motivos: [{ motivoId: 10, valores: {} }],
-                detalle: { accion: null, marca: 'Fric-Rot' },
-            }),
+            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(
+                42,
+                8,
+                expect.objectContaining({ marcas: [{ codigo: 'FR', descripcion: 'Fric-Rot' }] }),
+            ),
         )
         const rubrosEnviados = (api.resolverOfrecimiento as any).mock.calls.map((c: unknown[]) => c[1])
         expect(rubrosEnviados.sort()).toEqual([7, 8])
@@ -726,6 +738,48 @@ describe('la marca se manda en `detalle`, sin acción comercial', () => {
         await waitFor(() => expect(api.resolverOfrecimiento).toHaveBeenCalled())
         const rubrosEnviados = (api.resolverOfrecimiento as any).mock.calls.map((c: unknown[]) => c[1])
         expect(rubrosEnviados).toEqual([7])
+    })
+
+    // El PUT (si lo hay por motivos) no lleva la clave `marcas` cuando no cambiaron
+    // respecto de lo que ya está en el alcance de la propuesta congelada.
+    it('no manda `marcas` si no cambiaron respecto del alcance guardado', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([
+            {
+                id: 7, resolucionId: 42, tipo: 'rubro', codigo: 'AMORT', descripcion: 'Amortiguadores',
+                gapUnits: 12, esPropuesto: true, resuelto: false, motivos: [],
+                alcance: [{ tipo: 'marca', codigo: 'FR', descripcion: 'Fric-Rot' }],
+            },
+            ofrecimientos[1],
+        ])
+        renderSheet()
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+        await tildarSaquePedido()
+        fireEvent.click(await screen.findByRole('button', { name: /minimizar/i }))
+
+        fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+
+        await waitFor(() => expect(api.resolverOfrecimiento).toHaveBeenCalled())
+        const llamada = (api.resolverOfrecimiento as any).mock.calls.find((c: unknown[]) => c[1] === 7)
+        expect(llamada?.[2]).not.toHaveProperty('marcas')
+    })
+
+    // El wizard precarga los chips desde el alcance ya guardado: reabrir la resolución
+    // de un rubro con una marca declarada la muestra tildada, no en blanco.
+    it('precarga los chips desde el alcance tipo marca del ofrecimiento', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([
+            {
+                id: 7, resolucionId: 42, tipo: 'rubro', codigo: 'AMORT', descripcion: 'Amortiguadores',
+                gapUnits: 12, esPropuesto: true, resuelto: false, motivos: [],
+                alcance: [{ tipo: 'marca', codigo: 'FR', descripcion: 'Fric-Rot' }],
+            },
+            ofrecimientos[1],
+        ])
+        renderSheet()
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+
+        expect(await screen.findByRole('button', { name: /Fric-Rot/ })).toHaveAttribute('aria-pressed', 'true')
     })
 })
 
@@ -766,12 +820,24 @@ it('sin enCurso el eyebrow es la propuesta comercial, sin semáforo', async () =
     expect(screen.queryByText(/visita larga/i)).not.toBeInTheDocument()
 })
 
-it('no muestra el párrafo introductorio: la instrucción vive en el header de la tabla', async () => {
+it('no muestra el párrafo introductorio: la instrucción vive en el "?" del header del sheet', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
 
     expect(screen.queryByText(/cargá el resultado de cada rubro/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/tu propuesta · tocá uno para cargar el resultado/i)).toBeInTheDocument()
+    expect(screen.getByText('Tu propuesta')).toBeInTheDocument()
+    expect(screen.getByLabelText(/cómo funciona esta pantalla/i)).toBeInTheDocument()
+})
+
+it('el "?" del header abre y cierra el panel de ayuda', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    expect(screen.queryByText(/tocá el rubro para cargar el resultado/i)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText(/cómo funciona esta pantalla/i))
+    expect(screen.getByText(/tocá el rubro para cargar el resultado/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText(/cómo funciona esta pantalla/i))
+    expect(screen.queryByText(/tocá el rubro para cargar el resultado/i)).not.toBeInTheDocument()
 })
 
 // El naranja es de "ya podés cerrar". Mientras falten rubros el botón va gris con

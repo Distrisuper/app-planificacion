@@ -7,7 +7,7 @@ import {
 } from '@/api/planificacion'
 import { agendaKeys } from './useAgenda'
 import { errorCode } from '@/lib/apiError'
-import type { IAccionComercial, IAgregarOfrecimientoDTO, IOfrecimientoMotivo } from '@/types/planificacion'
+import type { IAccionComercial, IAgregarOfrecimientoDTO, IMarcaOfrecida, IOfrecimientoMotivo } from '@/types/planificacion'
 
 export const ofrecimientoKeys = {
     deVisita: (visitaId: number) => ['ofrecimientos', visitaId] as const,
@@ -43,6 +43,7 @@ export interface IResolverOfrecimientosItem {
     ofrecimientoId: number
     motivos: IOfrecimientoMotivo[]
     detalle?: IAccionComercial | null
+    marcas?: IMarcaOfrecida[]
 }
 
 export interface IResolverOfrecimientosResultado {
@@ -78,6 +79,7 @@ export function useResolverOfrecimientos(visitaId: number) {
                     resolverOfrecimiento(visitaId, item.ofrecimientoId, {
                         motivos: item.motivos,
                         ...(item.detalle !== undefined ? { detalle: item.detalle } : {}),
+                        ...(item.marcas !== undefined ? { marcas: item.marcas } : {}),
                     }),
                 ),
             )

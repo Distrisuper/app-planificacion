@@ -33,10 +33,14 @@ const marcas: ICatalogoItem[] = [
 function setup(value: IOfrecimientoMotivo[] = [], over: Record<string, unknown> = {}) {
     const onChange = vi.fn()
     const onChangeAccion = vi.fn()
+    const onChangeMarcasOfrecidas = vi.fn()
     render(
         <ResolucionOfrecimiento
             motivos={motivos}
             marcas={marcas}
+            marcasDelRubro={[]}
+            marcasOfrecidas={[]}
+            onChangeMarcasOfrecidas={onChangeMarcasOfrecidas}
             accion={null}
             onChangeAccion={onChangeAccion}
             value={value}
@@ -44,7 +48,7 @@ function setup(value: IOfrecimientoMotivo[] = [], over: Record<string, unknown> 
             {...over}
         />,
     )
-    return { onChange, onChangeAccion }
+    return { onChange, onChangeAccion, onChangeMarcasOfrecidas }
 }
 
 it('renderiza el catálogo recibido, sin nombres hardcodeados', () => {
@@ -63,7 +67,7 @@ it('no muestra el bloque de Acción Comercial', () => {
 
 it('Marca aparece antes que Resolución', () => {
     setup()
-    const marca = screen.getByLabelText('Marca del ofrecimiento')
+    const marca = screen.getByRole('button', { name: /otra/i })
     const objecion = screen.getByText('Objeción')
     // compareDocumentPosition: Node.DOCUMENT_POSITION_FOLLOWING (4) = marca va antes.
     expect(marca.compareDocumentPosition(objecion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -82,10 +86,10 @@ it('destildar un motivo lo saca', () => {
 })
 
 it('ofrece cargar una marca', () => {
-    const { onChangeAccion } = setup()
-    fireEvent.click(screen.getByLabelText('Marca del ofrecimiento'))
+    const { onChangeMarcasOfrecidas } = setup()
+    fireEvent.click(screen.getByRole('button', { name: /otra/i }))
     fireEvent.click(screen.getByText('Fric-Rot'))
-    expect(onChangeAccion).toHaveBeenCalledWith({ accion: null, marca: 'Fric-Rot' })
+    expect(onChangeMarcasOfrecidas).toHaveBeenCalledWith([{ codigo: 'FR', descripcion: 'Fric-Rot' }])
 })
 
 describe('el detalle lo dibuja el módulo del motivo', () => {
@@ -327,24 +331,28 @@ describe('qué resoluciones conviven', () => {
     })
 })
 
-// El check "Aplicar a restantes" de Marca sigue siendo el único que ofrece este
-// componente ahora que Acción Comercial no está.
-describe('aplicar a restantes: check de Marca', () => {
-    it('sin marca, no se ofrece el check aunque haya rubros restantes', () => {
+// El check "Aplicar a restantes" de las marcas ofrecidas sigue siendo el único que
+// ofrece este componente ahora que Acción Comercial no está.
+describe('aplicar a restantes: check de marcas ofrecidas', () => {
+    it('sin marcas, no se ofrece el check aunque haya rubros restantes', () => {
         setup([], { rubrosRestantes: 3 })
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     })
 
     it('sin rubros restantes, no se ofrece el check aunque haya marca cargada', () => {
-        setup([], { accion: { accion: null, marca: 'Fric-Rot' }, rubrosRestantes: 0 })
+        setup([], { marcasOfrecidas: [{ codigo: 'FR', descripcion: 'Fric-Rot' }], rubrosRestantes: 0 })
         expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     })
 
-    it('con marca y rubros restantes, ofrece el check y dispara onAplicarMarca', () => {
-        const onAplicarMarca = vi.fn()
-        setup([], { accion: { accion: null, marca: 'Fric-Rot' }, rubrosRestantes: 2, onAplicarMarca })
+    it('con marca y rubros restantes, ofrece el check y dispara onAplicarMarcas', () => {
+        const onAplicarMarcas = vi.fn()
+        setup([], {
+            marcasOfrecidas: [{ codigo: 'FR', descripcion: 'Fric-Rot' }],
+            rubrosRestantes: 2,
+            onAplicarMarcas,
+        })
         fireEvent.click(screen.getByRole('checkbox'))
-        expect(onAplicarMarca).toHaveBeenCalledTimes(1)
+        expect(onAplicarMarcas).toHaveBeenCalledTimes(1)
     })
 })
 

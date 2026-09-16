@@ -20,7 +20,7 @@ interface AccionComercialPickerProps {
 }
 
 /** "Acción comercial": con qué se ofreció este rubro (Plan cupo, Descuento) y con qué
- *  parámetros. La marca es un chip aparte (`MarcaOfrecimientoPicker`) — este componente
+ *  parámetros. La marca es un chip aparte (`MarcasOfrecidasChips`) — este componente
  *  no la conoce. Siempre desplegado, con "Sin acción" elegido por defecto: plegado
  *  detrás de un "¿Con acción comercial?" el vendedor no llegaba a ver que las opciones
  *  existían. Sigue siendo opcional — "Sin acción" es un valor válido, no un vacío.
