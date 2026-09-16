@@ -43,10 +43,6 @@ export default function MarcasOfrecidasChips({
         else onChange([...value, { codigo, descripcion }])
     }
 
-    function sufijo(m: IMarcaEstado): string {
-        return m.dejo ? 'dejó' : 'compra'
-    }
-
     return (
         <div className="mb-3">
             <div className="mb-1.5 flex items-center justify-between gap-2">
@@ -85,7 +81,6 @@ export default function MarcasOfrecidasChips({
                         >
                             {on && <Check className="h-3 w-3" strokeWidth={3} />}
                             {m.nombre}
-                            <span className={`text-[10.5px] font-semibold ${m.dejo ? 'text-dsred' : 'text-dsmuted'}`}>{sufijo(m)}</span>
                         </button>
                     )
                 })}

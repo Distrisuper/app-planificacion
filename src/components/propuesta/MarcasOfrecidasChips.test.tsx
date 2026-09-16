@@ -14,10 +14,12 @@ function setup(over: Partial<React.ComponentProps<typeof MarcasOfrecidasChips>> 
     return { onChange }
 }
 
-it('muestra un chip por marca del rubro con su sufijo, y "+ Otra"', () => {
+it('muestra un chip por marca del rubro, sin sufijo "compra"/"dejó", y "+ Otra"', () => {
     setup()
-    expect(screen.getByRole('button', { name: /FREMAX/ })).toHaveTextContent(/compra/i)
-    expect(screen.getByRole('button', { name: /CORVEN/ })).toHaveTextContent(/dejó/i)
+    expect(screen.getByRole('button', { name: 'FREMAX' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'CORVEN' })).toBeInTheDocument()
+    expect(screen.queryByText(/dejó/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/compra/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /otra/i })).toBeInTheDocument()
     expect(screen.getByText(/qué marca ofreciste/i)).toBeInTheDocument()
     expect(screen.getByText(/opcional/i)).toBeInTheDocument()

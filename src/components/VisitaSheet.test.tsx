@@ -809,12 +809,24 @@ it('sin enCurso el eyebrow es la propuesta comercial, sin semáforo', async () =
     expect(screen.queryByText(/visita larga/i)).not.toBeInTheDocument()
 })
 
-it('no muestra el párrafo introductorio: la instrucción vive en el header de la tabla', async () => {
+it('no muestra el párrafo introductorio: la instrucción vive en el "?" del header del sheet', async () => {
     renderSheet()
     await screen.findByText('Amortiguadores')
 
     expect(screen.queryByText(/cargá el resultado de cada rubro/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/tu propuesta · tocá el rubro para cargar el resultado/i)).toBeInTheDocument()
+    expect(screen.getByText('Tu propuesta')).toBeInTheDocument()
+    expect(screen.getByLabelText(/cómo funciona esta pantalla/i)).toBeInTheDocument()
+})
+
+it('el "?" del header abre y cierra el panel de ayuda', async () => {
+    renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    expect(screen.queryByText(/tocá el rubro para cargar el resultado/i)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText(/cómo funciona esta pantalla/i))
+    expect(screen.getByText(/tocá el rubro para cargar el resultado/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByLabelText(/cómo funciona esta pantalla/i))
+    expect(screen.queryByText(/tocá el rubro para cargar el resultado/i)).not.toBeInTheDocument()
 })
 
 // El naranja es de "ya podés cerrar". Mientras falten rubros el botón va gris con

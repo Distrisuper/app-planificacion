@@ -670,10 +670,11 @@ export default function OfrecimientoTable({
             tabla quede al borde (12px del borde del sheet) en vez de encajonada. No toca
             el padding del sheet — lo usan otras pantallas. */}
         <div className="-mx-1.5">
+        {/* El gesto se explica en el "?" del header del sheet (`BottomSheet.onHelp` +
+            `ayudaContenido`), no acá: esta banda es solo el rótulo de sección. */}
         {conChip && (
             <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted leading-[1.35]">
-                Tu propuesta · tocá el rubro para cargar el resultado{' '}
-                <span className="text-[#8A93A6]">· los números, para ver sus marcas</span>
+                Tu propuesta
             </p>
         )}
         <div className="w-full">

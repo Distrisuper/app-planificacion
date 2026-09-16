@@ -498,15 +498,16 @@ it('con acción y marca a la vez, cada una aparece en su propia sección', () =>
     expect(screen.getByText('Marcas')).toBeInTheDocument()
 })
 
-// El gesto va en una banda de ancho completo y NO en la columna Rubro: ahí mide
-// ~60-100px en mobile y el texto salía truncado.
-it('en la tabla de una visita, una banda propia dice el gesto de cargar', () => {
+// La banda de ancho completo (arriba de la tabla) es solo el rótulo de sección: el
+// gesto se explica en el "?" del header del sheet (ver BottomSheet.onHelp), NO en la
+// columna Rubro — ahí mide ~60-100px en mobile y el texto salía truncado.
+it('en la tabla de una visita, una banda propia rotula la sección', () => {
     render(
         <OfrecimientoTable
             filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: true } })]}
         />,
     )
-    expect(screen.getByText(/tocá el rubro para cargar el resultado/i)).toBeInTheDocument()
+    expect(screen.getByText('Tu propuesta')).toBeInTheDocument()
     expect(screen.getAllByRole('columnheader')[0].textContent).toBe('Rubro')
 })
 
@@ -679,10 +680,10 @@ describe('dos zonas en la fila de la visita', () => {
         expect(screen.getByText('FREMAX')).toBeInTheDocument()
     })
 
-    it('la banda explica las dos acciones', () => {
+    it('la banda es solo el rótulo de sección: la explicación vive en el "?" del sheet', () => {
         render(<OfrecimientoTable filas={[fila({ resolucion: resol, marcas: [] })]} />)
-        expect(screen.getByText(/tocá el rubro para cargar el resultado/i)).toBeInTheDocument()
-        expect(screen.getByText(/los números, para ver sus marcas/i)).toBeInTheDocument()
+        expect(screen.getByText('Tu propuesta')).toBeInTheDocument()
+        expect(screen.queryByText(/tocá el rubro para cargar el resultado/i)).not.toBeInTheDocument()
     })
 })
 

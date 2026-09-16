@@ -158,6 +158,7 @@ export default function VisitaSheet({
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
     const [errorGuardado, setErrorGuardado] = useState<string | null>(null)
     const [altaAbierta, setAltaAbierta] = useState(false)
+    const [mostrarAyuda, setMostrarAyuda] = useState(false)
     // Los ids que se agregaron dinámicamente esta sesión, más reciente primero — se
     // usan para insertarlos arriba de todo en la lista al agregarlos (ver
     // `conNuevosArriba`). Es una decisión deliberada que NO se generaliza a "reordenar
@@ -675,6 +676,15 @@ export default function VisitaSheet({
                 open={open}
                 onClose={onClose}
                 onMinimize={enCurso ? onMinimize : undefined}
+                onHelp={() => setMostrarAyuda(v => !v)}
+                ayudaAbierta={mostrarAyuda}
+                ayudaContenido={
+                    <ul className="list-disc space-y-1 pl-4">
+                        <li>Tocá el rubro para cargar el resultado.</li>
+                        <li>Tocá los números para ver sus marcas.</li>
+                        <li>$/U cambia entre pesos y unidades.</li>
+                    </ul>
+                }
                 acciones={acciones}
                 title={nombreCliente}
                 subtitle={identidad}
