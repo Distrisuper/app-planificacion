@@ -17,6 +17,7 @@ import {
     resolverOfrecimiento,
     eliminarOfrecimiento,
     getPropuesta,
+    getRubroStatus,
     getBrandCatalog,
     getAcciones,
 } from './planificacion'
@@ -315,6 +316,81 @@ describe('propuesta', () => {
         expect(apiClient.post).toHaveBeenCalledWith('/sale/rubro/recommendations/drops', {
             particularCode: '10034',
         })
+    })
+})
+
+describe('getRubroStatus', () => {
+    it('pega a client-context y mapea rubros con marcas, dividiendo last6Months por 6', async () => {
+        ;(apiClient.post as Mock).mockResolvedValue({
+            data: {
+                ok: 1,
+                data: {
+                    particularCode: '07463',
+                    clientName: 'X',
+                    currentYM: '2026-09',
+                    rubros: [
+                        {
+                            rubroCode: 'R1',
+                            rubroDescription: 'DISCOS, CAMP',
+                            totalsByPeriod: {
+                                thisMonth: { amount: 0, units: 0 },
+                                lastMonth: { amount: 54, units: 1 },
+                                last6Months: { amount: 498, units: 9 },
+                            },
+                            brands: [
+                                {
+                                    brandCode: 'B1',
+                                    brandName: 'FREMAX',
+                                    totalsByPeriod: {
+                                        thisMonth: { amount: 0, units: 0 },
+                                        lastMonth: { amount: 54, units: 1 },
+                                        last6Months: { amount: 366, units: 6 },
+                                    },
+                                    dropped: false,
+                                },
+                                {
+                                    brandCode: 'B2',
+                                    brandName: 'CORVEN',
+                                    totalsByPeriod: {
+                                        thisMonth: { amount: 0, units: 0 },
+                                        lastMonth: { amount: 0, units: 0 },
+                                        last6Months: { amount: 132, units: 3 },
+                                    },
+                                    dropped: true,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+        })
+
+        const out = await getRubroStatus('07463')
+
+        expect(apiClient.post).toHaveBeenCalledWith('/sale/rubro/client-context', { particularCode: '07463' })
+        expect(out).toEqual([
+            {
+                rubroCode: 'R1',
+                nombre: 'DISCOS, CAMP',
+                actual: 0,
+                mesAnterior: 54,
+                promedio6m: 83,
+                marcas: [
+                    { code: 'B1', nombre: 'FREMAX', actual: 0, mesAnterior: 54, promedio6m: 61, dejo: false },
+                    { code: 'B2', nombre: 'CORVEN', actual: 0, mesAnterior: 0, promedio6m: 22, dejo: true },
+                ],
+            },
+        ])
+    })
+
+    it('rubro sin marcas → marcas: []', async () => {
+        ;(apiClient.post as Mock).mockResolvedValue({
+            data: { ok: 1, data: { particularCode: '1', clientName: '', currentYM: '2026-09', rubros: [
+                { rubroCode: 'R9', rubroDescription: 'X', totalsByPeriod: { thisMonth: { amount: 1, units: 0 }, lastMonth: { amount: 0, units: 0 }, last6Months: { amount: 0, units: 0 } }, brands: [] },
+            ] } },
+        })
+        const out = await getRubroStatus('1')
+        expect(out[0].marcas).toEqual([])
     })
 })
 

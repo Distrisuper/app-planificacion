@@ -20,7 +20,8 @@ import type {
     IResolverOfrecimientoDTO,
     IResolverOfrecimientoResult,
     IResultadoBuscadorGeneral,
-    IRubroClientsPageResponse,
+    IClientContextResponse,
+    IClientContextRubro,
     IRubroDropsResponse,
     IRubroEstado,
     ISincronizarResult,
@@ -186,34 +187,35 @@ export const getPropuesta = async (
     return res.data.data ?? res.data
 }
 
-/** "Cómo viene comprando" (Ver versus): TODOS los rubros del cliente con Actual/M.Ant/
- *  Prom.6M, sin el recorte a caídas/relleno de la propuesta. `pageSize` > 1 y el filtro
- *  por `particularCode` exacto evitan quedarse con otro cliente si el `search` matchea
- *  más de uno por nombre. */
+/** "Cómo viene comprando" para la propuesta y la visita: TODOS los rubros del cliente con
+ *  Actual/M.Ant/Prom.6M y sus marcas anidadas. Pega a client-context (dominio sale), que
+ *  reemplaza al uso del listado paginado de Versus con `search` por código. Los períodos
+ *  vienen crudos: last6Months es suma, acá se divide por 6. */
 export const getRubroStatus = async (
     codigoParticularCliente: string,
 ): Promise<IRubroEstado[]> => {
-    const res = await apiClient.post('/sale/rubro/clients', {
-        sellerCode: null,
-        filters: { search: codigoParticularCliente },
-        page: 0,
-        pageSize: 5,
+    const res = await apiClient.post('/sale/rubro/client-context', {
+        particularCode: codigoParticularCliente,
     })
-    const data: IRubroClientsPageResponse = res.data.data ?? res.data
-    const entity = data.entities.find(
-        e => e.particularCode === codigoParticularCliente,
-    )
-    const items = entity?.breakdown?.items ?? []
+    const data: IClientContextResponse = res.data.data ?? res.data
 
-    return items
-        .filter(i => i.kind === 'rubro')
-        .map(i => ({
-            rubroCode: i.code,
-            nombre: i.name,
-            actual: i.totalsByPeriod.thisMonth?.amount ?? 0,
-            mesAnterior: i.totalsByPeriod.lastMonth?.amount ?? 0,
-            promedio6m: (i.totalsByPeriod.last6Months?.amount ?? 0) / 6,
-        }))
+    const tresNumeros = (t: IClientContextRubro['totalsByPeriod']) => ({
+        actual: t.thisMonth?.amount ?? 0,
+        mesAnterior: t.lastMonth?.amount ?? 0,
+        promedio6m: (t.last6Months?.amount ?? 0) / 6,
+    })
+
+    return (data.rubros ?? []).map(r => ({
+        rubroCode: r.rubroCode,
+        nombre: r.rubroDescription,
+        ...tresNumeros(r.totalsByPeriod),
+        marcas: (r.brands ?? []).map(b => ({
+            code: b.brandCode,
+            nombre: b.brandName,
+            ...tresNumeros(b.totalsByPeriod),
+            dejo: b.dropped === true,
+        })),
+    }))
 }
 
 // ── Catálogos (endpoints reusados, fuera del dominio de planificación) ─────────
