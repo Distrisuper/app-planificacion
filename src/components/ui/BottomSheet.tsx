@@ -1,7 +1,7 @@
 import { ChevronDown, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Button } from './button'
-import { useAlturaTeclado } from '@/hooks/useAlturaTeclado'
+import { useViewportTeclado } from '@/hooks/useViewportTeclado'
 
 interface BottomSheetProps {
     open: boolean
@@ -34,18 +34,26 @@ interface BottomSheetProps {
      *  El sheet no sabe qué es: sólo lo muestra. */
     acciones?: ReactNode
     /**
-     * Cuánto alto toma el sheet. Los tres modos dejan siempre una franja arriba
-     * para que se siga leyendo como modal; lo que cambia es qué manda, si el
-     * contenido o la pantalla:
+     * Cuánto alto toma el sheet, en % de la franja visible (el overlay). Los tres
+     * modos dejan siempre una franja arriba para que se siga leyendo como modal; lo
+     * que cambia es qué manda, si el contenido o la pantalla:
      *
-     * - 'auto' (default): mide lo que mida el contenido, hasta 85vh.
-     * - 'hasta-completa': ídem, pero llega hasta 90dvh antes de scrollear. Para
+     * - 'auto' (default): mide lo que mida el contenido, hasta el 85%.
+     * - 'hasta-completa': ídem, pero llega hasta el 90% antes de scrollear. Para
      *   contenido de alto variable que a veces entra justo y a veces no (ej. el
      *   sheet de estado: cinco zonas o una sola, según el vendedor). Con altura
      *   fija, el caso corto deja un hueco blanco de ~200px sobre el pie.
-     * - 'completa': altura fija de 96dvh. Para listas largas de alto imprevisible
+     * - 'completa': altura fija del 96%. Para listas largas de alto imprevisible
      *   (la propuesta), donde un sheet que crece y se achica según cuántos rubros
      *   trajo el cliente hace saltar el pie de botones entre un cliente y otro.
+     *
+     * Son % del overlay y NO `dvh`/`vh` a propósito: las viewport units miden contra
+     * el layout viewport, que en iOS Safari NO se achica con el teclado abierto. El
+     * overlay sí se achica (ver los padding de abajo), así que con `96dvh` el panel
+     * quedaba más alto que su caja y —alineado `items-end`— el sobrante se iba por
+     * ARRIBA de la pantalla: en el buscador del "+", que es el único sheet con el
+     * input arriba y con `autoFocus`, eso dejaba el header y el campo fuera de vista
+     * y sólo se veía el blanco del medio de la lista.
      */
     altura?: 'auto' | 'hasta-completa' | 'completa'
     /**
@@ -75,32 +83,37 @@ export default function BottomSheet({
 }: BottomSheetProps) {
     // Hook antes del `if (!open)`: las reglas de hooks exigen llamarlo siempre, y
     // adentro se gatea con `open` para no dejar un listener de por vida en un sheet
-    // cerrado. Ver el porqué completo en useAlturaTeclado.
-    const alturaTeclado = useAlturaTeclado(open)
+    // cerrado. Ver el porqué completo en useViewportTeclado.
+    const { tapado, desplazado } = useViewportTeclado(open)
     if (!open) return null
     return (
-        // `paddingBottom` empuja el sheet (alineado `items-end`) hacia arriba, tanto
-        // como lo tapa el teclado — así el pie fijo (observaciones, Cerrar visita) no
-        // queda debajo. En Android ya lo resuelve `interactive-widget=resizes-content`
-        // solo (acá da 0); esto es lo que hace falta en iOS, que no lo soporta.
+        // El overlay es `fixed`: se posiciona contra el LAYOUT viewport, que en iOS no
+        // se achica con el teclado. Los dos padding lo recortan a la franja que el
+        // usuario ve — abajo lo que tapa el teclado (así el pie fijo: observaciones,
+        // Cerrar visita, no queda debajo), arriba lo que Safari paneó fuera de pantalla
+        // para traer el input enfocado a la vista. Los DOS hacen falta: con sólo el de
+        // abajo, la caja sigue siendo más alta que lo visible y el panel se desborda
+        // por arriba. En Android ya lo resuelve `interactive-widget=resizes-content`
+        // solo (acá los dos dan 0); esto es lo que hace falta en iOS, que no lo soporta.
+        // El fondo negro sigue cubriendo la pantalla entera: el padding recorta la caja
+        // de contenido, no el `background`.
         <div
             className="animate-fade-in fixed inset-0 z-50 flex items-end bg-black/45"
-            style={{ paddingBottom: alturaTeclado }}
+            style={{ paddingTop: desplazado, paddingBottom: tapado }}
             onClick={onClose}
         >
             <div
                 className={`animate-sheet-up relative flex w-full flex-col rounded-t-[24px] bg-white shadow-[0_-10px_34px_rgba(10,15,30,.22)] ${
-                    // En 'completa', el max-h no llega a aplicar nunca con dvh soportado
-                    // (96dvh <= 96vh): está para que, si no lo estuviera, el sheet quede
-                    // acotado a la pantalla en vez de crecer con el contenido y empujar
-                    // el pie fijo fuera de la vista — justo lo que este modo vino a
-                    // evitar. En 'hasta-completa' el max-h es el mecanismo, no el
-                    // respaldo, y por eso no lleva `h` fija.
+                    // Los % resuelven contra la caja de CONTENIDO del overlay (o sea,
+                    // ya sin el teclado ni el paneo), que es justo lo que se ve. En
+                    // 'completa' no hace falta `max-h`: la `h` en % nunca puede pasarse
+                    // de su contenedor, que era todo lo que ese respaldo cuidaba cuando
+                    // la altura venía en dvh.
                     altura === 'completa'
-                        ? 'h-[96dvh] max-h-[96vh]'
+                        ? 'h-[96%]'
                         : altura === 'hasta-completa'
-                          ? 'max-h-[90dvh]'
-                          : 'max-h-[85vh]'
+                          ? 'max-h-[90%]'
+                          : 'max-h-[85%]'
                 }`}
                 onClick={e => e.stopPropagation()}
             >
