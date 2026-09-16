@@ -349,6 +349,20 @@ Hay **tres capas separadas**, y una operación toca una sola:
   el chip volvió a ser solo un indicador de estado. Anillo `border-2 border-dsnavy` sobre
   blanco (no el hairline `#C9D2E3` original, que era gris sobre gris e invisible) → número
   ámbar → ✓ verde.
+- **La fila del rubro tiene DOS zonas, sin ícono.** Chip + nombre carga el resultado (es donde
+  vive el estado); los tres números despliegan las marcas del cliente en ese rubro (sub-filas,
+  máximo 3 + `+N marcas más`, una sola abierta). Se probaron y descartaron: chevron al lado del
+  nombre (target chico pegado al grande), botón "Cargar resultado" dentro del despliegue (le
+  cuesta un toque a la acción más repetida), columna "Marcas" con contador (una columna más en
+  una fila que ya no tiene ancho), y siempre desplegado (15 filas donde entran 5). Las filas del
+  catálogo no se parten: toda la fila agrega. En la propuesta previa (sin resolución) toda la
+  fila despliega. Ver spec `2026-09-16-marcas-por-rubro-design.md`.
+- **Las marcas del cliente son contexto vivo, no se congelan**; lo que se congela es la marca
+  que el vendedor declaró haber ofrecido, en `pl_ofrecimiento_alcance` `tipo='marca'` (chips
+  del wizard, opcionales, multi). `detalle.marca` ya no se escribe.
+- **`getRubroStatus` pega a `POST /sale/rubro/client-context`**, no al listado paginado de
+  Versus. Devuelve rubros con marcas anidadas y `amount`+`units` por período (el toggle
+  pesos/unidades futuro es sólo front).
 - **El ＋ existe, pero en las filas del CATÁLOGO, no en las de la propuesta.** Tocar una
   fila de *otros rubros del cliente* **agrega** ese rubro a la visita: ese es el verbo de
   `＋`, y va en el mismo slot de 26px que el chip de estado, centrado sobre el mismo eje.

@@ -179,6 +179,11 @@ motivo es un `INSERT`, no un deploy.
 - **`pl_visita_rubro_motivo`**: el resultado por rubro, con `marca` / `competidor` / `pct_diferencia`
   cuando el motivo `requiere_detalle`. Columnas nullables y **no texto libre**, con el mismo objetivo:
   responder "contra quién perdemos y por cuánto" con un `GROUP BY`.
+- **La marca ofrecida vive en `pl_ofrecimiento_alcance` con `tipo='marca'`** (spec 2026-09-16).
+  Un rubro ofrecido en dos marcas son dos filas. Reemplaza a `detalle.marca` (JSON, una sola
+  marca, por descripción), que **ya no se escribe**; Cromo la lee como fallback para filas
+  anteriores. `PUT /visitas/:id/ofrecimientos/:id` con `marcas` reemplaza SOLO las filas
+  `tipo='marca'`; el resto del alcance es del alta y no se edita desde ahí.
 
 ## Tablas que ya no existen
 

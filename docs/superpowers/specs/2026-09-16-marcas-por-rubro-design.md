@@ -1,7 +1,7 @@
 # Marcas por rubro: qué marca ofrecer, y cuál se ofreció
 
 Fecha: 2026-09-16
-Estado: diseño aprobado, pendiente de implementación
+Estado: implementado (rama `feat/marcas-por-rubro` en api-vendedores y app-planificacion)
 Repos afectados: `app-planificacion` (front) y `api-vendedores` (dominios `sale` y `planificacion`)
 
 ## 1. El problema
