@@ -5,6 +5,9 @@ import {
     leerObservaciones,
     guardarObservaciones,
     limpiarObservaciones,
+    leerMarcasOfrecidas,
+    guardarMarcasOfrecidas,
+    limpiarMarcasOfrecidas,
 } from './resolucionDraft'
 
 beforeEach(() => {
@@ -104,5 +107,26 @@ describe('borrador de observaciones', () => {
         // tiene que manejar con try/catch.
         guardarObservaciones(42, 'con "comillas" y \\ barras')
         expect(leerObservaciones(42)).toBe('con "comillas" y \\ barras')
+    })
+})
+
+describe('marcas ofrecidas', () => {
+    beforeEach(() => localStorage.clear())
+    it('null sin nada guardado', () => {
+        expect(leerMarcasOfrecidas(5)).toBeNull()
+    })
+    it('guarda y lee por visita', () => {
+        guardarMarcasOfrecidas(5, { 7: [{ codigo: 'B1', descripcion: 'FREMAX' }] })
+        expect(leerMarcasOfrecidas(5)).toEqual({ 7: [{ codigo: 'B1', descripcion: 'FREMAX' }] })
+        expect(leerMarcasOfrecidas(6)).toBeNull()
+    })
+    it('limpiar borra la clave', () => {
+        guardarMarcasOfrecidas(5, { 7: [] })
+        limpiarMarcasOfrecidas(5)
+        expect(leerMarcasOfrecidas(5)).toBeNull()
+    })
+    it('JSON roto → null', () => {
+        localStorage.setItem('visita-marcas-5', '{nope')
+        expect(leerMarcasOfrecidas(5)).toBeNull()
     })
 })

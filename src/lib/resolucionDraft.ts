@@ -1,4 +1,4 @@
-import type { IAccionComercial, IOfrecimientoMotivo } from '@/types/planificacion'
+import type { IAccionComercial, IMarcaOfrecida, IOfrecimientoMotivo } from '@/types/planificacion'
 
 /** Claves por ofrecimientoId. */
 type Borrador = Record<number, IOfrecimientoMotivo[]>
@@ -92,4 +92,30 @@ export function guardarObservaciones(visitaId: number, texto: string): void {
 
 export function limpiarObservaciones(visitaId: number): void {
     localStorage.removeItem(keyObservaciones(visitaId))
+}
+
+/** Marcas ofrecidas por ofrecimientoId (spec 2026-09-16 §5.2). Clave propia por la misma
+ *  razón que `detalles`: no romper la forma del borrador de motivos ya guardado. */
+export type BorradorMarcas = Record<number, IMarcaOfrecida[]>
+
+function keyMarcas(visitaId: number): string {
+    return `visita-marcas-${visitaId}`
+}
+
+export function leerMarcasOfrecidas(visitaId: number): BorradorMarcas | null {
+    const raw = localStorage.getItem(keyMarcas(visitaId))
+    if (raw == null) return null
+    try {
+        return JSON.parse(raw) as BorradorMarcas
+    } catch {
+        return null
+    }
+}
+
+export function guardarMarcasOfrecidas(visitaId: number, marcas: BorradorMarcas): void {
+    localStorage.setItem(keyMarcas(visitaId), JSON.stringify(marcas))
+}
+
+export function limpiarMarcasOfrecidas(visitaId: number): void {
+    localStorage.removeItem(keyMarcas(visitaId))
 }
