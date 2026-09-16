@@ -1,5 +1,5 @@
-import type { IAlcance, IMarcaEstado, IOfrecimiento, IRubroEstado, IRubroPropuesta, TipoOfrecimiento } from '@/types/planificacion'
-import { ordenar80_20 } from '@/lib/ordenRubros'
+import type { IAlcance, ICatalogoItem, IMarcaEstado, IOfrecimiento, IRubroEstado, IRubroPropuesta, TipoOfrecimiento } from '@/types/planificacion'
+import { ORDER_RUBROS, ordenar80_20 } from '@/lib/ordenRubros'
 
 /** Presente ⇒ segunda línea con el botón de resolución. Sólo en la visita. */
 export interface IOfrecimientoFilaResolucion {
@@ -46,6 +46,49 @@ export interface IOfrecimientoFilaTotales {
 
 function porCode(rubroStatus: IRubroEstado[]): Map<string, IRubroEstado> {
     return new Map(rubroStatus.map(r => [r.rubroCode, r]))
+}
+
+/** Pseudo-filas de `ORDER_RUBROS` que no son un rubro ofrecible: la fila de totales, el
+ *  cajón "OTROS" y `-1` (SIN SUPERRUBRO, que el backend también descarta). */
+const NO_ES_RUBRO = new Set(['TOTALES', 'OTROS', '-1'])
+
+const NOMBRE_80_20 = new Map(ORDER_RUBROS.map(r => [r.code, r.name]))
+
+/** La lista de rubros del 80/20 mezclada con el historial del cliente, en orden 80/20 y
+ *  sin los códigos que el llamador ya está mostrando arriba (la propuesta, o los
+ *  ofrecimientos de la visita).
+ *
+ *  El 80/20 es el universo y el historial son los datos: por eso se mezclan en vez de
+ *  derivar uno del otro. Un cliente sin movimientos tiene historial vacío —
+ *  client-context devuelve `rubros: []`, y es correcto— y antes eso dejaba la lista en
+ *  cero: sin una sola fila para ofrecer, que es justo el cliente donde más importa. Los
+ *  rubros que el cliente compra y no están en el 80/20 no se pierden: `ordenar80_20` los
+ *  manda al final. */
+function otrosRubros(
+    rubroStatus: IRubroEstado[],
+    yaVisibles: Set<string>,
+): { codigo: string; nombre: string; status?: IRubroEstado }[] {
+    const status = porCode(rubroStatus)
+    const codigos = new Set<string>()
+    for (const r of ORDER_RUBROS) if (!NO_ES_RUBRO.has(r.code)) codigos.add(r.code)
+    for (const s of rubroStatus) codigos.add(s.rubroCode)
+
+    return ordenar80_20(
+        [...codigos].filter(c => !yaVisibles.has(c)),
+        c => c,
+    ).map(codigo => {
+        const s = status.get(codigo)
+        return { codigo, nombre: s?.nombre ?? NOMBRE_80_20.get(codigo) ?? codigo, status: s }
+    })
+}
+
+/** Los rubros elegibles para el buscador de "Agregar ofrecimiento": el mismo universo que
+ *  la tabla, en el mismo orden. No sale de `rubroStatus` por la razón de arriba. */
+export function rubrosElegibles(rubroStatus: IRubroEstado[]): ICatalogoItem[] {
+    return otrosRubros(rubroStatus, new Set()).map(r => ({
+        code: r.codigo,
+        description: r.nombre,
+    }))
 }
 
 function suma(valores: (number | null)[]): number | null {
@@ -100,23 +143,22 @@ export function construirFilasPropuesta(
     // Orden 80/20 (ver ordenRubros.ts): ninguno de los endpoints lo aplica, y acá
     // es donde corresponde — la propuesta arriba ya tiene su propio orden por
     // caída/pesos perdidos y no se toca.
-    const bloqueAbajo: IOfrecimientoFila[] = ordenar80_20(
-        rubroStatus.filter(s => !codesPropuesta.has(s.rubroCode)),
-        s => s.rubroCode,
-    ).map(s => ({
-        codigo: s.rubroCode,
-        nombre: s.nombre,
-        actual: s.actual,
-        mesAnterior: s.mesAnterior,
-        promedio6m: s.promedio6m,
-        actualUnidades: s.actualUnidades,
-        mesAnteriorUnidades: s.mesAnteriorUnidades,
-        promedio6mUnidades: s.promedio6mUnidades,
-        destacada: false,
-        tipo: 'rubro',
-        alcance: [],
-        marcas: s.marcas,
-    }))
+    const bloqueAbajo: IOfrecimientoFila[] = otrosRubros(rubroStatus, codesPropuesta).map(
+        ({ codigo, nombre, status: s }) => ({
+            codigo,
+            nombre,
+            actual: s?.actual ?? null,
+            mesAnterior: s?.mesAnterior ?? null,
+            promedio6m: s?.promedio6m ?? null,
+            actualUnidades: s?.actualUnidades,
+            mesAnteriorUnidades: s?.mesAnteriorUnidades,
+            promedio6mUnidades: s?.promedio6mUnidades,
+            destacada: false,
+            tipo: 'rubro',
+            alcance: [],
+            marcas: s?.marcas ?? [],
+        }),
+    )
 
     return [...bloqueArriba, ...bloqueAbajo]
 }
@@ -128,8 +170,9 @@ export interface IEstadoResolucionOfrecimiento {
 
 /** Colapsada: los ofrecimientos de la visita, en el orden que los devuelve el backend —
  *  no se reordena al resolver (ver spec: reordenar dejando pendientes arriba haría
- *  saltar la fila que el vendedor acaba de tocar). Expandida: agrega el resto de los
- *  rubros del cliente, marcados `agregable` cuando la visita es editable. */
+ *  saltar la fila que el vendedor acaba de tocar). Expandida: agrega los otros rubros
+ *  (`otrosRubros`: el 80/20 mezclado con el historial del cliente), marcados `agregable`
+ *  cuando la visita es editable. */
 export function construirFilasVisita(
     ofrecimientosVisita: IOfrecimiento[],
     rubroStatus: IRubroEstado[],
@@ -173,24 +216,23 @@ export function construirFilasVisita(
 
     // Orden 80/20 (ver ordenRubros.ts): igual que en construirFilasPropuesta,
     // solo acá — la visita arriba preserva el orden del backend a propósito.
-    const bloqueAbajo: IOfrecimientoFila[] = ordenar80_20(
-        rubroStatus.filter(s => !codesVisita.has(s.rubroCode)),
-        s => s.rubroCode,
-    ).map(s => ({
-        codigo: s.rubroCode,
-        nombre: s.nombre,
-        actual: s.actual,
-        mesAnterior: s.mesAnterior,
-        promedio6m: s.promedio6m,
-        actualUnidades: s.actualUnidades,
-        mesAnteriorUnidades: s.mesAnteriorUnidades,
-        promedio6mUnidades: s.promedio6mUnidades,
-        destacada: false,
-        agregable: editable || undefined,
-        tipo: 'rubro',
-        alcance: [],
-        marcas: s.marcas,
-    }))
+    const bloqueAbajo: IOfrecimientoFila[] = otrosRubros(rubroStatus, codesVisita).map(
+        ({ codigo, nombre, status: s }) => ({
+            codigo,
+            nombre,
+            actual: s?.actual ?? null,
+            mesAnterior: s?.mesAnterior ?? null,
+            promedio6m: s?.promedio6m ?? null,
+            actualUnidades: s?.actualUnidades,
+            mesAnteriorUnidades: s?.mesAnteriorUnidades,
+            promedio6mUnidades: s?.promedio6mUnidades,
+            destacada: false,
+            agregable: editable || undefined,
+            tipo: 'rubro',
+            alcance: [],
+            marcas: s?.marcas ?? [],
+        }),
+    )
 
     return [...bloqueArriba, ...bloqueAbajo]
 }

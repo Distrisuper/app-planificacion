@@ -150,8 +150,8 @@ function Celda({
  *  pendiente es un anillo hueco y NO un ＋ (que es lo que tuvo un rato).
  *  `＋` significa "agregar algo nuevo", y acá el rubro ya existe: viene de
  *  la propuesta congelada y lo que se hace es registrar su resultado. Peor: en ESTA misma
- *  tabla "agregar" ya es una acción distinta y real (las filas de "Otros rubros del
- *  cliente · tocá uno para agregarlo"), así que el ＋ quedaba pegado al
+ *  tabla "agregar" ya es una acción distinta y real (las filas de "Otros rubros ·
+ *  tocá uno para agregarlo"), así que el ＋ quedaba pegado al
  *  verbo equivocado: en las filas que hay que completar, mientras las que sí agregan no
  *  llevan ícono. El contraparte natural de un check es una casilla sin tildar. */
 function ChipEstado({ resolucion }: { resolucion: IOfrecimientoFilaResolucion }) {
@@ -661,7 +661,7 @@ export default function OfrecimientoTable({
             agregandoCodes={agregandoCodes}
             eliminandoIds={eliminandoIds}
         />
-        {/* La gemela de "Otros rubros del cliente · tocá uno para agregarlo": dos bandas,
+        {/* La gemela de "Otros rubros · tocá uno para agregarlo": dos bandas,
             misma gramática, verbos opuestos — arriba se CARGA el resultado, abajo se
             AGREGA un rubro. Ese contraste es lo que hace que la pantalla se explique sola,
             y reemplaza al párrafo de tres líneas que vivía arriba del sheet (~54px contra
@@ -757,8 +757,12 @@ export default function OfrecimientoTable({
                     // scrollea con ella hay que volver hasta arriba para usarlo — que es
                     // justo lo que uno quiere evitar cuando ya scrolleó mucho.
                     <div className="sticky top-8 z-10 border-y border-dsline bg-[#FAFBFD] px-2.5 py-2">
+                        {/* "Otros rubros" y no "otros rubros del cliente": abajo está el
+                            80/20 completo mezclado con su historial, así que ahí también
+                            hay rubros que el cliente nunca compró (es lo que hace que un
+                            cliente sin movimientos tenga algo que ofrecer). */}
                         <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
-                            Otros rubros del cliente
+                            Otros rubros
                             {bloqueExtraEsAgregable && ' · tocá uno para agregarlo'}
                         </p>
                         <div className="relative">

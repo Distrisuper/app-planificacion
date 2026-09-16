@@ -7,7 +7,7 @@ import ResolucionWizardAcciones from './propuesta/ResolucionWizardAcciones'
 import OfrecimientoTable from './propuesta/OfrecimientoTable'
 import AgregarOfrecimientoSheet from './propuesta/AgregarOfrecimientoSheet'
 import AccionesExternas from './AccionesExternas'
-import { construirFilasVisita } from './propuesta/filas'
+import { construirFilasVisita, rubrosElegibles } from './propuesta/filas'
 import { useMotivos } from '@/hooks/useMotivos'
 import {
     useOfrecimientos,
@@ -184,6 +184,10 @@ export default function VisitaSheet({
     // los números en las dos pantallas y en los dos estados (colapsada/expandida).
     const { data: rubroStatus = [] } = useRubroStatus(open ? (codigoParticularCliente ?? null) : null)
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(open)
+    // El mismo universo que las filas de la tabla (el 80/20 mezclado con el historial),
+    // y no `rubroStatus`: un cliente sin movimientos no tiene historial, y derivar de ahí
+    // los rubros elegibles dejaba el buscador vacío justo donde más importa ofrecer algo.
+    const rubrosCatalogo = useMemo(() => rubrosElegibles(rubroStatus), [rubroStatus])
 
     useEffect(() => {
         if (!open) {
@@ -307,16 +311,19 @@ export default function VisitaSheet({
     // la primera antes de que termine, y su "en vuelo" queda deshabilitado para
     // siempre. mutateAsync devuelve una promesa propia de CADA llamada, así que el
     // try/finally de acá sí queda atado a la request correcta.
+    // Contra `rubrosCatalogo` y no contra `rubroStatus`: las filas agregables ya no son
+    // sólo las del historial del cliente, y resolver la descripción ahí dejaba el ＋ de
+    // una fila del catálogo como un botón muerto (el `return` de abajo).
     async function agregarDesdeTabla(rubroCode: string) {
-        const item = rubroStatus.find(s => s.rubroCode === rubroCode)
+        const item = rubrosCatalogo.find(c => c.code === rubroCode)
         if (!item) return
         const clave = `rubro:${rubroCode}`
         setAgregandoCodes(prev => new Set(prev).add(clave))
         try {
             const result = await agregar.mutateAsync({
                 tipo: 'rubro',
-                codigo: item.rubroCode,
-                descripcion: item.nombre,
+                codigo: item.code,
+                descripcion: item.description,
             })
             setAgregadosIds(prev => [result.ofrecimientoId, ...prev])
             setAbrirAlLlegar(result.ofrecimientoId)
@@ -447,7 +454,6 @@ export default function VisitaSheet({
         true,
         !visitaCerrada,
     )
-    const rubrosCatalogo = rubroStatus.map(s => ({ code: s.rubroCode, description: s.nombre }))
     // Por código de rubro, para precargar los chips de "¿Qué marca ofreciste?" en el
     // wizard con el mismo desglose que ya muestra la tabla.
     const marcasPorRubro = useMemo(
