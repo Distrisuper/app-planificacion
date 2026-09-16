@@ -164,12 +164,29 @@ endpoints y es justamente lo que produce huérfanos.
 
 ## 4. Modelo: la marca ofrecida va en `pl_ofrecimiento_alcance`
 
+### 4.0 Lo que ya existe, y se reemplaza
+
+Hoy **ya hay** una marca por ofrecimiento: `MarcaOfrecimientoPicker`, arriba del checklist
+"¿Qué pasó?", guarda **una** marca como **descripción** dentro del JSON `pl_ofrecimiento.detalle`
+(`{ accion: null, marca: "SKF" }`). Cromo la lee de ahí (`seguimientoTexto.marcaDelDetalle`) y la
+manda como etiqueta. Tiene un check "Aplicar a restantes" que copia la marca a los demás rubros.
+
+Se **reemplaza** por el alcance, por tres razones: (1) una sola marca por rubro es
+irrepresentable cuando el vendedor ofreció dos; (2) guardar la descripción y no el código hace
+que el `GROUP BY` dependa de que el catálogo nunca renombre; (3) un JSON no es una tabla: la
+analítica necesita `JSON_EXTRACT` en vez de un `JOIN`. `detalle.marca` **deja de escribirse**;
+las filas viejas que la tienen se siguen leyendo (ver 4.3). `detalle.accion` y `detalle.params`
+no cambian.
+
+### 4.1 El alcance como destino
+
 Sin tabla nueva. `pl_ofrecimiento_alcance` ya significa "sobre qué aplica la oferta, 0..N
 destinos", con `tipo IN (rubro | marca | linea | articulo)` y `UNIQUE (ofrecimiento_id, tipo,
 codigo)`. Un rubro ofrecido en FREMAX y CORVEN son **dos filas de alcance `tipo='marca'`**
-colgadas del ofrecimiento del rubro.
+colgadas del ofrecimiento del rubro, con `codigo` = `brandCode` del warehouse/catálogo y
+`descripcion` = snapshot del nombre.
 
-### 4.1 Cambio en `resolver`
+### 4.2 Cambio en `resolver`
 
 Hoy `OfrecimientoRepository.resolver` no toca el alcance (sólo `crearFueraDePropuesta` lo escribe).
 El DTO de `PUT /planificacion/visitas/:id/ofrecimientos/:ofrecimientoId` suma:
@@ -181,22 +198,34 @@ marcas?: { codigo: string; descripcion: string }[]
 - `undefined` → no se toca el alcance (mismo criterio que `detalle`).
 - `[]` → se borran las filas de alcance `tipo='marca'` de ese ofrecimiento.
 - `[...]` → se reemplazan las filas `tipo='marca'`; **las de otros tipos no se tocan**.
-- Validación: códigos no vacíos, sin duplicados, `descripcion` obligatoria (es snapshot, igual
-  que el resto del alcance). No se valida contra el catálogo de marcas en el back: el front sólo
-  ofrece códigos del catálogo o del desglose, y el catálogo es "marcas con venta en 12 meses",
-  que puede excluir legítimamente una marca vieja que el vendedor sí ofreció.
-- Se hace dentro de la misma operación que motivos y campos, en el mismo orden: primero
-  `detalle`, después alcance, después motivos (o todo en una transacción, si `resolver` la tiene).
+- Validación (`ofrecimientoValidation.validarMarcasOfrecidas`): lista; cada item objeto con
+  `codigo` y `descripcion` string no vacíos (`assertCodigo`); sin códigos repetidos
+  (`MARCAS_DUPLICADAS`). No se valida contra el catálogo de marcas: el front sólo ofrece códigos
+  del catálogo o del desglose, y el catálogo es "marcas con venta en 12 meses", que puede excluir
+  legítimamente una marca vieja que el vendedor sí ofreció.
+- Orden dentro de `resolver`: `detalle` → alcance (`destroy where tipo='marca'` + `bulkCreate`)
+  → motivos y campos, igual que hoy.
 
 `listar` ya devuelve `alcance` por ofrecimiento, así que el front lo lee sin cambios.
 
-### 4.2 Qué NO cambia
+### 4.3 Cromo
+
+`buildTagsDesdeRubros` pasa a etiquetar **todas** las marcas del alcance `tipo='marca'` del
+ofrecimiento, y **si no hay ninguna**, cae a `detalle.marca` (filas resueltas antes de este
+cambio). Cuando ya no quede ninguna visita abierta anterior al deploy, el fallback se puede
+borrar; no hay apuro.
+
+### 4.4 Qué NO cambia
 
 - No se agregan columnas a `pl_ofrecimiento` ni a `pl_ofrecimiento_motivo`.
 - El campo `marca_trabaja` (texto) del motivo `NO_TRABAJA` y `competidor` de `PRECIO` quedan como
   están: son otra pregunta ("qué marca trabaja de la competencia"), no "qué marca ofrecí".
 - Un ofrecimiento `tipo='marca'` agregado a mano sigue existiendo como puerta alternativa; no se
   toca ni se deprecia.
+- El check **"Aplicar a restantes"** se conserva: copia las marcas tildadas a los rubros
+  restantes que todavía no tienen ninguna, una sola vez, igual que hoy. Existe con razón
+  documentada (el vendedor suele ofrecer la misma marca en varios rubros) y sacarlo no está en
+  el pedido.
 
 ## 5. UI
 
@@ -236,20 +265,26 @@ en dos zonas.
 
 ### 5.2 El wizard (`ResolucionWizard`)
 
-Arriba del checklist `¿Qué pasó?`, una banda `¿QUÉ MARCA OFRECISTE? · opcional` con chips:
+`MarcaOfrecimientoPicker` se **reemplaza** por `MarcasOfrecidasChips`, en el mismo lugar (arriba
+del checklist `¿Qué pasó?`), con la banda `¿QUÉ MARCA OFRECISTE? · opcional`:
 
 - Un chip por marca del desglose del rubro (**todas**, no sólo las 3 de la tabla), con sufijo gris
   `compra` (tiene `actual` o `mesAnterior` > 0) o `dejó`. Multi-selección, 32px de alto, tilde
   adentro cuando está elegido.
-- Un chip `+ Otra` con borde punteado que abre el `MarcaOfrecimientoPicker` existente (catálogo
-  `GET /sale/brand/catalog`). La marca elegida se suma como chip seleccionado.
+- Un chip `+ Otra` con borde punteado que abre el `CatalogoPicker` sobre el catálogo
+  `GET /sale/brand/catalog` (el mismo que usaba el picker viejo). La marca elegida se suma como
+  chip seleccionado; si ya estaba, no se duplica.
 - Si el rubro no tiene marcas en el historial, la banda muestra sólo `+ Otra`.
-- Se guarda en el **borrador** del ofrecimiento (junto a motivos y acción) y viaja en el mismo
-  `PUT` como `marcas`. Mismo comportamiento que los motivos ante "Limpiar" y ante el guardado en
-  lote de `ResolucionWizardAcciones`.
-- **No se replica** a los demás rubros con el check de "aplicar a todos": la marca es del rubro.
+- El check `Aplicar a restantes` aparece cuando hay al menos una marca tildada y quedan rubros
+  (`rubrosRestantes > 0`), y copia las marcas tildadas a los rubros restantes **sin marcas**.
+- Se guarda en un **borrador propio** por ofrecimiento (`marcasOfrecidas: Record<number,
+  IMarcaOfrecida[]>`, clave `visita-marcas-{visitaId}` en localStorage, misma razón que
+  `detalles`), y viaja en el mismo `PUT` como `marcas`. "Limpiar" del wizard también lo vacía.
 - Al reabrir un ofrecimiento ya resuelto, los chips se precargan desde `alcance` filtrado por
   `tipo='marca'`.
+- `esPersistible` del batch de cierre pasa a considerar también las marcas: un rubro entra al
+  `PUT` si cambiaron sus motivos, si tiene acción, **o si sus marcas difieren del alcance
+  guardado**.
 
 ### 5.3 Degradación
 
@@ -266,7 +301,10 @@ puede bloquear el cierre: el gate `ofrecimientosCargados` sigue mirando sólo a 
   con `lastMonth > 0` → `false`; sin historia → `false`), scope de vendedor aplicado.
 - `OfrecimientoRepository.resolver` con `marcas`: `undefined` no toca alcance; `[]` borra sólo
   `tipo='marca'`; `[...]` reemplaza y deja intactas las filas de otros tipos; rechaza duplicados.
-- Ruta: consumidores en JSDoc, `authorize(...ALL_ROLES)` + `salesScopeMiddleware` como `drops`.
+- `validarMarcasOfrecidas`: acepta lista válida, rechaza no-lista, item sin código, duplicados.
+- `buildTagsDesdeRubros`: etiqueta todas las marcas del alcance; sin alcance cae a `detalle.marca`; con
+  alcance ignora `detalle.marca`.
+- Ruta: consumidores en JSDoc, mismo `authorize` y `salesScopeMiddleware` que `drops`.
 
 **app-planificacion**
 
@@ -276,8 +314,13 @@ puede bloquear el cierre: el gate `ofrecimientosCargados` sigue mirando sólo a 
 - `OfrecimientoTable`: tocar el nombre abre la resolución; tocar los números despliega; una sola
   abierta; tocar los números de una fila sin marcas no hace nada; cuarta marca se colapsa en
   `+N marcas más`; filas `agregable` no se partan; en modo propuesta toda la fila despliega.
-- `ResolucionWizard`: chips desde `marcas` del rubro; selección va al borrador; `+ Otra` agrega el
-  chip; precarga desde `alcance` `tipo='marca'`; el `PUT` lleva `marcas`.
+- `MarcasOfrecidasChips`: chips desde `marcas` del rubro con sufijo `compra`/`dejó`; toggle;
+  `+ Otra` agrega desde el catálogo sin duplicar; sin marcas sólo `+ Otra`; `Aplicar a restantes`
+  sólo con algo tildado y restantes > 0.
+- `ResolucionWizard`: pasa las marcas del rubro a los chips; precarga desde `alcance`
+  `tipo='marca'`; "Limpiar" vacía marcas; aplicar copia sólo a restantes sin marcas.
+- `VisitaSheet.cerrarConBorrador`: el `PUT` lleva `marcas` cuando difieren del alcance guardado;
+  no las manda si no cambiaron; el borrador de marcas se persiste y se limpia con los demás.
 - Degradación: con `rubroStatus` en error, la tabla renderiza como hoy y el wizard sólo `+ Otra`.
 
 ## 7. Fuera de alcance, con su razón
@@ -293,6 +336,8 @@ puede bloquear el cierre: el gate `ofrecimientosCargados` sigue mirando sólo a 
   iteración.
 - **Unificar `drops` y `client-context`.** Son dos preguntas distintas (qué cayó vs. cómo viene
   comprando) y `drops` lo consume también `VisitasService` para congelar la propuesta.
+- **Migrar las filas viejas de `detalle.marca` al alcance.** Son pocas y Cromo ya las leyó; el
+  fallback de 4.3 las cubre para lectura.
 - **Marca a nivel de `pl_ofrecimiento_motivo`** (por motivo, no por ofrecimiento). Multiplica
   la carga y no responde ninguna pregunta que "marca por ofrecimiento" no responda.
 
