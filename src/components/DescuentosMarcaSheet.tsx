@@ -1,7 +1,34 @@
 import { useMemo, useState } from 'react'
+import { Percent } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { esSuscriptor, listaDescuentos } from '@/lib/descuentosMarca'
 import type { IVisitClientCard } from '@/types/planificacion'
+
+/**
+ * La puerta al sheet, en la línea de identidad del header. Compartida por `PropuestaSheet`
+ * (antes de entrar, cuando el vendedor decide qué ofrecer) y `VisitaSheet` (adentro, y
+ * también con la visita ya cerrada: es consulta, no edición).
+ *
+ * NO va en la fila de `AccionesExternas`: esos chips llevan afuera de la app y lo dicen
+ * con el ↗. Éste abre contenido propio, y mezclarlos le saca al ↗ su significado.
+ *
+ * El sheet que abre se monta en la raíz de cada pantalla, no al lado de este botón: el
+ * panel del `BottomSheet` que lo contiene se anima con `transform`, y un ancestro con
+ * transform se vuelve el bloque contenedor de sus descendientes `fixed` — el overlay del
+ * sheet anidado quedaría encerrado dentro del header.
+ */
+export function ChipDescuentos({ onAbrir }: { onAbrir: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onAbrir}
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 text-[11px] font-bold text-violet-700"
+        >
+            <Percent className="h-[12px] w-[12px]" strokeWidth={2.6} />
+            Descuentos
+        </button>
+    )
+}
 
 /** Sin acentos ni mayúsculas: nadie tipea la tilde parado en un mostrador (mismo criterio
  *  que `CatalogoPicker` y el buscador de `OfrecimientoTable`). */

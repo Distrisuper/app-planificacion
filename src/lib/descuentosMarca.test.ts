@@ -5,6 +5,7 @@ import {
     nombreDescuento,
     listaDescuentos,
     conDescuentos,
+    hayDescuentosParaMostrar,
 } from './descuentosMarca'
 import type { IRubroEstado, IVisitClientCard } from '@/types/planificacion'
 
@@ -181,5 +182,26 @@ describe('conDescuentos', () => {
         const entrada = [rubro()]
         conDescuentos(entrada, cliente())
         expect(entrada[0].marcas[0].descuento).toBeUndefined()
+    })
+})
+
+describe('hayDescuentosParaMostrar', () => {
+    it('con descuentos, sí', () => {
+        expect(hayDescuentosParaMostrar(cliente())).toBe(true)
+    })
+
+    // El suscriptor es la excepción: su lista está vacía, pero el sheet es donde se entera
+    // de que tiene el 45% global. Esconderlo sería esconder el caso que más importa.
+    it('el suscriptor sí, aunque su lista esté vacía', () => {
+        expect(hayDescuentosParaMostrar(cliente({ brandDiscounts: [], bonusDiscount: 45 }))).toBe(true)
+    })
+
+    it('sin descuentos y sin ser suscriptor, no', () => {
+        expect(hayDescuentosParaMostrar(cliente({ brandDiscounts: [], bonusDiscount: 0 }))).toBe(false)
+    })
+
+    it('sin cliente, no', () => {
+        expect(hayDescuentosParaMostrar(null)).toBe(false)
+        expect(hayDescuentosParaMostrar(undefined)).toBe(false)
     })
 })

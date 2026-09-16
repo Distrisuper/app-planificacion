@@ -119,3 +119,15 @@ export function conDescuentos(
         }),
     }))
 }
+
+/**
+ * Si vale la pena ofrecer la puerta al sheet de descuentos. El suscriptor entra aunque su
+ * lista esté vacía: el sheet es donde se entera de que tiene el 45% global, que es lo
+ * contrario de "este cliente no tiene descuentos". Sin descuentos y sin ser suscriptor no,
+ * porque un botón que abre una pantalla vacía es peor que no tenerlo.
+ */
+export function hayDescuentosParaMostrar(
+    cliente: IVisitClientCard | null | undefined,
+): boolean {
+    return !!cliente && (esSuscriptor(cliente) || listaDescuentos(cliente).length > 0)
+}

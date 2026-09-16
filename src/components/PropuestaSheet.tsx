@@ -1,10 +1,12 @@
+import { useState } from 'react'
 import { Loader2, Play } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import OfrecimientoTable from './propuesta/OfrecimientoTable'
 import AccionesExternas from './AccionesExternas'
 import { construirFilasPropuesta } from './propuesta/filas'
-import { conDescuentos } from '@/lib/descuentosMarca'
+import { conDescuentos, hayDescuentosParaMostrar } from '@/lib/descuentosMarca'
+import DescuentosMarcaSheet, { ChipDescuentos } from './DescuentosMarcaSheet'
 import { usePropuesta } from '@/hooks/usePropuesta'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import type { AppExterna } from '@/lib/appsExternas'
@@ -60,6 +62,7 @@ export default function PropuestaSheet({
     cliente,
     onAbrirAppExterna,
 }: PropuestaSheetProps) {
+    const [descuentosAbierto, setDescuentosAbierto] = useState(false)
     const { data, isLoading } = usePropuesta(open ? codigoCliente : null)
     const rubros: IRubroPropuesta[] = data?.rubros ?? []
 
@@ -76,12 +79,22 @@ export default function PropuestaSheet({
     const filas = construirFilasPropuesta(rubros, conDescuentos(rubroStatus, cliente), true)
 
     return (
+        <>
         <BottomSheet
             open={open}
             onClose={onClose}
             title={nombreCliente}
             subtitle={identidad}
             altura="completa"
+            // Antes de entrar es cuando el descuento más pesa: acá el vendedor decide QUÉ
+            // ofrecer, y el % es parte de esa decisión. Mismo slot del header que en
+            // VisitaSheet, para que el control no se mude entre las dos pantallas del
+            // mismo cliente.
+            acciones={
+                hayDescuentosParaMostrar(cliente) ? (
+                    <ChipDescuentos onAbrir={() => setDescuentosAbierto(true)} />
+                ) : undefined
+            }
             footer={
                 <>
                     {error && (
@@ -130,5 +143,14 @@ export default function PropuestaSheet({
                 )}
             </div>
         </BottomSheet>
+
+        {cliente && (
+            <DescuentosMarcaSheet
+                open={descuentosAbierto}
+                onClose={() => setDescuentosAbierto(false)}
+                cliente={cliente}
+            />
+        )}
+        </>
     )
 }

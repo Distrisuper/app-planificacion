@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Percent, WifiOff, X } from 'lucide-react'
+import { Loader2, WifiOff, X } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -8,8 +8,8 @@ import OfrecimientoTable from './propuesta/OfrecimientoTable'
 import AgregarOfrecimientoSheet from './propuesta/AgregarOfrecimientoSheet'
 import AccionesExternas from './AccionesExternas'
 import { construirFilasVisita, rubrosElegibles } from './propuesta/filas'
-import { conDescuentos, esSuscriptor, listaDescuentos } from '@/lib/descuentosMarca'
-import DescuentosMarcaSheet from './DescuentosMarcaSheet'
+import { conDescuentos, hayDescuentosParaMostrar } from '@/lib/descuentosMarca'
+import DescuentosMarcaSheet, { ChipDescuentos } from './DescuentosMarcaSheet'
 import { useMotivos } from '@/hooks/useMotivos'
 import {
     useOfrecimientos,
@@ -428,29 +428,13 @@ export default function VisitaSheet({
     // seguimiento pendiente) — probado y descartado, se leía como una etiqueta, no como
     // algo tocable. El rectángulo gris-rojizo es el mismo lenguaje que ya usa Reagendar,
     // sólo que en rojo para distinguirlo como la salida negativa.
-    // El chip de descuentos NO va en la fila de `AccionesExternas`: esos chips llevan
-    // afuera de la app y lo dicen con el ↗. Éste abre contenido propio, y mezclarlos le
-    // saca al ↗ su significado. Va acá, en la línea de identidad del header, por la misma
-    // razón que "No visité": es donde el vendedor lo encuentra rápido, parado en el local.
-    //
-    // A diferencia de "No visité", se muestra TAMBIÉN con la visita cerrada: es consulta,
-    // no edición, y el sheet de una visita cerrada es justamente de consulta.
-    //
-    // El suscriptor lo ve aunque su lista esté vacía — el sheet es donde se entera de que
-    // tiene el 45% global, que es lo contrario de "este cliente no tiene descuentos". Sin
-    // descuentos y sin ser suscriptor no se renderiza: un botón que abre una pantalla
-    // vacía es peor que no tenerlo.
-    const hayDescuentos = !!cliente && (esSuscriptor(cliente) || listaDescuentos(cliente).length > 0)
-
-    const chipDescuentos = hayDescuentos ? (
-        <button
-            type="button"
-            onClick={() => setDescuentosAbierto(true)}
-            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 text-[11px] font-bold text-violet-700"
-        >
-            <Percent className="h-[12px] w-[12px]" strokeWidth={2.6} />
-            Descuentos
-        </button>
+    // Va en la línea de identidad del header por la misma razón que "No visité": es donde
+    // el vendedor lo encuentra rápido, parado en el local. Pero a diferencia de "No
+    // visité", se muestra TAMBIÉN con la visita cerrada — es consulta, no edición, y el
+    // sheet de una visita cerrada es justamente de consulta. El resto del criterio
+    // (cuándo aparece, por qué no va en AccionesExternas) vive en `ChipDescuentos`.
+    const chipDescuentos = hayDescuentosParaMostrar(cliente) ? (
+        <ChipDescuentos onAbrir={() => setDescuentosAbierto(true)} />
     ) : null
 
     const botonNoVisita =
