@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Loader2, WifiOff, X } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
@@ -31,9 +31,26 @@ import {
     leerObservaciones,
     guardarObservaciones,
     limpiarObservaciones,
+    leerMarcasOfrecidas,
+    guardarMarcasOfrecidas,
+    limpiarMarcasOfrecidas,
 } from '@/lib/resolucionDraft'
 import type { AppExterna } from '@/lib/appsExternas'
-import type { IAccionComercial, IOfrecimiento, IOfrecimientoMotivo, IVisitClientCard } from '@/types/planificacion'
+import type {
+    IAccionComercial,
+    IMarcaOfrecida,
+    IOfrecimiento,
+    IOfrecimientoMotivo,
+    IVisitClientCard,
+} from '@/types/planificacion'
+
+/** Marcas ya declaradas para este ofrecimiento (alcance tipo='marca' de la propuesta
+ *  congelada), para precargar el borrador y para compararlo al detectar cambios. */
+function marcasDelAlcance(r: IOfrecimiento): IMarcaOfrecida[] {
+    return r.alcance
+        .filter(a => a.tipo === 'marca')
+        .map(a => ({ codigo: a.codigo, descripcion: a.descripcion }))
+}
 
 /** Tiene que coincidir con el VARCHAR(500) de pl_resolucion.observaciones y con
  *  OBSERVACIONES_MAX del controller de api-vendedores. */
@@ -135,6 +152,7 @@ export default function VisitaSheet({
     // cambio. No se manda al backend hasta "Cerrar visita" — ver cerrarConBorrador.
     const [borradores, setBorradores] = useState<Record<number, IOfrecimientoMotivo[]>>({})
     const [detalles, setDetalles] = useState<Record<number, IAccionComercial | null>>({})
+    const [marcasOfrecidas, setMarcasOfrecidas] = useState<Record<number, IMarcaOfrecida[]>>({})
     const [observaciones, setObservaciones] = useState('')
     const [borradorListo, setBorradorListo] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
@@ -171,6 +189,7 @@ export default function VisitaSheet({
             setWizard(null)
             setBorradores({})
             setDetalles({})
+            setMarcasOfrecidas({})
             setObservaciones('')
             setBorradorListo(false)
             setErrorGuardado(null)
@@ -195,6 +214,12 @@ export default function VisitaSheet({
             return next
         })
         setDetalles(prev => (Object.keys(prev).length > 0 ? prev : (leerDetalles(visitaId) ?? {})))
+        setMarcasOfrecidas(prev => {
+            const base = Object.keys(prev).length > 0 ? prev : (leerMarcasOfrecidas(visitaId) ?? {})
+            const next = { ...base }
+            for (const r of ofrecimientos) if (!(r.id in next)) next[r.id] = marcasDelAlcance(r)
+            return next
+        })
         setObservaciones(prev => (prev !== '' ? prev : (leerObservaciones(visitaId) ?? '')))
         setBorradorListo(true)
     }, [open, ofrecimientosCargados, visitaId, ofrecimientos])
@@ -236,8 +261,9 @@ export default function VisitaSheet({
         if (!open || !borradorListo) return
         guardarBorrador(visitaId, borradores)
         guardarDetalles(visitaId, detalles)
+        guardarMarcasOfrecidas(visitaId, marcasOfrecidas)
         guardarObservaciones(visitaId, observaciones)
-    }, [open, borradorListo, visitaId, borradores, detalles, observaciones])
+    }, [open, borradorListo, visitaId, borradores, detalles, marcasOfrecidas, observaciones])
 
     // Abre el wizard del ofrecimiento recién agregado, en cuanto el refetch de
     // `ofrecimientos` lo trae. Se resuelve acá y no en `agregarDesdeTabla`/
@@ -421,27 +447,38 @@ export default function VisitaSheet({
         !visitaCerrada,
     )
     const rubrosCatalogo = rubroStatus.map(s => ({ code: s.rubroCode, description: s.nombre }))
+    // Por código de rubro, para precargar los chips de "¿Qué marca ofreciste?" en el
+    // wizard con el mismo desglose que ya muestra la tabla.
+    const marcasPorRubro = useMemo(
+        () => Object.fromEntries(rubroStatus.map(s => [s.rubroCode, s.marcas])),
+        [rubroStatus],
+    )
 
     /**
-     * Si el `detalle` de este ofrecimiento se puede guardar. `validarDetalleAccion`
-     * (api-vendedores, desde el fix de 2026-08-21) acepta `{ accion: null, marca }`: la
-     * acción sigue siendo opcional, pero la marca ya no depende de que haya una cargada.
-     *
-     * Acción Comercial se sacó del formulario (spec 2026-08-19), así que en la práctica
-     * `accion` siempre es null y lo único que puede hacer persistible el detalle es la
-     * marca — se conserva la comprobación de `accion` porque el objeto sigue vivo en el
-     * resto del código y un futuro que reponga Acción Comercial no debería tener que
-     * volver a tocar esto.
+     * Si el `detalle` de este ofrecimiento se puede guardar. Acción Comercial se sacó
+     * del formulario (spec 2026-08-19); `detalle.marca` también dejó de escribirse (spec
+     * 2026-09-16: la marca ofrecida ahora vive en el alcance, ver `marcasCambiaron`) —
+     * se conserva la comprobación de `accion` porque el objeto sigue vivo en el resto del
+     * código y un futuro que reponga Acción Comercial no debería tener que volver a tocar
+     * esto.
      *
      * Importa para DOS cosas, y por eso es una sola función:
-     *  1. No ensuciar el ofrecimiento. Un rubro cuyos motivos no cambiaron Y sin marca ni
-     *     acción no entra al batch: sería un PUT que no persiste nada (cinco rubros sin
-     *     tocar son cinco requests de más con datos móviles).
+     *  1. No ensuciar el ofrecimiento. Un rubro cuyos motivos no cambiaron Y sin acción no
+     *     entra al batch: sería un PUT que no persiste nada (cinco rubros sin tocar son
+     *     cinco requests de más con datos móviles).
      *  2. No mandar `detalle: null`. `undefined` es "no toques lo guardado" en el DTO;
      *     `null` es "borralo", y borraría un detalle viejo que este formulario ni muestra.
      */
     function esPersistible(ofrecimientoId: number): boolean {
-        return !!detalles[ofrecimientoId]?.accion || !!detalles[ofrecimientoId]?.marca
+        return !!detalles[ofrecimientoId]?.accion
+    }
+
+    /** Si las marcas ofrecidas de este rubro cambiaron respecto de lo que ya está en el
+     *  alcance de la propuesta congelada — comparado por código, sin importar el orden. */
+    function marcasCambiaron(r: IOfrecimiento): boolean {
+        const a = (marcasOfrecidas[r.id] ?? []).map(m => m.codigo).sort()
+        const b = marcasDelAlcance(r).map(m => m.codigo).sort()
+        return a.length !== b.length || a.some((c, i) => c !== b[i])
     }
 
     // Único punto de guardado contra el backend: junta todo lo que cambió contra lo
@@ -451,11 +488,17 @@ export default function VisitaSheet({
     async function cerrarConBorrador() {
         setErrorGuardado(null)
         const cambios = ofrecimientos
-            .filter(r => !motivosIguales(borradores[r.id] ?? [], r.motivos) || esPersistible(r.id))
+            .filter(
+                r =>
+                    !motivosIguales(borradores[r.id] ?? [], r.motivos) ||
+                    esPersistible(r.id) ||
+                    marcasCambiaron(r),
+            )
             .map(r => ({
                 ofrecimientoId: r.id,
                 motivos: borradores[r.id] ?? [],
                 ...(esPersistible(r.id) ? { detalle: detalles[r.id] } : {}),
+                ...(marcasCambiaron(r) ? { marcas: marcasOfrecidas[r.id] ?? [] } : {}),
             }))
 
         if (cambios.length > 0) {
@@ -475,6 +518,7 @@ export default function VisitaSheet({
 
         limpiarBorrador(visitaId)
         limpiarDetalles(visitaId)
+        limpiarMarcasOfrecidas(visitaId)
         limpiarObservaciones(visitaId)
         // Trimmeado del lado del front además del backend: así "   " no viaja como si
         // fuera una observación. null y no '' — es el mismo valor que la columna.
@@ -656,6 +700,11 @@ export default function VisitaSheet({
                         detalles={detalles}
                         onCambiarAccion={(ofrecimientoId, accion) =>
                             setDetalles(prev => ({ ...prev, [ofrecimientoId]: accion }))
+                        }
+                        marcasPorRubro={marcasPorRubro}
+                        marcasOfrecidas={marcasOfrecidas}
+                        onCambiarMarcasOfrecidas={(ofrecimientoId, m) =>
+                            setMarcasOfrecidas(prev => ({ ...prev, [ofrecimientoId]: m }))
                         }
                         onVolver={() => setWizard(null)}
                     />

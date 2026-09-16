@@ -653,17 +653,16 @@ it('no ofrece ver la posición con la visita ya cerrada', async () => {
     expect(screen.queryByRole('button', { name: 'Ver mi posición' })).not.toBeInTheDocument()
 })
 
-// Acción Comercial se sacó del formulario de resolución (spec 2026-08-19): en la práctica
-// `accion` siempre es null, así que `detalle` solo existe para llevar la marca. El backend
-// la acepta sin acción desde el fix de 2026-08-21 (validarDetalleAccion ya no exige
-// `accion`) — antes de ese fix la marca se descartaba en silencio porque este formulario
-// nunca la mandaba.
-describe('la marca se manda en `detalle`, sin acción comercial', () => {
-    it('con marca cargada, el batch manda motivos + detalle con la marca', async () => {
+// La marca ofrecida ya no viaja en `detalle.marca` (spec 2026-09-16): va al alcance del
+// ofrecimiento, como `marcas` en el PUT de resolver. Acción Comercial sigue sin UI en
+// este formulario (spec 2026-08-19), así que `detalle` solo existiría para una acción
+// que este formulario no administra.
+describe('las marcas ofrecidas se mandan en `marcas`, vía el alcance', () => {
+    it('al cerrar, manda las marcas ofrecidas del rubro en el PUT', async () => {
         const { onCerrarVisita } = renderSheet()
         fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
 
-        fireEvent.click(await screen.findByLabelText('Marca del ofrecimiento'))
+        fireEvent.click(await screen.findByRole('button', { name: /otra/i }))
         fireEvent.click(await screen.findByText('Fric-Rot'))
         await tildarSaquePedido()
         fireEvent.click(screen.getByRole('button', { name: /siguiente/i }))
@@ -672,25 +671,26 @@ describe('la marca se manda en `detalle`, sin acción comercial', () => {
         fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
 
         await waitFor(() =>
-            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 7, {
-                motivos: [{ motivoId: 10, valores: {} }],
-                detalle: { accion: null, marca: 'Fric-Rot' },
-            }),
+            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(
+                42,
+                7,
+                expect.objectContaining({ marcas: [{ codigo: 'FR', descripcion: 'Fric-Rot' }] }),
+            ),
         )
         expect(onCerrarVisita).toHaveBeenCalled()
     })
 
     // Antes de este fix, tocar SOLO la marca no generaba ningún request para ese rubro
-    // (`esPersistible` exigía `accion`, que el formulario ya no administra) y la marca se
+    // (`esPersistible` exigía `accion`, y las marcas no se comparaban) y la marca se
     // perdía en silencio. Ahora sí entra al batch, con motivos vacíos si el rubro no tenía
     // ninguno tildado.
-    it('tocar SOLO la marca sí genera un request con el detalle, aunque los motivos no cambien', async () => {
+    it('tocar SOLO la marca sí genera un request, aunque los motivos no cambien', async () => {
         renderSheet()
 
         // Filtros (id 8) ya viene resuelto con motivoId 10: su borrador arranca igual a lo
         // guardado, así que solo se le cambia la marca.
         fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Filtros' }))
-        fireEvent.click(await screen.findByLabelText('Marca del ofrecimiento'))
+        fireEvent.click(await screen.findByRole('button', { name: /otra/i }))
         fireEvent.click(await screen.findByText('Fric-Rot'))
         fireEvent.click(await screen.findByRole('button', { name: /ver resumen/i }))
 
@@ -703,10 +703,11 @@ describe('la marca se manda en `detalle`, sin acción comercial', () => {
         fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
 
         await waitFor(() =>
-            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(42, 8, {
-                motivos: [{ motivoId: 10, valores: {} }],
-                detalle: { accion: null, marca: 'Fric-Rot' },
-            }),
+            expect(api.resolverOfrecimiento).toHaveBeenCalledWith(
+                42,
+                8,
+                expect.objectContaining({ marcas: [{ codigo: 'FR', descripcion: 'Fric-Rot' }] }),
+            ),
         )
         const rubrosEnviados = (api.resolverOfrecimiento as any).mock.calls.map((c: unknown[]) => c[1])
         expect(rubrosEnviados.sort()).toEqual([7, 8])
@@ -726,6 +727,48 @@ describe('la marca se manda en `detalle`, sin acción comercial', () => {
         await waitFor(() => expect(api.resolverOfrecimiento).toHaveBeenCalled())
         const rubrosEnviados = (api.resolverOfrecimiento as any).mock.calls.map((c: unknown[]) => c[1])
         expect(rubrosEnviados).toEqual([7])
+    })
+
+    // El PUT (si lo hay por motivos) no lleva la clave `marcas` cuando no cambiaron
+    // respecto de lo que ya está en el alcance de la propuesta congelada.
+    it('no manda `marcas` si no cambiaron respecto del alcance guardado', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([
+            {
+                id: 7, resolucionId: 42, tipo: 'rubro', codigo: 'AMORT', descripcion: 'Amortiguadores',
+                gapUnits: 12, esPropuesto: true, resuelto: false, motivos: [],
+                alcance: [{ tipo: 'marca', codigo: 'FR', descripcion: 'Fric-Rot' }],
+            },
+            ofrecimientos[1],
+        ])
+        renderSheet()
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+        await tildarSaquePedido()
+        fireEvent.click(await screen.findByRole('button', { name: /minimizar/i }))
+
+        fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+
+        await waitFor(() => expect(api.resolverOfrecimiento).toHaveBeenCalled())
+        const llamada = (api.resolverOfrecimiento as any).mock.calls.find((c: unknown[]) => c[1] === 7)
+        expect(llamada?.[2]).not.toHaveProperty('marcas')
+    })
+
+    // El wizard precarga los chips desde el alcance ya guardado: reabrir la resolución
+    // de un rubro con una marca declarada la muestra tildada, no en blanco.
+    it('precarga los chips desde el alcance tipo marca del ofrecimiento', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([
+            {
+                id: 7, resolucionId: 42, tipo: 'rubro', codigo: 'AMORT', descripcion: 'Amortiguadores',
+                gapUnits: 12, esPropuesto: true, resuelto: false, motivos: [],
+                alcance: [{ tipo: 'marca', codigo: 'FR', descripcion: 'Fric-Rot' }],
+            },
+            ofrecimientos[1],
+        ])
+        renderSheet()
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Resolución de Amortiguadores' }))
+
+        expect(await screen.findByRole('button', { name: /Fric-Rot/ })).toHaveAttribute('aria-pressed', 'true')
     })
 })
 
