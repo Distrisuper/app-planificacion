@@ -216,7 +216,9 @@ Lista completa del cliente, no solo las marcas del rubro abierto. Mismo contenid
   todas formas para que el día que arreglen el ETL aparezca solo, sin tocar esta pantalla.
 - **Ordenado por % descendente**, no alfabético: es el orden con el que se busca con qué
   empujar. El buscador cubre el caso "quiero ésta".
-- Buscador con el mismo `useTextoDebounced` que ya usa `OfrecimientoBuscador`.
+- Buscador **sin debounce**. `useTextoDebounced` existe para los buscadores de cartera, que
+  disparan una request por tecla; acá el filtro corre sobre un array en memoria y el debounce
+  sólo agregaría 300ms de lag a algo gratis.
 - Sin descuentos y **no** suscriptor: "Este cliente no tiene descuentos por marca".
 
 ### 6.1 Suscriptor
