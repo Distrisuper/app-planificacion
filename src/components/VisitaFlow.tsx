@@ -17,7 +17,13 @@ import { guardarVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
-import type { IAgendaClient, IPropuestaRubroDTO, IVisitClientCard } from '@/types/planificacion'
+import { esAlta } from '@/lib/alta'
+import type {
+    IAgendaClient,
+    IDetalleContactoAlta,
+    IPropuestaRubroDTO,
+    IVisitClientCard,
+} from '@/types/planificacion'
 
 /** La visita que está en curso ahora mismo, sea cual sea el cliente cuyo sheet esté
  *  abierto (o ninguno) — ver comentario en VisitaFlowProps.visitaEnCurso. */
@@ -156,12 +162,21 @@ export default function VisitaFlow({
     const enCurso = cliente?.estado === 'en_curso' || esClienteEnCurso
     const tieneCoords = cliente?.latitud != null && cliente?.longitud != null
 
+    // "Cliente nuevo": no hay historial (propuesta) ni coordenada (mapa/gate). Se
+    // arranca directo con la ubicación del vendedor, que pasa a ser la del comercio.
+    const clienteEsAlta = esAlta(cliente)
+
     // "Iniciar visita" tocado directo desde la card: se salta la propuesta y va derecho
     // al mapa. Solo aplica con coordenadas (si no las hay, no hay mapa que mostrar, así
     // que cae al flujo normal de la propuesta). La propuesta igual hace falta pedirla acá
     // (el backend la exige para congelarla), solo que ya no se muestra en pantalla.
     const cargandoDirecto =
-        !!directoAMapa && tieneCoords && !mostrarRubros && propuestaPendiente === null && !bloqueadoPorOtraVisita
+        !clienteEsAlta &&
+        !!directoAMapa &&
+        tieneCoords &&
+        !mostrarRubros &&
+        propuestaPendiente === null &&
+        !bloqueadoPorOtraVisita
     // `isError` es imprescindible, no un extra: el loader de abajo tapa toda la pantalla y
     // no tiene cómo cerrarse, así que mirando solo `data` (que ante un fallo queda
     // undefined para siempre) la app quedaba trabada en el spinner hasta reiniciarla.
@@ -174,6 +189,16 @@ export default function VisitaFlow({
         if (!cargandoDirecto || !propuestaDirecta) return
         setPropuestaPendiente(propuestaDirecta.rubros.map(toPropuestaDTO))
     }, [cargandoDirecto, propuestaDirecta])
+
+    // Arranque directo del cliente de alta: sin propuesta que confirmar ni mapa que
+    // mostrar, se inicia apenas se abre el flujo. `onIniciar` ya se encarga de capturar la
+    // ubicación del vendedor (que queda como coordInicio) y de no pisar un intento en
+    // curso — este efecto solo dispara el primero.
+    useEffect(() => {
+        if (!clienteEsAlta || !directoAMapa || mostrarRubros || iniciandoFlujo || bloqueadoPorOtraVisita) return
+        void onIniciar([])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [clienteEsAlta, directoAMapa, mostrarRubros, cliente?.rotacionClienteId])
 
     if (!cliente) return null
 
@@ -272,7 +297,7 @@ export default function VisitaFlow({
         }
     }
 
-    async function onCerrarVisita(observaciones: string | null) {
+    async function onCerrarVisita(observaciones: string | null, detalle?: IDetalleContactoAlta) {
         if (visitaId === null || cerrandoFlujo) return
         // Común a "cerró bien" y a "ya estaba cerrada" (tratado como éxito, ver abajo): las
         // dos anclas locales de la visita se limpian igual, sea cual sea el motivo por el
@@ -292,6 +317,7 @@ export default function VisitaFlow({
                         visitaId,
                         coordFinal: geo.coord,
                         ...(observaciones ? { observaciones } : {}),
+                        ...(detalle ? { detalle } : {}),
                     })
                     if (res.ofrecimientosPendientes > 0) {
                         // Resultado normal, no un error: el gate pide un mínimo de 2 rubros,
@@ -381,7 +407,7 @@ export default function VisitaFlow({
     return (
         <>
             <PropuestaSheet
-                open={!mostrarRubros && propuestaPendiente === null && !cargandoDirecto}
+                open={!clienteEsAlta && !mostrarRubros && propuestaPendiente === null && !cargandoDirecto}
                 codigoCliente={cliente.codigoParticularCliente}
                 nombreCliente={nombre}
                 identidad={identidad}
@@ -401,7 +427,8 @@ export default function VisitaFlow({
                     identidad={identidad}
                     visitaCerrada={cliente.estado === 'visitada'}
                     enCurso={enCurso}
-                    codigoParticularCliente={cliente.codigoParticularCliente}
+                    esAlta={clienteEsAlta}
+                    codigoParticularCliente={clienteEsAlta ? undefined : cliente.codigoParticularCliente}
                     cliente={cliente}
                     onAbrirAppExterna={onAbrirAppExterna}
                     onMinimize={cerrarFlujo}
@@ -515,6 +542,39 @@ export default function VisitaFlow({
                         <Loader2 className="h-7 w-7 animate-spin text-dsnavy" strokeWidth={2.4} />
                         <p className="text-[12.5px] font-semibold text-dsmuted">
                             Buscando la propuesta…
+                        </p>
+                    </div>
+                ))}
+            {clienteEsAlta &&
+                !mostrarRubros &&
+                (errorIniciar ? (
+                    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white px-8 text-center">
+                        <WifiOff className="h-8 w-8 text-dsmuted" strokeWidth={2} />
+                        <p className="text-[14px] font-semibold leading-snug text-[#182645]">
+                            {errorIniciar}
+                        </p>
+                        <Button
+                            onClick={() => void onIniciar([])}
+                            className="h-11 w-full max-w-[240px] bg-dsgreen text-[13.5px] hover:bg-dsgreen/90"
+                        >
+                            Volver a intentar
+                        </Button>
+                        <button
+                            type="button"
+                            onClick={cerrarFlujo}
+                            className="text-[13px] font-semibold text-dsmuted underline"
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+                ) : (
+                    <div
+                        data-testid="cargando-propuesta"
+                        className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white"
+                    >
+                        <Loader2 className="h-7 w-7 animate-spin text-dsnavy" strokeWidth={2.4} />
+                        <p className="text-[12.5px] font-semibold text-dsmuted">
+                            Iniciando visita…
                         </p>
                     </div>
                 ))}

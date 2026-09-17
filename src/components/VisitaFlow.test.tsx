@@ -521,6 +521,31 @@ it('directoAMapa: cancelar en el mapa lo cierra de verdad y no lo reabre solo', 
     expect(api.iniciarVisita).not.toHaveBeenCalled()
 })
 
+it('un cliente nuevo arranca directo: sin propuesta, sin mapa, propuesta vacía en el POST', async () => {
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        latitud: undefined,
+        longitud: undefined,
+    }
+    ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: true, coord: '-34.6,-58.4', precisionM: 10 })
+    ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 77, ofrecimientos: 0 })
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
+    const { onVisitaIniciada } = renderFlow({ cliente: clienteAlta, directoAMapa: true })
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith({
+            rotacionClienteId: 42,
+            coordInicio: '-34.6,-58.4',
+            coordCliente: undefined,
+            propuesta: [],
+        }),
+    )
+    expect(api.getPropuesta).not.toHaveBeenCalled()
+    expect(screen.queryByText(/propuesta comercial/i)).not.toBeInTheDocument()
+    await waitFor(() => expect(onVisitaIniciada).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'alta' }), 77))
+})
+
 it('cancelar en el mapa vuelve a la propuesta sin iniciar nada', async () => {
     renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
