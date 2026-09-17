@@ -4,6 +4,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import { fechaHoraNegocio } from '@/lib/fechas'
+import { esAlta } from '@/lib/alta'
 import type { IAgendaClientAdmin } from '@/types/planificacion'
 
 interface ClienteCardRutaProps {
@@ -95,8 +96,8 @@ const Cuerpo = memo(function Cuerpo({
                 </p>
                 <div className="mt-0.5 flex items-center justify-between gap-1">
                     <span className="flex items-center gap-1 text-[11px] text-slate-500">
-                        {cliente.tipo !== 'alta' && cliente.codigoParticularCliente}
-                        {cliente.tipo === 'alta' ? (
+                        {!esAlta(cliente) && cliente.codigoParticularCliente}
+                        {esAlta(cliente) ? (
                             <span className="inline-flex items-center rounded-full px-1 py-0.5 text-[9px] font-extrabold uppercase tracking-wide bg-[#DCFCE7] text-[#166534]">
                                 Cliente nuevo
                             </span>

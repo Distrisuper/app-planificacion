@@ -268,7 +268,13 @@ export default function ClienteCard({
                         Ver resumen
                     </Button>
                 </div>
-            ) : (
+            ) : !alta || puedeIniciar || (cliente.estado === 'pendiente' && otraVisitaEnCurso) ? (
+                // Un alta `en_curso` no tiene ni "Propuesta" (suprimido para altas) ni
+                // "Iniciar visita" (`puedeIniciar` es false con la visita ya abierta) ni
+                // la nota de bloqueo (esa es solo para `pendiente`) — sin esta guarda, esta
+                // caja quedaba renderizada vacía, con el `border-t pt-2.5` dibujando una
+                // línea y un padding alrededor de nada. El vendedor de todos modos vuelve a
+                // entrar por `VisitaEnCursoBar`.
                 <div className="mt-2.5 flex flex-col gap-1.5 border-t border-[#EDEFF4] pt-2.5">
                     {/* Tier 1 — las dos acciones de la visita, con el MISMO peso: el vendedor
                         tanto entra derecho como prepara la propuesta antes, según el cliente.
@@ -306,7 +312,7 @@ export default function ClienteCard({
                         </div>
                     )}
                 </div>
-            )}
+            ) : null}
         </div>
     )
 }

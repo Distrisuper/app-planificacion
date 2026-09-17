@@ -202,13 +202,20 @@ export default function VisitaFlow({
 
     if (!cliente) return null
 
-    async function conUbicacion(accion: (geo: Extract<GeoResult, { ok: true }>) => Promise<void>) {
+    // Devuelve si la ubicación se pudo capturar (y por lo tanto `accion` corrió). La
+    // mayoría de los llamadores no le prestan atención al resultado (el toast de
+    // `onGeoBloqueada` ya avisa), pero el arranque directo del cliente de alta sí lo
+    // necesita — ver `onIniciar` más abajo.
+    async function conUbicacion(
+        accion: (geo: Extract<GeoResult, { ok: true }>) => Promise<void>,
+    ): Promise<boolean> {
         const geo = await capturarUbicacion()
         if (!geo.ok) {
             onGeoBloqueada(geo.motivo)
-            return
+            return false
         }
         await accion(geo)
+        return true
     }
 
     // Solo con coordenadas del cliente vale la pena mostrar el mapa (confirmar cercanía);
@@ -231,7 +238,7 @@ export default function VisitaFlow({
         setErrorIniciar(null)
         setIniciandoFlujo(true)
         try {
-            await conUbicacion(async geo => {
+            const ubicado = await conUbicacion(async geo => {
                 // Segunda verificación, con la coordenada DEFINITIVA (la que se persiste). El
                 // mapa ya deshabilita el botón con el fix en vivo, pero eso solo evita el caso
                 // honesto — sin este chequeo alcanzaría con tocar "Iniciar visita" en el
@@ -292,6 +299,16 @@ export default function VisitaFlow({
                     setErrorIniciar('No se pudo iniciar la visita. Volvé a intentar.')
                 }
             })
+            // El arranque directo del cliente de alta no tiene propuesta ni mapa detrás:
+            // si la ubicación falla, `conUbicacion` ya avisó por toast (`onGeoBloqueada`)
+            // pero eso solo no alcanza — el overlay de "Iniciando visita…" no tiene cómo
+            // cerrarse solo (ver el bloque `clienteEsAlta` más abajo), así que sin esto
+            // quedaba trabado en el spinner para siempre. Los demás casos (cliente real)
+            // tienen la propuesta o el mapa abiertos detrás del toast, así que no
+            // necesitan este mensaje.
+            if (!ubicado && clienteEsAlta) {
+                setErrorIniciar('No pudimos obtener tu ubicación. Volvé a intentar.')
+            }
         } finally {
             setIniciandoFlujo(false)
         }
@@ -424,7 +441,11 @@ export default function VisitaFlow({
                     open={mostrarRubros}
                     visitaId={visitaId}
                     nombreCliente={nombre}
-                    identidad={identidad}
+                    // El código sintético `#ALTA-000009` no es vocabulario de vendedor
+                    // (ver CLAUDE.md): para un cliente nuevo no hay identidad que mostrar,
+                    // así que se omite entero en vez de dejar pasar el `#${codigo}` que
+                    // arma `identidadCliente`.
+                    identidad={clienteEsAlta ? undefined : identidad}
                     visitaCerrada={cliente.estado === 'visitada'}
                     enCurso={enCurso}
                     esAlta={clienteEsAlta}
@@ -576,6 +597,18 @@ export default function VisitaFlow({
                         <p className="text-[12.5px] font-semibold text-dsmuted">
                             Iniciando visita…
                         </p>
+                        {/* Escape del spinner: mientras la ubicación todavía no respondió
+                            (ni éxito ni error) esto es lo único que puede sacar al
+                            vendedor de acá — sin esto, un GPS que no responde nunca
+                            deja esta pantalla sin salida (ver el fix de `onIniciar` de
+                            arriba para el caso en que sí llega a responder con error). */}
+                        <button
+                            type="button"
+                            onClick={cerrarFlujo}
+                            className="text-[13px] font-semibold text-dsmuted underline"
+                        >
+                            Cancelar
+                        </button>
                     </div>
                 ))}
         </>

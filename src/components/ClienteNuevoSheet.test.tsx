@@ -30,6 +30,20 @@ it('crear: se puede cambiar el día con los chips', async () => {
     await waitFor(() => expect(api.crearAlta).toHaveBeenCalledWith(expect.objectContaining({ dia: 5 })))
 })
 
+it('crear: cambiar el día actualiza el eyebrow, no solo el botón', async () => {
+    // Finding #4 de la revisión final: el eyebrow se armaba con `contexto.dia` (el día en
+    // que se abrió el sheet) mientras el botón ya usaba el state `dia` — pasar de
+    // miércoles a viernes dejaba el header diciendo "Agregar al miércoles" con el botón
+    // diciendo "Agregar al viernes".
+    wrap(<ClienteNuevoSheet open contexto={{ modo: 'crear', semana: 2, dia: 3 }} onClose={() => {}} onListo={() => {}} onAviso={() => {}} />)
+    // Al abrir, eyebrow y botón coinciden (los dos parten de miércoles).
+    expect(screen.getAllByText(/agregar al miércoles/i).length).toBe(2)
+    fireEvent.click(screen.getByRole('button', { name: /^viernes$/i }))
+    // Después de cambiar el día, ninguno se queda en miércoles y los dos pasan a viernes.
+    expect(screen.queryByText(/agregar al miércoles/i)).not.toBeInTheDocument()
+    expect(screen.getAllByText(/agregar al viernes/i).length).toBe(2)
+})
+
 it('editar: precarga los datos y manda solo lo que cambió', async () => {
     vi.mocked(api.editarAlta).mockResolvedValue(creado)
     const cliente = { ...creado, detalleAlta: { nombre: 'Piche', razonSocial: null, direccion: 'Ruta 5' } }

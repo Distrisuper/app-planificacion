@@ -340,4 +340,17 @@ describe('variante Cliente nuevo', () => {
         render(<ClienteCard cliente={alta({ estado: 'visitada', visitaId: 7 })} {...handlers} />)
         expect(screen.getByRole('button', { name: /ver resumen/i })).toBeInTheDocument()
     })
+
+    it('un cliente nuevo en_curso no deja una caja de acciones vacía', () => {
+        // Finding #5 de la revisión final: sin "Propuesta" (suprimido para altas) ni
+        // "Iniciar visita" (ya hay una visita abierta) no queda ningún botón de este
+        // bloque, y el contenedor con `border-t pt-2.5` dibujaba una línea sobre nada.
+        const { container } = render(<ClienteCard cliente={alta({ estado: 'en_curso', visitaId: 7 })} {...handlers} />)
+        expect(screen.queryByRole('button', { name: /^propuesta$/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+        // El wrapper de la fila de acciones (el `flex gap-1.5` de Tier 1, clase exacta —
+        // otros bloques de la card comparten "flex" y "gap-1.5" mezclados con más
+        // clases) no debería renderizarse en absoluto, no solo quedar vacío de botones.
+        expect(container.querySelector('div[class="flex gap-1.5"]')).toBeNull()
+    })
 })

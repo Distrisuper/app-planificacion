@@ -546,6 +546,73 @@ it('un cliente nuevo arranca directo: sin propuesta, sin mapa, propuesta vacía 
     await waitFor(() => expect(onVisitaIniciada).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'alta' }), 77))
 })
 
+it('el cliente nuevo no muestra el código sintético #ALTA-000009 en el sheet', async () => {
+    // Finding #2 de la revisión final: `identidadCliente` arma `#${codigoParticularCliente}`,
+    // y ese código sintético es vocabulario que el vendedor nunca tiene que ver.
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        estado: 'en_curso',
+        visitaId: 77,
+        latitud: undefined,
+        longitud: undefined,
+    }
+    renderFlow({ cliente: clienteAlta })
+    await screen.findByText(clienteAlta.nombreCliente)
+    expect(screen.queryByText(/ALTA-000009/)).not.toBeInTheDocument()
+})
+
+it('GPS que falla en el arranque directo del cliente nuevo no deja el spinner sin salida', async () => {
+    // Finding #1 (crítico) de la revisión final: `onIniciar` delegaba en `conUbicacion`,
+    // que ante un fallo de geolocalización solo dispara el toast (`onGeoBloqueada`) y
+    // nunca seteaba `errorIniciar` — así que el overlay "Iniciando visita…" del arranque
+    // directo de un cliente nuevo quedaba trabado, sin Cancelar ni reintentar.
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        latitud: undefined,
+        longitud: undefined,
+    }
+    ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: false, motivo: 'sin_senal' })
+    const { onGeoBloqueada, onClose } = renderFlow({ cliente: clienteAlta, directoAMapa: true })
+
+    // Ya no queda trabado en el spinner: pasa a la pantalla de error, con "Volver a
+    // intentar" y "Cancelar".
+    await screen.findByText(/no pudimos obtener tu ubicación/i)
+    expect(onGeoBloqueada).toHaveBeenCalledWith('sin_senal')
+    expect(screen.queryByTestId('cargando-propuesta')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Cancelar'))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+})
+
+it('mientras la ubicación del cliente nuevo todavía no respondió, "Cancelar" ya permite salir', async () => {
+    // La otra mitad del finding #1: incluso ANTES de que la geolocalización responda
+    // (éxito o error), el vendedor no puede quedar sin salida en el overlay de carga.
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        latitud: undefined,
+        longitud: undefined,
+    }
+    let resolverGeo: (v: any) => void = () => {}
+    ;(geo.capturarUbicacion as any).mockReturnValue(new Promise(res => (resolverGeo = res)))
+    const { onClose } = renderFlow({ cliente: clienteAlta, directoAMapa: true })
+
+    const cancelar = await screen.findByText('Cancelar')
+    const cargando = screen.getByTestId('cargando-propuesta')
+    expect(cargando).toContainElement(cancelar)
+
+    fireEvent.click(cancelar)
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+
+    // No queda ninguna llamada pendiente sin resolver que rompa otros tests.
+    resolverGeo({ ok: true, coord: '-34.6,-58.4', precisionM: 10 })
+})
+
 it('cancelar en el mapa vuelve a la propuesta sin iniciar nada', async () => {
     renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))

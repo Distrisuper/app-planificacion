@@ -90,7 +90,10 @@ export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, on
     }
 
     const titulo = contexto.modo === 'crear' ? 'Cliente nuevo' : contexto.cliente.nombreCliente
-    const eyebrow = contexto.modo === 'crear' ? `Agregar al ${diaLabel(contexto.dia)}` : contexto.modo === 'editar' ? 'Cliente nuevo · editar datos' : 'Cliente nuevo · volver a agendar'
+    // `dia` (el state), no `contexto.dia`: tocar otro chip de día actualiza `dia` pero no
+    // `contexto`, así que usar `contexto.dia` acá dejaba el eyebrow mostrando el día viejo
+    // mientras el botón (que ya usaba `dia`) mostraba el nuevo.
+    const eyebrow = contexto.modo === 'crear' ? `Agregar al ${diaLabel(dia)}` : contexto.modo === 'editar' ? 'Cliente nuevo · editar datos' : 'Cliente nuevo · volver a agendar'
     const labelBoton =
         contexto.modo === 'crear' ? `Agregar al ${diaLabel(dia)}`
         : contexto.modo === 'editar' ? 'Guardar'
