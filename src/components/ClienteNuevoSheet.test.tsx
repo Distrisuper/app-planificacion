@@ -40,6 +40,15 @@ it('editar: precarga los datos y manda solo lo que cambió', async () => {
     await waitFor(() => expect(api.editarAlta).toHaveBeenCalledWith(9, { razonSocial: 'Piche SRL' }))
 })
 
+it('editar: detalleAlta null y sin tocar nada → no-op, manda {}', async () => {
+    vi.mocked(api.editarAlta).mockResolvedValue(creado)
+    const cliente = { ...creado, detalleAlta: null }
+    wrap(<ClienteNuevoSheet open contexto={{ modo: 'editar', cliente }} onClose={() => {}} onListo={() => {}} onAviso={() => {}} />)
+    expect(screen.getByLabelText(/nombre del comercio/i)).toHaveValue('Piche')
+    fireEvent.click(screen.getByRole('button', { name: /guardar/i }))
+    await waitFor(() => expect(api.editarAlta).toHaveBeenCalledWith(9, {}))
+})
+
 it('reintentar: no edita datos, solo elige el día', async () => {
     vi.mocked(api.reintentarAlta).mockResolvedValue(creado)
     wrap(<ClienteNuevoSheet open contexto={{ modo: 'reintentar', cliente: creado, diaSugerido: 4 }} onClose={() => {}} onListo={() => {}} onAviso={() => {}} />)

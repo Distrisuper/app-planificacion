@@ -72,7 +72,10 @@ export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, on
             } else if (contexto.modo === 'editar') {
                 const d = contexto.cliente.detalleAlta
                 const cambios: IEditarAltaDTO = {}
-                if (nombreLimpio !== (d?.nombre ?? '')) cambios.nombre = nombreLimpio
+                // Mismo fallback que la precarga (`d?.nombre ?? contexto.cliente.nombreCliente`):
+                // si detalleAlta viene null/undefined y se usara `''` acá, un no-op (no tocar
+                // el campo) calculaba un diff falso y mandaba `{ nombre: ... }` en vez de `{}`.
+                if (nombreLimpio !== (d?.nombre ?? contexto.cliente.nombreCliente)) cambios.nombre = nombreLimpio
                 if ((razonSocial.trim() || null) !== (d?.razonSocial ?? null)) cambios.razonSocial = razonSocial.trim() || null
                 if ((direccion.trim() || null) !== (d?.direccion ?? null)) cambios.direccion = direccion.trim() || null
                 cliente = await editar.mutateAsync({ rotacionClienteId: contexto.cliente.rotacionClienteId, dto: cambios })
