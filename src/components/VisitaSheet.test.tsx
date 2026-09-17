@@ -946,7 +946,9 @@ it('manda la observación al cerrar y limpia el borrador', async () => {
 
     // Trimmeado también del lado del front: el backend lo normaliza igual, pero mandar
     // el texto ya limpio evita que "   " cuente como observación en el contador.
-    await waitFor(() => expect(onCerrarVisita).toHaveBeenCalledWith('Pidió lista de precios'))
+    await waitFor(() =>
+        expect(onCerrarVisita).toHaveBeenCalledWith('Pidió lista de precios', null),
+    )
     expect(localStorage.getItem('visita-observaciones-42')).toBeNull()
 })
 
@@ -960,7 +962,7 @@ it('sin texto, cerrar manda null', async () => {
 
     fireEvent.click(await screen.findByRole('button', { name: /^cerrar visita$/i }))
 
-    await waitFor(() => expect(onCerrarVisita).toHaveBeenCalledWith(null))
+    await waitFor(() => expect(onCerrarVisita).toHaveBeenCalledWith(null, null))
 })
 
 it('si el guardado de los rubros falla, NO limpia el borrador ni cierra', async () => {
@@ -1091,4 +1093,70 @@ it('el chip sigue estando con la visita cerrada', () => {
     renderSheet({ visitaCerrada: true, cliente: { ...CLIENTE, brandDiscounts: CON_DESCUENTO } })
     expect(screen.getByRole('button', { name: /% desc\./i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /no visité/i })).not.toBeInTheDocument()
+})
+
+// ── Cliente nuevo / alta (spec 2026-09-17) ────────────────────────────────────
+
+describe('cliente nuevo (esAlta)', () => {
+    it('sin rubros ofrecidos el cierre queda gris hasta que haya un ofrecimiento o una observación', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        const { onCerrarVisita } = renderSheet({ esAlta: true, enCurso: true })
+
+        const boton = await screen.findByRole('button', {
+            name: /cargá lo que ofreciste o dejá una observación/i,
+        })
+        expect(boton).toBeDisabled()
+        expect(api.getRubroStatus).not.toHaveBeenCalled()
+        // la tabla muestra el catálogo 80/20 para agregar
+        expect(screen.getByText(/otros rubros/i)).toBeInTheDocument()
+
+        fireEvent.change(screen.getByLabelText(/observaciones/i), { target: { value: 'lo piensa' } })
+        fireEvent.change(screen.getByLabelText(/con quién hablaste/i), { target: { value: 'Gustavo' } })
+        fireEvent.change(screen.getByLabelText(/cumpleaños/i), { target: { value: '1978-03-14' } })
+
+        const cerrar = screen.getByRole('button', { name: /cerrar visita/i })
+        expect(cerrar).toBeEnabled()
+        fireEvent.click(cerrar)
+
+        await waitFor(() =>
+            expect(onCerrarVisita).toHaveBeenCalledWith('lo piensa', {
+                contacto: 'Gustavo',
+                fechaNacimiento: '1978-03-14',
+            }),
+        )
+    })
+
+    it('con un ofrecimiento completo y sin observación ya habilita el cierre', async () => {
+        const { onCerrarVisita } = renderSheet({ esAlta: true })
+        await screen.findByText('Amortiguadores')
+
+        // "Filtros" (id 8) ya viene completo desde el mock de ofrecimientos.
+        const cerrar = await screen.findByRole('button', { name: /^cerrar visita$/i })
+        expect(cerrar).toBeEnabled()
+        fireEvent.click(cerrar)
+
+        await waitFor(() => expect(onCerrarVisita).toHaveBeenCalledWith(null, null))
+    })
+
+    it('el eyebrow sin visita en curso dice Cliente nuevo, no Propuesta comercial', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({ esAlta: true, visitaCerrada: true })
+
+        expect(await screen.findByText(/cliente nuevo/i)).toBeInTheDocument()
+        expect(screen.queryByText(/propuesta comercial/i)).not.toBeInTheDocument()
+    })
+})
+
+// Cliente real (no esAlta, el default): onCerrarVisita siempre manda `null` de detalle.
+it('cliente real: onCerrarVisita recibe detalle null', async () => {
+    const { onCerrarVisita } = renderSheet()
+    await screen.findByText('Amortiguadores')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Resolución de Amortiguadores' }))
+    await tildarSaquePedido()
+    fireEvent.click(await screen.findByRole('button', { name: /minimizar y ver lista/i }))
+
+    fireEvent.click(await screen.findByRole('button', { name: /^cerrar visita$/i }))
+
+    await waitFor(() => expect(onCerrarVisita).toHaveBeenCalledWith(null, null))
 })

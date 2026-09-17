@@ -23,6 +23,7 @@ import { useVisitaTimer } from '@/hooks/useVisitaTimer'
 import { formatearDuracion } from '@/lib/visitaTimer'
 import { estadoVisitaVivo, PALETA_VISITA_VIVO, ROTULO_VISITA_VIVO } from '@/lib/estadoDuracion'
 import { motivosIguales, tieneDetalleIncompleto } from '@/lib/resolucionOfrecimiento'
+import { puedeCerrarAlta } from '@/lib/alta'
 import {
     leerBorrador,
     guardarBorrador,
@@ -40,6 +41,7 @@ import {
 import type { AppExterna } from '@/lib/appsExternas'
 import type {
     IAccionComercial,
+    IDetalleContactoAlta,
     IMarcaOfrecida,
     IOfrecimiento,
     IOfrecimientoMotivo,
@@ -87,9 +89,14 @@ interface VisitaSheetProps {
     /** Si se pasa, habilita la tabla "cómo viene comprando" durante la visita, igual
      *  que en la Propuesta previa. */
     codigoParticularCliente?: string
-    /** Recibe la observación libre ya normalizada (trim, `''` → null). Se manda en el
-     *  PUT de cierre, que es su único punto de escritura. */
-    onCerrarVisita: (observaciones: string | null) => void
+    /** true = visita de "Cliente nuevo" (spec 2026-09-17): no hay propuesta congelada,
+     *  así que el gate de cierre es `puedeCerrarAlta` en vez del mínimo de 2 rubros, y
+     *  el sheet suma dos campos de contacto opcionales junto a observaciones. */
+    esAlta?: boolean
+    /** Recibe la observación libre ya normalizada (trim, `''` → null), y — sólo para
+     *  `esAlta` con algún campo cargado — el detalle de contacto; `null` en cualquier
+     *  otro caso. Se manda en el PUT de cierre, que es su único punto de escritura. */
+    onCerrarVisita: (observaciones: string | null, detalle: IDetalleContactoAlta | null) => void
     onClose: () => void
     /** Si se pasa (y enCurso), aparece el botón de minimizar en el header. */
     onMinimize?: () => void
@@ -115,6 +122,7 @@ export default function VisitaSheet({
     enCurso,
     alejado,
     codigoParticularCliente,
+    esAlta = false,
     onCerrarVisita,
     onClose,
     onMinimize,
@@ -156,6 +164,12 @@ export default function VisitaSheet({
     const [detalles, setDetalles] = useState<Record<number, IAccionComercial | null>>({})
     const [marcasOfrecidas, setMarcasOfrecidas] = useState<Record<number, IMarcaOfrecida[]>>({})
     const [observaciones, setObservaciones] = useState('')
+    // Sólo para `esAlta`: datos de contacto del prospecto, se completan al cerrar la
+    // visita (no al crearla). No tienen borrador en localStorage — a diferencia de
+    // observaciones, se pierden si se cierra la app a mitad de carga, y se acepta:
+    // son opcionales y el flujo de alta es corto.
+    const [contacto, setContacto] = useState('')
+    const [fechaNacimiento, setFechaNacimiento] = useState('')
     const [borradorListo, setBorradorListo] = useState(false)
     const [descuentosAbierto, setDescuentosAbierto] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
@@ -199,6 +213,8 @@ export default function VisitaSheet({
             setDetalles({})
             setMarcasOfrecidas({})
             setObservaciones('')
+            setContacto('')
+            setFechaNacimiento('')
             setBorradorListo(false)
             setErrorGuardado(null)
             setAltaAbierta(false)
@@ -414,6 +430,12 @@ export default function VisitaSheet({
     const minimoRequerido = Math.min(2, ofrecimientos.length)
     const faltanParaMinimo = Math.max(0, minimoRequerido - completos)
 
+    // Una visita de alta no tiene propuesta congelada: el `min(2, ofrecidos)` de arriba
+    // se auto-satisface en 0 (como pasó con la visita 923), así que ese gate no sirve
+    // acá. `puedeCerrarAlta` pide que haya quedado ALGO — un ofrecimiento completo o una
+    // observación — en su lugar. Ver src/lib/alta.ts.
+    const cierreHabilitado = esAlta ? puedeCerrarAlta(completos, observaciones) : faltanParaMinimo === 0
+
     // En la línea de identidad del header (junto a `#10034 · FERNANDEZ MARIA ISABEL`) y
     // NO detrás de un menú: un control de un solo ítem escondido atrás de un "⋯" le suma
     // un toque de más a algo que el vendedor necesita encontrar rápido, parado en la
@@ -551,7 +573,11 @@ export default function VisitaSheet({
         // Trimmeado del lado del front además del backend: así "   " no viaja como si
         // fuera una observación. null y no '' — es el mismo valor que la columna.
         const texto = observaciones.trim()
-        onCerrarVisita(texto === '' ? null : texto)
+        const detalle: IDetalleContactoAlta | null =
+            esAlta && (contacto.trim() || fechaNacimiento)
+                ? { contacto: contacto.trim() || null, fechaNacimiento: fechaNacimiento || null }
+                : null
+        onCerrarVisita(texto === '' ? null : texto, detalle)
     }
 
     // El pie es fijo (fuera del scroll) tanto en list (Cerrar visita) como en el
@@ -602,7 +628,7 @@ export default function VisitaSheet({
              *  `ofrecimientosCargados` es parte del gate por la misma razón que en el
              *  botón de cerrar: con el GET en vuelo o fallado, `ofrecimientos` es [] y
              *  min(2, 0) es 0, así que el mínimo se auto-satisface. */}
-            {!visitaCerrada && ofrecimientosCargados && faltanParaMinimo === 0 && (
+            {!visitaCerrada && ofrecimientosCargados && (esAlta || faltanParaMinimo === 0) && (
                 <div className="mb-3.5">
                     <div className="mb-1 flex items-baseline justify-between">
                         <label
@@ -626,6 +652,46 @@ export default function VisitaSheet({
                         placeholder="Algo para agregar de esta visita…"
                         className="w-full resize-none rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
                     />
+                    {/* Sólo alta: datos de contacto del prospecto, opcionales — no hay
+                     *  cliente en fct_clients del que sacarlos. Van pegados a
+                     *  observaciones porque se completan en el mismo momento, al
+                     *  cerrar. */}
+                    {esAlta && (
+                        <div className="mt-2 flex gap-2">
+                            <div className="flex-1">
+                                <label
+                                    htmlFor="visita-contacto"
+                                    className="mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-dsmuted"
+                                >
+                                    Con quién hablaste (opcional)
+                                </label>
+                                <input
+                                    id="visita-contacto"
+                                    type="text"
+                                    maxLength={80}
+                                    value={contacto}
+                                    onChange={e => setContacto(e.target.value)}
+                                    placeholder="Nombre"
+                                    className="w-full rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label
+                                    htmlFor="visita-cumple"
+                                    className="mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-dsmuted"
+                                >
+                                    Cumpleaños (opcional)
+                                </label>
+                                <input
+                                    id="visita-cumple"
+                                    type="date"
+                                    value={fechaNacimiento}
+                                    onChange={e => setFechaNacimiento(e.target.value)}
+                                    className="w-full rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none focus:border-dsnavy"
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
             {/* Visita cerrada: solo lectura, y solo si hay algo que leer. `pl_resolucion`
@@ -662,7 +728,7 @@ export default function VisitaSheet({
             {!visitaCerrada && ofrecimientosCargados && (
                 <Button
                     onClick={cerrarConBorrador}
-                    disabled={faltanParaMinimo > 0}
+                    disabled={!cierreHabilitado}
                     loading={cerrando || guardandoBorrador}
                     // El naranja queda reservado para "ya podés cerrar". Mientras falten
                     // rubros va gris con texto navy, y NO el naranja al 40% de opacidad
@@ -676,7 +742,7 @@ export default function VisitaSheet({
                     // lavaría el gris y dejaría el texto del faltante ilegible, que es
                     // justo el único texto que el vendedor necesita leer en ese momento.
                     className={
-                        faltanParaMinimo > 0
+                        !cierreHabilitado
                             ? 'h-12 w-full border border-[#D8DEEA] bg-[#F1F4F9] text-[15px] text-dsnavy disabled:opacity-100'
                             : 'h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90'
                     }
@@ -684,13 +750,16 @@ export default function VisitaSheet({
                     {/* El faltante va DENTRO del botón deshabilitado, no en una línea
                      *  aparte arriba: dice lo mismo, en el único lugar donde el vendedor
                      *  ya está mirando (el botón que no lo deja avanzar), y no gasta una
-                     *  línea del pie fijo en cada render. */}
+                     *  línea del pie fijo en cada render. En alta no hay un número que
+                     *  contar (no hay mínimo de rubros), así que el texto es genérico. */}
                     {guardandoBorrador
                         ? 'Guardando…'
                         : cerrando
                           ? 'Cerrando…'
-                          : faltanParaMinimo > 0
-                            ? `Cargá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
+                          : !cierreHabilitado
+                            ? esAlta
+                                ? 'Cargá lo que ofreciste o dejá una observación'
+                                : `Cargá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
                             : 'Cerrar visita'}
                 </Button>
             )}
@@ -718,7 +787,9 @@ export default function VisitaSheet({
                 eyebrow={
                     enCurso
                         ? `● ${ROTULO_VISITA_VIVO[estadoVivo]} · ${formatearDuracion(segundos)}`
-                        : 'Propuesta comercial'
+                        : esAlta
+                          ? 'Cliente nuevo'
+                          : 'Propuesta comercial'
                 }
                 eyebrowClassName={enCurso ? PALETA_VISITA_VIVO[estadoVivo].eyebrow : undefined}
                 altura="completa"

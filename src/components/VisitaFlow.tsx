@@ -297,7 +297,7 @@ export default function VisitaFlow({
         }
     }
 
-    async function onCerrarVisita(observaciones: string | null, detalle?: IDetalleContactoAlta) {
+    async function onCerrarVisita(observaciones: string | null, detalle: IDetalleContactoAlta | null) {
         if (visitaId === null || cerrandoFlujo) return
         // Común a "cerró bien" y a "ya estaba cerrada" (tratado como éxito, ver abajo): las
         // dos anclas locales de la visita se limpian igual, sea cual sea el motivo por el
