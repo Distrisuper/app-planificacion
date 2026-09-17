@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PropuestaSheet, { toPropuestaDTO } from './PropuestaSheet'
@@ -136,7 +136,20 @@ export default function VisitaFlow({
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
+    //
+    // Limpia lo del cliente ANTERIOR: si no había ninguno (se está abriendo el flujo), no
+    // hay nada que limpiar y correr igual es activamente dañino. Los efectos del hijo
+    // corren ANTES que los del padre, así que el mapa en modo 'ubicar' —que emite el pin
+    // inicial apenas monta— ya había dejado su coordenada en `clienteOverride` para cuando
+    // este efecto se ejecuta, y un reset incondicional se la comía: el alta terminaba
+    // iniciando sin la ubicación del comercio.
+    const clientePrevio = useRef<number | undefined>(cliente?.rotacionClienteId)
     useEffect(() => {
+        const id = cliente?.rotacionClienteId
+        if (clientePrevio.current === id) return
+        const habiaOtro = clientePrevio.current !== undefined
+        clientePrevio.current = id
+        if (!habiaOtro) return
         setPropuestaPendiente(null)
         setErrorIniciar(null)
         setClienteOverride(null)
@@ -190,32 +203,15 @@ export default function VisitaFlow({
         setPropuestaPendiente(propuestaDirecta.rubros.map(toPropuestaDTO))
     }, [cargandoDirecto, propuestaDirecta])
 
-    // Arranque directo del cliente de alta: sin propuesta que confirmar ni mapa que
-    // mostrar, se inicia apenas se abre el flujo. `onIniciar` ya se encarga de capturar la
-    // ubicación del vendedor (que queda como coordInicio) y de no pisar un intento en
-    // curso — este efecto solo dispara el primero.
-    useEffect(() => {
-        if (!clienteEsAlta || !directoAMapa || mostrarRubros || iniciandoFlujo || bloqueadoPorOtraVisita) return
-        void onIniciar([])
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [clienteEsAlta, directoAMapa, mostrarRubros, cliente?.rotacionClienteId])
-
     if (!cliente) return null
 
-    // Devuelve si la ubicación se pudo capturar (y por lo tanto `accion` corrió). La
-    // mayoría de los llamadores no le prestan atención al resultado (el toast de
-    // `onGeoBloqueada` ya avisa), pero el arranque directo del cliente de alta sí lo
-    // necesita — ver `onIniciar` más abajo.
-    async function conUbicacion(
-        accion: (geo: Extract<GeoResult, { ok: true }>) => Promise<void>,
-    ): Promise<boolean> {
+    async function conUbicacion(accion: (geo: Extract<GeoResult, { ok: true }>) => Promise<void>) {
         const geo = await capturarUbicacion()
         if (!geo.ok) {
             onGeoBloqueada(geo.motivo)
-            return false
+            return
         }
         await accion(geo)
-        return true
     }
 
     // Solo con coordenadas del cliente vale la pena mostrar el mapa (confirmar cercanía);
@@ -238,7 +234,7 @@ export default function VisitaFlow({
         setErrorIniciar(null)
         setIniciandoFlujo(true)
         try {
-            const ubicado = await conUbicacion(async geo => {
+            await conUbicacion(async geo => {
                 // Segunda verificación, con la coordenada DEFINITIVA (la que se persiste). El
                 // mapa ya deshabilita el botón con el fix en vivo, pero eso solo evita el caso
                 // honesto — sin este chequeo alcanzaría con tocar "Iniciar visita" en el
@@ -299,16 +295,6 @@ export default function VisitaFlow({
                     setErrorIniciar('No se pudo iniciar la visita. Volvé a intentar.')
                 }
             })
-            // El arranque directo del cliente de alta no tiene propuesta ni mapa detrás:
-            // si la ubicación falla, `conUbicacion` ya avisó por toast (`onGeoBloqueada`)
-            // pero eso solo no alcanza — el overlay de "Iniciando visita…" no tiene cómo
-            // cerrarse solo (ver el bloque `clienteEsAlta` más abajo), así que sin esto
-            // quedaba trabado en el spinner para siempre. Los demás casos (cliente real)
-            // tienen la propuesta o el mapa abiertos detrás del toast, así que no
-            // necesitan este mensaje.
-            if (!ubicado && clienteEsAlta) {
-                setErrorIniciar('No pudimos obtener tu ubicación. Volvé a intentar.')
-            }
         } finally {
             setIniciandoFlujo(false)
         }
@@ -566,51 +552,28 @@ export default function VisitaFlow({
                         </p>
                     </div>
                 ))}
-            {clienteEsAlta &&
-                !mostrarRubros &&
-                (errorIniciar ? (
-                    <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white px-8 text-center">
-                        <WifiOff className="h-8 w-8 text-dsmuted" strokeWidth={2} />
-                        <p className="text-[14px] font-semibold leading-snug text-[#182645]">
-                            {errorIniciar}
-                        </p>
-                        <Button
-                            onClick={() => void onIniciar([])}
-                            className="h-11 w-full max-w-[240px] bg-dsgreen text-[13.5px] hover:bg-dsgreen/90"
-                        >
-                            Volver a intentar
-                        </Button>
-                        <button
-                            type="button"
-                            onClick={cerrarFlujo}
-                            className="text-[13px] font-semibold text-dsmuted underline"
-                        >
-                            Cancelar
-                        </button>
-                    </div>
-                ) : (
-                    <div
-                        data-testid="cargando-propuesta"
-                        className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-white"
-                    >
-                        <Loader2 className="h-7 w-7 animate-spin text-dsnavy" strokeWidth={2.4} />
-                        <p className="text-[12.5px] font-semibold text-dsmuted">
-                            Iniciando visita…
-                        </p>
-                        {/* Escape del spinner: mientras la ubicación todavía no respondió
-                            (ni éxito ni error) esto es lo único que puede sacar al
-                            vendedor de acá — sin esto, un GPS que no responde nunca
-                            deja esta pantalla sin salida (ver el fix de `onIniciar` de
-                            arriba para el caso en que sí llega a responder con error). */}
-                        <button
-                            type="button"
-                            onClick={cerrarFlujo}
-                            className="text-[13px] font-semibold text-dsmuted underline"
-                        >
-                            Cancelar
-                        </button>
-                    </div>
-                ))}
+            {/* "Cliente nuevo": no hay propuesta que confirmar ni coordenada previa, así
+                que el único paso antes de arrancar es ubicar el comercio. El mapa se abre
+                sin pin y lo planta donde el GPS ubica al vendedor (modo 'ubicar'), que es
+                lo que llega por `onReposicionar` y termina viajando como `coordCliente`:
+                la única ubicación que ese comercio va a tener. Sin gate de cercanía. */}
+            {clienteEsAlta && (
+                <MapaVisita
+                    open={!mostrarRubros}
+                    modo="ubicar"
+                    nombreCliente={nombre}
+                    direccion={direccionTexto}
+                    iniciando={iniciandoFlujo}
+                    error={errorIniciar ?? mensajeBloqueo}
+                    onIniciar={() => void onIniciar([])}
+                    onReposicionar={setClienteOverride}
+                    onCancel={() => {
+                        setErrorIniciar(null)
+                        setClienteOverride(null)
+                        cerrarFlujo()
+                    }}
+                />
+            )}
         </>
     )
 }

@@ -904,24 +904,38 @@ it('cliente nuevo: crear desde el "+" del día e iniciar la visita llega a los r
     await screen.findByText('Autopartes Piche')
     expect(screen.getAllByText(/cliente nuevo/i).length).toBeGreaterThan(0)
 
-    // Ubicación disponible: el arranque directo del alta se resuelve con éxito, sin pasar
-    // por el trap de GPS del finding #1 (ese caso se cubre en VisitaFlow.test.tsx, donde
-    // mockear un fallo de geolocalización es mucho más directo).
+    // Ubicación disponible. `watchPosition` es el que usa el mapa de "ubicar el comercio":
+    // su primer fix es el que planta el pin del alta y lo manda como coordCliente.
     const getCurrentPosition = vi.fn((ok: any) =>
         ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
     )
+    const watchPosition = vi.fn((ok: any) => {
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } })
+        return 1
+    })
     vi.stubGlobal('navigator', {
-        geolocation: { getCurrentPosition, watchPosition: vi.fn(), clearWatch: vi.fn() },
+        geolocation: { getCurrentPosition, watchPosition, clearWatch: vi.fn() },
     })
     ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 900, ofrecimientos: 0 })
     ;(api.getOfrecimientos as any).mockResolvedValue([])
 
+    // Primer toque: el de la card, que abre el mapa para ubicar el comercio.
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
 
-    // Llegó al sheet de la visita del alta (contacto opcional, exclusivo de `esAlta`) sin
-    // quedar trabado en el spinner de "Iniciando visita…".
+    // Segundo toque: el CTA del mapa (la card sigue montada detrás, de ahí el getAll).
+    const botonesIniciar = screen.getAllByRole('button', { name: /iniciar visita/i })
+    fireEvent.click(botonesIniciar[botonesIniciar.length - 1])
+
+    // El pin que puso el GPS viaja como la ubicación del comercio.
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith(
+            expect.objectContaining({ coordCliente: expect.stringContaining('-34.6') }),
+        ),
+    )
+
+    // Llegó al sheet de la visita del alta (contacto opcional, exclusivo de `esAlta`).
     await screen.findByLabelText(/con quién hablaste/i)
-    expect(screen.queryByText(/iniciando visita/i)).not.toBeInTheDocument()
     // Finding #2: el código sintético del alta no se filtra al sheet del vendedor.
     expect(screen.queryByText(/ALTA-000009/)).not.toBeInTheDocument()
 
