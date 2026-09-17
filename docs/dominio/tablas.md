@@ -110,6 +110,8 @@ Los `CHECK` de rango (`semana >= 1`, `dia BETWEEN 1 AND 5`) viven en la base y n
 porque esta tabla se **edita** con `UPDATE`, al contrario de los snapshots inmutables del diseño
 anterior: un `UPDATE` mal armado desde cualquier camino futuro rebota acá.
 
+**`tipo` y `detalle` (spec 2026-09-17).** `tipo = 'alta'` es un **"Cliente nuevo"**: un comercio que todavía no es cliente. La fila lleva `es_extra = 1` (está fuera del plan materializado, y así la cobertura la excluye sin tocar la query), un código sintético `ALTA-<id>` (la columna es `NOT NULL` y parte del `UNIQUE`; el 09895 de Cromo no sirve porque dos altas el mismo día chocarían) y los datos del comercio en `detalle JSON` (`nombre`, `razonSocial`, `direccion`). JSON y no columnas porque nadie agrupa por razón social. `tipo` es columna propia y no recicla `es_extra`: "fuera del plan" y "no es un cliente" son dos propiedades distintas.
+
 ## `pl_reacomodacion` — bitácora de movimientos
 
 `(rotacion_cliente_id, semana_antes, dia_antes, semana_despues, dia_despues, origen, usuario, fecha)`.
@@ -146,6 +148,7 @@ medio camino.
 - Las tres columnas `seguimiento_*` están creadas pero **ningún código las escribe todavía**: el aviso
   a Cromo quedó fuera de alcance. Se crearon igual porque acá un `ALTER` en producción es intervención
   manual de ops, y así reponer el aviso es solo código de servicio.
+- **`detalle JSON NULL`** (spec 2026-09-17) — el contacto de una visita de alta (`contacto`, `fechaNacimiento`), por visita porque la persona puede cambiar entre intentos. `NULL` para toda visita a un cliente real.
 
 **No tiene ninguna columna que apunte al ciclo.** Es la decisión central del modelo, y su consecuencia
 está explicada en [`modelo.md`](modelo.md): un hecho pertenece a un cliente y a un momento, nunca a un
