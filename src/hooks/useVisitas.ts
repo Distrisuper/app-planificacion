@@ -37,6 +37,8 @@ export function useCerrarVisita() {
             // queda idéntico al de antes de esta feature para el caso más común, así que
             // un backend viejo sin la columna sigue recibiendo exactamente lo que espera.
             ...(args.observaciones ? { observaciones: args.observaciones } : {}),
+            // Solo en visitas de alta: datos de contacto cargados al cerrar.
+            ...(args.detalle ? { detalle: args.detalle } : {}),
         }),
     )
 }

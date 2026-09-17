@@ -6,6 +6,8 @@ import type {
     IAgregarOfrecimientoDTO,
     IAgregarOfrecimientoResult,
     ICatalogoItem,
+    ICrearAltaDTO,
+    IEditarAltaDTO,
     ICerrarVisitaDTO,
     ICerrarVisitaResult,
     ICicloActualResult,
@@ -267,5 +269,24 @@ export const confirmarExtra = async (
 /** Buscador general de solo lectura: toda la cartera de la rotación, cualquier zona. */
 export const buscarEnCartera = async (texto: string): Promise<IResultadoBuscadorGeneral[]> => {
     const res = await apiClient.get('/planificacion/buscador/rotacion', { params: { q: texto } })
+    return res.data.data
+}
+
+// ── "Cliente nuevo" / altas (spec 2026-09-17) ──────────────────────────────────
+
+/** "Cliente nuevo": crea la fila de alta en (zona vista, dia). Body plano, como lo normaliza el backend. */
+export const crearAlta = async (dto: ICrearAltaDTO): Promise<IAgendaClient> => {
+    const res = await apiClient.post('/planificacion/altas', dto)
+    return res.data.data
+}
+
+export const editarAlta = async (rotacionClienteId: number, dto: IEditarAltaDTO): Promise<IAgendaClient> => {
+    const res = await apiClient.put(`/planificacion/altas/${rotacionClienteId}`, dto)
+    return res.data.data
+}
+
+/** Después de un "No visité": otra fila para el mismo comercio, en `dia`. */
+export const reintentarAlta = async (rotacionClienteId: number, dia: number): Promise<IAgendaClient> => {
+    const res = await apiClient.post(`/planificacion/altas/${rotacionClienteId}/reintentar`, { dia })
     return res.data.data
 }

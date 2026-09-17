@@ -20,6 +20,9 @@ import {
     getRubroStatus,
     getBrandCatalog,
     getAcciones,
+    crearAlta,
+    editarAlta,
+    reintentarAlta,
 } from './planificacion'
 
 vi.mock('./apiClient', () => ({
@@ -224,6 +227,15 @@ describe('visitas', () => {
         })
     })
 
+    it('cerrarVisita manda detalle solo cuando viene', async () => {
+        ;(apiClient.put as any).mockResolvedValue(ok({ visitaId: 7, ofrecimientosPendientes: 0 }))
+        await cerrarVisita(7, { coordFinal: 'c', detalle: { contacto: 'G', fechaNacimiento: null } })
+        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/visitas/7/cerrar', {
+            coordFinal: 'c',
+            detalle: { contacto: 'G', fechaNacimiento: null },
+        })
+    })
+
     it('registrarNoVisita manda rotacionClienteId y motivoIds', async () => {
         ;(apiClient.post as any).mockResolvedValue(ok({ rotacionClienteId: 11 }))
         await registrarNoVisita({ rotacionClienteId: 11, motivoIds: [1, 3] })
@@ -416,5 +428,33 @@ describe('catálogos', () => {
         )
         await expect(getAcciones()).resolves.toEqual([{ codigo: 'CUPO', descripcion: 'Plan cupo' }])
         expect(apiClient.get).toHaveBeenCalledWith('/planificacion/acciones')
+    })
+})
+
+describe('altas', () => {
+    it('crearAlta hace POST /planificacion/altas con el body plano', async () => {
+        ;(apiClient.post as any).mockResolvedValue(ok({ rotacionClienteId: 9 }))
+        await crearAlta({ semana: 2, dia: 3, nombre: 'Piche' })
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/altas', {
+            semana: 2,
+            dia: 3,
+            nombre: 'Piche',
+        })
+    })
+
+    it('editarAlta hace PUT /planificacion/altas/:id', async () => {
+        ;(apiClient.put as any).mockResolvedValue(ok({ rotacionClienteId: 9 }))
+        await editarAlta(9, { nombre: 'Piche SRL' })
+        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/altas/9', {
+            nombre: 'Piche SRL',
+        })
+    })
+
+    it('reintentarAlta hace POST /planificacion/altas/:id/reintentar con { dia }', async () => {
+        ;(apiClient.post as any).mockResolvedValue(ok({ rotacionClienteId: 12 }))
+        await reintentarAlta(9, 4)
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/altas/9/reintentar', {
+            dia: 4,
+        })
     })
 })
