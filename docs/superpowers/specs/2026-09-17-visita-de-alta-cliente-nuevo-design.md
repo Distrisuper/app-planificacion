@@ -97,8 +97,9 @@ vez atendió el encargado, la segunda el dueño):
 { "contacto": "Gustavo", "fechaNacimiento": "1978-03-14" }
 ```
 
-Ambos opcionales. Se escriben al cerrar (`PUT /visitas/:id/cerrar`) o al registrar `no_visita`, junto
-con `observaciones`. **`tipo` de la resolución no cambia:** la visita de un alta es una resolución
+Ambos opcionales. Se escriben **solo al cerrar la visita** (`PUT /visitas/:id/cerrar`). Un `no_visita`
+no lleva contacto: si no atendió nadie, no hay a quién anotar. Junto con `observaciones`.
+**`tipo` de la resolución no cambia:** la visita de un alta es una resolución
 `visita` o `no_visita` común. Su naturaleza de alta la da el `tipo` de la fila del plan, no la
 resolución. Así `TipoResolucion` sigue con dos valores y nada de lo que ramifica por tipo se toca.
 
@@ -165,9 +166,9 @@ genérico de Cromo con la etiqueta que ya usan.
 
 ```
 POST /planificacion/altas
-     body: { dia: 1..5; nombre: string; razonSocial?: string; direccion?: string }
-     → IAgendaClient  (la fila creada, tipo: 'alta', esExtra: true)
-     Crea en la zona en curso (ciclo abierto del vendedor del token), como el buscador self-service.
+     body: { dia: 1..5; nombre: string; razonSocial?: string; direccion?: string; semana: number }
+     → 201 IAgendaClient  (la fila creada, tipo: 'alta', esExtra: true)
+     Crea en la zona en curso (la `semana` en el body, zona vista, como `confirmarExtra`).
      400 ALTA_SIN_NOMBRE si `nombre` viene vacío tras trim.
 
 PUT  /planificacion/altas/:rotacionClienteId
@@ -184,7 +185,7 @@ POST /planificacion/altas/:rotacionClienteId/reintentar
 
 Los endpoints existentes que se extienden, sin cambiar su forma:
 
-- `PUT /visitas/:id/cerrar` y `POST /visitas/no-visita` / `POST /visitas/:id/no-visita` aceptan
+- `PUT /visitas/:id/cerrar` acepta
   `detalle?: { contacto?: string; fechaNacimiento?: string }`. Se valida `fechaNacimiento` como
   `YYYY-MM-DD` y se ignora `detalle` si la fila no es `tipo = 'alta'`.
 - `GET /planificacion/agenda/...`: `AgendaService` hoy **omite** la fila si no hay ficha en el
