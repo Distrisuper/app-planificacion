@@ -1,8 +1,9 @@
-import { Ban, Calendar, Check, ChevronRight, Lock, MapPin, Phone, Play, RefreshCw, Zap } from 'lucide-react'
+import { Ban, Calendar, Check, ChevronRight, Lock, MapPin, Pencil, Phone, Play, RefreshCw, RotateCcw, UserPlus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import AccionesExternas from './AccionesExternas'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { estaResuelto } from '@/lib/estadoCiclo'
+import { esAlta } from '@/lib/alta'
 import type { AppExterna } from '@/lib/appsExternas'
 import type { IAgendaClient, IVisitClientCard } from '@/types/planificacion'
 
@@ -65,7 +66,10 @@ export default function ClienteCard({
     onIniciarVisita,
     onAbrirAppExterna,
     onReintentarSeguimiento,
+    onEditarAlta,
+    onReintentarAlta,
 }: ClienteCardProps) {
+    const alta = esAlta(cliente)
     const resuelto = estaResuelto(cliente.estado)
     const enCurso = cliente.estado === 'en_curso'
     const noVisitado = cliente.estado === 'no_visita'
@@ -102,10 +106,17 @@ export default function ClienteCard({
         >
             <div className="mb-1.5 flex items-start justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-dsmuted">
-                        <span className="h-1.5 w-1.5 rounded-full" style={{ background: ACCENT }} />#
-                        {cliente.codigoParticularCliente}
-                    </span>
+                    {alta ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#DCFCE7] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-[#166534]">
+                            <UserPlus className="h-2.5 w-2.5" strokeWidth={2.6} />
+                            Cliente nuevo
+                        </span>
+                    ) : (
+                        <span className="inline-flex items-center gap-1 text-[10.5px] font-bold text-dsmuted">
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: ACCENT }} />#
+                            {cliente.codigoParticularCliente}
+                        </span>
+                    )}
                     {enCurso && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#FEF0E1] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-[#B45309]">
                             <span className="h-1.5 w-1.5 rounded-full bg-[#F97316]" />
@@ -118,7 +129,7 @@ export default function ClienteCard({
                             No visitado
                         </span>
                     )}
-                    {cliente.esExtra && (
+                    {cliente.esExtra && !alta && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#E0E7FF] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-[#3730A3]">
                             Agregado
                         </span>
@@ -139,7 +150,7 @@ export default function ClienteCard({
                     contexto, debajo de la dirección. */}
                 {!resuelto && (
                     <div className="-mr-0.5 -mt-0.5 flex shrink-0 gap-1">
-                        {telefonoLimpio && (
+                        {!alta && telefonoLimpio && (
                             <a
                                 href={`tel:+54${telefonoLimpio.replace(/\D/g, '')}`}
                                 onClick={e => e.stopPropagation()}
@@ -149,6 +160,16 @@ export default function ClienteCard({
                             >
                                 <Phone className="h-[15px] w-[15px]" strokeWidth={2} />
                             </a>
+                        )}
+                        {alta && onEditarAlta && cliente.estado === 'pendiente' && (
+                            <button
+                                type="button"
+                                onClick={() => onEditarAlta(cliente)}
+                                className={HEADER_WITH_LABEL}
+                            >
+                                <Pencil className="h-[13px] w-[13px]" strokeWidth={2} />
+                                Editar
+                            </button>
                         )}
                         <button
                             type="button"
@@ -193,17 +214,34 @@ export default function ClienteCard({
                     </div>
                 ))}
 
-            {/* Sin `!resuelto`: un cliente ya visitado también tiene pagos que mirar. */}
-            <AccionesExternas
-                cliente={cliente}
-                variante="contexto"
-                onAbrir={onAbrirAppExterna}
-            />
+            {/* Sin `!resuelto`: un cliente ya visitado también tiene pagos que mirar.
+                Salvo un "Cliente nuevo": no tiene cuenta en Lupa/Versus/CRM todavía. */}
+            {!alta && (
+                <AccionesExternas
+                    cliente={cliente}
+                    variante="contexto"
+                    onAbrir={onAbrirAppExterna}
+                />
+            )}
 
             {/* Resuelto sin visita real (no_visita): no hay nada que resumir ni ninguna acción
                 que tenga sentido — llamar o reagendar a alguien ya resuelto no aplica. Queda
                 solo el pill de estado de más arriba. */}
-            {resuelto && cliente.visitaId === null ? null : resuelto ? (
+            {resuelto && cliente.visitaId === null ? (
+                alta && onReintentarAlta ? (
+                    <div className="mt-2.5 border-t pt-2.5">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onReintentarAlta(cliente)}
+                            className="h-11 w-full border-[#D8DEEA] text-[13px] text-dsnavy"
+                        >
+                            <RotateCcw className="h-[14px] w-[14px]" strokeWidth={2} />
+                            Volver a agendar
+                        </Button>
+                    </div>
+                ) : null
+            ) : resuelto ? (
                 <div className="mt-2.5 flex flex-col gap-1.5 border-t border-[#EDEFF4] pt-2.5">
                     {/* El aviso a Cromo falló (o nunca se intentó) y la visita ya está
                         completa: acá es donde el vendedor vuelve a pasar, así que es el
@@ -236,15 +274,17 @@ export default function ClienteCard({
                         tanto entra derecho como prepara la propuesta antes, según el cliente.
                         Se distinguen por relleno (outline vs. verde), no por tamaño. */}
                     <div className="flex gap-1.5">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => onAbrir(cliente)}
-                            className="h-11 flex-1 border-[#D8DEEA] text-[13px] text-dsnavy"
-                        >
-                            <Zap className="h-[14px] w-[14px]" strokeWidth={2} />
-                            Propuesta
-                        </Button>
+                        {!alta && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => onAbrir(cliente)}
+                                className="h-11 flex-1 border-[#D8DEEA] text-[13px] text-dsnavy"
+                            >
+                                <Zap className="h-[14px] w-[14px]" strokeWidth={2} />
+                                Propuesta
+                            </Button>
+                        )}
                         {puedeIniciar && (
                             <Button
                                 variant="default"
