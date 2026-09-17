@@ -29,6 +29,12 @@ interface ClienteCardProps {
      *  cuando `seguimiento.estado === 'pendiente'` — es la única condición, sin que la
      *  card sepa nada del ciclo de vida de la visita. */
     onReintentarSeguimiento: (cliente: IAgendaClient) => void
+    /** "Cliente nuevo": editar los datos del comercio mientras la fila sigue
+     *  pendiente/en curso. Todavía sin consumir acá — llega en la Task 14. */
+    onEditarAlta?: (cliente: IAgendaClient) => void
+    /** "Cliente nuevo": volver a agendar después de un "No visité". Todavía sin
+     *  consumir acá — llega en la Task 14. */
+    onReintentarAlta?: (cliente: IAgendaClient) => void
 }
 
 // Utilidades (llamar/reagendar). Viven en el header, no en el área de acciones: son

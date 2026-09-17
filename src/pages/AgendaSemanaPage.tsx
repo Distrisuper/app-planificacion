@@ -9,6 +9,7 @@ import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import AppExternaSheet from '@/components/AppExternaSheet'
+import ClienteNuevoSheet, { type ModoClienteNuevo } from '@/components/ClienteNuevoSheet'
 import { BuscadorDiaSheet } from '@/components/buscador/BuscadorDiaSheet'
 import { BuscadorGeneralPanel } from '@/components/buscador/BuscadorGeneralPanel'
 import { useAgendaSemana } from '@/hooks/useAgenda'
@@ -244,6 +245,10 @@ export default function AgendaSemanaPage() {
     // no `diaActivo`: el board scrollea entre columnas y los dos pueden diferir por un
     // instante mientras el swipe se asienta.
     const [diaAAgregar, setDiaAAgregar] = useState<Dia | null>(null)
+    // "Cliente nuevo": null = sheet cerrado. Comparte el mismo sheet para crear (desde el
+    // "+" del día), editar (desde la card de una fila `es_alta`) y reintentar (después de
+    // "No visité" sobre una fila `es_alta`) — el modo lo decide quien lo abre.
+    const [clienteNuevo, setClienteNuevo] = useState<ModoClienteNuevo | null>(null)
     // Búsqueda general: null = no se está buscando. El texto vive acá y no adentro del
     // header porque el panel de resultados es hermano del header, no hijo.
     const [textoBusqueda, setTextoBusqueda] = useState<string | null>(null)
@@ -554,6 +559,10 @@ export default function AgendaSemanaPage() {
                         onIniciarVisita={iniciarDirecto}
                         onAbrirAppExterna={abrirAppExternaEnPestana}
                         onReintentarSeguimiento={onReintentarSincronizacion}
+                        onEditarAlta={cliente => setClienteNuevo({ modo: 'editar', cliente })}
+                        onReintentarAlta={cliente =>
+                            setClienteNuevo({ modo: 'reintentar', cliente, diaSugerido: cliente.dia })
+                        }
                     />
                 </>
             )}
@@ -660,8 +669,24 @@ export default function AgendaSemanaPage() {
                     }}
                     onNavegarAExistente={abrirPropuesta}
                     onAviso={mostrar}
+                    onClienteNuevo={() =>
+                        setClienteNuevo({ modo: 'crear', semana: semanaEfectiva, dia: DIAS.indexOf(diaAAgregar) + 1 })
+                    }
                 />
             )}
+            <ClienteNuevoSheet
+                open={clienteNuevo !== null}
+                contexto={clienteNuevo}
+                onClose={() => setClienteNuevo(null)}
+                onAviso={mostrar}
+                onListo={(cliente, ctx) => {
+                    setDiaActivo(DIAS[cliente.dia - 1])
+                    mostrar(
+                        'exito',
+                        ctx.modo === 'editar' ? 'Datos guardados' : `Cliente nuevo agendado el ${NOMBRE_DIA[DIAS[cliente.dia - 1]]}`,
+                    )
+                }}
+            />
             <Notification notificacion={notificacion} onDismiss={ocultar} />
         </div>
     )
