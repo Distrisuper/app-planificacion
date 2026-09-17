@@ -86,6 +86,11 @@ function Harness({
             {otroCliente && (
                 <button onClick={() => setCliente(otroCliente)}>Abrir {otroCliente.nombreCliente}</button>
             )}
+            {/* Simula lo que hace el efecto de reconciliación de AgendaSemanaPage cuando el
+                refetch de la agenda no encuentra la card en curso: suelta el puntero. Es el
+                parpadeo de estado DERIVADO que reabría el mapa del alta sobre una visita ya
+                iniciada. */}
+            <button onClick={() => setVisitaEnCurso(null)}>Soltar visita en curso</button>
             <VisitaFlow
                 cliente={cliente}
                 visitaEnCurso={visitaEnCurso}
@@ -620,6 +625,38 @@ it('con el GPS caído el cliente nuevo igual puede iniciar, y la visita queda si
             expect.objectContaining({ rotacionClienteId: 42, coordCliente: undefined }),
         ),
     )
+})
+
+it('una vez iniciada la visita del alta, el mapa no vuelve aunque se suelte el puntero de visita en curso', async () => {
+    // El bug real: el mapa del alta colgaba de `mostrarRubros`, estado DERIVADO de
+    // `visitaEnCurso` + la card refetcheada. Cuando el efecto de reconciliación de la
+    // página soltaba ese puntero, el mapa reaparecía sobre una visita YA iniciada y el
+    // siguiente "Iniciar visita" rebotaba con 409 VISITA_ACTIVA_EXISTENTE.
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        latitud: undefined,
+        longitud: undefined,
+    }
+    mockGeolocacionEnVivo({ latitude: -34.62, longitude: -58.42, accuracy: 8 })
+    ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 77, ofrecimientos: 0 })
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
+    renderFlow({ cliente: clienteAlta, directoAMapa: true })
+
+    await screen.findByTestId('mapa-iniciar-visita')
+    fireEvent.click(screen.getByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+        expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument(),
+    )
+
+    // La card sigue diciendo 'pendiente' (el refetch todavía no llegó) y encima se suelta
+    // el puntero: con eso alcanzaba para que el mapa volviera.
+    fireEvent.click(screen.getByRole('button', { name: /soltar visita en curso/i }))
+    await new Promise(r => setTimeout(r, 100))
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+    expect(api.iniciarVisita).toHaveBeenCalledTimes(1)
 })
 
 it('el mapa del cliente nuevo se puede cancelar y vuelve a la agenda', async () => {

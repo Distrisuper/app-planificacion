@@ -133,6 +133,16 @@ export default function VisitaFlow({
     // Mapa de consulta abierto (botón "Ver mi posición" del sheet). Nada que ver con
     // `propuestaPendiente`, que es el mapa del flujo de iniciar.
     const [verPosicion, setVerPosicion] = useState(false)
+    // Trinquete del mapa de "ubicar el comercio": se levanta apenas la visita del alta
+    // arrancó bien y no se vuelve a bajar hasta cambiar de cliente.
+    //
+    // El cliente real no lo necesita porque su mapa cuelga de `propuestaPendiente`, que el
+    // éxito pone en null — un estado explícito que nada vuelve a encender. El del alta
+    // colgaba de `mostrarRubros`, que es DERIVADO (`visitaEnCurso` + el estado de la card
+    // tras el refetch): cualquier parpadeo de esa cadena reabría el mapa sobre una visita
+    // ya iniciada, y el siguiente toque de "Iniciar visita" rebotaba con 409
+    // VISITA_ACTIVA_EXISTENTE.
+    const [altaYaIniciada, setAltaYaIniciada] = useState(false)
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
@@ -154,6 +164,7 @@ export default function VisitaFlow({
         setErrorIniciar(null)
         setClienteOverride(null)
         setNoVisitaRubros(null)
+        setAltaYaIniciada(false)
     }, [cliente?.rotacionClienteId])
 
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
@@ -267,6 +278,7 @@ export default function VisitaFlow({
                     const clienteParaVisita = clienteOverride
                         ? { ...cliente!, latitud: clienteOverride.lat, longitud: clienteOverride.lng }
                         : cliente!
+                    setAltaYaIniciada(true)
                     onVisitaIniciada(clienteParaVisita, id)
                     marcarInicioVisita(id)
                     guardarVisitaEnCurso({ cliente: clienteParaVisita, visitaId: id })
@@ -559,7 +571,10 @@ export default function VisitaFlow({
                 la única ubicación que ese comercio va a tener. Sin gate de cercanía. */}
             {clienteEsAlta && (
                 <MapaVisita
-                    open={!mostrarRubros}
+                    // Tres candados, no uno: el trinquete local (lo definitivo), que esta
+                    // fila no tenga ya una visita (`visitaId`), y el estado derivado. Con
+                    // cualquiera de los tres arriba, el mapa no se muestra.
+                    open={!mostrarRubros && !altaYaIniciada && visitaId === null}
                     modo="ubicar"
                     nombreCliente={nombre}
                     direccion={direccionTexto}
