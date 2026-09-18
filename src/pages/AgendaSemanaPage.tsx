@@ -25,6 +25,7 @@ import { errorCode } from '@/lib/apiError'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
 import { leerVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 import { limpiarInicioVisita } from '@/lib/visitaTimer'
+import { ALTAS_HABILITADAS } from '@/lib/flags'
 import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
@@ -669,8 +670,13 @@ export default function AgendaSemanaPage() {
                     }}
                     onNavegarAExistente={abrirPropuesta}
                     onAviso={mostrar}
-                    onClienteNuevo={() =>
-                        setClienteNuevo({ modo: 'crear', semana: semanaEfectiva, dia: DIAS.indexOf(diaAAgregar) + 1 })
+                    onClienteNuevo={
+                        /* Apagado temporal: sin el handler el botón no se pinta (ver
+                           ALTAS_HABILITADAS). Es el único punto de entrada a crear un alta. */
+                        ALTAS_HABILITADAS
+                            ? () =>
+                                  setClienteNuevo({ modo: 'crear', semana: semanaEfectiva, dia: DIAS.indexOf(diaAAgregar) + 1 })
+                            : undefined
                     }
                 />
             )}

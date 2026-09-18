@@ -8,6 +8,15 @@ import { getDiaDeHoy } from '@/lib/weekDates'
 import { guardarVisitaEnCurso, leerVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 
 vi.mock('@/api/planificacion')
+// El botón de "Cliente nuevo" está apagado por flag (ver src/lib/flags.ts). El test de
+// wiring de abajo lo prende para poder recorrer el flujo completo; el que verifica el
+// apagado lo baja. Getter y no valor fijo: la página lee la constante en cada render.
+const flags = vi.hoisted(() => ({ ALTAS_HABILITADAS: true }))
+vi.mock('@/lib/flags', () => ({
+    get ALTAS_HABILITADAS() {
+        return flags.ALTAS_HABILITADAS
+    },
+}))
 vi.mock('@/context/AuthContext', () => ({
     useAuth: () => ({ user: { name: 'Martín Rossi' }, logout: vi.fn() }),
 }))
@@ -844,6 +853,24 @@ it('con el cliente pendiente sigue usando el endpoint de siempre', async () => {
         }),
     )
     expect(api.noVisitaSobreVisitaAbierta).not.toHaveBeenCalled()
+})
+
+it('cliente nuevo: con el flag apagado, el buscador del día no ofrece el botón', async () => {
+    flags.ALTAS_HABILITADAS = false
+    try {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue(semanaVacia)
+
+        renderPage()
+
+        fireEvent.click(await screen.findByLabelText('Agregar cliente al lunes'))
+        // El buscador abrió (su placeholder está en pantalla) pero sin la salida a alta.
+        await screen.findByText(/esté o no en la hoja de ruta/i)
+        expect(screen.queryByText(/cliente nuevo/i)).toBeNull()
+    } finally {
+        flags.ALTAS_HABILITADAS = true
+    }
 })
 
 // Wiring completo del flujo de "Cliente nuevo" (findings #1 y #2 de la revisión final de
