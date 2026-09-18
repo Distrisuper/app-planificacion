@@ -4,6 +4,7 @@ import TablaActividad from '@/components/analitica/TablaActividad'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import AccountMenu from '@/components/AccountMenu'
+import { useAccionesDeCuenta } from '@/hooks/useAccionesDeCuenta'
 import { useAuth } from '@/context/AuthContext'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
 import { useResumen, useVendedores, useVisitas } from '@/hooks/useAnalitica'
@@ -16,6 +17,7 @@ const REFRESCO_MS = 60_000
 
 export default function AnaliticaActividadPage() {
     const { user, logout } = useAuth()
+    const accionesDeCuenta = useAccionesDeCuenta()
     const { filtro, setRango, toggleVendedor, limpiarVendedores } = useFiltroAnalitica(rangoHoy())
     const [visitaElegida, setVisitaElegida] = useState<number | null>(null)
 
@@ -50,7 +52,7 @@ export default function AnaliticaActividadPage() {
                 <div className="flex-1">
                     <AnaliticaTabs enVivo={enVivo} />
                 </div>
-                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} />
+                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
             </header>
 
             <FiltrosAnalitica

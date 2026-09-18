@@ -76,7 +76,12 @@ export default function ClienteCard({
     // `visitaId` es lo único que identifica la resolución sobre la que reintentar (es el
     // id que pide POST /visitas/:id/seguimiento). Un `no_visita` no lo trae — hoy no puede
     // ofrecer este botón aunque su aviso también pueda fallar.
-    const puedeReintentar = cliente.visitaId !== null && cliente.seguimiento.estado === 'pendiente'
+    // MODO_PRUEBA: el aviso nunca sale (es la salida esperada del vendedor de prueba), así
+    // que reintentar no serviría y confundiría. Se muestra el mensaje, sin botón.
+    const puedeReintentar =
+        cliente.visitaId !== null &&
+        cliente.seguimiento.estado === 'pendiente' &&
+        cliente.seguimiento.motivo !== 'MODO_PRUEBA'
     const reintentando = puedeReintentar && reintentandoId === cliente.visitaId
     // Solo se puede arrancar de cero un cliente que todavía no tiene visita: una vez
     // iniciada (en_curso) o resuelta, "Iniciar visita" ya no aplica. Tampoco aplica con
@@ -258,6 +263,9 @@ export default function ClienteCard({
                             <RefreshCw className="h-[14px] w-[14px]" strokeWidth={2} />
                             Reintentar sincronización
                         </Button>
+                    )}
+                    {cliente.seguimiento.estado === 'pendiente' && cliente.seguimiento.motivo === 'MODO_PRUEBA' && (
+                        <p className="text-[12px] text-dsmuted">{cliente.seguimiento.mensaje}</p>
                     )}
                     <Button
                         variant="outline"

@@ -1,28 +1,54 @@
-import { esRolGerencia, esRolVendedor, rutaInicialPara } from './roles'
+import { readFileSync } from 'fs'
+import { resolve } from 'path'
+import { estaProbando, puedeOperarComoVendedor, rutaInicialPara, supervisa } from './roles'
 
-it('reconoce los roles con scope unrestricted de api-vendedores', () => {
-    expect(esRolGerencia('admin')).toBe(true)
-    expect(esRolGerencia('versus-ger')).toBe(true)
-    expect(esRolGerencia('supervisor')).toBe(true)
+const cap = (o: Partial<{ v: boolean; p: boolean; s: boolean }>) => ({
+    operaComoVendedor: o.v ?? false,
+    operaComoVendedorDePrueba: o.p ?? false,
+    superviseVendedores: o.s ?? false,
 })
 
-it('no le da acceso analítico al vendedor', () => {
-    expect(esRolGerencia('vendedor')).toBe(false)
-    expect(esRolVendedor('vendedor')).toBe(true)
-})
+describe('roles.ts — predicados sobre capacidades', () => {
+    it('vendedor: opera, no supervisa, no está probando, arranca en /', () => {
+        const c = cap({ v: true })
+        expect(puedeOperarComoVendedor(c)).toBe(true)
+        expect(supervisa(c)).toBe(false)
+        expect(estaProbando(c)).toBe(false)
+        expect(rutaInicialPara(c)).toBe('/')
+    })
 
-it('ignora mayúsculas y espacios, como authorize() en el backend', () => {
-    expect(esRolGerencia(' VERSUS-GER ')).toBe(true)
-    expect(esRolVendedor('Vendedor')).toBe(true)
-})
+    it('gerencia: opera (como prueba), supervisa, está probando, arranca en /analitica', () => {
+        const c = cap({ p: true, s: true })
+        expect(puedeOperarComoVendedor(c)).toBe(true)
+        expect(supervisa(c)).toBe(true)
+        expect(estaProbando(c)).toBe(true)
+        expect(rutaInicialPara(c)).toBe('/analitica')
+    })
 
-it('un rol desconocido no accede a nada', () => {
-    expect(esRolGerencia('marketing')).toBe(false)
-    expect(esRolVendedor('marketing')).toBe(false)
-})
+    it('tester: opera como prueba, no supervisa, arranca en /', () => {
+        const c = cap({ p: true })
+        expect(puedeOperarComoVendedor(c)).toBe(true)
+        expect(supervisa(c)).toBe(false)
+        expect(estaProbando(c)).toBe(true)
+        expect(rutaInicialPara(c)).toBe('/')
+    })
 
-it('manda a cada rol a su pantalla', () => {
-    expect(rutaInicialPara('vendedor')).toBe('/')
-    expect(rutaInicialPara('versus-ger')).toBe('/analitica')
-    expect(rutaInicialPara('marketing')).toBeNull()
+    it('un TV futuro (supervisa, no prueba): arranca en /analitica y no opera como vendedor', () => {
+        const c = cap({ s: true })
+        expect(puedeOperarComoVendedor(c)).toBe(false)
+        expect(rutaInicialPara(c)).toBe('/analitica')
+    })
+
+    it('sin capacidades (marketing) → sin acceso', () => {
+        expect(rutaInicialPara(cap({}))).toBeNull()
+        expect(rutaInicialPara(null)).toBeNull()
+        expect(rutaInicialPara(undefined)).toBeNull()
+    })
+
+    it('el módulo no contiene ningún rol como literal (la tabla de roles vive en el backend)', () => {
+        const fuente = readFileSync(resolve(__dirname, 'roles.ts'), 'utf8')
+        for (const rol of ["'admin'", "'versus-ger'", "'supervisor'", "'tester'", "'tv'", "'vendedor'", "'marketing'"]) {
+            expect(fuente).not.toContain(rol)
+        }
+    })
 })

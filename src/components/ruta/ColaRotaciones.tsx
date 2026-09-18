@@ -203,7 +203,9 @@ export default function ColaRotaciones({
                 // rotación y el otro el diálogo.
                 cancelLabel="Volver"
                 destructivo
-                onConfirm={() => aCancelar && onCancelar(aCancelar.id)}
+                onConfirm={() => {
+                    if (aCancelar) onCancelar(aCancelar.id)
+                }}
             />
         </div>
     )

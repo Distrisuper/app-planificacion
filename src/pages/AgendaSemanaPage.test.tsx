@@ -17,8 +17,9 @@ vi.mock('@/lib/flags', () => ({
         return flags.ALTAS_HABILITADAS
     },
 }))
+const authMock = vi.fn()
 vi.mock('@/context/AuthContext', () => ({
-    useAuth: () => ({ user: { name: 'Martín Rossi' }, logout: vi.fn() }),
+    useAuth: () => authMock(),
 }))
 
 // `descripcion: null` en todas a propósito: estos tests cubren el fallback al número
@@ -95,6 +96,12 @@ function renderPage(url = '/') {
 beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    authMock.mockReturnValue({
+        user: { name: 'Martín Rossi' },
+        logout: vi.fn(),
+        capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false },
+        vendedorDePrueba: null,
+    })
     ;(api.getMotivos as any).mockResolvedValue([])
     ;(api.getAgendaSemana as any).mockResolvedValue(semanaVacia)
     ;(api.sincronizar as any).mockResolvedValue({
@@ -967,4 +974,15 @@ it('cliente nuevo: crear desde el "+" del día e iniciar la visita llega a los r
     expect(screen.queryByText(/ALTA-000009/)).not.toBeInTheDocument()
 
     vi.unstubAllGlobals()
+})
+
+it('con capacidades de prueba muestra el banner arriba de la agenda', async () => {
+    authMock.mockReturnValue({
+        user: { name: 'Ana' }, logout: vi.fn(),
+        capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+        vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: 'Cartera de V 2', origenesDisponibles: ['V 2'] },
+    })
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    renderPage()
+    expect(await screen.findByText(/Modo prueba · Cartera de V 2/)).toBeInTheDocument()
 })

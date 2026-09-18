@@ -1,6 +1,9 @@
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react'
 import { login as loginApi, getMe } from '@/api/authApi'
+import { getMePlanificacion } from '@/api/planificacion'
 import { rutaInicialPara } from '@/lib/roles'
+import { cerrarSesionLocal } from '@/lib/sesionLocal'
+import type { ICapacidades, IMePlanificacion, IVendedorDePrueba } from '@/types/planificacion'
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthorized' | 'unauthenticated'
 
@@ -12,12 +15,22 @@ interface AuthUser {
 interface AuthContextValue {
     status: AuthStatus
     user: AuthUser | null
+    capacidades: ICapacidades | null
+    vendedoresVisibles: string[] | null
+    vendedorDePrueba: IVendedorDePrueba | null
     /** Pantalla donde arranca el rol logueado. null si no tiene acceso. */
     rutaInicial: string | null
     loginError: string | null
     loginLoading: boolean
     login: (email: string, password: string) => Promise<void>
     logout: () => void
+    /** `/planificacion/me` no respondió (red, 5xx). El status queda `unauthorized` porque sin
+     *  capacidades no hay acceso, pero la causa NO es el rol: /me devuelve 200 para cualquier
+     *  token válido. SinPermisosPage lo usa para ofrecer reintentar en vez de solo cerrar sesión. */
+    capacidadesNoCargadas: boolean
+    /** Vuelve a pedir /planificacion/me: después de reiniciar la prueba (refresca la descripción)
+     *  y como reintento cuando `capacidadesNoCargadas`. Si responde, recalcula el status. */
+    refrescarMe: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -31,21 +44,46 @@ export function useAuth(): AuthContextValue {
 export function AuthProvider({ children }: PropsWithChildren) {
     const [status, setStatus] = useState<AuthStatus>('loading')
     const [user, setUser] = useState<AuthUser | null>(null)
+    const [me, setMe] = useState<IMePlanificacion | null>(null)
+    const [capacidadesNoCargadas, setCapacidadesNoCargadas] = useState(false)
     const [loginError, setLoginError] = useState<string | null>(null)
     const [loginLoading, setLoginLoading] = useState(false)
 
     async function validateAndSetUser(token: string) {
         try {
-            const me = await getMe(token)
-            const authUser = { name: me.name, rol: me.rol }
-            setUser(authUser)
-            // El rol define a qué pantalla entra: el vendedor a su agenda, los roles
-            // analíticos a /analitica. Cualquier otro no tiene nada que hacer acá.
-            setStatus(rutaInicialPara(me.rol) === null ? 'unauthorized' : 'authenticated')
+            const authMe = await getMe(token)
+            setUser({ name: authMe.name, rol: authMe.rol })
         } catch {
-            localStorage.removeItem('access_token')
+            cerrarSesionLocal()
             setUser(null)
+            setMe(null)
+            setCapacidadesNoCargadas(false)
             setStatus('unauthenticated')
+            return
+        }
+        // Qué puede hacer lo dice planificación, no el rol: sin este dato no hay acceso.
+        // Si falla, 'unauthorized' y no 'unauthenticated': el token es válido, lo que no
+        // hay es una capacidad conocida — y no se adivina por rol.
+        try {
+            aplicarMe(await getMePlanificacion())
+        } catch {
+            setMe(null)
+            setCapacidadesNoCargadas(true)
+            setStatus('unauthorized')
+        }
+    }
+
+    function aplicarMe(mePlan: IMePlanificacion) {
+        setMe(mePlan)
+        setCapacidadesNoCargadas(false)
+        setStatus(rutaInicialPara(mePlan.capacidades) === null ? 'unauthorized' : 'authenticated')
+    }
+
+    async function refrescarMe() {
+        try {
+            aplicarMe(await getMePlanificacion())
+        } catch {
+            /* se conserva el último conocido; si nunca cargó, sigue `capacidadesNoCargadas` */
         }
     }
 
@@ -73,8 +111,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     function logout() {
-        localStorage.removeItem('access_token')
+        // No solo el token: el puntero de visita en curso, los borradores y la caché de
+        // React Query son de ESTA sesión. Sin esto el próximo usuario en el mismo teléfono
+        // veía la agenda y la visita abierta del anterior (ver src/lib/sesionLocal.ts).
+        cerrarSesionLocal()
         setUser(null)
+        setMe(null)
+        setCapacidadesNoCargadas(false)
         setLoginError(null)
         setStatus('unauthenticated')
     }
@@ -84,11 +127,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
             value={{
                 status,
                 user,
-                rutaInicial: rutaInicialPara(user?.rol),
+                capacidades: me?.capacidades ?? null,
+                vendedoresVisibles: me?.vendedoresVisibles ?? null,
+                vendedorDePrueba: me?.vendedorDePrueba ?? null,
+                rutaInicial: rutaInicialPara(me?.capacidades),
                 loginError,
                 loginLoading,
                 login,
                 logout,
+                capacidadesNoCargadas,
+                refrescarMe,
             }}
         >
             {children}

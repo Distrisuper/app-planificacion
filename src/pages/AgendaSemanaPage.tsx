@@ -12,6 +12,9 @@ import AppExternaSheet from '@/components/AppExternaSheet'
 import ClienteNuevoSheet, { type ModoClienteNuevo } from '@/components/ClienteNuevoSheet'
 import { BuscadorDiaSheet } from '@/components/buscador/BuscadorDiaSheet'
 import { BuscadorGeneralPanel } from '@/components/buscador/BuscadorGeneralPanel'
+import BannerPrueba, { ALTO_BANNER_PRUEBA } from '@/components/prueba/BannerPrueba'
+import CarteraDialog from '@/components/prueba/CarteraDialog'
+import { estaProbando } from '@/lib/roles'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useMotivos } from '@/hooks/useMotivos'
@@ -63,7 +66,9 @@ function mensajeDeCuenta(code: string | null): string | null {
 }
 
 export default function AgendaSemanaPage() {
-    const { user, logout } = useAuth()
+    const { user, logout, capacidades } = useAuth()
+    const probando = estaProbando(capacidades)
+    const [eligiendoCartera, setEligiendoCartera] = useState(false)
     const { data: cicloActual, error: cicloActualError, isSuccess: cicloResuelto } =
         useCicloActual()
     const mensajeCuenta = mensajeDeCuenta(errorCode(cicloActualError))
@@ -493,6 +498,24 @@ export default function AgendaSemanaPage() {
     // cinco columnas de "Sin visitas este día" — indistinguible de una falla de red.
     // El `cicloResuelto` es lo que separa este caso del "todavía está cargando" real.
     if (cicloResuelto && semanaEfectiva === null) {
+        if (probando) {
+            return (
+                <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center" style={{ paddingTop: ALTO_BANNER_PRUEBA }}>
+                    <BannerPrueba />
+                    <p className="text-[14px] font-semibold leading-snug text-[#182645]">
+                        Tu vendedor de prueba todavía no tiene agenda.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => setEligiendoCartera(true)}
+                        className="rounded-xl bg-dsnavy px-4 py-2.5 text-[13px] font-bold text-white"
+                    >
+                        Elegir cartera
+                    </button>
+                    <CarteraDialog open={eligiendoCartera} onOpenChange={setEligiendoCartera} onReiniciado={() => setEligiendoCartera(false)} />
+                </div>
+            )
+        }
         return (
             <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
                 <p className="text-[14px] font-semibold leading-snug text-[#182645]">
@@ -513,7 +536,11 @@ export default function AgendaSemanaPage() {
     }
 
     return (
-        <div className="flex h-dvh flex-col overflow-hidden bg-[#EEF1F6]">
+        <div
+            className="flex h-dvh flex-col overflow-hidden bg-[#EEF1F6]"
+            style={probando ? { paddingTop: ALTO_BANNER_PRUEBA } : undefined}
+        >
+            <BannerPrueba />
             <AppHeader
                 vendedorNombre={user?.name ?? ''}
                 completadas={totalDone}

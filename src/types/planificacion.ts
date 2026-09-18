@@ -622,3 +622,24 @@ export interface IClienteEnRotacion {
     yaPlanificado: boolean
     celdas: ICeldaPlanificada[]
 }
+
+// ── Identidad y vendedor de prueba (spec 2026-09-17) ────────────────────────────
+
+export interface ICapacidades {
+    operaComoVendedor: boolean
+    operaComoVendedorDePrueba: boolean
+    superviseVendedores: boolean
+}
+
+export interface IVendedorDePrueba {
+    codigo: string
+    descripcion: string | null
+    origenesDisponibles: string[]
+}
+
+export interface IMePlanificacion {
+    rol: string
+    capacidades: ICapacidades
+    vendedoresVisibles: string[] | null
+    vendedorDePrueba: IVendedorDePrueba | null
+}

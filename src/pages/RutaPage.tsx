@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import HelpPopover from '@/components/analitica/HelpPopover'
 import AccountMenu from '@/components/AccountMenu'
+import { useAccionesDeCuenta } from '@/hooks/useAccionesDeCuenta'
 import AgregarClienteExtraDialog from '@/components/ruta/AgregarClienteExtraDialog'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
@@ -32,7 +33,8 @@ import {
  * reportes. Acá se opera sobre un vendedor y una rotación a la vez.
  */
 export default function RutaPage() {
-    const { user, logout } = useAuth()
+    const { user, logout, vendedoresVisibles, vendedorDePrueba } = useAuth()
+    const accionesDeCuenta = useAccionesDeCuenta()
     const [vendedor, setVendedor] = useState<string | null>(null)
     const [rotacionActivaId, setRotacionActivaId] = useState<number | null>(null)
     // La celda cuyo "+" se tocó. null = el diálogo está cerrado. Guarda la celda y no un
@@ -42,6 +44,17 @@ export default function RutaPage() {
     )
 
     const { data: roster } = useVendedores()
+    // El roster del warehouse no conoce a PRUEBA-*: se agrega a mano, al final y separado.
+    // Y se acota a lo que el backend va a aceptar (`requireVendedorEnScope`): un TV futuro
+    // no tiene que ver vendedores que después le rebotan con 403.
+    const rosterVisible = useMemo(() => {
+        const base = (roster ?? []).filter(
+            v => vendedoresVisibles === null || vendedoresVisibles.some(c => c.toUpperCase() === v.codigoParticularVendedor.toUpperCase()),
+        )
+        return vendedorDePrueba
+            ? [...base, { codigoParticularVendedor: vendedorDePrueba.codigo, nombreVendedor: 'Mi vendedor de prueba' }]
+            : base
+    }, [roster, vendedoresVisibles, vendedorDePrueba])
     const { data: cola, isLoading, isError } = useRotaciones(vendedor)
 
     const crear = useCrearRotacion(vendedor ?? '')
@@ -87,12 +100,12 @@ export default function RutaPage() {
                 <div className="flex-1">
                     <AnaliticaTabs />
                 </div>
-                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} />
+                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
             </header>
 
             <div className="flex flex-wrap items-end gap-4 border-b border-slate-200 bg-white px-6 py-4">
                 <SelectorVendedor
-                    vendedores={roster ?? []}
+                    vendedores={rosterVisible}
                     elegido={vendedor}
                     onElegir={elegirVendedor}
                 />

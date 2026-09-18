@@ -75,10 +75,11 @@ export function useObjeciones(args: IObjecionesArgs) {
 
 /** El roster cambia de mes a mes, no de minuto a minuto: no hace falta refrescarlo
  *  con cada cambio de rango, por eso no depende del filtro. */
-export function useVendedores() {
+export function useVendedores(opts?: { enabled?: boolean }) {
     return useQuery({
         queryKey: analiticaKeys.vendedores(),
         queryFn: getVendedores,
         staleTime: 30 * 60 * 1000,
+        enabled: opts?.enabled ?? true,
     })
 }

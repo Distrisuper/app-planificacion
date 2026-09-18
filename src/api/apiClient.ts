@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { fixMojibake } from '@/lib/textFormat'
+import { limpiarStorageSesion } from '@/lib/sesionLocal'
 
 const apiUrl: string = import.meta.env.VITE_API_URL || ''
 
@@ -38,7 +39,9 @@ apiClient.interceptors.response.use(
     },
     error => {
         if (error.response?.status === 401) {
-            localStorage.removeItem('access_token')
+            // Token vencido = sesión terminada: se va todo lo local de esa sesión, no solo
+            // el token. La caché en memoria la vacía el reload de abajo.
+            limpiarStorageSesion()
             // An expired/missing token routes to /login (see ProtectedRoute.tsx).
             // Avoid reloading there to prevent a reload loop if that screen ever
             // makes an authenticated request.

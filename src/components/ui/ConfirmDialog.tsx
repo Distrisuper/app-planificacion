@@ -1,5 +1,5 @@
 import * as AlertDialog from '@radix-ui/react-alert-dialog'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Button } from './button'
 
 interface ConfirmDialogProps {
@@ -18,7 +18,14 @@ interface ConfirmDialogProps {
     cancelLabel?: string
     /** Pinta el botón de acción en rojo. Para acciones que descartan trabajo. */
     destructivo?: boolean
-    onConfirm: () => void
+    /**
+     * Sincrónico: el diálogo cierra al toque (comportamiento de `AlertDialog.Action`).
+     * Si devuelve una promesa, el diálogo espera: cierra recién cuando resuelve, y si
+     * rechaza queda ABIERTO para que el caller muestre el error en `description`. Sin esto
+     * Radix cerraba antes de que la llamada volviera, y un fallo quedaba invisible (y como
+     * promesa sin catch).
+     */
+    onConfirm: () => void | Promise<unknown>
 }
 
 /**
@@ -42,6 +49,22 @@ export default function ConfirmDialog({
     destructivo,
     onConfirm,
 }: ConfirmDialogProps) {
+    const [trabajando, setTrabajando] = useState(false)
+
+    function confirmar(e: React.MouseEvent) {
+        const resultado = onConfirm()
+        if (!(resultado instanceof Promise)) return
+        // `AlertDialog.Action` cierra en su onClick salvo que el handler haga preventDefault.
+        e.preventDefault()
+        setTrabajando(true)
+        resultado
+            .then(() => onOpenChange(false))
+            .catch(() => {
+                /* el caller ya lo mostró en `description`; acá solo se evita el unhandled */
+            })
+            .finally(() => setTrabajando(false))
+    }
+
     return (
         <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
             <AlertDialog.Portal>
@@ -60,19 +83,28 @@ export default function ConfirmDialog({
                     <AlertDialog.Title className="text-[16px] font-extrabold leading-tight text-dsnavytext">
                         {title}
                     </AlertDialog.Title>
-                    <AlertDialog.Description className="mt-1.5 text-[13px] leading-snug text-dsmuted">
-                        {description}
+                    {/* `asChild` + div: la descripción puede traer un formulario (CarteraDialog
+                        mete un <select>), y un <div> adentro del <p> por defecto de Radix es
+                        HTML inválido — React 19 lo loguea en cada render. */}
+                    <AlertDialog.Description asChild>
+                        <div className="mt-1.5 text-[13px] leading-snug text-dsmuted">{description}</div>
                     </AlertDialog.Description>
                     <div className="mt-5 flex justify-end gap-2">
                         <AlertDialog.Cancel asChild>
-                            <Button variant="outline" size="sm" className="h-9 px-3.5 text-[13px]">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={trabajando}
+                                className="h-9 px-3.5 text-[13px]"
+                            >
                                 {cancelLabel}
                             </Button>
                         </AlertDialog.Cancel>
                         <AlertDialog.Action asChild>
                             <Button
                                 size="sm"
-                                onClick={onConfirm}
+                                onClick={confirmar}
+                                disabled={trabajando}
                                 className={`h-9 px-3.5 text-[13px] ${destructivo ? 'bg-dsred hover:bg-dsred/90' : ''}`}
                             >
                                 {confirmLabel}

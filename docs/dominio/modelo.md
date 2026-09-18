@@ -290,3 +290,32 @@ la versión anterior" del spec.
 El ciclo sigue haciendo exactamente los mismos dos trabajos que le corresponden — decidir qué agenda
 mostrar por defecto, y registrar cuándo se recorrió cada zona —, ahora sin el bug de contar desde la
 apertura.
+
+## El vendedor de prueba
+
+Gerencia y el rol `tester` operan la app del vendedor como un vendedor sintético propio,
+`PRUEBA-<userId>`, para probar y mostrar sin ensuciar datos. No es un "modo": es una identidad.
+
+**El prefijo `PRUEBA-` es un espacio reservado del código de vendedor, con dos invariantes:**
+
+1. Un código con ese prefijo nunca existe en el warehouse.
+2. Un código con ese prefijo nunca entra en una agregación que cruce vendedores, ni dispara un
+   efecto fuera de `pl_*`.
+
+Sus filas viven en `pl_*` como las de cualquier vendedor (misma partición por
+`codigo_particular_vendedor`), y tres guardas lo mantienen aislado, todas preguntando al módulo
+`vendedorPrueba.ts` de api-vendedores:
+
+- **Lecturas de gerencia:** `fragmentoVendedores` agrega siempre `NOT LIKE 'PRUEBA-%'`. Regla:
+  toda query que agrupe o filtre ENTRE vendedores pasa por el fragmento (hay un test de contrato).
+- **Efectos externos:** Cromo (`MODO_PRUEBA`, nunca se envía) y client-service (sin `PATCH`
+  permanente; la corrección efímera sí funciona).
+- **Decisiones sobre datos reales:** el cupo de 3 correcciones por cliente ignora las filas de
+  prueba. Regla: los datos de prueba no escriben afuera y no influyen en decisiones sobre datos reales.
+
+Arranca como **foto** de la cartera de un vendedor real elegido al reiniciar (o vacío), y su cartera
+para buscar y agregar es **toda la base**. Quién puede probar y quién supervisa lo dice
+`config/roles.ts` de api-vendedores (`operaComoVendedorDePrueba`, `superviseVendedores`), y el front
+lo lee de `GET /planificacion/me`: **el front no tiene tabla de roles**.
+
+Spec: `docs/superpowers/specs/2026-09-17-modo-prueba-gerencia-design.md`.

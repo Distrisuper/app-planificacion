@@ -23,6 +23,8 @@ import {
     crearAlta,
     editarAlta,
     reintentarAlta,
+    getMePlanificacion,
+    reiniciarPrueba,
 } from './planificacion'
 
 vi.mock('./apiClient', () => ({
@@ -456,5 +458,32 @@ describe('altas', () => {
         expect(apiClient.post).toHaveBeenCalledWith('/planificacion/altas/9/reintentar', {
             dia: 4,
         })
+    })
+})
+
+describe('vendedor de prueba', () => {
+    it('getMePlanificacion pega a GET /planificacion/me y devuelve data', async () => {
+        const me = {
+            rol: 'admin',
+            capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+            vendedoresVisibles: null,
+            vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: null, origenesDisponibles: ['V 2'] },
+        }
+        ;(apiClient.get as any).mockResolvedValue({ data: { ok: 1, data: me } })
+        await expect(getMePlanificacion()).resolves.toEqual(me)
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/me')
+    })
+
+    it('reiniciarPrueba manda { origen } al POST y devuelve el vendedorDePrueba', async () => {
+        const vp = { codigo: 'PRUEBA-42', descripcion: 'Cartera de V 2', origenesDisponibles: ['V 2'] }
+        ;(apiClient.post as any).mockResolvedValue({ data: { ok: 1, data: vp } })
+        await expect(reiniciarPrueba('V 2')).resolves.toEqual(vp)
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/prueba/reiniciar', { origen: 'V 2' })
+    })
+
+    it('reiniciarPrueba con null manda { origen: null } (arrancar vacío)', async () => {
+        ;(apiClient.post as any).mockResolvedValue({ data: { ok: 1, data: {} } })
+        await reiniciarPrueba(null)
+        expect(apiClient.post).toHaveBeenCalledWith('/planificacion/prueba/reiniciar', { origen: null })
     })
 })
