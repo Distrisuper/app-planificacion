@@ -11,6 +11,10 @@ import type { IAgendaClient } from '@/types/planificacion'
 
 vi.mock('@/api/planificacion')
 vi.mock('@/lib/geolocation')
+const authMock = vi.fn(() => ({
+    capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false },
+}))
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => authMock() }))
 vi.mock('leaflet', () => {
     const map = { setView: vi.fn().mockReturnThis(), remove: vi.fn(), fitBounds: vi.fn(), on: vi.fn() }
     const marker = { addTo: vi.fn().mockReturnThis(), setLatLng: vi.fn() }
@@ -908,6 +912,38 @@ it('si el backend avisa que ya se agotó el cupo de corrección permanente, mues
         expect(onAviso).toHaveBeenCalledWith(
             'info',
             'Esta corrección ya no se guarda de forma permanente (límite alcanzado).',
+        ),
+    )
+})
+
+it('en modo prueba el aviso de corrección dice que no se guarda de forma permanente', async () => {
+    authMock.mockReturnValue({ capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true } })
+    ;(api.iniciarVisita as any).mockResolvedValue({
+        visitaId: 99,
+        ofrecimientos: 0,
+        correccionPermanenteAplicada: false,
+    })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.41',
+        precisionM: 10,
+    })
+    const { onAviso } = renderFlow({ cliente: { ...cliente, latitud: -34.6, longitud: -58.4 } })
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+
+    fireEvent.click(screen.getByRole('button', { name: /reposicionar cliente/i }))
+    const handleClick = await getClickHandler()
+    handleClick({ latlng: { lat: -34.61, lng: -58.41 } })
+
+    const botonIniciar = screen.getByRole('button', { name: /^iniciar visita$/i })
+    await waitFor(() => expect(botonIniciar).toBeEnabled())
+    fireEvent.click(botonIniciar)
+
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith(
+            'info',
+            'En modo prueba la corrección no se guarda de forma permanente.',
         ),
     )
 })

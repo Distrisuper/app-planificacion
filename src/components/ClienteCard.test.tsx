@@ -257,6 +257,21 @@ describe('reintento del aviso a Cromo', () => {
         expect(screen.getByRole('button', { name: /ver resumen/i })).toBeInTheDocument()
     })
 
+    it('con seguimiento pendiente por MODO_PRUEBA no ofrece reintentar (no serviría)', () => {
+        render(
+            <ClienteCard
+                cliente={cliente({
+                    estado: 'visitada',
+                    visitaId: 7,
+                    seguimiento: { estado: 'pendiente', motivo: 'MODO_PRUEBA', mensaje: 'En modo prueba el seguimiento no se manda a Cromo.' },
+                })}
+                {...handlers}
+            />,
+        )
+        expect(screen.queryByRole('button', { name: /reintentar sincronización/i })).not.toBeInTheDocument()
+        expect(screen.getByText('En modo prueba el seguimiento no se manda a Cromo.')).toBeInTheDocument()
+    })
+
     it('tocar "Reintentar sincronización" llama al handler con el cliente completo', () => {
         const onReintentarSeguimiento = vi.fn()
         render(

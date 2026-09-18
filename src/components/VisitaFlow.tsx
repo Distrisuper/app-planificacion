@@ -18,6 +18,8 @@ import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
 import { esAlta } from '@/lib/alta'
+import { useAuth } from '@/context/AuthContext'
+import { estaProbando } from '@/lib/roles'
 import type {
     IAgendaClient,
     IDetalleContactoAlta,
@@ -78,6 +80,7 @@ export default function VisitaFlow({
     onAbrirAppExterna,
     onAlejadoChange,
 }: VisitaFlowProps) {
+    const { capacidades } = useAuth()
     const iniciar = useIniciarVisita()
     const cerrar = useCerrarVisita()
     const noVisitaAbierta = useNoVisitaSobreVisitaAbierta()
@@ -291,7 +294,9 @@ export default function VisitaFlow({
                     if (clienteOverride && correccionPermanenteAplicada === false) {
                         onAviso?.(
                             'info',
-                            'Esta corrección ya no se guarda de forma permanente (límite alcanzado).',
+                            estaProbando(capacidades)
+                                ? 'En modo prueba la corrección no se guarda de forma permanente.'
+                                : 'Esta corrección ya no se guarda de forma permanente (límite alcanzado).',
                         )
                     }
                     setClienteOverride(null)
