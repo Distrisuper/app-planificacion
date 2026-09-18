@@ -412,6 +412,15 @@ Hay **tres capas separadas**, y una operación toca una sola:
   mover un cliente de martes a jueves lo sacaría del pendiente y la semana cerraría sin haberlo
   visitado — el cumplimiento sería inflable con dos clicks. **No hay estado `reagendada`**: el enum
   tiene cuatro valores, `pendiente | en_curso | visitada | no_visita`.
+- **Cerrar sesión limpia TODO lo local de la sesión, no solo el token.** `cerrarSesionLocal()`
+  en `src/lib/sesionLocal.ts`: borra `access_token`, `visita-en-curso` y toda clave `visita-*`
+  (borradores y cronómetros), y vacía la caché de React Query. Lo mismo hace el 401 de
+  `apiClient` (sin la caché: recarga) y un token por URL distinto al guardado (`main.tsx`).
+  Motivo: las query keys de agenda y ciclo son fijas, sin usuario, y con `staleTime` 5 min +
+  `refetchOnMount: false` el siguiente usuario en el mismo teléfono veía la agenda del anterior
+  sin pedirla; y como esa agenda traía al cliente de `visita-en-curso` como `en_curso`, la
+  barra flotante del otro quedaba viva. Si se agrega algo nuevo al storage que sea de la
+  sesión, va con prefijo `visita-` o se suma a esa función.
 - **El vendedor de prueba (`PRUEBA-<userId>`) es una identidad, no un modo.** Gerencia y `tester`
   operan la app como su vendedor sintético; el prefijo es un espacio reservado con dos invariantes
   (nunca existe en el warehouse; nunca cruza vendedores ni sale de `pl_*`). Ante cualquier efecto

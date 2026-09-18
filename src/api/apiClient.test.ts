@@ -71,6 +71,18 @@ describe('apiClient response interceptor', () => {
         expect(reloadSpy).toHaveBeenCalledTimes(1)
     })
 
+    it('un 401 también borra la visita en curso y los borradores de esa sesión', async () => {
+        localStorage.setItem('visita-en-curso', '{"visitaId":7}')
+        localStorage.setItem('visita-borrador-7', '{}')
+        const error = { response: { status: 401 } }
+
+        await expect(rejected(error)).rejects.toBe(error)
+
+        expect(localStorage.getItem('access_token')).toBeNull()
+        expect(localStorage.getItem('visita-en-curso')).toBeNull()
+        expect(localStorage.getItem('visita-borrador-7')).toBeNull()
+    })
+
     it('clears the token but does not reload when already on /login (avoids reload loop)', async () => {
         window.location.pathname = '/login'
         const error = { response: { status: 401 } }

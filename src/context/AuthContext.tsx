@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type PropsWithChildren 
 import { login as loginApi, getMe } from '@/api/authApi'
 import { getMePlanificacion } from '@/api/planificacion'
 import { rutaInicialPara } from '@/lib/roles'
+import { cerrarSesionLocal } from '@/lib/sesionLocal'
 import type { ICapacidades, IMePlanificacion, IVendedorDePrueba } from '@/types/planificacion'
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthorized' | 'unauthenticated'
@@ -53,7 +54,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             const authMe = await getMe(token)
             setUser({ name: authMe.name, rol: authMe.rol })
         } catch {
-            localStorage.removeItem('access_token')
+            cerrarSesionLocal()
             setUser(null)
             setMe(null)
             setCapacidadesNoCargadas(false)
@@ -110,7 +111,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     function logout() {
-        localStorage.removeItem('access_token')
+        // No solo el token: el puntero de visita en curso, los borradores y la caché de
+        // React Query son de ESTA sesión. Sin esto el próximo usuario en el mismo teléfono
+        // veía la agenda y la visita abierta del anterior (ver src/lib/sesionLocal.ts).
+        cerrarSesionLocal()
         setUser(null)
         setMe(null)
         setCapacidadesNoCargadas(false)

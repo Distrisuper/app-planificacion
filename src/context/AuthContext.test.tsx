@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import { AuthProvider, useAuth } from './AuthContext'
+import { queryClient } from '@/lib/queryClient'
 
 vi.mock('@/api/authApi', () => ({
     login: vi.fn(),
@@ -61,6 +62,7 @@ describe('AuthContext', () => {
     beforeEach(() => {
         vi.clearAllMocks()
         localStorage.clear()
+        queryClient.clear()
     })
 
     it('starts unauthenticated when there is no stored token', async () => {
@@ -136,6 +138,36 @@ describe('AuthContext', () => {
         await userEvent.click(screen.getByText('logout'))
         expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated')
         expect(localStorage.getItem('access_token')).toBeNull()
+    })
+
+    it('logout borra la visita en curso, los borradores y la caché: el próximo usuario no hereda nada', async () => {
+        localStorage.setItem('access_token', 'tok')
+        localStorage.setItem('visita-en-curso', JSON.stringify({ visitaId: 7, cliente: { codigo: 'DE-A' } }))
+        localStorage.setItem('visita-borrador-7', '{}')
+        localStorage.setItem('visita-inicio-7', '123')
+        ;(getMe as any).mockResolvedValue({ name: 'A', rol: 'vendedor' })
+        ;(getMePlanificacion as any).mockResolvedValue(ME_VENDEDOR)
+        renderProbe()
+        await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
+        // La agenda de A, fresca en caché: con staleTime de 5 min y refetchOnMount: false,
+        // B la vería sin pedirla al servidor.
+        queryClient.setQueryData(['agenda', 'semana'], { lunes: [{ codigo: 'DE-A', estado: 'en_curso' }] })
+
+        await userEvent.click(screen.getByText('logout'))
+
+        expect(localStorage.getItem('visita-en-curso')).toBeNull()
+        expect(localStorage.getItem('visita-borrador-7')).toBeNull()
+        expect(localStorage.getItem('visita-inicio-7')).toBeNull()
+        expect(queryClient.getQueryData(['agenda', 'semana'])).toBeUndefined()
+    })
+
+    it('un token guardado que ya no valida también limpia lo local de esa sesión', async () => {
+        localStorage.setItem('access_token', 'bad')
+        localStorage.setItem('visita-en-curso', '{"visitaId":7}')
+        ;(getMe as any).mockRejectedValue(new Error('401'))
+        renderProbe()
+        await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthenticated'))
+        expect(localStorage.getItem('visita-en-curso')).toBeNull()
     })
 
     it('valida el token, pide /planificacion/me y autentica a un vendedor en /', async () => {
