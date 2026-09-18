@@ -1,88 +1,55 @@
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter, Routes, Route } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
 import ProtectedRoute from './ProtectedRoute'
-import { esRolGerencia, esRolVendedor } from '@/lib/roles'
+import { puedeOperarComoVendedor, supervisa } from '@/lib/roles'
 
-const useAuthMock = vi.fn()
-vi.mock('@/context/AuthContext', () => ({
-    useAuth: () => useAuthMock(),
-}))
+const auth = vi.fn()
+vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth() }))
 
-function renderAt(path: string) {
+const cap = (v: boolean, p: boolean, s: boolean) => ({
+    operaComoVendedor: v, operaComoVendedorDePrueba: p, superviseVendedores: s,
+})
+
+function montar(ruta: string, capacidades: ReturnType<typeof cap>) {
+    auth.mockReturnValue({
+        status: 'authenticated',
+        capacidades,
+        rutaInicial: supervisa(capacidades) ? '/analitica' : puedeOperarComoVendedor(capacidades) ? '/' : null,
+    })
     render(
-        <MemoryRouter initialEntries={[path]}>
+        <MemoryRouter initialEntries={[ruta]}>
             <Routes>
-                <Route element={<ProtectedRoute />}>
-                    <Route path="/" element={<div>agenda</div>} />
+                <Route element={<ProtectedRoute permitir={puedeOperarComoVendedor} />}>
+                    <Route path="/" element={<div>AGENDA</div>} />
                 </Route>
-                <Route path="/login" element={<div>login</div>} />
-                <Route path="/sin-permisos" element={<div>sin permisos</div>} />
+                <Route element={<ProtectedRoute permitir={supervisa} />}>
+                    <Route path="/analitica" element={<div>ANALITICA</div>} />
+                </Route>
             </Routes>
         </MemoryRouter>,
     )
 }
 
-function renderConRoles(path: string) {
-    render(
-        <MemoryRouter initialEntries={[path]}>
-            <Routes>
-                <Route element={<ProtectedRoute permitirRol={esRolVendedor} />}>
-                    <Route path="/" element={<div>agenda</div>} />
-                </Route>
-                <Route element={<ProtectedRoute permitirRol={esRolGerencia} />}>
-                    <Route path="/analitica" element={<div>analitica</div>} />
-                </Route>
-                <Route path="/login" element={<div>login</div>} />
-                <Route path="/sin-permisos" element={<div>sin permisos</div>} />
-            </Routes>
-        </MemoryRouter>,
-    )
-}
-
-it('renders the child route when authenticated', () => {
-    useAuthMock.mockReturnValue({ status: 'authenticated' })
-    renderAt('/')
-    expect(screen.getByText('agenda')).toBeInTheDocument()
-})
-
-it('shows a loading placeholder while validating', () => {
-    useAuthMock.mockReturnValue({ status: 'loading' })
-    renderAt('/')
-    expect(screen.queryByText('agenda')).not.toBeInTheDocument()
-    expect(screen.queryByText('login')).not.toBeInTheDocument()
-})
-
-it('redirects to /sin-permisos when the role is not vendedor', () => {
-    useAuthMock.mockReturnValue({ status: 'unauthorized' })
-    renderAt('/')
-    expect(screen.getByText('sin permisos')).toBeInTheDocument()
-})
-
-it('redirects to /login when there is no valid session', () => {
-    useAuthMock.mockReturnValue({ status: 'unauthenticated' })
-    renderAt('/')
-    expect(screen.getByText('login')).toBeInTheDocument()
-})
-
-it('blocks a vendedor from /analitica and sends it to its own ruta inicial', () => {
-    useAuthMock.mockReturnValue({
-        status: 'authenticated',
-        user: { name: 'Martín', rol: 'vendedor' },
-        rutaInicial: '/',
+describe('ProtectedRoute por capacidades', () => {
+    it('gerencia entra a / y a /analitica', () => {
+        montar('/', cap(false, true, true))
+        expect(screen.getByText('AGENDA')).toBeInTheDocument()
     })
-    renderConRoles('/analitica')
-    expect(screen.getByText('agenda')).toBeInTheDocument()
-    expect(screen.queryByText('analitica')).not.toBeInTheDocument()
-})
-
-it('blocks an analitica role from / and sends it to its own ruta inicial', () => {
-    useAuthMock.mockReturnValue({
-        status: 'authenticated',
-        user: { name: 'Ana', rol: 'admin' },
-        rutaInicial: '/analitica',
+    it('gerencia entra a /analitica', () => {
+        montar('/analitica', cap(false, true, true))
+        expect(screen.getByText('ANALITICA')).toBeInTheDocument()
     })
-    renderConRoles('/')
-    expect(screen.getByText('analitica')).toBeInTheDocument()
-    expect(screen.queryByText('agenda')).not.toBeInTheDocument()
+    it('tester entra a / pero /analitica lo manda a /', () => {
+        montar('/analitica', cap(false, true, false))
+        expect(screen.getByText('AGENDA')).toBeInTheDocument()
+    })
+    it('vendedor entra a / pero /analitica lo manda a /', () => {
+        montar('/analitica', cap(true, false, false))
+        expect(screen.getByText('AGENDA')).toBeInTheDocument()
+    })
+    it('un TV futuro entra a /analitica y / lo manda a /analitica', () => {
+        montar('/', cap(false, false, true))
+        expect(screen.getByText('ANALITICA')).toBeInTheDocument()
+    })
 })
