@@ -3,6 +3,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
 import { useReiniciarPrueba } from '@/hooks/usePrueba'
+import { errorCode } from '@/lib/apiError'
 import { supervisa } from '@/lib/roles'
 
 interface CarteraDialogProps {
@@ -25,7 +26,13 @@ export default function CarteraDialog({ open, onOpenChange, onReiniciado }: Cart
     const { data: roster } = useVendedores({ enabled: puedeVerRoster })
     const reiniciar = useReiniciarPrueba()
     const origenes = vendedorDePrueba?.origenesDisponibles ?? []
-    const [origen, setOrigen] = useState<string>(origenes[0] ?? '')
+    const [elegido, setElegido] = useState<string | null>(null)
+    // Derivado, no snapshot: el diálogo está montado (cerrado) desde el primer render y
+    // `origenesDisponibles` puede cambiar después (refrescarMe tras un reinicio). Si el
+    // elegido dejó de existir, el <select> mostraría la primera opción mientras el estado
+    // guardaba otra, y "Reiniciar" copiaría una cartera distinta de la que se ve.
+    const origen = elegido !== null && (elegido === '' || origenes.includes(elegido)) ? elegido : origenes[0] ?? ''
+    const [error, setError] = useState<string | null>(null)
 
     const nombreDe = (codigo: string) => {
         if (!puedeVerRoster) return codigo
@@ -41,7 +48,19 @@ export default function CarteraDialog({ open, onOpenChange, onReiniciado }: Cart
             confirmLabel="Reiniciar"
             destructivo
             onConfirm={async () => {
-                await reiniciar.mutateAsync(origen === '' ? null : origen)
+                setError(null)
+                try {
+                    await reiniciar.mutateAsync(origen === '' ? null : origen)
+                } catch (e) {
+                    // ORIGEN_INVALIDO: la cartera elegida dejó de tener plantilla entre que se
+                    // abrió el diálogo y se confirmó. Lo demás es red/servidor.
+                    setError(
+                        errorCode(e) === 'ORIGEN_INVALIDO'
+                            ? 'Esa cartera ya no está disponible. Elegí otra.'
+                            : 'No pudimos reiniciar la prueba. Probá de nuevo.',
+                    )
+                    throw e // ConfirmDialog lo lee como "quedate abierto"
+                }
                 onReiniciado()
             }}
             description={
@@ -51,7 +70,7 @@ export default function CarteraDialog({ open, onOpenChange, onReiniciado }: Cart
                         <select
                             aria-label="Cartera"
                             value={origen}
-                            onChange={e => setOrigen(e.target.value)}
+                            onChange={e => setElegido(e.target.value)}
                             className="rounded-md border border-dsline px-2 py-2 text-sm font-normal text-[#182645]"
                         >
                             {origenes.map(c => (
@@ -64,6 +83,11 @@ export default function CarteraDialog({ open, onOpenChange, onReiniciado }: Cart
                         Se borran todas tus visitas de prueba y la agenda vuelve a empezar. Los datos
                         reales no se tocan.
                     </p>
+                    {error && (
+                        <p role="alert" className="text-[13px] font-semibold text-dsred">
+                            {error}
+                        </p>
+                    )}
                 </div>
             }
         />

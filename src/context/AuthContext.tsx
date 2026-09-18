@@ -23,7 +23,12 @@ interface AuthContextValue {
     loginLoading: boolean
     login: (email: string, password: string) => Promise<void>
     logout: () => void
-    /** Vuelve a pedir /planificacion/me (después de reiniciar la prueba, para refrescar la descripción). */
+    /** `/planificacion/me` no respondió (red, 5xx). El status queda `unauthorized` porque sin
+     *  capacidades no hay acceso, pero la causa NO es el rol: /me devuelve 200 para cualquier
+     *  token válido. SinPermisosPage lo usa para ofrecer reintentar en vez de solo cerrar sesión. */
+    capacidadesNoCargadas: boolean
+    /** Vuelve a pedir /planificacion/me: después de reiniciar la prueba (refresca la descripción)
+     *  y como reintento cuando `capacidadesNoCargadas`. Si responde, recalcula el status. */
     refrescarMe: () => Promise<void>
 }
 
@@ -39,6 +44,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const [status, setStatus] = useState<AuthStatus>('loading')
     const [user, setUser] = useState<AuthUser | null>(null)
     const [me, setMe] = useState<IMePlanificacion | null>(null)
+    const [capacidadesNoCargadas, setCapacidadesNoCargadas] = useState(false)
     const [loginError, setLoginError] = useState<string | null>(null)
     const [loginLoading, setLoginLoading] = useState(false)
 
@@ -50,6 +56,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             localStorage.removeItem('access_token')
             setUser(null)
             setMe(null)
+            setCapacidadesNoCargadas(false)
             setStatus('unauthenticated')
             return
         }
@@ -57,20 +64,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
         // Si falla, 'unauthorized' y no 'unauthenticated': el token es válido, lo que no
         // hay es una capacidad conocida — y no se adivina por rol.
         try {
-            const mePlan = await getMePlanificacion()
-            setMe(mePlan)
-            setStatus(rutaInicialPara(mePlan.capacidades) === null ? 'unauthorized' : 'authenticated')
+            aplicarMe(await getMePlanificacion())
         } catch {
             setMe(null)
+            setCapacidadesNoCargadas(true)
             setStatus('unauthorized')
         }
     }
 
+    function aplicarMe(mePlan: IMePlanificacion) {
+        setMe(mePlan)
+        setCapacidadesNoCargadas(false)
+        setStatus(rutaInicialPara(mePlan.capacidades) === null ? 'unauthorized' : 'authenticated')
+    }
+
     async function refrescarMe() {
         try {
-            setMe(await getMePlanificacion())
+            aplicarMe(await getMePlanificacion())
         } catch {
-            /* se conserva el último conocido */
+            /* se conserva el último conocido; si nunca cargó, sigue `capacidadesNoCargadas` */
         }
     }
 
@@ -101,6 +113,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         localStorage.removeItem('access_token')
         setUser(null)
         setMe(null)
+        setCapacidadesNoCargadas(false)
         setLoginError(null)
         setStatus('unauthenticated')
     }
@@ -118,6 +131,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
                 loginLoading,
                 login,
                 logout,
+                capacidadesNoCargadas,
                 refrescarMe,
             }}
         >

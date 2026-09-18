@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import CarteraDialog from './CarteraDialog'
@@ -44,7 +44,29 @@ it('elegir un origen y confirmar llama a reiniciar con ese código y avisa', asy
     await userEvent.selectOptions(screen.getByLabelText('Cartera'), 'NACHO')
     await userEvent.click(screen.getByRole('button', { name: 'Reiniciar' }))
     expect(mutateAsync).toHaveBeenCalledWith('NACHO')
-    expect(onReiniciado).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(onReiniciado).toHaveBeenCalledTimes(1))
+})
+
+it('si reiniciar falla, el diálogo queda abierto con el error y no avisa', async () => {
+    // Sin esto la promesa rechazada quedaba sin catch: Radix ya había cerrado el diálogo al
+    // tocar la acción, y el usuario veía la agenda vieja sin ninguna explicación.
+    auth.mockReturnValue(GERENCIA)
+    mutateAsync.mockRejectedValue(new Error('red caída'))
+    const onReiniciado = vi.fn()
+    const onOpenChange = vi.fn()
+    render(<CarteraDialog open onOpenChange={onOpenChange} onReiniciado={onReiniciado} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Reiniciar' }))
+    expect(await screen.findByText('No pudimos reiniciar la prueba. Probá de nuevo.')).toBeInTheDocument()
+    expect(onReiniciado).not.toHaveBeenCalled()
+    expect(onOpenChange).not.toHaveBeenCalledWith(false)
+})
+
+it('ORIGEN_INVALIDO explica que esa cartera ya no está disponible', async () => {
+    auth.mockReturnValue(GERENCIA)
+    mutateAsync.mockRejectedValue({ response: { data: { code: 'ORIGEN_INVALIDO' } } })
+    render(<CarteraDialog open onOpenChange={() => {}} onReiniciado={() => {}} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Reiniciar' }))
+    expect(await screen.findByText(/Esa cartera ya no está disponible/)).toBeInTheDocument()
 })
 
 it('"Arrancar vacío" manda null', async () => {
@@ -53,6 +75,20 @@ it('"Arrancar vacío" manda null', async () => {
     await userEvent.selectOptions(screen.getByLabelText('Cartera'), '')
     await userEvent.click(screen.getByRole('button', { name: 'Reiniciar' }))
     expect(mutateAsync).toHaveBeenCalledWith(null)
+})
+
+it('si el origen elegido desaparece de origenesDisponibles, manda el que se ve (el primero)', async () => {
+    auth.mockReturnValue(GERENCIA)
+    const { rerender } = render(<CarteraDialog open onOpenChange={() => {}} onReiniciado={() => {}} />)
+    await userEvent.selectOptions(screen.getByLabelText('Cartera'), 'NACHO')
+    auth.mockReturnValue({
+        ...GERENCIA,
+        vendedorDePrueba: { ...GERENCIA.vendedorDePrueba, origenesDisponibles: ['V 2', 'PEPE'] },
+    })
+    rerender(<CarteraDialog open onOpenChange={() => {}} onReiniciado={() => {}} />)
+    expect(screen.getByLabelText('Cartera')).toHaveValue('V 2')
+    await userEvent.click(screen.getByRole('button', { name: 'Reiniciar' }))
+    expect(mutateAsync).toHaveBeenCalledWith('V 2')
 })
 
 it('muestra la advertencia de borrado', () => {

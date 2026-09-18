@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ConfirmDialog from './ConfirmDialog'
 
@@ -56,5 +56,31 @@ describe('ConfirmDialog', () => {
         // Un Enter reflejo con el diálogo recién abierto no puede quitar al cliente.
         render(<ConfirmDialog {...props} />)
         expect(await screen.findByRole('button', { name: 'Cancelar' })).toHaveFocus()
+    })
+
+    it('con onConfirm async, cierra recién cuando la promesa resuelve', async () => {
+        const onOpenChange = vi.fn()
+        let resolver!: () => void
+        const onConfirm = vi.fn(() => new Promise<void>(r => { resolver = r }))
+        render(<ConfirmDialog {...props} onConfirm={onConfirm} onOpenChange={onOpenChange} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Quitar' }))
+        expect(onConfirm).toHaveBeenCalledTimes(1)
+        expect(onOpenChange).not.toHaveBeenCalled()
+        expect(screen.getByRole('button', { name: 'Quitar' })).toBeDisabled()
+
+        resolver()
+        await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    })
+
+    it('con onConfirm async que rechaza, queda abierto y vuelve a habilitar la acción', async () => {
+        const onOpenChange = vi.fn()
+        const onConfirm = vi.fn(() => Promise.reject(new Error('falló')))
+        render(<ConfirmDialog {...props} onConfirm={onConfirm} onOpenChange={onOpenChange} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Quitar' }))
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Quitar' })).toBeEnabled())
+        expect(onOpenChange).not.toHaveBeenCalled()
+        expect(screen.getByRole('alertdialog')).toBeInTheDocument()
     })
 })

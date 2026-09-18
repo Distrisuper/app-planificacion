@@ -32,7 +32,7 @@ const ME_NADA = {
 }
 
 function Probe() {
-    const { status, user, capacidades, vendedorDePrueba, rutaInicial, loginError, login, logout } = useAuth()
+    const { status, user, capacidades, vendedorDePrueba, rutaInicial, loginError, login, logout, capacidadesNoCargadas, refrescarMe } = useAuth()
     return (
         <div>
             <div data-testid="status">{status}</div>
@@ -43,6 +43,8 @@ function Probe() {
             <div data-testid="cap">{capacidades ? JSON.stringify(capacidades) : ''}</div>
             <button onClick={() => login('user@x.com', 'pass')}>login</button>
             <button onClick={logout}>logout</button>
+            <button onClick={() => void refrescarMe()}>refrescar</button>
+            <div data-testid="nocargadas">{String(capacidadesNoCargadas)}</div>
         </div>
     )
 }
@@ -170,5 +172,28 @@ describe('AuthContext', () => {
         ;(getMePlanificacion as any).mockRejectedValue(new Error('500'))
         renderProbe()
         await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthorized'))
+        expect(screen.getByTestId('nocargadas')).toHaveTextContent('true')
+        expect(localStorage.getItem('access_token')).toBe('tok')
+    })
+
+    it('un fallo de /me se distingue de "sin capacidades", y reintentar con éxito autentica', async () => {
+        localStorage.setItem('access_token', 'tok')
+        ;(getMe as any).mockResolvedValue({ name: 'Ana', rol: 'admin' })
+        ;(getMePlanificacion as any).mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce(ME_GERENCIA)
+        renderProbe()
+        await waitFor(() => expect(screen.getByTestId('nocargadas')).toHaveTextContent('true'))
+        await userEvent.click(screen.getByText('refrescar'))
+        await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
+        expect(screen.getByTestId('nocargadas')).toHaveTextContent('false')
+        expect(screen.getByTestId('ruta')).toHaveTextContent('/analitica')
+    })
+
+    it('sin capacidades por rol NO marca capacidadesNoCargadas', async () => {
+        localStorage.setItem('access_token', 'tok')
+        ;(getMe as any).mockResolvedValue({ name: 'Mk', rol: 'marketing' })
+        ;(getMePlanificacion as any).mockResolvedValue(ME_NADA)
+        renderProbe()
+        await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unauthorized'))
+        expect(screen.getByTestId('nocargadas')).toHaveTextContent('false')
     })
 })
