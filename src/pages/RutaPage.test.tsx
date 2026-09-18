@@ -9,8 +9,9 @@ import RutaPage from './RutaPage'
 
 vi.mock('@/api/planificacionAdmin')
 vi.mock('@/api/analitica')
+const authMock = vi.fn()
 vi.mock('@/context/AuthContext', () => ({
-    useAuth: () => ({ user: { name: 'Jefa', rol: 'admin' }, logout: vi.fn() }),
+    useAuth: () => authMock(),
 }))
 
 function renderPage() {
@@ -26,6 +27,13 @@ function renderPage() {
 
 beforeEach(() => {
     vi.clearAllMocks()
+    authMock.mockReturnValue({
+        user: { name: 'Jefa', rol: 'admin' },
+        logout: vi.fn(),
+        capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+        vendedoresVisibles: null,
+        vendedorDePrueba: null,
+    })
     vi.mocked(apiAnalitica.getVendedores).mockResolvedValue([
         { codigoParticularVendedor: 'V 2', nombreVendedor: 'Juan Pérez' },
     ])
@@ -323,5 +331,24 @@ describe('RutaPage', () => {
                 2,
             ),
         )
+    })
+
+    it('el selector suma "Mi vendedor de prueba" al final, y acota el roster a vendedoresVisibles', async () => {
+        authMock.mockReturnValue({
+            user: { name: 'Ana' }, logout: vi.fn(),
+            capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+            vendedoresVisibles: ['V 2'],
+            vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: 'Cartera de V 2', origenesDisponibles: [] },
+        })
+        vi.mocked(apiAnalitica.getVendedores).mockResolvedValue([
+            { codigoParticularVendedor: 'V 2', nombreVendedor: 'ROSSI' },
+            { codigoParticularVendedor: 'NACHO', nombreVendedor: 'NACHO' },
+        ])
+        renderPage()
+        await screen.findByRole('option', { name: 'ROSSI' })
+        const opciones = screen.getAllByRole('option').map(o => o.textContent)
+        expect(opciones).toContain('ROSSI')
+        expect(opciones).not.toContain('NACHO')
+        expect(opciones[opciones.length - 1]).toBe('Mi vendedor de prueba')
     })
 })
