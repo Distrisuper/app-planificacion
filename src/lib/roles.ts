@@ -1,22 +1,29 @@
-/** Los roles de scope 'unrestricted' en api-vendedores/src/config/roles.ts.
- *  Si allá se agrega uno nuevo con ese scope, hay que sumarlo acá.
- *
- *  Se llaman "de gerencia" y no "de analítica" porque habilitan todo el grupo de rutas
- *  bajo /analitica, que además de los reportes incluye la edición de la ruta del vendedor
- *  (/analitica/ruta). */
-export const ROLES_GERENCIA = ['admin', 'versus-ger', 'supervisor'] as const
+import type { ICapacidades } from '@/types/planificacion'
 
-const normalizar = (rol: string | undefined | null) => (rol ?? '').trim().toLowerCase()
+/**
+ * El front NO tiene tabla de roles. Qué puede hacer el usuario lo dice el backend en
+ * `GET /planificacion/me` (`capacidades`), derivado de `config/roles.ts` de api-vendedores.
+ * Acá solo se traducen esas capacidades a decisiones de navegación. Si una pantalla nueva
+ * necesita saber "quién puede", la respuesta es una capacidad nueva en el backend, no un
+ * `if (rol === ...)` acá. Spec 2026-09-17-modo-prueba-gerencia-design.md.
+ */
 
-export const esRolGerencia = (rol: string | undefined | null): boolean =>
-    (ROLES_GERENCIA as readonly string[]).includes(normalizar(rol))
+type Cap = ICapacidades | null | undefined
 
-export const esRolVendedor = (rol: string | undefined | null): boolean =>
-    normalizar(rol) === 'vendedor'
+/** Puede entrar al grupo de rutas del vendedor: el vendedor real, o quien tiene vendedor de prueba. */
+export const puedeOperarComoVendedor = (c: Cap): boolean =>
+    !!c && (c.operaComoVendedor || c.operaComoVendedorDePrueba)
 
-/** La pantalla donde arranca cada rol. null = sin acceso a la app. */
-export const rutaInicialPara = (rol: string | undefined | null): string | null => {
-    if (esRolVendedor(rol)) return '/'
-    if (esRolGerencia(rol)) return '/analitica'
+/** Puede entrar al grupo /analitica (reportes, actividad, ruta). */
+export const supervisa = (c: Cap): boolean => !!c && c.superviseVendedores
+
+/** Está operando la app del vendedor como su vendedor de prueba (no es vendedor real). */
+export const estaProbando = (c: Cap): boolean =>
+    !!c && !c.operaComoVendedor && c.operaComoVendedorDePrueba
+
+/** La pantalla donde arranca. null = sin acceso a la app. */
+export const rutaInicialPara = (c: Cap): string | null => {
+    if (supervisa(c)) return '/analitica'
+    if (puedeOperarComoVendedor(c)) return '/'
     return null
 }
