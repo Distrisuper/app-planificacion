@@ -86,6 +86,11 @@ function Harness({
             {otroCliente && (
                 <button onClick={() => setCliente(otroCliente)}>Abrir {otroCliente.nombreCliente}</button>
             )}
+            {/* Simula lo que hace el efecto de reconciliación de AgendaSemanaPage cuando el
+                refetch de la agenda no encuentra la card en curso: suelta el puntero. Es el
+                parpadeo de estado DERIVADO que reabría el mapa del alta sobre una visita ya
+                iniciada. */}
+            <button onClick={() => setVisitaEnCurso(null)}>Soltar visita en curso</button>
             <VisitaFlow
                 cliente={cliente}
                 visitaEnCurso={visitaEnCurso}
@@ -518,6 +523,156 @@ it('directoAMapa: cancelar en el mapa lo cierra de verdad y no lo reabre solo', 
     // Y sigue cerrado: nada lo vuelve a abrir en los ticks siguientes.
     await new Promise(r => setTimeout(r, 150))
     expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+    expect(api.iniciarVisita).not.toHaveBeenCalled()
+})
+
+it('un cliente nuevo abre el mapa para ubicar el comercio y manda ese pin como coordCliente', async () => {
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        latitud: undefined,
+        longitud: undefined,
+    }
+    // El watch en vivo del mapa es el que planta el pin del comercio (modo 'ubicar'):
+    // sin pin previo, el primer fix propio ES la ubicación de partida.
+    mockGeolocacionEnVivo({ latitude: -34.62, longitude: -58.42, accuracy: 8 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: true, coord: '-34.6,-58.4', precisionM: 10 })
+    ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 77, ofrecimientos: 0 })
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
+    const { onVisitaIniciada } = renderFlow({ cliente: clienteAlta, directoAMapa: true })
+
+    // El mapa aparece solo (no hay propuesta que confirmar antes) y nada se inició todavía.
+    await screen.findByTestId('mapa-iniciar-visita')
+    expect(api.getPropuesta).not.toHaveBeenCalled()
+    expect(api.iniciarVisita).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith({
+            rotacionClienteId: 42,
+            coordInicio: '-34.6,-58.4',
+            // El pin que puso el GPS: la única ubicación que va a tener este comercio.
+            coordCliente: '-34.62000000,-58.42000000',
+            propuesta: [],
+        }),
+    )
+    await waitFor(() => expect(onVisitaIniciada).toHaveBeenCalledWith(expect.objectContaining({ tipo: 'alta' }), 77))
+})
+
+it('el mapa del cliente nuevo no bloquea por distancia: no hay coordenada previa contra la cual medir', async () => {
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        latitud: undefined,
+        longitud: undefined,
+    }
+    mockGeolocacionEnVivo({ latitude: -34.62, longitude: -58.42, accuracy: 8 })
+    renderFlow({ cliente: clienteAlta, directoAMapa: true })
+
+    await screen.findByTestId('mapa-iniciar-visita')
+    expect(screen.getByRole('button', { name: /iniciar visita/i })).toBeEnabled()
+    // El texto de distancia es de los clientes reales: acá el pin y el vendedor son el
+    // mismo punto hasta que él lo mueva.
+    expect(screen.queryByText(/del cliente/i)).not.toBeInTheDocument()
+})
+
+it('el cliente nuevo no muestra el código sintético #ALTA-000009 en el sheet', async () => {
+    // Finding #2 de la revisión final: `identidadCliente` arma `#${codigoParticularCliente}`,
+    // y ese código sintético es vocabulario que el vendedor nunca tiene que ver.
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        estado: 'en_curso',
+        visitaId: 77,
+        latitud: undefined,
+        longitud: undefined,
+    }
+    renderFlow({ cliente: clienteAlta })
+    await screen.findByText(clienteAlta.nombreCliente)
+    expect(screen.queryByText(/ALTA-000009/)).not.toBeInTheDocument()
+})
+
+it('con el GPS caído el cliente nuevo igual puede iniciar, y la visita queda sin ubicación', async () => {
+    // El overlay "Iniciando visita…" que trababa al vendedor (finding #1 de la revisión
+    // final) ya no existe: ahora el paso es el mapa, que tiene su propia salida y avisa
+    // qué se pierde. Sin fix nunca hay pin, así que no viaja coordCliente.
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        latitud: undefined,
+        longitud: undefined,
+    }
+    const watchPosition = vi.fn((_ok: any, err: any) => {
+        err({ code: 1 })
+        return 1
+    })
+    vi.stubGlobal('navigator', {
+        geolocation: { watchPosition, getCurrentPosition: vi.fn(), clearWatch: vi.fn() },
+    })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: true, coord: '-34.6,-58.4', precisionM: 10 })
+    ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 77, ofrecimientos: 0 })
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
+    renderFlow({ cliente: clienteAlta, directoAMapa: true })
+
+    await screen.findByText(/sin la ubicación del comercio/i)
+    fireEvent.click(screen.getByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith(
+            expect.objectContaining({ rotacionClienteId: 42, coordCliente: undefined }),
+        ),
+    )
+})
+
+it('una vez iniciada la visita del alta, el mapa no vuelve aunque se suelte el puntero de visita en curso', async () => {
+    // El bug real: el mapa del alta colgaba de `mostrarRubros`, estado DERIVADO de
+    // `visitaEnCurso` + la card refetcheada. Cuando el efecto de reconciliación de la
+    // página soltaba ese puntero, el mapa reaparecía sobre una visita YA iniciada y el
+    // siguiente "Iniciar visita" rebotaba con 409 VISITA_ACTIVA_EXISTENTE.
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        latitud: undefined,
+        longitud: undefined,
+    }
+    mockGeolocacionEnVivo({ latitude: -34.62, longitude: -58.42, accuracy: 8 })
+    ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 77, ofrecimientos: 0 })
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
+    renderFlow({ cliente: clienteAlta, directoAMapa: true })
+
+    await screen.findByTestId('mapa-iniciar-visita')
+    fireEvent.click(screen.getByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+        expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument(),
+    )
+
+    // La card sigue diciendo 'pendiente' (el refetch todavía no llegó) y encima se suelta
+    // el puntero: con eso alcanzaba para que el mapa volviera.
+    fireEvent.click(screen.getByRole('button', { name: /soltar visita en curso/i }))
+    await new Promise(r => setTimeout(r, 100))
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+    expect(api.iniciarVisita).toHaveBeenCalledTimes(1)
+})
+
+it('el mapa del cliente nuevo se puede cancelar y vuelve a la agenda', async () => {
+    const clienteAlta: IAgendaClient = {
+        ...cliente,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+        latitud: undefined,
+        longitud: undefined,
+    }
+    mockGeolocacionEnVivo({ latitude: -34.62, longitude: -58.42, accuracy: 8 })
+    const { onClose } = renderFlow({ cliente: clienteAlta, directoAMapa: true })
+
+    await screen.findByTestId('mapa-iniciar-visita')
+    fireEvent.click(screen.getByLabelText('Cancelar'))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
     expect(api.iniciarVisita).not.toHaveBeenCalled()
 })
 

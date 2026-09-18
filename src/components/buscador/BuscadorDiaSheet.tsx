@@ -25,6 +25,10 @@ interface BuscadorDiaSheetProps {
     /** Se movió una fila existente a la celda destino (reacomodar, no crear). */
     onTraido: () => void
     onAviso: (tipo: NotificacionTipo, mensaje: string) => void
+    /** El comercio no está en la cartera y no lo va a estar nunca (la búsqueda solo
+     *  conoce clientes existentes): abre el flujo de "Cliente nuevo" en vez de este
+     *  buscador. Opcional — sin ella el botón no se pinta. */
+    onClienteNuevo?: () => void
 }
 
 type Consulta = {
@@ -57,6 +61,7 @@ export function BuscadorDiaSheet({
     onNavegarAExistente,
     onTraido,
     onAviso,
+    onClienteNuevo,
 }: BuscadorDiaSheetProps) {
     const [texto, setTexto] = useState('')
     const [consulta, setConsulta] = useState<Consulta | null>(null)
@@ -185,6 +190,15 @@ export function BuscadorDiaSheet({
                             </div>
                         )}
                     </div>
+                    {/* Comercio que NO está en la cartera: la búsqueda no lo va a encontrar
+                        nunca. Va abajo de la lista, discreto, para que el camino normal
+                        (buscar al cliente real) siga siendo el primero. */}
+                    {onClienteNuevo && (
+                        <button type="button" onClick={() => { cerrar(); onClienteNuevo() }}
+                            className="mt-1 h-11 w-full rounded-lg border-[1.5px] border-dashed border-[#C9D2E3] text-sm font-semibold text-dsnavy">
+                            ¿No es cliente todavía? · Cliente nuevo
+                        </button>
+                    )}
                 </div>
             )}
 

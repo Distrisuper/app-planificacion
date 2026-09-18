@@ -216,6 +216,10 @@ correspondía, gerencia lo ve después y lo corrige.
 `ultimoMovimiento` se muestra como un `✎` con tooltip por card en el grid de gerencia: con 200 clientes
 nadie lo encuentra, y no hay vista agregada. `pl_reacomodacion` ya tiene los datos.
 
+## La visita de alta ("Cliente nuevo")
+
+El comercio que todavía no es cliente **se representa con una fila del plan** (`tipo='alta'`), no con una tabla propia: la fila ya es una cita —vive en la agenda de un día, se mueve auditada con `reacomodar`, se resuelve una vez—, y eso era exactamente lo que hacía falta. El hecho es una `pl_resolucion` común. Sin ficha en el warehouse no hay coordenada (no hay gate de distancia: la `coord_inicio` **es** la ubicación del comercio) ni propuesta (el vendedor carga desde el catálogo). Cromo recibe el evento sobre el genérico **09895** con etiqueta `ALTA`, que es donde los vendedores escribían esto a mano. Un segundo intento tras un `no_visita` es **otra fila** con el detalle copiado (`FILA_RESUELTA` impide mover la primera). Costo aceptado: el alta queda atada a la rotación; si la vuelta cierra con un alta pendiente, no se arrastra. Spec: `2026-09-17-visita-de-alta-cliente-nuevo-design.md`.
+
 ## Lo que NO hay que hacer
 
 Cuatro ideas que aparecen sistemáticamente, son razonables a primera vista, y están descartadas. Se

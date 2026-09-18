@@ -1,5 +1,26 @@
 export type Dia = 'LUN' | 'MAR' | 'MIE' | 'JUE' | 'VIE'
 
+/** Qué representa una fila del plan. 'alta' = "cliente nuevo" (spec 2026-09-17): un
+ *  prospecto sin fct_clients todavía. Ausente en el payload = 'cliente' — no romper eso:
+ *  es lo que permite que ni `IAgendaClient` ni los ~20 fixtures de test existentes tengan
+ *  que declarar el campo. */
+export type TipoFilaPlan = 'cliente' | 'alta'
+
+/** Datos propios de una fila `tipo: 'alta'`: no vienen de fct_clients, los tipeó el
+ *  vendedor al crearla. */
+export interface IDetalleAlta {
+    nombre: string
+    razonSocial: string | null
+    direccion: string | null
+}
+
+/** Lo que se completa al CERRAR una visita de alta (no al crearla): datos de contacto
+ *  del prospecto. Viaja en `ICerrarVisitaDTO.detalle`. */
+export interface IDetalleContactoAlta {
+    contacto: string | null
+    fechaNacimiento: string | null
+}
+
 export type NivelMotivo = 'visita' | 'ofrecimiento'
 
 /** Qué significa comercialmente el motivo. Solo los de nivel 'ofrecimiento' lo tienen. */
@@ -125,6 +146,13 @@ export interface IAgendaClient extends IVisitClientCard {
     /** Observación que el vendedor dejó al cerrar. null si no dejó ninguna o si la fila
      *  todavía no tiene resolución. Solo lectura: no se puede editar después del cierre. */
     observaciones: string | null
+    /** Ausente = 'cliente' (opcional a propósito: no forzar a los ~20 fixtures de test
+     *  existentes, que nunca son de alta, a declarar el campo). */
+    tipo?: TipoFilaPlan
+    /** Solo presente cuando `tipo === 'alta'`. `null` no debería darse junto con
+     *  `tipo: 'alta'`, pero se tipea opcional/nullable para no asumir de más sobre lo
+     *  que manda el backend. */
+    detalleAlta?: IDetalleAlta | null
 }
 
 /** El plan de una semana que no es necesariamente la abierta, con el estado REAL de
@@ -389,6 +417,24 @@ export interface ICerrarVisitaDTO {
     /** Texto libre del vendedor. Se omite cuando no escribió nada — ver useCerrarVisita.
      *  Este es el ÚNICO momento en que se puede mandar: `pl_resolucion` es inmutable. */
     observaciones?: string
+    /** Solo para visitas de alta: datos de contacto del prospecto, cargados al cerrar. */
+    detalle?: IDetalleContactoAlta
+}
+
+/** "Cliente nuevo": crea la fila de alta en `(zona vista, dia)`. */
+export interface ICrearAltaDTO {
+    semana: number
+    dia: number
+    nombre: string
+    razonSocial?: string
+    direccion?: string
+}
+
+/** `null` = borrar el valor cargado; `undefined` = no tocarlo. */
+export interface IEditarAltaDTO {
+    nombre?: string
+    razonSocial?: string | null
+    direccion?: string | null
 }
 
 export interface ICerrarVisitaResult {
@@ -486,6 +532,8 @@ export interface IAgendaClientAdmin {
     esExtra: boolean
     /** true = quitada de esta rotación: se muestra deshabilitada, con botón "Restaurar". */
     eliminado: boolean
+    /** Ausente = 'cliente'. Ver comentario en `IAgendaClient.tipo`. */
+    tipo?: TipoFilaPlan
 }
 
 export interface ISemanaRotacionAdmin {

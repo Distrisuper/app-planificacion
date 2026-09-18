@@ -31,6 +31,12 @@ interface AgendaBoardProps {
     onIniciarVisita: (cliente: IAgendaClient) => void
     onAbrirAppExterna: (app: AppExterna, cliente: IVisitClientCard) => void
     onReintentarSeguimiento: (cliente: IAgendaClient) => void
+    /** Pass-through hacia `ClienteCard` — todavía no la consume (Task 14): editar los
+     *  datos de un comercio de "Cliente nuevo" mientras su fila sigue pendiente/abierta. */
+    onEditarAlta?: (cliente: IAgendaClient) => void
+    /** Pass-through hacia `ClienteCard` — todavía no la consume (Task 14): volver a
+     *  agendar un "Cliente nuevo" después de un "No visité". */
+    onReintentarAlta?: (cliente: IAgendaClient) => void
 }
 
 export default function AgendaBoard({
@@ -46,6 +52,8 @@ export default function AgendaBoard({
     onIniciarVisita,
     onAbrirAppExterna,
     onReintentarSeguimiento,
+    onEditarAlta,
+    onReintentarAlta,
 }: AgendaBoardProps) {
     const boardRef = useRef<HTMLDivElement>(null)
     const columnRefs = useRef<Partial<Record<Dia, HTMLDivElement>>>({})
@@ -197,6 +205,8 @@ export default function AgendaBoard({
                                         onIniciarVisita={onIniciarVisita}
                                         onAbrirAppExterna={onAbrirAppExterna}
                                         onReintentarSeguimiento={onReintentarSeguimiento}
+                                        onEditarAlta={onEditarAlta}
+                                        onReintentarAlta={onReintentarAlta}
                                     />
                                 ))}
                                 {clientes.length === 0 && (

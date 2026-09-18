@@ -8,6 +8,15 @@ import { getDiaDeHoy } from '@/lib/weekDates'
 import { guardarVisitaEnCurso, leerVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 
 vi.mock('@/api/planificacion')
+// El botón de "Cliente nuevo" está apagado por flag (ver src/lib/flags.ts). El test de
+// wiring de abajo lo prende para poder recorrer el flujo completo; el que verifica el
+// apagado lo baja. Getter y no valor fijo: la página lee la constante en cada render.
+const flags = vi.hoisted(() => ({ ALTAS_HABILITADAS: true }))
+vi.mock('@/lib/flags', () => ({
+    get ALTAS_HABILITADAS() {
+        return flags.ALTAS_HABILITADAS
+    },
+}))
 vi.mock('@/context/AuthContext', () => ({
     useAuth: () => ({ user: { name: 'Martín Rossi' }, logout: vi.fn() }),
 }))
@@ -844,4 +853,118 @@ it('con el cliente pendiente sigue usando el endpoint de siempre', async () => {
         }),
     )
     expect(api.noVisitaSobreVisitaAbierta).not.toHaveBeenCalled()
+})
+
+it('cliente nuevo: con el flag apagado, el buscador del día no ofrece el botón', async () => {
+    flags.ALTAS_HABILITADAS = false
+    try {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue(semanaVacia)
+
+        renderPage()
+
+        fireEvent.click(await screen.findByLabelText('Agregar cliente al lunes'))
+        // El buscador abrió (su placeholder está en pantalla) pero sin la salida a alta.
+        await screen.findByText(/esté o no en la hoja de ruta/i)
+        expect(screen.queryByText(/cliente nuevo/i)).toBeNull()
+    } finally {
+        flags.ALTAS_HABILITADAS = true
+    }
+})
+
+// Wiring completo del flujo de "Cliente nuevo" (findings #1 y #2 de la revisión final de
+// feature/visita-de-alta): abrir el "+" de un día → "Cliente nuevo" → crear → la card
+// aparece en la agenda → "Iniciar visita" → llega a los rubros sin quedar trabada. Todo lo
+// demás de este archivo mockea `@/api/planificacion` y renderiza la página entera igual
+// que este test — es el patrón establecido para probar los seams ENTRE componentes, que
+// ningún test por-componente puede ver.
+it('cliente nuevo: crear desde el "+" del día e iniciar la visita llega a los rubros', async () => {
+    fijarLunes()
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+
+    const clienteAlta = {
+        codigoParticularCliente: 'ALTA-000009',
+        nombreCliente: 'Autopartes Piche',
+        rotacionClienteId: 500,
+        dia: 1,
+        estado: 'pendiente' as const,
+        visitaId: null,
+        ofrecimientosPendientes: 0,
+        seguimiento: { estado: 'no_corresponde' as const, motivo: null, mensaje: null },
+        observaciones: null,
+        esExtra: true,
+        tipo: 'alta' as const,
+        detalleAlta: { nombre: 'Autopartes Piche', razonSocial: null, direccion: null },
+    }
+    // La agenda arranca vacía y, tras crear el alta, refleja la fila nueva — mismo patrón
+    // de invalidación que el resto del archivo usa para "Iniciar visita" (ver los tests
+    // de arriba con `mockResolvedValue` reasignado entre pasos).
+    let agendaActual: any = semanaVacia
+    ;(api.getAgendaSemana as any).mockImplementation(() => Promise.resolve(agendaActual))
+    ;(api.crearAlta as any).mockImplementation(async () => {
+        agendaActual = { ...semanaVacia, LUN: [clienteAlta] }
+        return clienteAlta
+    })
+
+    renderPage()
+
+    fireEvent.click(await screen.findByLabelText('Agregar cliente al lunes'))
+    fireEvent.click(await screen.findByText(/cliente nuevo/i))
+    fireEvent.change(screen.getByLabelText(/nombre del comercio/i), {
+        target: { value: 'Autopartes Piche' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /agregar al lunes/i }))
+
+    await waitFor(() =>
+        expect(api.crearAlta).toHaveBeenCalledWith({
+            semana: 3,
+            dia: 1,
+            nombre: 'Autopartes Piche',
+            razonSocial: undefined,
+            direccion: undefined,
+        }),
+    )
+    // La card del cliente nuevo aparece en la agenda, con su chip distintivo (puede haber
+    // más de una coincidencia de "cliente nuevo" en pantalla — el toast de éxito usa un
+    // texto parecido — así que se verifica que haya AL MENOS una, no una sola).
+    await screen.findByText('Autopartes Piche')
+    expect(screen.getAllByText(/cliente nuevo/i).length).toBeGreaterThan(0)
+
+    // Ubicación disponible. `watchPosition` es el que usa el mapa de "ubicar el comercio":
+    // su primer fix es el que planta el pin del alta y lo manda como coordCliente.
+    const getCurrentPosition = vi.fn((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+    )
+    const watchPosition = vi.fn((ok: any) => {
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } })
+        return 1
+    })
+    vi.stubGlobal('navigator', {
+        geolocation: { getCurrentPosition, watchPosition, clearWatch: vi.fn() },
+    })
+    ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 900, ofrecimientos: 0 })
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
+
+    // Primer toque: el de la card, que abre el mapa para ubicar el comercio.
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+
+    // Segundo toque: el CTA del mapa (la card sigue montada detrás, de ahí el getAll).
+    const botonesIniciar = screen.getAllByRole('button', { name: /iniciar visita/i })
+    fireEvent.click(botonesIniciar[botonesIniciar.length - 1])
+
+    // El pin que puso el GPS viaja como la ubicación del comercio.
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith(
+            expect.objectContaining({ coordCliente: expect.stringContaining('-34.6') }),
+        ),
+    )
+
+    // Llegó al sheet de la visita del alta (contacto opcional, exclusivo de `esAlta`).
+    await screen.findByLabelText(/con quién hablaste/i)
+    // Finding #2: el código sintético del alta no se filtra al sheet del vendedor.
+    expect(screen.queryByText(/ALTA-000009/)).not.toBeInTheDocument()
+
+    vi.unstubAllGlobals()
 })

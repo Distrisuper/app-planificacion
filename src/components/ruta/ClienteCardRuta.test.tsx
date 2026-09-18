@@ -286,6 +286,22 @@ describe('chip de fila creada a mano', () => {
         expect(screen.queryByText('Agregado')).not.toBeInTheDocument()
         expect(screen.queryByText('Extra')).not.toBeInTheDocument()
     })
+
+    it('una fila de alta muestra el chip Cliente nuevo y no Agregado', () => {
+        render(
+            <ClienteCardRuta
+                cliente={{
+                    ...CLIENTE,
+                    tipo: 'alta',
+                    esExtra: true,
+                    codigoParticularCliente: 'ALTA-000009',
+                    nombreCliente: 'Autopartes Piche',
+                }}
+            />,
+        )
+        expect(screen.getByText(/cliente nuevo/i)).toBeInTheDocument()
+        expect(screen.queryByText(/agregado/i)).not.toBeInTheDocument()
+    })
 })
 
 describe('tooltips de la card', () => {

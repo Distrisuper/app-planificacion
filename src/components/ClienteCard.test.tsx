@@ -306,3 +306,51 @@ describe('reintento del aviso a Cromo', () => {
         expect(screen.getByRole('button', { name: /reintentar sincronización/i })).toBeEnabled()
     })
 })
+
+describe('variante Cliente nuevo', () => {
+    const alta = (over: Partial<IAgendaClient> = {}) => cliente({
+        codigoParticularCliente: 'ALTA-000009', nombreCliente: 'Autopartes Piche', direccion: 'San Martín 811',
+        telefono: '1140506070', esExtra: true, tipo: 'alta',
+        detalleAlta: { nombre: 'Autopartes Piche', razonSocial: null, direccion: 'San Martín 811' }, ...over,
+    })
+
+    it('un cliente nuevo pendiente muestra el chip, la dirección, Editar e Iniciar; sin Propuesta, sin llamar, sin código', () => {
+        const onEditarAlta = vi.fn(); const onIniciarVisita = vi.fn()
+        render(<ClienteCard cliente={alta()} {...handlers} onEditarAlta={onEditarAlta} onIniciarVisita={onIniciarVisita} />)
+        expect(screen.getByText(/cliente nuevo/i)).toBeInTheDocument()
+        expect(screen.queryByText(/agregado/i)).not.toBeInTheDocument()
+        expect(screen.queryByText('#ALTA-000009')).not.toBeInTheDocument()
+        expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^propuesta$/i })).not.toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: /editar/i }))
+        expect(onEditarAlta).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
+        fireEvent.click(screen.getByRole('button', { name: /iniciar visita/i }))
+        expect(onIniciarVisita).toHaveBeenCalled()
+        expect(screen.getByRole('button', { name: /reagendar/i })).toBeInTheDocument()
+    })
+
+    it('un cliente nuevo no visitado ofrece "Volver a agendar"', () => {
+        const onReintentarAlta = vi.fn()
+        render(<ClienteCard cliente={alta({ estado: 'no_visita' })} {...handlers} onReintentarAlta={onReintentarAlta} />)
+        fireEvent.click(screen.getByRole('button', { name: /volver a agendar/i }))
+        expect(onReintentarAlta).toHaveBeenCalled()
+    })
+
+    it('un cliente nuevo visitado muestra Ver resumen como cualquier otro', () => {
+        render(<ClienteCard cliente={alta({ estado: 'visitada', visitaId: 7 })} {...handlers} />)
+        expect(screen.getByRole('button', { name: /ver resumen/i })).toBeInTheDocument()
+    })
+
+    it('un cliente nuevo en_curso no deja una caja de acciones vacía', () => {
+        // Finding #5 de la revisión final: sin "Propuesta" (suprimido para altas) ni
+        // "Iniciar visita" (ya hay una visita abierta) no queda ningún botón de este
+        // bloque, y el contenedor con `border-t pt-2.5` dibujaba una línea sobre nada.
+        const { container } = render(<ClienteCard cliente={alta({ estado: 'en_curso', visitaId: 7 })} {...handlers} />)
+        expect(screen.queryByRole('button', { name: /^propuesta$/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+        // El wrapper de la fila de acciones (el `flex gap-1.5` de Tier 1, clase exacta —
+        // otros bloques de la card comparten "flex" y "gap-1.5" mezclados con más
+        // clases) no debería renderizarse en absoluto, no solo quedar vacío de botones.
+        expect(container.querySelector('div[class="flex gap-1.5"]')).toBeNull()
+    })
+})

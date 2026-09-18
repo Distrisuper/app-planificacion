@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Loader2, WifiOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import PropuestaSheet, { toPropuestaDTO } from './PropuestaSheet'
@@ -17,7 +17,13 @@ import { guardarVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
-import type { IAgendaClient, IPropuestaRubroDTO, IVisitClientCard } from '@/types/planificacion'
+import { esAlta } from '@/lib/alta'
+import type {
+    IAgendaClient,
+    IDetalleContactoAlta,
+    IPropuestaRubroDTO,
+    IVisitClientCard,
+} from '@/types/planificacion'
 
 /** La visita que está en curso ahora mismo, sea cual sea el cliente cuyo sheet esté
  *  abierto (o ninguno) — ver comentario en VisitaFlowProps.visitaEnCurso. */
@@ -127,14 +133,38 @@ export default function VisitaFlow({
     // Mapa de consulta abierto (botón "Ver mi posición" del sheet). Nada que ver con
     // `propuestaPendiente`, que es el mapa del flujo de iniciar.
     const [verPosicion, setVerPosicion] = useState(false)
+    // Trinquete del mapa de "ubicar el comercio": se levanta apenas la visita del alta
+    // arrancó bien y no se vuelve a bajar hasta cambiar de cliente.
+    //
+    // El cliente real no lo necesita porque su mapa cuelga de `propuestaPendiente`, que el
+    // éxito pone en null — un estado explícito que nada vuelve a encender. El del alta
+    // colgaba de `mostrarRubros`, que es DERIVADO (`visitaEnCurso` + el estado de la card
+    // tras el refetch): cualquier parpadeo de esa cadena reabría el mapa sobre una visita
+    // ya iniciada, y el siguiente toque de "Iniciar visita" rebotaba con 409
+    // VISITA_ACTIVA_EXISTENTE.
+    const [altaYaIniciada, setAltaYaIniciada] = useState(false)
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
+    //
+    // Limpia lo del cliente ANTERIOR: si no había ninguno (se está abriendo el flujo), no
+    // hay nada que limpiar y correr igual es activamente dañino. Los efectos del hijo
+    // corren ANTES que los del padre, así que el mapa en modo 'ubicar' —que emite el pin
+    // inicial apenas monta— ya había dejado su coordenada en `clienteOverride` para cuando
+    // este efecto se ejecuta, y un reset incondicional se la comía: el alta terminaba
+    // iniciando sin la ubicación del comercio.
+    const clientePrevio = useRef<number | undefined>(cliente?.rotacionClienteId)
     useEffect(() => {
+        const id = cliente?.rotacionClienteId
+        if (clientePrevio.current === id) return
+        const habiaOtro = clientePrevio.current !== undefined
+        clientePrevio.current = id
+        if (!habiaOtro) return
         setPropuestaPendiente(null)
         setErrorIniciar(null)
         setClienteOverride(null)
         setNoVisitaRubros(null)
+        setAltaYaIniciada(false)
     }, [cliente?.rotacionClienteId])
 
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
@@ -156,12 +186,21 @@ export default function VisitaFlow({
     const enCurso = cliente?.estado === 'en_curso' || esClienteEnCurso
     const tieneCoords = cliente?.latitud != null && cliente?.longitud != null
 
+    // "Cliente nuevo": no hay historial (propuesta) ni coordenada (mapa/gate). Se
+    // arranca directo con la ubicación del vendedor, que pasa a ser la del comercio.
+    const clienteEsAlta = esAlta(cliente)
+
     // "Iniciar visita" tocado directo desde la card: se salta la propuesta y va derecho
     // al mapa. Solo aplica con coordenadas (si no las hay, no hay mapa que mostrar, así
     // que cae al flujo normal de la propuesta). La propuesta igual hace falta pedirla acá
     // (el backend la exige para congelarla), solo que ya no se muestra en pantalla.
     const cargandoDirecto =
-        !!directoAMapa && tieneCoords && !mostrarRubros && propuestaPendiente === null && !bloqueadoPorOtraVisita
+        !clienteEsAlta &&
+        !!directoAMapa &&
+        tieneCoords &&
+        !mostrarRubros &&
+        propuestaPendiente === null &&
+        !bloqueadoPorOtraVisita
     // `isError` es imprescindible, no un extra: el loader de abajo tapa toda la pantalla y
     // no tiene cómo cerrarse, así que mirando solo `data` (que ante un fallo queda
     // undefined para siempre) la app quedaba trabada en el spinner hasta reiniciarla.
@@ -239,6 +278,7 @@ export default function VisitaFlow({
                     const clienteParaVisita = clienteOverride
                         ? { ...cliente!, latitud: clienteOverride.lat, longitud: clienteOverride.lng }
                         : cliente!
+                    setAltaYaIniciada(true)
                     onVisitaIniciada(clienteParaVisita, id)
                     marcarInicioVisita(id)
                     guardarVisitaEnCurso({ cliente: clienteParaVisita, visitaId: id })
@@ -272,7 +312,7 @@ export default function VisitaFlow({
         }
     }
 
-    async function onCerrarVisita(observaciones: string | null) {
+    async function onCerrarVisita(observaciones: string | null, detalle: IDetalleContactoAlta | null) {
         if (visitaId === null || cerrandoFlujo) return
         // Común a "cerró bien" y a "ya estaba cerrada" (tratado como éxito, ver abajo): las
         // dos anclas locales de la visita se limpian igual, sea cual sea el motivo por el
@@ -292,6 +332,7 @@ export default function VisitaFlow({
                         visitaId,
                         coordFinal: geo.coord,
                         ...(observaciones ? { observaciones } : {}),
+                        ...(detalle ? { detalle } : {}),
                     })
                     if (res.ofrecimientosPendientes > 0) {
                         // Resultado normal, no un error: el gate pide un mínimo de 2 rubros,
@@ -381,7 +422,7 @@ export default function VisitaFlow({
     return (
         <>
             <PropuestaSheet
-                open={!mostrarRubros && propuestaPendiente === null && !cargandoDirecto}
+                open={!clienteEsAlta && !mostrarRubros && propuestaPendiente === null && !cargandoDirecto}
                 codigoCliente={cliente.codigoParticularCliente}
                 nombreCliente={nombre}
                 identidad={identidad}
@@ -398,10 +439,15 @@ export default function VisitaFlow({
                     open={mostrarRubros}
                     visitaId={visitaId}
                     nombreCliente={nombre}
-                    identidad={identidad}
+                    // El código sintético `#ALTA-000009` no es vocabulario de vendedor
+                    // (ver CLAUDE.md): para un cliente nuevo no hay identidad que mostrar,
+                    // así que se omite entero en vez de dejar pasar el `#${codigo}` que
+                    // arma `identidadCliente`.
+                    identidad={clienteEsAlta ? undefined : identidad}
                     visitaCerrada={cliente.estado === 'visitada'}
                     enCurso={enCurso}
-                    codigoParticularCliente={cliente.codigoParticularCliente}
+                    esAlta={clienteEsAlta}
+                    codigoParticularCliente={clienteEsAlta ? undefined : cliente.codigoParticularCliente}
                     cliente={cliente}
                     onAbrirAppExterna={onAbrirAppExterna}
                     onMinimize={cerrarFlujo}
@@ -518,6 +564,31 @@ export default function VisitaFlow({
                         </p>
                     </div>
                 ))}
+            {/* "Cliente nuevo": no hay propuesta que confirmar ni coordenada previa, así
+                que el único paso antes de arrancar es ubicar el comercio. El mapa se abre
+                sin pin y lo planta donde el GPS ubica al vendedor (modo 'ubicar'), que es
+                lo que llega por `onReposicionar` y termina viajando como `coordCliente`:
+                la única ubicación que ese comercio va a tener. Sin gate de cercanía. */}
+            {clienteEsAlta && (
+                <MapaVisita
+                    // Tres candados, no uno: el trinquete local (lo definitivo), que esta
+                    // fila no tenga ya una visita (`visitaId`), y el estado derivado. Con
+                    // cualquiera de los tres arriba, el mapa no se muestra.
+                    open={!mostrarRubros && !altaYaIniciada && visitaId === null}
+                    modo="ubicar"
+                    nombreCliente={nombre}
+                    direccion={direccionTexto}
+                    iniciando={iniciandoFlujo}
+                    error={errorIniciar ?? mensajeBloqueo}
+                    onIniciar={() => void onIniciar([])}
+                    onReposicionar={setClienteOverride}
+                    onCancel={() => {
+                        setErrorIniciar(null)
+                        setClienteOverride(null)
+                        cerrarFlujo()
+                    }}
+                />
+            )}
         </>
     )
 }
