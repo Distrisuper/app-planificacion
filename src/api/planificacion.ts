@@ -29,6 +29,8 @@ import type {
     ISincronizarResult,
     NivelMotivo,
     SemanaAgenda,
+    IMePlanificacion,
+    IVendedorDePrueba,
 } from '@/types/planificacion'
 
 // ── Ciclo ──────────────────────────────────────────────────────────────────────
@@ -288,5 +290,21 @@ export const editarAlta = async (rotacionClienteId: number, dto: IEditarAltaDTO)
 /** Después de un "No visité": otra fila para el mismo comercio, en `dia`. */
 export const reintentarAlta = async (rotacionClienteId: number, dia: number): Promise<IAgendaClient> => {
     const res = await apiClient.post(`/planificacion/altas/${rotacionClienteId}/reintentar`, { dia })
+    return res.data.data
+}
+
+// ── Identidad y vendedor de prueba ──────────────────────────────────────────────
+
+/** Qué puede hacer el usuario en planificación, según el backend. El front NO tiene tabla de
+ *  roles: decide con esto (spec 2026-09-17, "GET /planificacion/me"). */
+export const getMePlanificacion = async (): Promise<IMePlanificacion> => {
+    const res = await apiClient.get('/planificacion/me')
+    return res.data.data
+}
+
+/** Borra todo lo del vendedor de prueba del usuario y lo vuelve a crear como copia del plan de
+ *  `origen`, o vacío con `null`. El código del vendedor de prueba nunca viaja: sale del token. */
+export const reiniciarPrueba = async (origen: string | null): Promise<IVendedorDePrueba> => {
+    const res = await apiClient.post('/planificacion/prueba/reiniciar', { origen })
     return res.data.data
 }
