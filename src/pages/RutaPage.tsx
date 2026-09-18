@@ -96,27 +96,31 @@ export default function RutaPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="flex items-center justify-between gap-4 bg-white px-6 pt-4">
-                <div className="flex-1">
-                    <AnaliticaTabs />
-                </div>
-                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
-            </header>
+            {/* El bloque de navegación y filtros queda fijo al scrollear: las tablas de gerencia
+                son largas y sin esto tabs y filtros desaparecen a la primera pantalla. */}
+            <div className="sticky top-0 z-20 bg-white">
+                <header className="flex items-center justify-between gap-4 bg-white px-6 pt-4">
+                    <div className="flex-1">
+                        <AnaliticaTabs />
+                    </div>
+                    <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
+                </header>
 
-            <div className="flex flex-wrap items-end gap-4 border-b border-slate-200 bg-white px-6 py-4">
-                <SelectorVendedor
-                    vendedores={rosterVisible}
-                    elegido={vendedor}
-                    onElegir={elegirVendedor}
-                />
-                {/* Va en la barra y no dentro del grid: lo que explica son las reglas de la
-                    pantalla entera (mover vs. agregar, qué significa cada cartel, qué no se
-                    puede tocar), y adentro del grid competiría con los controles de celda. */}
-                <div className="flex items-center gap-1 pb-2 text-xs text-slate-500">
-                    <span>Cómo funciona</span>
-                    <HelpPopover label="Cómo funciona la edición de la ruta" align="left">
-                        <AyudaRuta />
-                    </HelpPopover>
+                <div className="flex flex-wrap items-end gap-4 border-b border-slate-200 bg-white px-6 py-4">
+                    <SelectorVendedor
+                        vendedores={rosterVisible}
+                        elegido={vendedor}
+                        onElegir={elegirVendedor}
+                    />
+                    {/* Va en la barra y no dentro del grid: lo que explica son las reglas de la
+                        pantalla entera (mover vs. agregar, qué significa cada cartel, qué no se
+                        puede tocar), y adentro del grid competiría con los controles de celda. */}
+                    <div className="flex items-center gap-1 pb-2 text-xs text-slate-500">
+                        <span>Cómo funciona</span>
+                        <HelpPopover label="Cómo funciona la edición de la ruta" align="left">
+                            <AyudaRuta />
+                        </HelpPopover>
+                    </div>
                 </div>
             </div>
 

@@ -35,12 +35,13 @@ export default function TablaVisitas({ visitas, onElegirVisita }: TablaVisitasPr
     return (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+<thead className="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
                         <th className="px-3 py-2 text-left">Fecha</th>
                         <th className="px-3 py-2 text-left">Inicio</th>
                         <th className="px-3 py-2 text-right">Duración</th>
                         <th className="px-3 py-2 text-right">Dist.</th>
+                        <th className="px-3 py-2 text-left">Código</th>
                         <th className="px-3 py-2 text-left">Cliente</th>
                         <th className="px-3 py-2 text-left">Motivo</th>
                         <th className="px-3 py-2 text-left">Resultado</th>
@@ -70,6 +71,9 @@ export default function TablaVisitas({ visitas, onElegirVisita }: TablaVisitasPr
                                 >
                                     {formatDistancia(peorDistancia(v.distanciaInicioMetros, v.distanciaFinMetros))}
                                 </span>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500">
+                                {v.codigoParticularCliente}
                             </td>
                             <td className="px-3 py-2 text-slate-900">{v.nombreCliente}</td>
                             <td className="px-3 py-2 text-slate-600">

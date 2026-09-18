@@ -26,24 +26,28 @@ export default function AnaliticaVendedorPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
-                <div>
-                    <Link
-                        to={`/analitica?desde=${desde}&hasta=${hasta}`}
-                        className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900"
-                    >
-                        <ArrowLeft className="h-3.5 w-3.5" />
-                        Volver a la analítica
-                    </Link>
-                    <h1 className="mt-1 text-lg font-semibold text-slate-900">
-                        {vendedor?.nombreVendedor ?? codigo}
-                    </h1>
-                    <p className="text-xs text-slate-500">
-                        {desde} a {hasta}
-                    </p>
-                </div>
-                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
-            </header>
+            {/* El bloque de navegación y filtros queda fijo al scrollear: las tablas de gerencia
+                son largas y sin esto tabs y filtros desaparecen a la primera pantalla. */}
+            <div className="sticky top-0 z-20 bg-white">
+                <header className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-6 py-4">
+                    <div>
+                        <Link
+                            to={`/analitica?desde=${desde}&hasta=${hasta}`}
+                            className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-900"
+                        >
+                            <ArrowLeft className="h-3.5 w-3.5" />
+                            Volver a la analítica
+                        </Link>
+                        <h1 className="mt-1 text-lg font-semibold text-slate-900">
+                            {vendedor?.nombreVendedor ?? codigo}
+                        </h1>
+                        <p className="text-xs text-slate-500">
+                            {desde} a {hasta}
+                        </p>
+                    </div>
+                    <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
+                </header>
+            </div>
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 {vendedor && promedios && (
