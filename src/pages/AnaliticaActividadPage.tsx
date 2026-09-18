@@ -48,20 +48,24 @@ export default function AnaliticaActividadPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="flex items-center justify-between gap-4 bg-white px-6 pt-4">
-                <div className="flex-1">
-                    <AnaliticaTabs enVivo={enVivo} />
-                </div>
-                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
-            </header>
+            {/* El bloque de navegación y filtros queda fijo al scrollear: las tablas de gerencia
+                son largas y sin esto tabs y filtros desaparecen a la primera pantalla. */}
+            <div className="sticky top-0 z-20 bg-white">
+                <header className="flex items-center justify-between gap-4 bg-white px-6 pt-4">
+                    <div className="flex-1">
+                        <AnaliticaTabs enVivo={enVivo} />
+                    </div>
+                    <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
+                </header>
 
-            <FiltrosAnalitica
-                filtro={filtro}
-                vendedoresDisponibles={opciones}
-                onRango={setRango}
-                onToggleVendedor={toggleVendedor}
-                onLimpiar={limpiarVendedores}
-            />
+                <FiltrosAnalitica
+                    filtro={filtro}
+                    vendedoresDisponibles={opciones}
+                    onRango={setRango}
+                    onToggleVendedor={toggleVendedor}
+                    onLimpiar={limpiarVendedores}
+                />
+            </div>
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
