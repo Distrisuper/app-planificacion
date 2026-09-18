@@ -4,12 +4,14 @@ import { ArrowLeft } from 'lucide-react'
 import TablaVisitas from '@/components/analitica/TablaVisitas'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
 import AccountMenu from '@/components/AccountMenu'
+import { useAccionesDeCuenta } from '@/hooks/useAccionesDeCuenta'
 import { useAuth } from '@/context/AuthContext'
 import { useResumen, useVisitas } from '@/hooks/useAnalitica'
 import { formatDuracion, formatNumero, formatPct } from '@/lib/analiticaFormat'
 
 export default function AnaliticaVendedorPage() {
     const { user, logout } = useAuth()
+    const accionesDeCuenta = useAccionesDeCuenta()
     const { codigo = '' } = useParams()
     const [params] = useSearchParams()
     const desde = params.get('desde') ?? ''
@@ -40,7 +42,7 @@ export default function AnaliticaVendedorPage() {
                         {desde} a {hasta}
                     </p>
                 </div>
-                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} />
+                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
             </header>
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">

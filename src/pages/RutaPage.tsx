@@ -2,6 +2,7 @@ import { useState } from 'react'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import HelpPopover from '@/components/analitica/HelpPopover'
 import AccountMenu from '@/components/AccountMenu'
+import { useAccionesDeCuenta } from '@/hooks/useAccionesDeCuenta'
 import AgregarClienteExtraDialog from '@/components/ruta/AgregarClienteExtraDialog'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
@@ -33,6 +34,7 @@ import {
  */
 export default function RutaPage() {
     const { user, logout } = useAuth()
+    const accionesDeCuenta = useAccionesDeCuenta()
     const [vendedor, setVendedor] = useState<string | null>(null)
     const [rotacionActivaId, setRotacionActivaId] = useState<number | null>(null)
     // La celda cuyo "+" se tocó. null = el diálogo está cerrado. Guarda la celda y no un
@@ -87,7 +89,7 @@ export default function RutaPage() {
                 <div className="flex-1">
                     <AnaliticaTabs />
                 </div>
-                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} />
+                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
             </header>
 
             <div className="flex flex-wrap items-end gap-4 border-b border-slate-200 bg-white px-6 py-4">
