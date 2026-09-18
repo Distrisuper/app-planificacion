@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, type PropsWithChildren } from 'react'
 import { login as loginApi, getMe } from '@/api/authApi'
+import { getMePlanificacion } from '@/api/planificacion'
 import { rutaInicialPara } from '@/lib/roles'
+import type { ICapacidades, IMePlanificacion, IVendedorDePrueba } from '@/types/planificacion'
 
 type AuthStatus = 'loading' | 'authenticated' | 'unauthorized' | 'unauthenticated'
 
@@ -12,12 +14,17 @@ interface AuthUser {
 interface AuthContextValue {
     status: AuthStatus
     user: AuthUser | null
+    capacidades: ICapacidades | null
+    vendedoresVisibles: string[] | null
+    vendedorDePrueba: IVendedorDePrueba | null
     /** Pantalla donde arranca el rol logueado. null si no tiene acceso. */
     rutaInicial: string | null
     loginError: string | null
     loginLoading: boolean
     login: (email: string, password: string) => Promise<void>
     logout: () => void
+    /** Vuelve a pedir /planificacion/me (después de reiniciar la prueba, para refrescar la descripción). */
+    refrescarMe: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -31,21 +38,39 @@ export function useAuth(): AuthContextValue {
 export function AuthProvider({ children }: PropsWithChildren) {
     const [status, setStatus] = useState<AuthStatus>('loading')
     const [user, setUser] = useState<AuthUser | null>(null)
+    const [me, setMe] = useState<IMePlanificacion | null>(null)
     const [loginError, setLoginError] = useState<string | null>(null)
     const [loginLoading, setLoginLoading] = useState(false)
 
     async function validateAndSetUser(token: string) {
         try {
-            const me = await getMe(token)
-            const authUser = { name: me.name, rol: me.rol }
-            setUser(authUser)
-            // El rol define a qué pantalla entra: el vendedor a su agenda, los roles
-            // analíticos a /analitica. Cualquier otro no tiene nada que hacer acá.
-            setStatus(rutaInicialPara(me.rol) === null ? 'unauthorized' : 'authenticated')
+            const authMe = await getMe(token)
+            setUser({ name: authMe.name, rol: authMe.rol })
         } catch {
             localStorage.removeItem('access_token')
             setUser(null)
+            setMe(null)
             setStatus('unauthenticated')
+            return
+        }
+        // Qué puede hacer lo dice planificación, no el rol: sin este dato no hay acceso.
+        // Si falla, 'unauthorized' y no 'unauthenticated': el token es válido, lo que no
+        // hay es una capacidad conocida — y no se adivina por rol.
+        try {
+            const mePlan = await getMePlanificacion()
+            setMe(mePlan)
+            setStatus(rutaInicialPara(mePlan.capacidades) === null ? 'unauthorized' : 'authenticated')
+        } catch {
+            setMe(null)
+            setStatus('unauthorized')
+        }
+    }
+
+    async function refrescarMe() {
+        try {
+            setMe(await getMePlanificacion())
+        } catch {
+            /* se conserva el último conocido */
         }
     }
 
@@ -75,6 +100,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     function logout() {
         localStorage.removeItem('access_token')
         setUser(null)
+        setMe(null)
         setLoginError(null)
         setStatus('unauthenticated')
     }
@@ -84,11 +110,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
             value={{
                 status,
                 user,
-                rutaInicial: rutaInicialPara(user?.rol),
+                capacidades: me?.capacidades ?? null,
+                vendedoresVisibles: me?.vendedoresVisibles ?? null,
+                vendedorDePrueba: me?.vendedorDePrueba ?? null,
+                rutaInicial: rutaInicialPara(me?.capacidades),
                 loginError,
                 loginLoading,
                 login,
                 logout,
+                refrescarMe,
             }}
         >
             {children}
