@@ -88,9 +88,8 @@ app-planificacion  ──Bearer token──►  api-vendedores (dominio nuevo "p
                                              │       teléfono, coords, descuentos, pago)
                                              │     propuesta comercial (RubroRecommendationService)
                                              │
-                                             ├─► MySQL distriap_distri (MISMA conexión existente
-                                             │     sequelizeWrite, la que ya usa para Notas —
-                                             │     NO es conexión nueva)
+                                             ├─► MySQL planificacion (base propia, conexión
+                                             │     sequelizeWritePlanificacion)
                                              │     TABLAS PROPIAS (prefijo pl_, las escribimos):
                                              │       pl_rotacion          la vuelta completa
                                              │       pl_rotacion_semana   set de semanas + nombre zona
@@ -110,8 +109,8 @@ app-planificacion  ──Bearer token──►  api-vendedores (dominio nuevo "p
                                                    — se llama automático al cerrar visita, best-effort
 ```
 
-- **La planificación es un dominio propio con sus propias tablas** (prefijo `pl_`), en la misma base
-  MySQL `distriap_distri` y reusando la conexión existente `sequelizeWrite`. Motivo: sin persistir
+- **La planificación es un dominio propio con sus propias tablas** (prefijo `pl_`), en la base MySQL
+  propia `planificacion`, con su propia conexión `sequelizeWritePlanificacion`. Motivo: sin persistir
   **el plan** (a quién había que visitar) no hay denominador, y la cobertura/efectividad —el objetivo
   del proyecto— es incalculable. El dashboard de efectividad de `app-mobiliza` que leía `Visitas`
   se deprecia junto con `api-mobiliza`, así que no hay doble escritura ni migración.
@@ -413,6 +412,15 @@ Hay **tres capas separadas**, y una operación toca una sola:
   mover un cliente de martes a jueves lo sacaría del pendiente y la semana cerraría sin haberlo
   visitado — el cumplimiento sería inflable con dos clicks. **No hay estado `reagendada`**: el enum
   tiene cuatro valores, `pendiente | en_curso | visitada | no_visita`.
+- **El vendedor de prueba (`PRUEBA-<userId>`) es una identidad, no un modo.** Gerencia y `tester`
+  operan la app como su vendedor sintético; el prefijo es un espacio reservado con dos invariantes
+  (nunca existe en el warehouse; nunca cruza vendedores ni sale de `pl_*`). Ante cualquier efecto
+  externo nuevo o agregación entre vendedores, preguntar `esVendedorDePrueba` /
+  `fragmentoVendedores` en api-vendedores. **El front no tiene tabla de roles**: decide con las
+  capacidades de `GET /planificacion/me` (`src/lib/roles.ts` solo traduce capacidades a rutas). Si
+  una pantalla nueva necesita "quién puede", es una capacidad nueva en el backend, no un
+  `if (rol === ...)`. El warehouse **no se modifica ni se extiende bajo ninguna forma**. Ver
+  `docs/dominio/modelo.md`, "El vendedor de prueba".
 
 ## Fuera de alcance (no implementar salvo pedido explícito)
 
