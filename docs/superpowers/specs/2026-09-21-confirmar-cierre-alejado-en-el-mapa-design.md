@@ -287,6 +287,17 @@ cerrar a ciegas en el caso frecuente.
   saber. Si más adelante hace falta analizar el fenómeno con datos, el camino es persistir
   precisión y antigüedad junto a `coord_final`, que es columna nueva en `pl_resolucion` y
   cambio en api-vendedores — otro spec.
+- **No se desvía cuando el fix es demasiado impreciso para concluir.** `distancia − precisión`
+  nunca supera el radio si la precisión es enorme, así que un fix de 400 m con precisión 500 m
+  cierra sin pasar por el mapa. Es un agujero conocido en el objetivo de "que no pueda cerrar
+  lejos sin darse cuenta", y se acepta a propósito: ante la duda el sistema no interrumpe, y
+  la alternativa —desviar a todo fix con precisión mayor que el radio— manda al mapa a gente
+  parada en el local con un fix de antena, con el CTA en "Cerrar igual" sin que esté lejos de
+  verdad. Eso erosiona la señal justo donde la feature necesita que se le crea. **Disparador
+  para revisarlo:** si en la práctica aparecen cierres lejanos que se escaparon del desvío,
+  la salida es desviar también con precisión > `RADIO_INICIO_METROS`. Lo que NO hay que hacer
+  es comparar la distancia cruda ignorando la precisión: ese criterio ya se descartó dos veces
+  en este repo por generar avisos falsos.
 - **No se toca `useAlejadoDelCliente`.** El `watchPosition` sigue en baja precisión (batería),
   el `visibilitychange` sigue como está y el `onError` silencioso también. El fix viejo deja
   de importar para el cierre porque el cierre ya no lo consulta, no porque el hook mejore.
