@@ -438,12 +438,24 @@ Hay **tres capas separadas**, y una operación toca una sola:
   una pantalla nueva necesita "quién puede", es una capacidad nueva en el backend, no un
   `if (rol === ...)`. El warehouse **no se modifica ni se extiende bajo ninguna forma**. Ver
   `docs/dominio/modelo.md`, "El vendedor de prueba".
+- **Las métricas son un catálogo declarativo, no JSX por KPI.** `src/lib/metricas/catalogo.ts`
+  lista secciones y tiles (`objetivo` / `comparacion` / `lista`) sobre el objeto ancho de
+  `GET /planificacion/metricas`. Gerencia cambia KPIs sobre la marcha: sacar, reordenar o
+  renombrar es tocar una entrada ahí; agregar uno con dato nuevo es un campo más en la API y
+  una entrada. No agregar un `<KpiTile>` suelto en `PanelMetricas`. El tab se muestra con la
+  capacidad `veSusMetricas` de `/planificacion/me`, no por rol. Los objetivos de venta están
+  hardcodeados en la fila global de `pl_objetivo` (0 = "s/d") hasta que gerencia pase los
+  reales.
 
 ## Fuera de alcance (no implementar salvo pedido explícito)
 
-Cumplimiento de objetivo/ranking de vendedores, novedades para el vendedor, link de WhatsApp al
+Ranking de vendedores, novedades para el vendedor, link de WhatsApp al
 cliente, recorrido/trazo continuo de la visita o del día (requiere Capacitor + plugin nativo),
 migración del dashboard de efectividad de app-mobiliza.
+
+El **cumplimiento de objetivo del propio vendedor** SÍ entra desde el spec
+`2026-09-21-metricas-vendedor-y-gerencia-design.md`: es el tab "Mi cartera" (`/cartera`), y la
+pestaña "Métricas" de gerencia (`/analitica/metricas`). El ranking sigue afuera.
 
 Las vistas de gerencia **sí existen** y no están fuera de alcance: `/analitica` (cobertura y
 efectividad), `/analitica/actividad` (actividad en vivo) y `/analitica/ruta` (edición de la rotación
