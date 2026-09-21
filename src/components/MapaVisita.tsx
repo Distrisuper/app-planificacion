@@ -4,7 +4,13 @@ import 'leaflet/dist/leaflet.css'
 import { MapPin, Navigation, RotateCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { distanciaMetros, estaFueraDeRango, RADIO_INICIO_METROS } from '@/lib/distancia'
+import { obtenerFix, type Fix } from '@/lib/geolocation'
 import { formatDistancia } from '@/lib/analiticaFormat'
+
+/** Cuánto vale un fix como "dónde está el vendedor ahora". Pasado este margen, cualquier
+ *  lectura nueva lo reemplaza aunque sea más gruesa: un "estás cerca" de hace medio minuto
+ *  es peor información que un "estás lejos" de recién. Ver `aceptarFix`. */
+const VIGENCIA_FIX_MS = 30_000
 
 interface MapaVisitaProps {
     open: boolean
@@ -17,8 +23,13 @@ interface MapaVisitaProps {
      *  gate (no hay contra qué medir: la coordenada se está definiendo recién ahora) y
      *  sin círculo de rango. El punto elegido sale por `onReposicionar`, igual que un
      *  ajuste manual, así el llamador recibe una coordenada aunque el vendedor no toque
-     *  nada. */
-    modo?: 'iniciar' | 'consulta' | 'ubicar'
+     *  nada.
+     *  'cerrar' = el vendedor tocó "Cerrar visita" y la coordenada definitiva lo ubica
+     *  lejos del cliente. Es 'consulta' con CTA: se le impone para que no cierre lejos
+     *  sin darse cuenta, y "Recalcular posición" es su salida si el GPS se equivocó.
+     *  NO es un gate — el CTA nunca se deshabilita por distancia. Ver
+     *  docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md. */
+    modo?: 'iniciar' | 'consulta' | 'ubicar' | 'cerrar'
     nombreCliente: string
     /** Línea de identidad bajo el título: `#10034 · DERQUI AUTOPARTES SRL`. La arma
      *  `identidadCliente` en VisitaFlow — ver ahí por qué la razón social no siempre va.
@@ -35,6 +46,19 @@ interface MapaVisitaProps {
     error?: string | null
     /** Sólo se usa en modo 'iniciar'. */
     onIniciar?: () => void
+    /** Sólo en modo 'cerrar'. Si `alejado`, el llamador es quien pide la confirmación —
+     *  este componente no la muestra. */
+    onCerrar?: () => void
+    /** Sólo en modo 'cerrar': decide la cara del CTA. Viene de `useAlejadoDelCliente`, y
+     *  NO del `fueraDeRango` que este componente calcula para el texto de la distancia:
+     *  la histéresis simétrica del hook (entra con `d − p > radio`, sale con
+     *  `d + p <= radio`) tiene que ser la única fuente de verdad, o las dos pantallas
+     *  terminan discrepando. */
+    alejado?: boolean
+    /** Sólo en modo 'cerrar': el cierre está en vuelo. Paralelo a `iniciando` y no un
+     *  renombre — los dos modos nunca están montados a la vez, pero un prop compartido
+     *  obligaría a leer `modo` para saber qué significa. */
+    cerrando?: boolean
     onCancel: () => void
     /** Cada fix propio del vendedor (watch en vivo y "Recalcular posición"). El watch de
      *  este componente es de ALTA precisión, a diferencia del de useAlejadoDelCliente: por
@@ -81,6 +105,9 @@ export default function MapaVisita({
     iniciando,
     error,
     onIniciar,
+    onCerrar,
+    alejado,
+    cerrando,
     onCancel,
     onFix,
     onReposicionar,
@@ -88,6 +115,14 @@ export default function MapaVisita({
     const esConsulta = modo === 'consulta'
     // "Cliente nuevo": no hay pin previo ni gate — ver el docstring de `modo`.
     const esUbicar = modo === 'ubicar'
+    // 'cerrar' es 'consulta' con CTA: comparte todo lo que NO es el pie.
+    const esCerrar = modo === 'cerrar'
+    // Mover el pin del cliente es una decisión del inicio de la visita. Ni consultando la
+    // posición ni cerrando se ajusta la ubicación del comercio.
+    const sinReposicionar = esConsulta || esCerrar
+    // Los dos modos que miran la posición con la visita ya abierta: ni uno ni otro puede
+    // decir "acercate para iniciar", que ya pasó.
+    const visitaYaAbierta = esConsulta || esCerrar
     const tienePinInicial = latitud != null && longitud != null
     const mapRef = useRef<HTMLDivElement>(null)
     const mapInstance = useRef<L.Map | null>(null)
@@ -99,10 +134,10 @@ export default function MapaVisita({
     // mapa y necesitan leer el override VIGENTE al momento del fix, no el de cuando
     // se armaron.
     const overrideRef = useRef<{ lat: number; lng: number } | null>(null)
-    // Último fix crudo del vendedor (no el derivado que guarda posicionRef): hace
-    // falta para recalcular distancia al instante cuando se reposiciona al cliente,
-    // sin esperar el próximo tick de watchPosition.
-    const vendedorFixRef = useRef<{ lat: number; lng: number; accuracy: number } | null>(null)
+    // Último fix crudo del vendedor VIGENTE (no el derivado que guarda posicionRef):
+    // hace falta para recalcular distancia al instante cuando se reposiciona al cliente,
+    // sin esperar el próximo tick de watchPosition, y es contra quién arbitra `aceptarFix`.
+    const vendedorFixRef = useRef<Fix | null>(null)
     const modoReposicionarRef = useRef(false)
     const [modoReposicionar, setModoReposicionar] = useState(false)
     const [overrideCliente, setOverrideCliente] = useState<{ lat: number; lng: number } | null>(
@@ -110,6 +145,9 @@ export default function MapaVisita({
     )
     const [sinUbicacion, setSinUbicacion] = useState(false)
     const [recalculando, setRecalculando] = useState(false)
+    // Espejo de `recalculando` en un ref: el callback de error del watch se crea UNA sola
+    // vez por apertura del mapa y necesita saber si HAY un recálculo en vuelo AHORA.
+    const recalculandoRef = useRef(false)
     // Un intento (el watch en vivo o "Recalcular posición") falló DESPUÉS de que ya
     // hubiera un fix conocido — a diferencia de `sinUbicacion`, no habilita "iniciar
     // igual": seguimos sabiendo la distancia del último fix bueno, solo que no se pudo
@@ -128,10 +166,53 @@ export default function MapaVisita({
     // seguía bloqueado por el fix anterior).
     const posicionRef = useRef<typeof posicion>(null)
 
+    /**
+     * Único punto por donde entra un fix nuevo. Decide si reemplaza al vigente y, si sí,
+     * lo deja en `vendedorFixRef`.
+     *
+     * Hace falta porque las dos fuentes —el watch de fondo y "Recalcular posición"—
+     * escriben en el mismo estado y el watch NO se pausa durante el recálculo: sin
+     * arbitrar, gana el último que llega. El vendedor corregía su posición, la veía
+     * corregida, y un tick de red de cientos de metros se la revertía un segundo después.
+     *
+     * Las dos reglas, con los campos que la propia API da para esto (`coords.accuracy` en
+     * metros al 95% de confianza, `timestamp` en Unix ms):
+     *
+     *   1. Una lectura anterior a la vigente no es información nueva — es el fix cacheado
+     *      que devuelve `maximumAge`. Se descarta.
+     *   2. Una lectura más nueva pero MÁS GRUESA solo reemplaza si la vigente ya venció.
+     *      Mientras siga fresca, 1500 m de margen de error no pueden borrar un fix fino de
+     *      hace un instante.
+     *
+     * `explicito` (el vendedor tocó "Recalcular posición") saltea la regla 2: pidió una
+     * lectura y hay que mostrarle la que salga, o el botón parece no hacer nada. No saltea
+     * la 1, que justamente evita devolverle el mismo fix de siempre. Y no abre un agujero:
+     * `estaFueraDeRango` ya descuenta la precisión, así que un fix grueso no puede afirmar
+     * lejanía.
+     */
+    function aceptarFix(fix: Fix, explicito = false): boolean {
+        const vigente = vendedorFixRef.current
+        if (vigente) {
+            if (fix.timestamp < vigente.timestamp) return false
+            if (
+                !explicito &&
+                fix.precisionM > vigente.precisionM &&
+                fix.timestamp - vigente.timestamp < VIGENCIA_FIX_MS
+            )
+                return false
+        }
+        vendedorFixRef.current = fix
+        return true
+    }
+
     /** Único punto donde un intento de fix (watch o recálculo) fracasa. Solo habilita
      *  "iniciar igual" si nunca hubo un fix bueno — si ya lo hubo, el fracaso solo avisa
      *  que no se pudo refrescar, sin tocar el bloqueo que ya está vigente. */
-    function marcarFixFallido() {
+    function marcarFixFallido({ deWatch = false } = {}) {
+        // El vendedor pidió una lectura y la está esperando: que el watch de fondo le
+        // avise que ÉL falló es ruido sobre la acción en curso, y el propio recálculo va
+        // a avisar si termina mal.
+        if (deWatch && recalculandoRef.current) return
         if (posicionRef.current === null) {
             setSinUbicacion(true)
         } else {
@@ -212,9 +293,9 @@ export default function MapaVisita({
             setOverrideCliente({ lat, lng })
             ponerPin(lat, lng)
             if (vendedorFixRef.current) {
-                const { lat: vLat, lng: vLng, accuracy } = vendedorFixRef.current
+                const { lat: vLat, lng: vLng, precisionM } = vendedorFixRef.current
                 const distanciaM = distanciaMetros(lat, lng, vLat, vLng)
-                marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
+                marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, precisionM))
             }
             onReposicionar?.({ lat, lng })
         }
@@ -228,8 +309,19 @@ export default function MapaVisita({
                 pos => {
                     setCalculando(false)
                     const { latitude, longitude, accuracy } = pos.coords
-                    vendedorFixRef.current = { lat: latitude, lng: longitude, accuracy }
+                    // `onFix` va SIEMPRE, incluso si el arbitraje descarta la lectura:
+                    // `useAlejadoDelCliente` tiene su propia histéresis simétrica y un
+                    // fix impreciso, ahí, simplemente no mueve el estado.
                     onFix?.(latitude, longitude, accuracy)
+                    if (
+                        !aceptarFix({
+                            lat: latitude,
+                            lng: longitude,
+                            precisionM: accuracy,
+                            timestamp: pos.timestamp ?? Date.now(),
+                        })
+                    )
+                        return
                     // 'ubicar': el primer fix propio ES el punto de partida del comercio.
                     // Se avisa por `onReposicionar` —el mismo canal del ajuste manual— para
                     // que el llamador tenga una coordenada aunque el vendedor no toque nada.
@@ -274,7 +366,7 @@ export default function MapaVisita({
                 },
                 () => {
                     setCalculando(false)
-                    marcarFixFallido()
+                    marcarFixFallido({ deWatch: true })
                 },
                 { enableHighAccuracy: true, maximumAge: 5000 },
             )
@@ -295,72 +387,70 @@ export default function MapaVisita({
         }
     }, [open, latitud, longitud])
 
-    function handleRecalcular() {
-        if (!navigator.geolocation) {
+    async function handleRecalcular() {
+        setRecalculando(true)
+        recalculandoRef.current = true
+        // Dos etapas (fino, y grueso solo si el fino falló por señal), las mismas que usa
+        // `capturarUbicacion()`. Con un solo intento de alta precisión —lo que hacía este
+        // botón— bajo techo se agotaba el timeout y terminaba SIEMPRE en "No pudimos
+        // actualizar tu posición", justo donde la segunda etapa sí consigue un fix.
+        const res = await obtenerFix()
+        setRecalculando(false)
+        recalculandoRef.current = false
+        setCalculando(false)
+        if (!res.ok) {
             marcarFixFallido()
             return
         }
-        setRecalculando(true)
-        navigator.geolocation.getCurrentPosition(
-            pos => {
-                setRecalculando(false)
-                setCalculando(false)
-                const { latitude, longitude, accuracy } = pos.coords
-                vendedorFixRef.current = { lat: latitude, lng: longitude, accuracy }
-                onFix?.(latitude, longitude, accuracy)
-                const map = mapInstance.current
-                // 'ubicar' sin pin todavía (el watch nunca pudo resolver y el vendedor tocó
-                // "Recalcular"): este fix es el que estrena el pin del comercio.
-                if (esUbicar && overrideRef.current === null && map) {
-                    overrideRef.current = { lat: latitude, lng: longitude }
-                    setOverrideCliente({ lat: latitude, lng: longitude })
-                    clienteMarker.current = L.marker([latitude, longitude], {
-                        icon: ICONO_CLIENTE,
-                    }).addTo(map)
-                    onReposicionar?.({ lat: latitude, lng: longitude })
-                }
-                const punto =
-                    overrideRef.current ?? (tienePinInicial ? { lat: latitud, lng: longitud } : null)
-                if (punto) {
-                    const distanciaM = distanciaMetros(punto.lat, punto.lng, latitude, longitude)
-                    marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
-                } else {
-                    marcarFixExitoso(0, false)
-                }
-                if (!map) return
-                if (!vendedorMarker.current) {
-                    vendedorMarker.current = L.marker([latitude, longitude], { icon: ICONO_VENDEDOR }).addTo(map)
-                } else {
-                    vendedorMarker.current.setLatLng([latitude, longitude])
-                }
-                if (tienePinInicial) {
-                    map.fitBounds(
-                        [
-                            [latitud, longitud],
-                            [latitude, longitude],
-                        ],
-                        { padding: [48, 48] },
-                    )
-                } else {
-                    map.setView([latitude, longitude], 17)
-                }
-            },
-            () => {
-                setRecalculando(false)
-                setCalculando(false)
-                marcarFixFallido()
-            },
-            // `maximumAge: 0` (que tenía este código) exige una lectura estrictamente
-            // nueva: en equipos sin GPS (una PC de escritorio) el proveedor de ubicación
-            // por red resuelve UNA vez y no puede producir otra a pedido, así que el
-            // pedido quedaba esperando hasta agotar el timeout y terminaba siempre en
-            // "No pudimos actualizar tu posición" — mismo motivo, documentado, por el
-            // que `capturarUbicacion()` tampoco usa 0 (ver src/lib/geolocation.ts). Un
-            // margen chico sigue sirviendo como "recalcular": no reusa el fix inicial
-            // del montaje (que ya lleva más de 5 s dando vueltas para cuando el
-            // vendedor llega a tocar el botón), solo tolera un fix genuinamente reciente.
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
-        )
+        // Que el arbitraje lo descarte NO es un fracaso, y se sale sin cartel. La rama
+        // existe por el encuentro de dos arreglos de este mismo commit: bajo techo la
+        // etapa 1 falla y la 2 devuelve el fix de red, que puede ser MÁS VIEJO que el que
+        // el watch ya tenía (regla 1 de `aceptarFix`, la única que `explicito` no saltea).
+        // Descartarlo está bien —900 m de hace medio minuto son peor información que 10 m
+        // de recién— pero decirle "No pudimos actualizar tu posición" es mentirle: la
+        // lectura salió, y la distancia que está mirando es la buena. Sería encima el
+        // mismo cartel que este commit vino a sacar, en el mismo escenario bajo techo.
+        if (!aceptarFix(res.fix, true)) return
+        const { lat: latitude, lng: longitude, precisionM } = res.fix
+        onFix?.(latitude, longitude, precisionM)
+        const map = mapInstance.current
+        // 'ubicar' sin pin todavía (el watch nunca pudo resolver y el vendedor tocó
+        // "Recalcular"): este fix es el que estrena el pin del comercio.
+        if (esUbicar && overrideRef.current === null && map) {
+            overrideRef.current = { lat: latitude, lng: longitude }
+            setOverrideCliente({ lat: latitude, lng: longitude })
+            clienteMarker.current = L.marker([latitude, longitude], {
+                icon: ICONO_CLIENTE,
+            }).addTo(map)
+            onReposicionar?.({ lat: latitude, lng: longitude })
+        }
+        const punto =
+            overrideRef.current ?? (tienePinInicial ? { lat: latitud, lng: longitud } : null)
+        if (punto) {
+            const distanciaM = distanciaMetros(punto.lat, punto.lng, latitude, longitude)
+            marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, precisionM))
+        } else {
+            marcarFixExitoso(0, false)
+        }
+        if (!map) return
+        if (!vendedorMarker.current) {
+            vendedorMarker.current = L.marker([latitude, longitude], {
+                icon: ICONO_VENDEDOR,
+            }).addTo(map)
+        } else {
+            vendedorMarker.current.setLatLng([latitude, longitude])
+        }
+        if (tienePinInicial) {
+            map.fitBounds(
+                [
+                    [latitud, longitud],
+                    [latitude, longitude],
+                ],
+                { padding: [48, 48] },
+            )
+        } else {
+            map.setView([latitude, longitude], 17)
+        }
     }
 
     function handleComoLlegar() {
@@ -384,9 +474,9 @@ export default function MapaVisita({
         clienteMarker.current?.setLatLng([latitud, longitud])
         circuloRango.current?.setLatLng([latitud, longitud])
         if (vendedorFixRef.current) {
-            const { lat, lng, accuracy } = vendedorFixRef.current
+            const { lat, lng, precisionM } = vendedorFixRef.current
             const distanciaM = distanciaMetros(latitud, longitud, lat, lng)
-            marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
+            marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, precisionM))
         }
         onReposicionar?.(null)
     }
@@ -408,7 +498,13 @@ export default function MapaVisita({
             <div className="flex items-center justify-between border-b border-dsline px-4 py-3">
                 <div className="min-w-0">
                     <span className="text-[11px] font-extrabold uppercase tracking-wide text-dsmuted">
-                        {esConsulta ? 'Tu posición' : esUbicar ? 'Ubicar el comercio' : 'Iniciar visita'}
+                        {esConsulta
+                            ? 'Tu posición'
+                            : esUbicar
+                              ? 'Ubicar el comercio'
+                              : esCerrar
+                                ? 'Cerrar visita'
+                                : 'Iniciar visita'}
                     </span>
                     <h2 className="truncate text-[16px] font-extrabold text-[#182645]">{nombreCliente}</h2>
                     {identidad && (
@@ -443,7 +539,7 @@ export default function MapaVisita({
                 {!esUbicar && posicion && posicion.fueraDeRango && (
                     <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
                         Estás a {formatDistancia(posicion.distanciaM)} del cliente
-                        {esConsulta
+                        {visitaYaAbierta
                             ? '.'
                             : ` — acercate a menos de ${RADIO_INICIO_METROS} m para iniciar.`}
                     </p>
@@ -460,7 +556,7 @@ export default function MapaVisita({
                 )}
                 {sinUbicacion && (
                     <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
-                        {esConsulta
+                        {visitaYaAbierta
                             ? 'No pudimos ubicarte. Probá al aire libre y tocá "Recalcular posición".'
                             : esUbicar
                               ? 'No pudimos ubicarte: la visita va a quedar sin la ubicación del comercio. Podés iniciar igual.'
@@ -477,7 +573,7 @@ export default function MapaVisita({
                     </p>
                 )}
                 {error && <p className="mb-3 text-[12.5px] font-semibold text-dsred">{error}</p>}
-                {!esConsulta && modoReposicionar && (
+                {!sinReposicionar && modoReposicionar && (
                     <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-dashed border-[#F59E0B] bg-[#FFFBEB] px-3 py-2">
                         <span className="text-[12.5px] font-semibold text-[#92400E]">
                             {esUbicar
@@ -495,7 +591,7 @@ export default function MapaVisita({
                 )}
                 {/* "Restablecer" necesita una coordenada original a la que volver: en
                  *  'ubicar' no existe (el pin lo puso el GPS recién), así que no va. */}
-                {!esConsulta && !esUbicar && overrideCliente && !modoReposicionar && (
+                {!sinReposicionar && !esUbicar && overrideCliente && !modoReposicionar && (
                     <div className="mb-3 flex items-center justify-between gap-2">
                         <span className="text-[12.5px] font-semibold text-dsmuted">
                             Posición ajustada para esta visita
@@ -509,7 +605,7 @@ export default function MapaVisita({
                         </button>
                     </div>
                 )}
-                {!esConsulta && !modoReposicionar && (
+                {!sinReposicionar && !modoReposicionar && (
                     <Button
                         variant="outline"
                         onClick={handleArmarReposicionar}
@@ -552,7 +648,7 @@ export default function MapaVisita({
                         </Button>
                     )}
                 </div>
-                {!esConsulta && (
+                {!visitaYaAbierta && (
                     <Button
                         onClick={onIniciar}
                         loading={iniciando}
@@ -562,6 +658,33 @@ export default function MapaVisita({
                         className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
                     >
                         {iniciando ? 'Iniciando…' : calculando ? 'Calculando…' : 'Iniciar visita'}
+                    </Button>
+                )}
+                {/* A diferencia del CTA de arriba, este NUNCA se deshabilita por distancia,
+                 *  ni por `calculando`, ni por `sinUbicacion`. Cerrar no tiene gate (el
+                 *  vendedor pudo irse del local por motivos legítimos, y bloquearlo dejaría
+                 *  visitas abiertas para siempre), y un GPS que no responde no puede trabar
+                 *  un cierre. El desvío hasta acá ya cumplió su función: que lo vea. */}
+                {esCerrar && (
+                    <Button
+                        onClick={onCerrar}
+                        loading={cerrando}
+                        className={
+                            alejado
+                                ? 'h-12 w-full bg-[#B45309] text-[15px] hover:bg-[#92400E]'
+                                : 'h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90'
+                        }
+                    >
+                        {cerrando
+                            ? 'Cerrando…'
+                            : alejado
+                              ? // Sin fix todavía no hay metros que mostrar, pero el botón
+                                // igual va en su cara de "lejos": es el estado con el que
+                                // se entró al mapa.
+                                posicion
+                                  ? `Cerrar igual · estás a ${formatDistancia(posicion.distanciaM)}`
+                                  : 'Cerrar igual'
+                              : 'Cerrar visita'}
                     </Button>
                 )}
             </div>
