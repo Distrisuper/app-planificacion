@@ -233,6 +233,41 @@ capa de navegación. Una confirmación es un corte, no un paso.
   reintentar y donde el toast queda legible. Reintentar vuelve a pasar por el desvío.
 - **`VISITA_YA_CERRADA`:** se trata como éxito, igual que hoy. Sin cambios.
 
+## Impacto sobre el cierre normal
+
+El que cierra parado en el local **no ve ningún cambio**: ni un toque ni un segundo de más.
+La captura de coordenada ya ocurría igual antes de cerrar, y el desvío exige
+`distancia − precisión > 100 m`, o sea evidencia de lejanía aun en el mejor caso para el fix
+— un GPS impreciso no manda a nadie al mapa por ser impreciso.
+
+El falso positivo que importaría es **la coordenada del cliente mal guardada**: el vendedor
+parado en el local midiendo 400 m contra un punto equivocado, y comiéndose el desvío en cada
+cierre de ese cliente sin tener ninguna culpa. Dos cosas lo contienen:
+
+1. **La medición usa `visitaEnCurso.cliente`, que ya lleva la corrección.** Si el vendedor
+   reposicionó el pin al iniciar, `clienteParaVisita` guardó la coordenada nueva como ancla de
+   toda la visita, exactamente para que el aviso de "te alejaste" no dispare estando parado
+   donde reposicionó. El cierre hereda eso gratis. **No medir contra `cliente` ni contra el
+   card de la agenda**, que pueden traer la coordenada vieja del warehouse.
+2. **Para haber iniciado, ya tuvo que estar a menos de 100 m de esa misma ancla.** El gate de
+   inicio sí bloquea. O reposicionó, o estaba cerca: en los dos casos el ancla contra la que
+   se mide al cerrar es una que él validó con el cuerpo media hora antes. Un falso positivo
+   exigiría que la coordenada estuviera mal *y* que el inicio no lo hubiera detectado.
+
+Queda un residuo, chico y asumido:
+
+- **Inició sin GPS.** Con el "No pudimos ubicarte, pero podés iniciar igual" no hubo gate, así
+  que el ancla pudo quedar mal sin que nadie lo notara. Al cerrar con señal buena, desvío. Es
+  raro, y discutiblemente correcto: la app realmente no sabe dónde está el local.
+- **Deriva del GPS adentro del local.** Un fix de 150 m con precisión 30 dispara el desvío.
+  No es una fuente *nueva* de falsos positivos —es el mismo criterio que el cartel del pie ya
+  usa hoy—; lo que cambia es la consecuencia, de una banda ignorable a una pantalla completa.
+  Ése es el intercambio que la feature compra a propósito.
+
+En los dos casos el costo tiene techo: no es un bloqueo. Ve el mapa, toca "Recalcular
+posición" o directamente "Cerrar igual", y confirma. Dos toques de más en un caso raro, contra
+cerrar a ciegas en el caso frecuente.
+
 ## Qué NO se hace
 
 - **No se agrega un gate de distancia al cierre.** Decisión vigente del dominio, reafirmada:
