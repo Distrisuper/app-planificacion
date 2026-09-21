@@ -8,3 +8,8 @@ export function mesAnterior(mes: string): string {
     const [a, m] = mes.split('-').map(Number)
     return m === 1 ? `${a - 1}-12` : `${a}-${pad(m - 1)}`
 }
+
+const NOMBRES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre']
+export function nombreDeMes(mes: string): string {
+    return NOMBRES[Number(mes.split('-')[1]) - 1]
+}
