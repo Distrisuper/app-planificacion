@@ -23,6 +23,28 @@ Las dos consecuencias:
    hook), pero hay que saber que está ahí y tocarlo antes de cerrar. El que va directo al
    botón nunca le da al GPS la oportunidad de corregirse.
 
+### La causa que no es "no vio el cartel"
+
+Lo anterior asume que el aviso estaba y el vendedor no lo miró. Hay un segundo caso, y es
+peor: **el aviso puede no haber existido nunca**, porque el estado del hook estaba congelado.
+
+`useAlejadoDelCliente` corre su `watchPosition` sólo con la app al frente. Cuando el vendedor
+guarda el teléfono —que es lo normal durante una visita— el navegador congela el watch, y
+`alejado`/`distanciaM` se quedan con el último fix bueno: el de hace minutos. Al volver al
+frente, el handler de `visibilitychange` pide un fix nuevo, pero con
+`enableHighAccuracy: false`, **sin `timeout`** (si el GPS no responde, no vuelve nunca) y con
+el `onError` en `() => {}` (falla en silencio). Entre que la app vuelve y ese fix llega, el
+estado sigue siendo el viejo.
+
+Así que un vendedor que se fue del local con el celular guardado y vuelve a abrir la app para
+cerrar tiene buenas chances de tocar **Cerrar visita** con el hook todavía diciendo "cerca".
+No ve ningún cartel porque no hay ningún cartel. La visita se cierra, y la coordenada que se
+persiste —ésa sí capturada fresca, por `conUbicacion`— lo registra a 400 m.
+
+**Esto es lo que hace que el disparador no pueda ser `alejado`.** Un desvío atado al aviso
+hereda exactamente el estado congelado que causa el problema: molesta cuando el fix viejo dice
+"lejos" sin serlo, y se calla cuando dice "cerca" sin serlo.
+
 El aviso no bloquea el cierre y **no lo va a bloquear**: cerrar nunca tuvo gate de distancia
 (a esa altura el vendedor ya puede haberse ido del local por cualquier motivo legítimo, y
 bloquearlo dejaría visitas abiertas para siempre). Lo que falta no es un candado: es que el
@@ -31,7 +53,7 @@ está equivocado.
 
 ## Alcance
 
-Sólo el camino "tocar Cerrar visita con `alejado` activo". Todo lo demás queda intacto:
+Sólo el camino "tocar Cerrar visita estando lejos del cliente". Todo lo demás queda intacto:
 
 - **No se toca el backend.** `PUT /planificacion/visitas/:id/cerrar` sigue aceptando cerrar
   desde cualquier coordenada. Esto es una guía operativa del front, como el gate de los 100 m
@@ -41,43 +63,81 @@ Sólo el camino "tocar Cerrar visita con `alejado` activo". Todo lo demás queda
   puerta a la misma pantalla.
 - **No aplica a `no_visita`**, que no captura ubicación a propósito, ni a la visita de alta
   (`tipo='alta'`), que no tiene coordenada del cliente contra la cual medir.
-- **Un cliente sin coordenadas nunca llega acá**: `useAlejadoDelCliente` queda inactivo sin
-  `latitud`/`longitud`, así que `alejado` es siempre `false` y el flujo es idéntico a hoy.
+- **Un cliente sin coordenadas nunca llega acá**: no hay contra qué medir, así que no hay
+  desvío posible y el flujo es idéntico a hoy.
 
 ## Diseño
 
-### 1. El desvío vive en `VisitaFlow`, no en `VisitaSheet`
+### 1. El disparador es la coordenada definitiva, no el aviso
 
-`VisitaFlow.onCerrarVisita` pasa a ser un desvío **simétrico al de iniciar**. El flujo de
-inicio ya tiene exactamente esta forma —`propuestaPendiente` → `MapaVisita` →
-`onConfirmarEnMapa`— y el de cierre la copia:
+`VisitaFlow.onCerrarVisita` pasa a **medir antes de decidir**, con el mismo fix fresco que se
+va a persistir. Es el espejo exacto de lo que `onIniciar` ya hace y documenta como *"segunda
+verificación, con la coordenada DEFINITIVA (la que se persiste)"*:
 
 ```
 VisitaSheet.cerrarConBorrador
   → guarda el batch de rubros contra el backend      (sin cambios)
   → limpia borradores locales                        (sin cambios)
   → onCerrarVisita(observaciones, detalle)
-        ├─ alejado && esClienteEnCurso → setCierrePendiente({observaciones, detalle})
-        │                                 → se abre MapaVisita modo 'cerrar'
-        └─ si no                       → ejecutarCierre(observaciones, detalle)
+        → conUbicacion(geo => {                       ← capturarUbicacion(): coord + precisionM
+              d = distanciaMetros(geo, visitaEnCurso.cliente)
+              ├─ sin coords del cliente, o !estaFueraDeRango(d, geo.precisionM)
+              │     → ejecutarCierre(geo, observaciones, detalle)     ← cierra, sin desvío
+              └─ estaFueraDeRango(d, geo.precisionM)
+                    → evaluarFix(geo)                 ← sincroniza el hook con la verdad
+                    → setCierrePendiente({observaciones, detalle})
+                                                      ← se abre MapaVisita modo 'cerrar'
+          })
 ```
 
-El cuerpo actual de `onCerrarVisita` (el `conUbicacion` + `cerrar.mutateAsync` + limpieza de
-anclas + `cerrarFlujo`) se extrae tal cual a **`ejecutarCierre(observaciones, detalle)`**. No
-cambia una línea de su lógica: cambia sólo quién lo llama y cuándo.
+**No agrega ninguna espera.** `conUbicacion` ya corría antes de cerrar, para obtener la
+coordenada que se guarda en `coord_final`. Lo único nuevo es que su resultado, además de
+viajar al backend, se usa para decidir.
 
-**Por qué en `VisitaFlow` y no antes, dentro del sheet:** para cuando `onCerrarVisita` corre,
-`cerrarConBorrador` ya persistió el batch de rubros contra el backend. Interceptar después
-significa que cancelar el mapa **no pierde nada**: los rubros ya están guardados, y el state
-del sheet conserva observaciones y contacto, así que un segundo intento de cerrar re-arma los
-mismos valores y vuelve a pasar por el mismo desvío. Interceptar antes obligaría a meter el
-mapa dentro del sheet y a decidir si el batch se guarda o no antes de una confirmación que el
-vendedor todavía puede cancelar.
+El criterio es `estaFueraDeRango(d, precisionM)` —`d − precisión > RADIO_INICIO_METROS`, la
+misma función que gobierna el gate de inicio y la entrada del aviso—: evidencia positiva de
+lejanía aun en el mejor caso para el fix. Un fix grueso de wifi/antena no manda a nadie al
+mapa por ser impreciso. **Esto no es un gate**: el resultado de estar lejos es un desvío que
+se puede atravesar, no un bloqueo.
 
-**El desvío es incondicional mientras `alejado` esté activo**: si el vendedor ve el mapa,
-cancela y vuelve a tocar Cerrar visita, pasa de nuevo por el mapa. No hay "ya lo vio una vez".
-Es un estado menos que mantener, y el caso que evita —cancelar y reintentar sin haberse
-movido— es justamente el caso donde el desvío tiene algo que decir.
+#### Sincronizar el hook al entrar
+
+Al desviar se llama a **`evaluarFix(lat, lon, geo.precisionM)`** con la coordenada definitiva,
+por el seam que el hook ya expone para esto. Sin esa llamada, el hook podría seguir con su fix
+viejo diciendo `alejado: false`, y el mapa —cuyo CTA lee `alejado`, ver §2— abriría en verde
+"Cerrar visita", contradiciendo el motivo por el que se abrió.
+
+Con la llamada, el hook queda en el mismo estado que la medición que disparó el desvío (el
+criterio de entrada de `evaluarFix` es `estaFueraDeRango`, el mismo que acaba de dar
+verdadero), el cartel del pie se pone al día, y a partir de ahí el watch de alta precisión del
+mapa puede apagarlo solo. Es el efecto colateral correcto: el estado congelado se descongela
+justo cuando importa.
+
+#### `ejecutarCierre` y la recaptura al confirmar
+
+El cuerpo actual de `onCerrarVisita` (el `cerrar.mutateAsync` + limpieza de anclas +
+`cerrarFlujo`) se extrae a **`ejecutarCierre(geo, observaciones, detalle)`**, que ahora recibe
+el `geo` en vez de capturarlo. Su lógica no cambia.
+
+En el camino directo se le pasa el `geo` de la medición, sin recapturar. En el camino del
+desvío, confirmar **vuelve a capturar** con `conUbicacion`: entre que el vendedor tocó Cerrar
+visita y que confirma pueden pasar minutos de recalcular y mirar el mapa, y `coord_final`
+tiene que ser dónde estaba al cerrar, no dónde estaba al empezar a dudar. La segunda captura
+es rápida —el GPS quedó caliente y el mapa lo tuvo en alta precisión todo el rato— y reusa el
+mismo camino, incluido el manejo de permiso denegado (`onGeoBloqueada`), que no se duplica.
+
+#### Por qué el desvío vive en `VisitaFlow` y no en `VisitaSheet`
+
+Para cuando `onCerrarVisita` corre, `cerrarConBorrador` ya persistió el batch de rubros contra
+el backend. Interceptar después significa que cancelar el mapa **no pierde nada**: los rubros
+ya están guardados, y el state del sheet conserva observaciones y contacto, así que un segundo
+intento de cerrar re-arma los mismos valores y vuelve a medir. Interceptar antes obligaría a
+meter el mapa dentro del sheet y a decidir si el batch se guarda o no antes de una
+confirmación que el vendedor todavía puede cancelar.
+
+**El desvío es incondicional**: no hay "ya lo vio una vez". Si cancela y vuelve a tocar Cerrar
+visita, se vuelve a medir, y si sigue lejos vuelve al mapa. Es un estado menos que mantener, y
+al medir de nuevo cada vez, el que se acercó mientras tanto pasa derecho.
 
 ### 2. Modo `'cerrar'` en `MapaVisita`
 
@@ -88,9 +148,17 @@ watch de alta precisión, distancia en vivo, "Recalcular posición" y "¿Cómo l
 reposicionar el cliente —ajustar el pin es una decisión del inicio de la visita, no del
 cierre— y sin "Restablecer".
 
-Como en `'consulta'`, cada fix se reporta por `onFix` → `evaluarFix` del hook. Eso es lo que
-hace que el mapa pueda apagar el aviso solo, a los pocos segundos de abrirse, si el vendedor
-tiene razón.
+**"Recalcular posición" es el protagonista de esta pantalla, no un accesorio heredado de
+`'consulta'`.** Es la respuesta concreta al caso de mala señal o actualización congelada: el
+botón que el vendedor toca para decirle al sistema "medime de nuevo, estoy acá". Ya existe y
+no cambia; lo que cambia es que ahora aparece en el momento en que sirve para algo.
+
+Como en `'consulta'`, cada fix se reporta por `onFix` → `evaluarFix` del hook — tanto los del
+watch como el de "Recalcular posición". Eso es lo que hace que el mapa pueda apagar el aviso
+solo, a los pocos segundos de abrirse, si el vendedor tiene razón.
+
+Y el mapa **no se puede saltear**: es full-screen y la única salida hacia adelante es el CTA.
+Ése es el punto de toda la feature — que nadie cierre lejos sin haberlo visto.
 
 #### El CTA y sus dos caras
 
@@ -147,10 +215,16 @@ capa de navegación. Una confirmación es un corte, no un paso.
 
 ### 4. Errores y estados de carga
 
-- Mientras `ejecutarCierre` corre, el CTA del mapa muestra su spinner. Es un prop nuevo,
-  **`cerrando`**, paralelo a `iniciando` y no un renombre: `iniciando` sigue siendo del modo
-  `'iniciar'` y los dos modos nunca están montados a la vez, pero un solo prop compartido
-  obligaría a leer `modo` para saber qué significa.
+- Mientras la medición inicial corre (el `capturarUbicacion` de `onCerrarVisita`), el botón
+  del **sheet** muestra "Cerrando…" como hoy. Si el resultado es un desvío, el sheet vuelve a
+  su estado normal detrás del mapa.
+- Mientras la recaptura + `ejecutarCierre` corren, el CTA del **mapa** muestra su spinner. Es
+  un prop nuevo, **`cerrando`**, paralelo a `iniciando` y no un renombre: `iniciando` sigue
+  siendo del modo `'iniciar'` y los dos modos nunca están montados a la vez, pero un solo
+  prop compartido obligaría a leer `modo` para saber qué significa.
+- **Permiso de ubicación denegado o GPS caído** en cualquiera de las dos capturas:
+  `conUbicacion` llama a `onGeoBloqueada` y no cierra, igual que hoy. Sin cambios — y sin
+  desvío, porque sin coordenada no hay nada que medir ni que mostrar en un mapa.
 - **Éxito:** `ejecutarCierre` ya hace `cerrarFlujo()`, que desmonta todo el flujo —mapa
   incluido—. `cierrePendiente` se limpia junto con el resto del state del flujo.
 - **Fallo:** el toast de error (`No se pudo cerrar la visita. Volvé a intentar.`) ya sale de
@@ -169,25 +243,46 @@ capa de navegación. Una confirmación es un corte, no un paso.
   el vendedor que quiere un fix mejor tiene "Recalcular posición" a mano.
 - **No se guarda "ya vio el mapa en esta visita"**, por lo dicho en §1.
 - **No se manda nada nuevo al backend.** La coordenada de cierre que se persiste sigue siendo
-  la de `conUbicacion` dentro de `ejecutarCierre`, capturada al confirmar — no el fix del
-  watch del mapa, que es sólo visual.
+  la de `conUbicacion`, capturada al confirmar — no el fix del watch del mapa, que es sólo
+  visual. Nada de esto toca `pl_resolucion` ni api-vendedores.
+- **No se muestra el detalle técnico del fix** (precisión en metros, antigüedad de la
+  medición). Se evaluó como ayuda de diagnóstico —distinguir a simple vista un GPS malo de
+  una medición vieja— y se descartó: el vendedor no tiene por qué leer metros de precisión, y
+  el mapa con el pin, el círculo y la distancia en vivo ya le dice lo único que necesita
+  saber. Si más adelante hace falta analizar el fenómeno con datos, el camino es persistir
+  precisión y antigüedad junto a `coord_final`, que es columna nueva en `pl_resolucion` y
+  cambio en api-vendedores — otro spec.
+- **No se toca `useAlejadoDelCliente`.** El `watchPosition` sigue en baja precisión (batería),
+  el `visibilitychange` sigue como está y el `onError` silencioso también. El fix viejo deja
+  de importar para el cierre porque el cierre ya no lo consulta, no porque el hook mejore.
 
 ## Tests
 
 `VisitaFlow.test.tsx`:
 
-- Con `alejado` activo, tocar Cerrar visita **no** llama al endpoint de cierre y abre el mapa.
+- Con la coordenada definitiva **lejos** del cliente, tocar Cerrar visita **no** llama al
+  endpoint de cierre y abre el mapa.
+- Con la coordenada definitiva **cerca**, el cierre es directo: ni mapa ni diálogo, y el
+  endpoint recibe la coordenada ya capturada (una sola captura, sin recaptura).
+- **Con `alejado` en `false` por fix viejo pero la coordenada definitiva lejos, igual desvía.**
+  Es el caso que motiva el diseño: el estado congelado del hook no puede dejar pasar un cierre
+  lejano en silencio.
+- Con `alejado` en `true` por fix viejo pero la coordenada definitiva cerca, cierra directo
+  sin molestar.
 - Confirmar en el diálogo llama al endpoint una sola vez, con las observaciones y el detalle
-  que venían del sheet.
+  que venían del sheet, y con la coordenada de la **recaptura**, no la de la medición inicial.
 - Cancelar el mapa no cierra la visita y devuelve al sheet; volver a tocar Cerrar visita
-  vuelve a abrir el mapa.
-- Con `alejado` en `false`, el cierre es directo: ni mapa ni diálogo.
+  vuelve a medir y vuelve a abrir el mapa.
 - Un fallo del endpoint cierra el mapa y muestra el toast de error, sin marcar la visita como
   cerrada.
+- Permiso de ubicación denegado: no cierra, no abre el mapa, llama a `onGeoBloqueada`.
 
 `MapaVisita.test.tsx`:
 
-- Modo `'cerrar'`: renderiza el CTA, no renderiza "Reposicionar cliente" ni "Restablecer".
+- Modo `'cerrar'`: renderiza el CTA y "Recalcular posición", no renderiza "Reposicionar
+  cliente" ni "Restablecer".
 - Con `alejado` en `true` el CTA es "Cerrar igual" con la distancia; con `false`, "Cerrar
   visita".
 - El CTA está habilitado mientras `calculando` y con `sinUbicacion`.
+
+`useAlejadoDelCliente.test.ts`: sin cambios — el hook no se toca.
