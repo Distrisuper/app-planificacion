@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import VisitaFlow, { type IVisitaEnCurso } from './VisitaFlow'
@@ -1234,4 +1234,110 @@ it('con el permiso denegado no cierra ni abre el mapa', async () => {
     await waitFor(() => expect(onGeoBloqueada).toHaveBeenCalledWith('denegado'))
     expect(api.cerrarVisita).not.toHaveBeenCalled()
     expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+})
+
+it('cerrar igual desde el mapa exige confirmar, y confirmar cierra una sola vez', async () => {
+    // El watch en vivo confirma la lejanía, así que el hook enciende `alejado` y el CTA
+    // sale en su cara de "Cerrar igual".
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar igual/i }))
+
+    // El diálogo se interpone: todavía no se escribió nada.
+    await screen.findByText('¿Cerrar la visita lejos del cliente?')
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^cerrar igual$/i }))
+    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledTimes(1))
+    expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.61,-58.4' })
+})
+
+// Este test usa `within`: agregarlo al import de '@testing-library/react' de la cabecera.
+it('cancelar la confirmación deja la visita abierta y el mapa a la vista', async () => {
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar igual/i }))
+    // `within` el diálogo y no `screen`: la X del mapa también tiene aria-label "Cancelar",
+    // así que con el diálogo abierto hay DOS botones con ese nombre accesible y una query
+    // global tira "found multiple elements".
+    const dialogo = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+
+    await waitFor(() =>
+        expect(screen.queryByText('¿Cerrar la visita lejos del cliente?')).not.toBeInTheDocument(),
+    )
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+    // El mapa sigue ahí: cancelar la confirmación no es cancelar el desvío.
+    expect(screen.getByTestId('mapa-iniciar-visita')).toBeInTheDocument()
+})
+
+it('si el GPS del mapa lo ubica en el cliente, el CTA cierra sin confirmación', async () => {
+    // Llegó al mapa por una medición lejana, pero el watch de alta precisión del mapa
+    // lo ubica en el local: el hook apaga `alejado` y el desacuerdo se resolvió a su favor.
+    mockGeolocacionEnVivo({ latitude: -34.6, longitude: -58.4, accuracy: 5 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+
+    // Esperar a que el CTA pase a verde, y NO `findAllByRole(/^cerrar visita$/)`: esa
+    // query resuelve apenas hay UN match, y el botón del sheet de atrás siempre matchea
+    // — devolvía ese, el click reabría el desvío y nunca se cerraba nada. La señal real
+    // es que "Cerrar igual" desaparezca: el fix de alta precisión del mapa apagó el aviso.
+    await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /cerrar igual/i })).not.toBeInTheDocument(),
+    )
+    // Ahora sí hay dos "Cerrar visita": el del sheet y el CTA del mapa, que va después.
+    const ctas = screen.getAllByRole('button', { name: /^cerrar visita$/i })
+    expect(ctas).toHaveLength(2)
+    fireEvent.click(ctas[ctas.length - 1])
+
+    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText('¿Cerrar la visita lejos del cliente?')).not.toBeInTheDocument()
+})
+
+it('si el cierre falla desde el mapa, avisa y no marca la visita como cerrada', async () => {
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockRejectedValue(new Error('red caída'))
+    const { onAviso, onVisitaCerrada } = renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar igual/i }))
+    await screen.findByText('¿Cerrar la visita lejos del cliente?')
+    fireEvent.click(screen.getByRole('button', { name: /^cerrar igual$/i }))
+
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith('error', 'No se pudo cerrar la visita. Volvé a intentar.'),
+    )
+    expect(onVisitaCerrada).not.toHaveBeenCalled()
+    // El mapa y el diálogo se van: el vendedor vuelve al sheet, donde está el botón para
+    // reintentar y donde el toast queda legible.
+    await waitFor(() => expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument())
 })

@@ -18,6 +18,8 @@ import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
 import { esAlta } from '@/lib/alta'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { formatDistancia } from '@/lib/analiticaFormat'
 import { useAuth } from '@/context/AuthContext'
 import { estaProbando } from '@/lib/roles'
 import type {
@@ -91,7 +93,7 @@ export default function VisitaFlow({
     // Coordenadas del cliente de LA VISITA EN CURSO, no del `cliente` que esté abierto en
     // pantalla — el vendedor puede estar mirando la propuesta de otro cliente mientras la
     // visita sigue corriendo en otro lado.
-    const { alejado, evaluarFix } = useAlejadoDelCliente({
+    const { alejado, distanciaM, evaluarFix } = useAlejadoDelCliente({
         activo: visitaEnCurso !== null,
         latitud: visitaEnCurso?.cliente.latitud,
         longitud: visitaEnCurso?.cliente.longitud,
@@ -135,6 +137,10 @@ export default function VisitaFlow({
         observaciones: string | null
         detalle: IDetalleContactoAlta | null
     } | null>(null)
+    // El vendedor tocó "Cerrar igual" con el aviso vigente. Es estado propio y no derivado
+    // de `alejado`: si mientras el diálogo está abierto llega un fix que apaga el aviso, la
+    // pregunta que el vendedor está leyendo no puede desaparecerle de abajo del dedo.
+    const [confirmarCierreLejos, setConfirmarCierreLejos] = useState(false)
     // Ajuste efímero del pin del cliente (MapaVisita.onReposicionar). Solo
     // importa para ESTE intento de iniciar: viaja como coordCliente y se usa en la
     // segunda verificación de distancia de acá abajo. Nunca se guarda en ningún otro
@@ -441,8 +447,10 @@ export default function VisitaFlow({
             await conUbicacion(geo => ejecutarCierre(geo, observaciones, detalle))
         } finally {
             setCerrandoFlujo(false)
-            // Tanto si cerró como si falló: el mapa se va y el vendedor vuelve al sheet,
-            // que es donde está el botón para reintentar y donde el toast queda legible.
+            // Tanto si cerró como si falló: el diálogo y el mapa se van, y el vendedor
+            // vuelve al sheet, que es donde está el botón para reintentar y donde el toast
+            // queda legible.
+            setConfirmarCierreLejos(false)
             setCierrePendiente(null)
         }
     }
@@ -628,10 +636,42 @@ export default function VisitaFlow({
                         // hook: es lo que le permite al vendedor mal ubicado por señal
                         // desmentir la medición y ver el CTA pasar a verde.
                         onFix={evaluarFix}
-                        onCerrar={onConfirmarCierreEnMapa}
-                        onCancel={() => setCierrePendiente(null)}
+                        onCerrar={() => {
+                            // Con el aviso vigente la pregunta se hace explícita. Sin él, el
+                            // vendedor ya desmintió la medición con un fix de alta precisión
+                            // y esto es un cierre normal.
+                            if (alejado) setConfirmarCierreLejos(true)
+                            else void onConfirmarCierreEnMapa()
+                        }}
+                        onCancel={() => {
+                            setConfirmarCierreLejos(false)
+                            setCierrePendiente(null)
+                        }}
                     />
                 )}
+            <ConfirmDialog
+                open={confirmarCierreLejos}
+                onOpenChange={setConfirmarCierreLejos}
+                title="¿Cerrar la visita lejos del cliente?"
+                description={
+                    distanciaM === null
+                        ? `La visita de ${
+                              visitaEnCurso?.cliente.nombreFantasia ??
+                              visitaEnCurso?.cliente.nombreCliente ??
+                              'este cliente'
+                          } va a quedar registrada con tu ubicación actual.`
+                        : `Estás a ${formatDistancia(distanciaM)} de ${
+                              visitaEnCurso?.cliente.nombreFantasia ??
+                              visitaEnCurso?.cliente.nombreCliente ??
+                              'este cliente'
+                          }. La visita va a quedar registrada igual, con esta ubicación.`
+                }
+                confirmLabel="Cerrar igual"
+                cancelLabel="Cancelar"
+                // No `destructivo`: el rojo está reservado para lo que descarta trabajo, y
+                // esto registra un hecho legítimo. Que sea irreversible lo dice el texto.
+                onConfirm={onConfirmarCierreEnMapa}
+            />
             {cargandoDirecto &&
                 !propuestaDirecta &&
                 (fallóPropuestaDirecta ? (
