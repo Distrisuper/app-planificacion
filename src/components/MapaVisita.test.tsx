@@ -468,3 +468,133 @@ it('avisa por onFix también al recalcular', async () => {
 
     expect(onFix).toHaveBeenCalledWith(-34.602, -58.402, 8)
 })
+
+it('modo cerrar: con alejado muestra "Cerrar igual" con la distancia y dispara onCerrar', async () => {
+    // -34.6,-58.4 contra -34.61,-58.4 son ~1112 m: bien fuera de rango con accuracy 10.
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.61, longitude: -58.4, accuracy: 10 } }),
+    )
+    const onCerrar = vi.fn()
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            alejado
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCerrar={onCerrar}
+            onCancel={() => {}}
+        />,
+    )
+    const boton = await screen.findByRole('button', { name: /cerrar igual · estás a \d+ m/i })
+    expect(boton).toBeEnabled()
+    await userEvent.click(boton)
+    expect(onCerrar).toHaveBeenCalledTimes(1)
+})
+
+it('modo cerrar: sin alejado el CTA es "Cerrar visita"', async () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            alejado={false}
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: /cerrar igual/i })).not.toBeInTheDocument()
+})
+
+it('modo cerrar: el CTA NO se deshabilita mientras el GPS todavía no respondió', () => {
+    // El watch no llama a nadie: queda en `calculando`. En 'iniciar' eso deshabilita;
+    // acá no hay gate y un GPS mudo no puede trabar un cierre.
+    mockGeolocation(() => 1)
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            alejado
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(screen.getByRole('button', { name: /cerrar igual/i })).toBeEnabled()
+    expect(screen.getByText('Calculando tu posición…')).toBeInTheDocument()
+})
+
+it('modo cerrar: el CTA sigue habilitado si el GPS falla del todo', async () => {
+    mockGeolocation((_ok: any, err: any) => {
+        err({ code: 1 })
+        return 1
+    })
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            alejado
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(await screen.findByRole('button', { name: /cerrar igual/i })).toBeEnabled()
+})
+
+it('modo cerrar: ofrece recalcular la posición pero no reposicionar al cliente', async () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.61, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            alejado
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    // "Recalcular posición" es la salida concreta del vendedor mal ubicado por señal.
+    expect(await screen.findByRole('button', { name: /recalcular posición/i })).toBeInTheDocument()
+    // Mover el pin del cliente es una decisión del INICIO de la visita, no del cierre.
+    expect(screen.queryByRole('button', { name: /reposicionar cliente/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+})
+
+it('modo cerrar: el eyebrow dice "Cerrar visita", no "Iniciar visita"', async () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+    )
+    // Con `alejado` el CTA dice "Cerrar igual …", así que "Cerrar visita" queda como
+    // texto único y la aserción apunta al eyebrow sin ambigüedad. Sin `alejado` el CTA
+    // también diría "Cerrar visita" — correcto en producto, pero dos matches en el test.
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            alejado
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(await screen.findByText('Cerrar visita')).toBeInTheDocument()
+    expect(screen.queryByText('Iniciar visita')).not.toBeInTheDocument()
+})

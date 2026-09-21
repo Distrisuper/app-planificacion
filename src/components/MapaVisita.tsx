@@ -17,8 +17,13 @@ interface MapaVisitaProps {
      *  gate (no hay contra qué medir: la coordenada se está definiendo recién ahora) y
      *  sin círculo de rango. El punto elegido sale por `onReposicionar`, igual que un
      *  ajuste manual, así el llamador recibe una coordenada aunque el vendedor no toque
-     *  nada. */
-    modo?: 'iniciar' | 'consulta' | 'ubicar'
+     *  nada.
+     *  'cerrar' = el vendedor tocó "Cerrar visita" y la coordenada definitiva lo ubica
+     *  lejos del cliente. Es 'consulta' con CTA: se le impone para que no cierre lejos
+     *  sin darse cuenta, y "Recalcular posición" es su salida si el GPS se equivocó.
+     *  NO es un gate — el CTA nunca se deshabilita por distancia. Ver
+     *  docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md. */
+    modo?: 'iniciar' | 'consulta' | 'ubicar' | 'cerrar'
     nombreCliente: string
     /** Línea de identidad bajo el título: `#10034 · DERQUI AUTOPARTES SRL`. La arma
      *  `identidadCliente` en VisitaFlow — ver ahí por qué la razón social no siempre va.
@@ -35,6 +40,19 @@ interface MapaVisitaProps {
     error?: string | null
     /** Sólo se usa en modo 'iniciar'. */
     onIniciar?: () => void
+    /** Sólo en modo 'cerrar'. Si `alejado`, el llamador es quien pide la confirmación —
+     *  este componente no la muestra. */
+    onCerrar?: () => void
+    /** Sólo en modo 'cerrar': decide la cara del CTA. Viene de `useAlejadoDelCliente`, y
+     *  NO del `fueraDeRango` que este componente calcula para el texto de la distancia:
+     *  la histéresis simétrica del hook (entra con `d − p > radio`, sale con
+     *  `d + p <= radio`) tiene que ser la única fuente de verdad, o las dos pantallas
+     *  terminan discrepando. */
+    alejado?: boolean
+    /** Sólo en modo 'cerrar': el cierre está en vuelo. Paralelo a `iniciando` y no un
+     *  renombre — los dos modos nunca están montados a la vez, pero un prop compartido
+     *  obligaría a leer `modo` para saber qué significa. */
+    cerrando?: boolean
     onCancel: () => void
     /** Cada fix propio del vendedor (watch en vivo y "Recalcular posición"). El watch de
      *  este componente es de ALTA precisión, a diferencia del de useAlejadoDelCliente: por
@@ -81,6 +99,9 @@ export default function MapaVisita({
     iniciando,
     error,
     onIniciar,
+    onCerrar,
+    alejado,
+    cerrando,
     onCancel,
     onFix,
     onReposicionar,
@@ -88,6 +109,14 @@ export default function MapaVisita({
     const esConsulta = modo === 'consulta'
     // "Cliente nuevo": no hay pin previo ni gate — ver el docstring de `modo`.
     const esUbicar = modo === 'ubicar'
+    // 'cerrar' es 'consulta' con CTA: comparte todo lo que NO es el pie.
+    const esCerrar = modo === 'cerrar'
+    // Mover el pin del cliente es una decisión del inicio de la visita. Ni consultando la
+    // posición ni cerrando se ajusta la ubicación del comercio.
+    const sinReposicionar = esConsulta || esCerrar
+    // Los dos modos que miran la posición con la visita ya abierta: ni uno ni otro puede
+    // decir "acercate para iniciar", que ya pasó.
+    const visitaYaAbierta = esConsulta || esCerrar
     const tienePinInicial = latitud != null && longitud != null
     const mapRef = useRef<HTMLDivElement>(null)
     const mapInstance = useRef<L.Map | null>(null)
@@ -408,7 +437,13 @@ export default function MapaVisita({
             <div className="flex items-center justify-between border-b border-dsline px-4 py-3">
                 <div className="min-w-0">
                     <span className="text-[11px] font-extrabold uppercase tracking-wide text-dsmuted">
-                        {esConsulta ? 'Tu posición' : esUbicar ? 'Ubicar el comercio' : 'Iniciar visita'}
+                        {esConsulta
+                            ? 'Tu posición'
+                            : esUbicar
+                              ? 'Ubicar el comercio'
+                              : esCerrar
+                                ? 'Cerrar visita'
+                                : 'Iniciar visita'}
                     </span>
                     <h2 className="truncate text-[16px] font-extrabold text-[#182645]">{nombreCliente}</h2>
                     {identidad && (
@@ -443,7 +478,7 @@ export default function MapaVisita({
                 {!esUbicar && posicion && posicion.fueraDeRango && (
                     <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
                         Estás a {formatDistancia(posicion.distanciaM)} del cliente
-                        {esConsulta
+                        {visitaYaAbierta
                             ? '.'
                             : ` — acercate a menos de ${RADIO_INICIO_METROS} m para iniciar.`}
                     </p>
@@ -460,7 +495,7 @@ export default function MapaVisita({
                 )}
                 {sinUbicacion && (
                     <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
-                        {esConsulta
+                        {visitaYaAbierta
                             ? 'No pudimos ubicarte. Probá al aire libre y tocá "Recalcular posición".'
                             : esUbicar
                               ? 'No pudimos ubicarte: la visita va a quedar sin la ubicación del comercio. Podés iniciar igual.'
@@ -477,7 +512,7 @@ export default function MapaVisita({
                     </p>
                 )}
                 {error && <p className="mb-3 text-[12.5px] font-semibold text-dsred">{error}</p>}
-                {!esConsulta && modoReposicionar && (
+                {!sinReposicionar && modoReposicionar && (
                     <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-dashed border-[#F59E0B] bg-[#FFFBEB] px-3 py-2">
                         <span className="text-[12.5px] font-semibold text-[#92400E]">
                             {esUbicar
@@ -495,7 +530,7 @@ export default function MapaVisita({
                 )}
                 {/* "Restablecer" necesita una coordenada original a la que volver: en
                  *  'ubicar' no existe (el pin lo puso el GPS recién), así que no va. */}
-                {!esConsulta && !esUbicar && overrideCliente && !modoReposicionar && (
+                {!sinReposicionar && !esUbicar && overrideCliente && !modoReposicionar && (
                     <div className="mb-3 flex items-center justify-between gap-2">
                         <span className="text-[12.5px] font-semibold text-dsmuted">
                             Posición ajustada para esta visita
@@ -509,7 +544,7 @@ export default function MapaVisita({
                         </button>
                     </div>
                 )}
-                {!esConsulta && !modoReposicionar && (
+                {!sinReposicionar && !modoReposicionar && (
                     <Button
                         variant="outline"
                         onClick={handleArmarReposicionar}
@@ -552,7 +587,7 @@ export default function MapaVisita({
                         </Button>
                     )}
                 </div>
-                {!esConsulta && (
+                {!visitaYaAbierta && (
                     <Button
                         onClick={onIniciar}
                         loading={iniciando}
@@ -562,6 +597,33 @@ export default function MapaVisita({
                         className="h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90"
                     >
                         {iniciando ? 'Iniciando…' : calculando ? 'Calculando…' : 'Iniciar visita'}
+                    </Button>
+                )}
+                {/* A diferencia del CTA de arriba, este NUNCA se deshabilita por distancia,
+                 *  ni por `calculando`, ni por `sinUbicacion`. Cerrar no tiene gate (el
+                 *  vendedor pudo irse del local por motivos legítimos, y bloquearlo dejaría
+                 *  visitas abiertas para siempre), y un GPS que no responde no puede trabar
+                 *  un cierre. El desvío hasta acá ya cumplió su función: que lo vea. */}
+                {esCerrar && (
+                    <Button
+                        onClick={onCerrar}
+                        loading={cerrando}
+                        className={
+                            alejado
+                                ? 'h-12 w-full bg-[#B45309] text-[15px] hover:bg-[#92400E]'
+                                : 'h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90'
+                        }
+                    >
+                        {cerrando
+                            ? 'Cerrando…'
+                            : alejado
+                              ? // Sin fix todavía no hay metros que mostrar, pero el botón
+                                // igual va en su cara de "lejos": es el estado con el que
+                                // se entró al mapa.
+                                posicion
+                                  ? `Cerrar igual · estás a ${formatDistancia(posicion.distanciaM)}`
+                                  : 'Cerrar igual'
+                              : 'Cerrar visita'}
                     </Button>
                 )}
             </div>
