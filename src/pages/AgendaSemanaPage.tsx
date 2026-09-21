@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
+import BarraTabs from '@/components/BarraTabs'
 import DiaTabs from '@/components/DiaTabs'
 import AgendaBoard from '@/components/AgendaBoard'
 import VisitaFlow, { type IVisitaEnCurso } from '@/components/VisitaFlow'
@@ -15,7 +16,7 @@ import { BuscadorDiaSheet } from '@/components/buscador/BuscadorDiaSheet'
 import { BuscadorGeneralPanel } from '@/components/buscador/BuscadorGeneralPanel'
 import BannerPrueba, { ALTO_BANNER_PRUEBA } from '@/components/prueba/BannerPrueba'
 import CarteraDialog from '@/components/prueba/CarteraDialog'
-import { estaProbando } from '@/lib/roles'
+import { estaProbando, veMetricas } from '@/lib/roles'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useEliminarFila } from '@/hooks/useEliminarFila'
@@ -303,6 +304,18 @@ export default function AgendaSemanaPage() {
     // VisitaFlow es quien lo calcula (no se desmonta mientras haya visita en curso); acá
     // solo se sostiene para pintar VisitaEnCursoBar.
     const [alejado, setAlejado] = useState(false)
+
+    // Vuelta desde "Mi cartera" tocando la barra de visita en curso: abre el sheet y
+    // limpia el param para que un refresh no lo reabra.
+    useEffect(() => {
+        if (searchParams.get('visita') !== 'abrir') return
+        if (visitaEnCurso) abrirPropuesta(visitaEnCurso.cliente)
+        setSearchParams(p => {
+            p.delete('visita')
+            return p
+        }, { replace: true })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams])
 
     // La instancia embebida es del cliente que se estaba mirando. Al cambiar de día — o de
     // semana, que es el mismo tipo de cambio de contexto: el cliente deja de estar en
@@ -631,6 +644,8 @@ export default function AgendaSemanaPage() {
                 </>
             )}
 
+            <BarraTabs />
+
             <VisitaFlow
                 cliente={visitaCliente}
                 visitaEnCurso={visitaEnCurso}
@@ -663,6 +678,7 @@ export default function AgendaSemanaPage() {
                         visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente
                     }
                     alejado={alejado}
+                    sobreBarraTabs={veMetricas(capacidades)}
                     onExpandir={() => abrirPropuesta(visitaEnCurso.cliente)}
                 />
             )}
