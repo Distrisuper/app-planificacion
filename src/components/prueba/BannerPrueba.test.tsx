@@ -8,7 +8,7 @@ const auth = vi.fn()
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth() }))
 vi.mock('./CarteraDialog', () => ({ default: ({ open }: { open: boolean }) => (open ? <div>DIALOGO</div> : null) }))
 
-const cap = (v: boolean, p: boolean, s: boolean) => ({ operaComoVendedor: v, operaComoVendedorDePrueba: p, superviseVendedores: s })
+const cap = (v: boolean, p: boolean, s: boolean) => ({ operaComoVendedor: v, operaComoVendedorDePrueba: p, superviseVendedores: s, veSusMetricas: true })
 const montar = () => render(<MemoryRouter><BannerPrueba /></MemoryRouter>)
 
 it('no se pinta para un vendedor real', () => {

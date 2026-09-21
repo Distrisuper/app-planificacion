@@ -527,15 +527,18 @@ export default function AgendaSemanaPage() {
 
     if (mensajeCuenta) {
         return (
-            <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
-                <p className="text-[14px] font-semibold leading-snug text-[#182645]">{mensajeCuenta}</p>
-                <button
-                    type="button"
-                    onClick={logout}
-                    className="text-[13px] font-semibold text-dsmuted underline"
-                >
-                    Cerrar sesión
-                </button>
+            <div className="flex h-dvh flex-col overflow-hidden bg-[#EEF1F6]">
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
+                    <p className="text-[14px] font-semibold leading-snug text-[#182645]">{mensajeCuenta}</p>
+                    <button
+                        type="button"
+                        onClick={logout}
+                        className="text-[13px] font-semibold text-dsmuted underline"
+                    >
+                        Cerrar sesión
+                    </button>
+                </div>
+                <BarraTabs />
             </div>
         )
     }
@@ -549,37 +552,46 @@ export default function AgendaSemanaPage() {
     if (cicloResuelto && semanaEfectiva === null) {
         if (probando) {
             return (
-                <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center" style={{ paddingTop: ALTO_BANNER_PRUEBA }}>
+                <div
+                    className="flex h-dvh flex-col overflow-hidden bg-[#EEF1F6]"
+                    style={{ paddingTop: ALTO_BANNER_PRUEBA }}
+                >
                     <BannerPrueba />
-                    <p className="text-[14px] font-semibold leading-snug text-[#182645]">
-                        Tu vendedor de prueba todavía no tiene agenda.
-                    </p>
-                    <button
-                        type="button"
-                        onClick={() => setEligiendoCartera(true)}
-                        className="rounded-xl bg-dsnavy px-4 py-2.5 text-[13px] font-bold text-white"
-                    >
-                        Elegir cartera
-                    </button>
-                    <CarteraDialog open={eligiendoCartera} onOpenChange={setEligiendoCartera} onReiniciado={() => setEligiendoCartera(false)} />
+                    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
+                        <p className="text-[14px] font-semibold leading-snug text-[#182645]">
+                            Tu vendedor de prueba todavía no tiene agenda.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setEligiendoCartera(true)}
+                            className="rounded-xl bg-dsnavy px-4 py-2.5 text-[13px] font-bold text-white"
+                        >
+                            Elegir cartera
+                        </button>
+                        <CarteraDialog open={eligiendoCartera} onOpenChange={setEligiendoCartera} onReiniciado={() => setEligiendoCartera(false)} />
+                    </div>
+                    <BarraTabs />
                 </div>
             )
         }
         return (
-            <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
-                <p className="text-[14px] font-semibold leading-snug text-[#182645]">
-                    Todavía no tenés una ruta asignada.
-                </p>
-                <p className="text-[13px] leading-snug text-dsmuted">
-                    Cuando gerencia cargue tu rotación, tu agenda aparece acá.
-                </p>
-                <button
-                    type="button"
-                    onClick={logout}
-                    className="text-[13px] font-semibold text-dsmuted underline"
-                >
-                    Cerrar sesión
-                </button>
+            <div className="flex h-dvh flex-col overflow-hidden bg-[#EEF1F6]">
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
+                    <p className="text-[14px] font-semibold leading-snug text-[#182645]">
+                        Todavía no tenés una ruta asignada.
+                    </p>
+                    <p className="text-[13px] leading-snug text-dsmuted">
+                        Cuando gerencia cargue tu rotación, tu agenda aparece acá.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={logout}
+                        className="text-[13px] font-semibold text-dsmuted underline"
+                    >
+                        Cerrar sesión
+                    </button>
+                </div>
+                <BarraTabs />
             </div>
         )
     }

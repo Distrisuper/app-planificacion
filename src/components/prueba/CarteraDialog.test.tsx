@@ -12,11 +12,11 @@ const auth = vi.fn()
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth() }))
 
 const GERENCIA = {
-    capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+    capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true, veSusMetricas: false },
     vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: null, origenesDisponibles: ['V 2', 'NACHO'] },
 }
 const TESTER = {
-    capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: false },
+    capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: false, veSusMetricas: true },
     vendedorDePrueba: { codigo: 'PRUEBA-9', descripcion: 'Cartera de V 2', origenesDisponibles: ['V 2', 'NACHO'] },
 }
 

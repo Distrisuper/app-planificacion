@@ -30,7 +30,7 @@ beforeEach(() => {
     authMock.mockReturnValue({
         user: { name: 'Jefa', rol: 'admin' },
         logout: vi.fn(),
-        capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+        capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true, veSusMetricas: false },
         vendedoresVisibles: null,
         vendedorDePrueba: null,
     })
@@ -336,7 +336,7 @@ describe('RutaPage', () => {
     it('el selector suma "Mi vendedor de prueba" al final, y acota el roster a vendedoresVisibles', async () => {
         authMock.mockReturnValue({
             user: { name: 'Ana' }, logout: vi.fn(),
-            capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+            capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true, veSusMetricas: false },
             vendedoresVisibles: ['V 2'],
             vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: 'Cartera de V 2', origenesDisponibles: [] },
         })

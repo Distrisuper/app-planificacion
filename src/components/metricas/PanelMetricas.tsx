@@ -24,7 +24,13 @@ interface Props {
 export default function PanelMetricas({ mes, vendedor, propio, columnas = 2, onDetalle }: Props) {
     const { data, isLoading, isError, refetch } = useMetricas({ mes, vendedor })
     const grilla = `grid gap-2.5 ${columnas === 4 ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'}`
-    const ctx = { propio, nombre: data?.sujeto.nombre ?? '' }
+    // Antes de que `data` llegue (o si falló), `data?.sujeto.nombre` es '' y los títulos de
+    // gerencia (`propio: false`) salían como " · mes" — separador pegado a un nombre vacío.
+    // Mientras no hay `data`, se cae a la rama `propio` de `titulo()` (el título sin
+    // prefijo de sujeto, "Mi mes"/"Mi cartera"/etc.): no es exacto para gerencia, pero es
+    // un texto sensato y sin el artefacto, y en cuanto `data` llega el título real toma el
+    // nombre del sujeto.
+    const ctx = { propio: propio || !data, nombre: data?.sujeto.nombre ?? '' }
 
     return (
         <div className="space-y-5 px-4 pb-4 pt-4">
@@ -56,19 +62,21 @@ export default function PanelMetricas({ mes, vendedor, propio, columnas = 2, onD
 }
 
 function renderTile(tile: Tile, data: IMetricas, mes: string, onDetalle?: (a: DetalleArgs) => void) {
-    const comunes = { key: tile.id, titulo: tile.titulo, ayuda: tile.ayuda }
+    // `key` se pasa como prop JSX literal en cada return, no adentro del spread: React 19
+    // avisa (dev warning) cuando `key` viaja escondida dentro de un objeto spreadeado.
+    const comunes = { titulo: tile.titulo, ayuda: tile.ayuda }
     const sinDatos = (
-        <TileSinDatos {...comunes} ancho={tile.forma === 'lista' ? 'doble' : 'simple'}
+        <TileSinDatos key={tile.id} {...comunes} ancho={tile.forma === 'lista' ? 'doble' : 'simple'}
             mensaje={data.fuentes.ventas === 'no_disponible' ? 'Sin datos por ahora' : 'Sin datos'} />
     )
     switch (tile.forma) {
         case 'objetivo': {
             const v = tile.leer(data)
-            return v ? <TileObjetivo {...comunes} formato={tile.formato} valor={v} /> : sinDatos
+            return v ? <TileObjetivo key={tile.id} {...comunes} formato={tile.formato} valor={v} /> : sinDatos
         }
         case 'comparacion': {
             const v = tile.leer(data)
-            return v ? <TileComparacion {...comunes} formato={tile.formato} valor={v} mes={mes} /> : sinDatos
+            return v ? <TileComparacion key={tile.id} {...comunes} formato={tile.formato} valor={v} mes={mes} /> : sinDatos
         }
         case 'lista': {
             const filas = tile.leer(data)
@@ -76,7 +84,7 @@ function renderTile(tile: Tile, data: IMetricas, mes: string, onDetalle?: (a: De
             const onFila = tile.detalle && onDetalle
                 ? (f: FilaLista) => onDetalle({ estado: tile.detalle!(f), titulo: f.etiqueta })
                 : undefined
-            return <TileLista {...comunes} formato={tile.formato} filas={filas} onFila={onFila} />
+            return <TileLista key={tile.id} {...comunes} formato={tile.formato} filas={filas} onFila={onFila} />
         }
     }
 }

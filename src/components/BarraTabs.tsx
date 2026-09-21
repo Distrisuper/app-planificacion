@@ -20,7 +20,19 @@ export default function BarraTabs() {
         <nav
             aria-label="Secciones"
             className="flex shrink-0 border-t border-dsline bg-white"
-            style={{ height: ALTO_BARRA_TABS, paddingBottom: 'env(safe-area-inset-bottom)' }}
+            /* `height` fijo + `paddingBottom` con `border-box` (box-sizing global del
+             *  proyecto) hacía que el padding se RESTARA de los 56px en vez de sumarse: en
+             *  un dispositivo con home indicator grande (~34px en iPhone) los íconos y
+             *  labels quedaban apretados en ~22px. `calc()` hace que el safe-area area sea
+             *  ADITIVA: el contenido siempre tiene sus 56px completos, y el padding crece
+             *  la barra hacia abajo. VisitaEnCursoBar's `sobreBarraTabs` offset (en
+             *  VisitaEnCursoBar.tsx) también se corrigió para sumar
+             *  `env(safe-area-inset-bottom)` — antes solo compensaba los 56px de banda de
+             *  contenido y la barra flotante quedaba tapada por el padding extra. */
+            style={{
+                height: `calc(${ALTO_BARRA_TABS}px + env(safe-area-inset-bottom))`,
+                paddingBottom: 'env(safe-area-inset-bottom)',
+            }}
         >
             {TABS.map(({ to, label, Icono, end }) => (
                 <NavLink

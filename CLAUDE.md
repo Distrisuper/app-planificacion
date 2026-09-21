@@ -286,7 +286,9 @@ Hay **tres capas separadas**, y una operación toca una sola:
   para el reporte de gerencia, pero ya no bloquea nada del lado del vendedor. El día que ese
   umbral vuelva a cambiar, hay que actualizar a mano el texto de
   `ayudaEfectividadOperativa.tsx` — el criterio no se expone por API, así que no se
-  sincroniza solo.
+  sincroniza solo. `src/lib/metricas/catalogo.ts` tiene una SEGUNDA copia hardcodeada del
+  mismo umbral (el `ayuda` del tile "Visitas": "al menos 15 minutos") — si el umbral
+  cambia, actualizar también esa.
 - **Cerrar visita exige un mínimo de `min(2, total ofrecidos)` rubros completos, no todos.**
   Vive en `VisitaSheet.tsx` (`minimoRequerido`/`faltanParaMinimo`). Con 5 rubros propuestos,
   resolver 2 habilita el cierre. Revierte a propósito la decisión del spec

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import AccountMenu from '@/components/AccountMenu'
 import BarraTabs from '@/components/BarraTabs'
 import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
@@ -8,7 +8,7 @@ import DetalleClientesSheet from '@/components/metricas/DetalleClientesSheet'
 import PanelMetricas, { type DetalleArgs } from '@/components/metricas/PanelMetricas'
 import SelectorMes from '@/components/metricas/SelectorMes'
 import { useAuth } from '@/context/AuthContext'
-import { estaProbando } from '@/lib/roles'
+import { estaProbando, veMetricas } from '@/lib/roles'
 import { mesActual } from '@/lib/metricas/mes'
 import { leerVisitaEnCurso } from '@/lib/visitaEnCurso'
 
@@ -21,6 +21,12 @@ export default function CarteraPage() {
     const [mes, setMes] = useState(() => mesActual())
     const [detalle, setDetalle] = useState<DetalleArgs | null>(null)
     const visitaEnCurso = leerVisitaEnCurso()
+
+    // Esta ruta a propósito NO está guardada a nivel router (ver plan: "Simplicidad > una
+    // guarda más", el backend es el gate real). Pero sin esto, alguien sin la capacidad
+    // que llegue acá directo quedaba varado: BarraTabs devuelve null sin ella, así que no
+    // había forma de volver a la agenda.
+    if (!veMetricas(capacidades)) return <Navigate to="/" replace />
 
     return (
         <div
@@ -47,6 +53,11 @@ export default function CarteraPage() {
             <BarraTabs />
             <DetalleClientesSheet detalle={detalle} mes={mes} onClose={() => setDetalle(null)} />
             {visitaEnCurso && (
+                // `alejado` no se pasa: ese cálculo vive en VisitaFlow (compara la posición
+                // en vivo contra el cliente), y VisitaFlow no está montado en esta página.
+                // La barra siempre muestra el estado neutral/en-curso acá, aunque el
+                // vendedor esté realmente lejos — solo en la agenda (donde VisitaFlow SÍ
+                // está montado) puede pintarse "Te alejaste".
                 <VisitaEnCursoBar
                     visitaId={visitaEnCurso.visitaId}
                     nombreCliente={visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente}

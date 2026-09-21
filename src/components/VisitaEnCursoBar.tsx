@@ -35,7 +35,16 @@ export default function VisitaEnCursoBar({
         <button
             onClick={onExpandir}
             data-testid="visita-en-curso-bar"
-            style={{ bottom: sobreBarraTabs ? 12 + ALTO_BARRA_TABS : 12 }}
+            /* `sobreBarraTabs` corre la barra por encima de BarraTabs, que mide
+             *  `ALTO_BARRA_TABS` (56px) de banda de contenido MÁS
+             *  `env(safe-area-inset-bottom)` de padding aditivo (ver el comentario en
+             *  BarraTabs.tsx) — hay que sumar el mismo safe-area acá o esta barra queda
+             *  tapada por ese padding extra en dispositivos con home indicator grande. */
+            style={{
+                bottom: sobreBarraTabs
+                    ? `calc(${12 + ALTO_BARRA_TABS}px + env(safe-area-inset-bottom))`
+                    : 12,
+            }}
             className={`fixed inset-x-3 z-40 flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-white shadow-[0_6px_20px_rgba(180,83,9,.35)] ${PALETA_VISITA_VIVO[estado].barra}`}
         >
             <span className="flex min-w-0 items-center gap-2 text-left">
