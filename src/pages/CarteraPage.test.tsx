@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import CarteraPage from './CarteraPage'
 import * as api from '@/api/metricas'
-import { MOCK_METRICAS } from '@/mocks/metricasMock'
+import { MOCK_CLIENTES, MOCK_METRICAS } from '@/mocks/metricasMock'
 vi.mock('@/api/metricas')
 vi.mock('@/context/AuthContext', () => ({
     useAuth: () => ({ user: { name: 'Mariano Acosta' }, logout: vi.fn(),
@@ -44,5 +44,12 @@ describe('CarteraPage', () => {
         montar()
         fireEvent.click(screen.getByTestId('visita-en-curso-bar'))
         await waitFor(() => expect(screen.getByTestId('url')).toHaveTextContent('/?visita=abrir'))
+    })
+    it('tocar "Inactivo" abre el sheet de clientes', async () => {
+        ;(api.getMetricasClientes as any).mockResolvedValue(MOCK_CLIENTES)
+        montar()
+        await waitFor(() => screen.getByRole('button', { name: /Inactivo/ }))
+        fireEvent.click(screen.getByRole('button', { name: /Inactivo/ }))
+        await waitFor(() => expect(screen.getByText('Clientes inactivos')).toBeInTheDocument())
     })
 })

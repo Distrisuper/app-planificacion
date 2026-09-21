@@ -4,6 +4,7 @@ import AccountMenu from '@/components/AccountMenu'
 import BarraTabs from '@/components/BarraTabs'
 import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import BannerPrueba, { ALTO_BANNER_PRUEBA } from '@/components/prueba/BannerPrueba'
+import DetalleClientesSheet from '@/components/metricas/DetalleClientesSheet'
 import PanelMetricas, { type DetalleArgs } from '@/components/metricas/PanelMetricas'
 import SelectorMes from '@/components/metricas/SelectorMes'
 import { useAuth } from '@/context/AuthContext'
@@ -18,10 +19,7 @@ export default function CarteraPage() {
     const probando = estaProbando(capacidades)
     const navigate = useNavigate()
     const [mes, setMes] = useState(() => mesActual())
-    // `_setDetalle` (no `setDetalle`): TS noUnusedLocals se queja de un setter sin usar,
-    // y el propio estado — Task 7 lo conecta a un sheet de detalle — no se lee todavía.
-    const [, _setDetalle] = useState<DetalleArgs | null>(null)
-    void _setDetalle
+    const [detalle, setDetalle] = useState<DetalleArgs | null>(null)
     const visitaEnCurso = leerVisitaEnCurso()
 
     return (
@@ -44,9 +42,10 @@ export default function CarteraPage() {
             <h1 className="px-4 pt-3 text-[18px] font-extrabold text-dsnavytext">Mi cartera</h1>
             <SelectorMes mes={mes} onCambiar={setMes} />
             <main className="flex-1 overflow-y-auto">
-                <PanelMetricas mes={mes} propio />
+                <PanelMetricas mes={mes} propio onDetalle={setDetalle} />
             </main>
             <BarraTabs />
+            <DetalleClientesSheet detalle={detalle} mes={mes} onClose={() => setDetalle(null)} />
             {visitaEnCurso && (
                 <VisitaEnCursoBar
                     visitaId={visitaEnCurso.visitaId}
