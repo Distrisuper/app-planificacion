@@ -329,7 +329,7 @@ describe('variante Cliente nuevo', () => {
         detalleAlta: { nombre: 'Autopartes Piche', razonSocial: null, direccion: 'San Martín 811' }, ...over,
     })
 
-    it('un cliente nuevo pendiente muestra el chip, la dirección, Editar e Iniciar; sin Propuesta, sin llamar, sin código', () => {
+    it('un cliente nuevo pendiente muestra el chip, la dirección, Datos e Iniciar; sin Propuesta, sin llamar, sin código', () => {
         const onEditarAlta = vi.fn(); const onIniciarVisita = vi.fn()
         render(<ClienteCard cliente={alta()} {...handlers} onEditarAlta={onEditarAlta} onIniciarVisita={onIniciarVisita} />)
         expect(screen.getByText(/cliente nuevo/i)).toBeInTheDocument()
@@ -337,7 +337,7 @@ describe('variante Cliente nuevo', () => {
         expect(screen.queryByText('#ALTA-000009')).not.toBeInTheDocument()
         expect(screen.queryByRole('link', { name: /llamar/i })).not.toBeInTheDocument()
         expect(screen.queryByRole('button', { name: /^propuesta$/i })).not.toBeInTheDocument()
-        fireEvent.click(screen.getByRole('button', { name: /editar/i }))
+        fireEvent.click(screen.getByRole('button', { name: /^datos$/i }))
         expect(onEditarAlta).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
         fireEvent.click(screen.getByRole('button', { name: /iniciar visita/i }))
         expect(onIniciarVisita).toHaveBeenCalled()
