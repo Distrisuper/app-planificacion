@@ -269,6 +269,30 @@ Hay **tres capas separadas**, y una operación toca una sola:
   del radio, así que ningún fix simulado desde ahí podía disparar el aviso. Tampoco restar la
   precisión en la salida (`d − p ≤ 100`): eso sí convierte un fix basura en evidencia de
   cercanía. Y ojo con el nombre: `IniciarVisitaMapa` pasó a llamarse **`MapaVisita`**.
+- **Entre dos fixes gana el mejor, no el último: todo fix pasa por `aceptarFix`.** El
+  `watchPosition` del mapa y el `getCurrentPosition` de "Recalcular posición" escriben en el
+  mismo estado, y el watch **no se pausa** durante el recálculo — sin arbitrar, el vendedor
+  corregía su posición, la veía corregida, y un tick de red de cientos de metros se la
+  revertía un segundo después (el síntoma que se reportaba como "queda lagueado"). Dos
+  reglas, sobre los campos que la propia API da para esto (`coords.accuracy` en metros al
+  95% de confianza, `position.timestamp` en Unix ms): una lectura **anterior** a la vigente
+  se descarta (es el fix cacheado que devuelve `maximumAge`, no información nueva), y una
+  **más nueva pero más gruesa** solo reemplaza si la vigente ya venció (`VIGENCIA_FIX_MS`,
+  30 s — un "estás cerca" de hace medio minuto es peor información que un "estás lejos" de
+  recién). "Recalcular posición" pasa `explicito` y saltea la segunda regla: el vendedor
+  pidió la lectura y hay que mostrarle la que salga, o el botón parece no hacer nada; no
+  abre un agujero porque `estaFueraDeRango` ya descuenta la precisión, así que un fix grueso
+  no puede afirmar lejanía. Y un **error del watch mientras hay un recálculo en vuelo se
+  ignora** (`marcarFixFallido({ deWatch: true })`): el vendedor está esperando SU lectura, y
+  el recálculo ya avisa si termina mal.
+- **"Recalcular posición" usa `obtenerFix()`, las mismas dos etapas que `capturarUbicacion()`.**
+  Era el único pedido de posición a demanda que hacía su propio `getCurrentPosition` de una
+  sola etapa en alta precisión: bajo techo agotaba el timeout y terminaba **siempre** en "No
+  pudimos actualizar tu posición", justo donde la segunda etapa (wifi/antena) sí consigue un
+  fix. `obtenerFix` en `src/lib/geolocation.ts` es ahora la única puerta —devuelve el fix
+  crudo con `precisionM` y `timestamp`— y `capturarUbicacion()` es su formateo para el
+  backend. El `maximumAge > 0` sigue siendo obligatorio y **no se toca**: el comentario de
+  ese archivo explica por qué 0 reintroduce la espera de 23 s.
 - **Cerrar sigue sin gate, pero pasa por el mapa si la coordenada definitiva ubica al
   vendedor lejos.** `VisitaFlow.onCerrarVisita` mide con el `geo` de `capturarUbicacion()`
   —el mismo que se persiste como `coord_final`, así que no agrega espera— y con
