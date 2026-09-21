@@ -28,6 +28,8 @@ pl_rotacion ──┬─ pl_rotacion_semana        el set de semanas + nombre de
                                                              congelada          │
 pl_motivo ─────────────────────────────────────────────────────────────────────┘
    catálogo (niveles: visita | rubro)
+
+pl_catalogo_alta   listas cerradas del relevamiento del cliente nuevo (IVA, pago)
 ```
 
 ## `pl_rotacion` — la vuelta completa
@@ -168,6 +170,19 @@ motivo es un `INSERT`, no un deploy.
 - `requiere_detalle = 1` pide marca/competidor/pct — hoy solo "Precio".
 - Los `motivo_id` van explícitos en el seed porque los tests y el sandbox los referencian. El 16
   ("No lo ofrecí") es el que usa el autocompletado al cerrar la semana.
+
+## `pl_catalogo_alta` — listas cerradas del cliente nuevo
+
+Condición de IVA (`tipo='iva'`) y condición de pago (`tipo='pago'`) del relevamiento del
+comercio. Son **datos y no código** por la misma razón que `pl_motivo`: texto libre se ensucia
+(`RI` / `R.I.` / `resp. inscripto`), el ERP los consume directo, y administración los corrige
+con un `UPDATE`, sin deploy. Qué campo usa qué `tipo` lo dice el esquema (`esquemaAlta.ts`,
+campo `tipo: 'catalogo'`); agregar un catálogo nuevo es sembrar otro `tipo` y apuntar un campo.
+
+- `UNIQUE (tipo, codigo)`: el `codigo` es lo que queda en el JSON de `pl_rotacion_cliente.detalle`.
+- **Baja lógica** (`activo = 0`), nunca `DELETE`: hay JSONs que referencian el código, y el front
+  lo sigue mostrando por descripción aunque esté inactivo.
+- Seed idempotente y seguro para prod: `docs/db-notes/planificacion-catalogo-alta.sql`.
 
 ## `pl_resolucion_motivo` y `pl_visita_rubro` / `pl_visita_rubro_motivo`
 

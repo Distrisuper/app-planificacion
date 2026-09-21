@@ -313,3 +313,43 @@ del plan, y el segundo intento es el que administración quiere. No se deduplica
 - `docs/dominio/tablas.md`: alta de `pl_catalogo_alta`.
 - `docs/db-notes/planificacion-ciclo-tables.sql` (api-vendedores): comentario de la columna
   `detalle` de `pl_rotacion_cliente`, y la tabla nueva.
+
+## Adenda 2026-09-21 · un solo esquema, dueño el backend
+
+Decisión posterior al brainstorming, tomada antes de escribir el plan: el relevamiento tiene que
+poder cambiar de campos sin tocar la app (a futuro se quiere ofrecer el producto a otras empresas,
+y cada una va a pedir sus propios datos para el alta). Eso invalida la parte del diseño que tenía
+**dos registros duplicados** (`CAMPOS_ALTA` en la API y `src/lib/camposAlta.ts` en el front) y
+un formulario con los 16 campos escritos a mano. Queda así:
+
+- **La definición vive en un solo lugar: `esquemaAlta.ts` en api-vendedores**, y la API la sirve
+  por `GET /planificacion/altas/esquema` → `{ secciones, campos, catalogos }`. Es código, no tabla:
+  cambiar campos es un deploy de la API y nunca de la app. Pasarlo a una tabla más adelante es un
+  swap interno detrás del mismo endpoint, sin tocar el front.
+- **El front es 100% genérico.** `RelevamientoSheet`, el contador "N de M", el panel de gerencia
+  y el CSV se dibujan recorriendo el esquema. Ningún componente enumera claves por su nombre; el
+  único campo que el front conoce por clave es `nombre` (es el título de la card) y
+  `contactoNombre` (la precarga del cierre), y los dos se leen con fallback a `null`.
+- **Los tipos de campo son un set cerrado y chico**: `texto`, `textoLargo`, `cuit`, `email`,
+  `catalogo`. Cada tipo tiene un validador en la API y un widget en el front. Extender el
+  relevamiento es agregar una fila al registro; extender el *lenguaje* del relevamiento es agregar
+  un tipo. Las dos cosas están separadas a propósito.
+- **`IDetalleAlta` deja de enumerar claves**: pasa a `{ nombre: string; [clave: string]: string |
+  null }` en los dos repos. `detalle` sigue siendo `JSON NULL` en `pl_rotacion_cliente`, así que un
+  esquema distinto por empresa no necesita DDL.
+- **`/altas/catalogos` no existe como endpoint aparte**: los catálogos viajan dentro del esquema.
+  Si la lectura de `pl_catalogo_alta` falla, el endpoint responde igual con `catalogos: null` y el
+  front deshabilita solo los selects — el resto del formulario sigue operativo (misma intención que
+  la sección 3, con un solo request).
+
+Tres desvíos respecto del texto de arriba, detectados leyendo el código:
+
+1. **`creadaEl` no existe**: `pl_rotacion_cliente` no tiene columna de creación (el DDL la
+   reemplazó a propósito por la bitácora `pl_reacomodacion`). La tabla de gerencia ordena por
+   `rotacionClienteId` desc (mismo orden de creación) y muestra `fechaVisita`. No se agrega
+   columna.
+2. **Son 15 claves, no 16**: la tabla de la sección 1 enumera 15. Ningún texto hardcodea el total;
+   sale de `campos.length`.
+3. **El panel de detalle de gerencia es el mismo `aside` que `DetalleVisitaPanel`** (ancho completo
+   en mobile, `max-w-md` en desktop). No se hace la variante `BottomSheet`: `/analitica` es
+   desktop-first y el `aside` ya se adapta.
