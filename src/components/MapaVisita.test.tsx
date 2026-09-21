@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import MapaVisita from './MapaVisita'
@@ -162,7 +162,8 @@ it('no bloquea con un fix impreciso aunque marque lejos', () => {
 it('si falla el recálculo pero ya había una posición conocida, no muestra el aviso contradictorio de "podés iniciar igual"', async () => {
     const { getCurrentPosition } = mockGeolocation(
         (ok: any) => ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } }),
-        (_ok: any, fail: any) => fail(),
+        // La API siempre pasa un GeolocationPositionError; 2 = POSITION_UNAVAILABLE.
+        (_ok: any, fail: any) => fail({ code: 2 }),
     )
     render(
         <MapaVisita
@@ -597,4 +598,103 @@ it('modo cerrar: el eyebrow dice "Cerrar visita", no "Iniciar visita"', async ()
     )
     expect(await screen.findByText('Cerrar visita')).toBeInTheDocument()
     expect(screen.queryByText('Iniciar visita')).not.toBeInTheDocument()
+})
+
+// ── Arbitraje entre fixes: el watch de fondo no puede pisar un recálculo ─────────────
+//
+// El watch (`watchPosition`) y "Recalcular posición" (`getCurrentPosition`) escriben en
+// el mismo estado. Sin arbitraje gana el último que llega, y el watch sigue vivo durante
+// el recálculo: el vendedor corrige su posición, la ve corregida, y medio segundo después
+// un tick de red de cientos de metros la revierte. Eso es lo que se lee como "quedó
+// lagueado". Ver `aceptarFix` en MapaVisita.tsx y el bullet de CLAUDE.md.
+
+it('un fix grueso posterior del watch no pisa el recálculo fino que pidió el vendedor', async () => {
+    let okWatch: any
+    mockGeolocation(
+        (ok: any) => {
+            okWatch = ok
+            ok({ coords: { latitude: -34.61, longitude: -58.4, accuracy: 10 } })
+        },
+        (ok: any) => ok({ coords: { latitude: -34.6001, longitude: -58.4, accuracy: 8 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(await screen.findByText(/estás a 1112 m/i)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /recalcular posición/i }))
+    expect(await screen.findByText(/estás a 11 m/i)).toBeInTheDocument()
+
+    // Mismo punto lejano que el fix inicial, pero resuelto por red: 1500 m de margen de
+    // error no prueban nada, y no pueden borrar la lectura fina de hace un instante.
+    await act(async () => {
+        okWatch({ coords: { latitude: -34.61, longitude: -58.4, accuracy: 1500 } })
+    })
+    expect(screen.getByText(/estás a 11 m/i)).toBeInTheDocument()
+    expect(screen.queryByText(/estás a 1112 m/i)).not.toBeInTheDocument()
+})
+
+it('un error del watch mientras el vendedor recalcula no le pinta "no pudimos actualizar"', async () => {
+    let failWatch: any
+    mockGeolocation(
+        (ok: any, fail: any) => {
+            failWatch = fail
+            ok({ coords: { latitude: -34.61, longitude: -58.4, accuracy: 10 } })
+        },
+        // Nunca resuelve: deja el recálculo en vuelo para poder fallar el watch encima.
+        () => {},
+    )
+    render(
+        <MapaVisita
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /recalcular posición/i }))
+
+    await act(async () => failWatch({ code: 2 }))
+
+    // El vendedor pidió una lectura y está esperándola: que el watch de fondo le avise
+    // que ÉL falló es ruido sobre la acción en curso.
+    expect(screen.queryByText(/no pudimos actualizar tu posición/i)).not.toBeInTheDocument()
+})
+
+it('el recálculo reintenta con precisión gruesa cuando el GPS fino falla', async () => {
+    // Bajo techo la etapa fina no resuelve nunca. Con un solo intento, "Recalcular
+    // posición" termina siempre en "No pudimos actualizar tu posición" aunque el fix de
+    // wifi/antena estuviera disponible — mismas dos etapas que `capturarUbicacion()`.
+    const { getCurrentPosition } = mockGeolocation(() => {})
+    getCurrentPosition
+        .mockImplementationOnce((_ok: any, fail: any) => fail({ code: 2 }))
+        .mockImplementationOnce((ok: any) =>
+            ok({ coords: { latitude: -34.6001, longitude: -58.4, accuracy: 900 } }),
+        )
+    render(
+        <MapaVisita
+            open
+            modo="consulta"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCancel={() => {}}
+        />,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /recalcular posición/i }))
+
+    expect(await screen.findByText(/estás a 11 m/i)).toBeInTheDocument()
+    expect(getCurrentPosition).toHaveBeenCalledTimes(2)
+    expect((getCurrentPosition.mock.calls[1][2] as PositionOptions).enableHighAccuracy).toBe(false)
+    expect(screen.queryByText(/no pudimos actualizar tu posición/i)).not.toBeInTheDocument()
 })
