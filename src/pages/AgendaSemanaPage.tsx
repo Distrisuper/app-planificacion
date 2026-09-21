@@ -8,6 +8,7 @@ import VisitaFlow, { type IVisitaEnCurso } from '@/components/VisitaFlow'
 import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import AppExternaSheet from '@/components/AppExternaSheet'
 import ClienteNuevoSheet, { type ModoClienteNuevo } from '@/components/ClienteNuevoSheet'
 import { BuscadorDiaSheet } from '@/components/buscador/BuscadorDiaSheet'
@@ -17,6 +18,7 @@ import CarteraDialog from '@/components/prueba/CarteraDialog'
 import { estaProbando } from '@/lib/roles'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
+import { useEliminarFila } from '@/hooks/useEliminarFila'
 import { useMotivos } from '@/hooks/useMotivos'
 import { useNoVisita, useNoVisitaSobreVisitaAbierta, useReintentarSeguimiento } from '@/hooks/useVisitas'
 import { useNotificacion } from '@/hooks/useNotificacion'
@@ -25,6 +27,7 @@ import { abrirAppExternaEnPestana } from '@/lib/appsExternas'
 import { Notification } from '@/components/ui/Notification'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
+import { titleCaseNombre } from '@/lib/textFormat'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
 import { leerVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 import { limpiarInicioVisita } from '@/lib/visitaTimer'
@@ -40,6 +43,20 @@ const NOMBRE_DIA: Record<Dia, string> = {
     MIE: 'miércoles',
     JUE: 'jueves',
     VIE: 'viernes',
+}
+
+/** El 409 de la API traducido a algo que el vendedor pueda leer parado en la calle. */
+function mensajeDeEliminar(err: unknown): string {
+    switch (errorCode(err)) {
+        case 'FILA_RESUELTA':
+            return 'Este cliente ya se resolvió, así que no se puede sacar.'
+        case 'VISITA_EN_CURSO':
+            return 'Tenés la visita abierta: cerrala antes de sacarlo.'
+        case 'FILA_PLANIFICADA':
+            return 'Este cliente es parte de tu recorrido: para sacarlo hablá con tu supervisor.'
+        default:
+            return 'No se pudo sacar de tu agenda. Volvé a intentar.'
+    }
 }
 
 const MENSAJE_GEO = {
@@ -79,6 +96,7 @@ export default function AgendaSemanaPage() {
     const reacomodar = useReacomodar()
     const noVisita = useNoVisita()
     const noVisitaAbierta = useNoVisitaSobreVisitaAbierta()
+    const eliminarFila = useEliminarFila()
     const reintentarSeguimiento = useReintentarSeguimiento()
     const { data: motivosVisita = [] } = useMotivos('visita')
     const { notificacion, mostrar, ocultar } = useNotificacion()
@@ -247,6 +265,7 @@ export default function AgendaSemanaPage() {
     const [directoAMapa, setDirectoAMapa] = useState(false)
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
+    const [eliminarCliente, setEliminarCliente] = useState<IAgendaClient | null>(null)
     // El día destino del "+" que se tocó. null = sheet cerrado. Es el día del ENCABEZADO,
     // no `diaActivo`: el board scrollea entre columnas y los dos pueden diferir por un
     // instante mientras el swipe se asienta.
@@ -411,6 +430,23 @@ export default function AgendaSemanaPage() {
         const cliente = estadoVisitaCliente
         setEstadoVisitaCliente(null)
         setNoVisitaCliente(cliente)
+    }
+
+    function onElegirEliminar() {
+        const cliente = estadoVisitaCliente
+        setEstadoVisitaCliente(null)
+        setEliminarCliente(cliente)
+    }
+
+    async function onConfirmEliminar() {
+        const cliente = eliminarCliente
+        if (!cliente) return
+        try {
+            await eliminarFila.mutateAsync(cliente.rotacionClienteId)
+            mostrar('exito', 'Lo sacamos de tu agenda')
+        } catch (err) {
+            mostrar('error', mensajeDeEliminar(err))
+        }
     }
 
     // El visitaId no puede salir sólo del snapshot de la agenda: si la visita se inició en
@@ -655,8 +691,31 @@ export default function AgendaSemanaPage() {
                 semanasDisponibles={semanas ?? []}
                 onReagendar={onReagendar}
                 onElegirNoVisita={onElegirNoVisita}
+                // Solo lo que el vendedor agregó a mano y sigue pendiente: lo planificado
+                // es la línea de base (lo saca gerencia desde /analitica/ruta), y una fila
+                // resuelta o en curso la rebota la API igual.
+                onEliminar={
+                    estadoVisitaCliente?.esExtra &&
+                    estadoVisitaCliente.estado === 'pendiente' &&
+                    !visitaAbiertaDe(estadoVisitaCliente)
+                        ? onElegirEliminar
+                        : undefined
+                }
                 onClose={() => setEstadoVisitaCliente(null)}
             />
+            {eliminarCliente && (
+                <ConfirmDialog
+                    open
+                    onOpenChange={abierto => {
+                        if (!abierto) setEliminarCliente(null)
+                    }}
+                    title={`¿Sacar a ${titleCaseNombre(eliminarCliente.nombreFantasia || eliminarCliente.nombreCliente)} de tu agenda?`}
+                    description="Solo se saca de esta vuelta."
+                    confirmLabel="Sacar"
+                    destructivo
+                    onConfirm={onConfirmEliminar}
+                />
+            )}
             {/* `ocultar` y no `desmontar`: cerrar deja las instancias vivas para que reabrir
                 el mismo cliente sea instantáneo. */}
             {appExterna.clienteActivo && Object.keys(appExterna.montadas).length > 0 && (

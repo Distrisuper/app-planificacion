@@ -986,3 +986,76 @@ it('con capacidades de prueba muestra el banner arriba de la agenda', async () =
     renderPage()
     expect(await screen.findByText(/Modo prueba · Cartera de V 2/)).toBeInTheDocument()
 })
+
+describe('sacar de la agenda', () => {
+    it('una fila agregada a mano se saca, y confirma antes de llamar a la API', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({
+            ...semanaVacia,
+            LUN: [{ ...clienteLunes, esExtra: true }],
+        })
+        ;(api.eliminarFilaPropia as any).mockResolvedValue(undefined)
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByText('Sacar de mi agenda'))
+
+        // Confirma antes: el diálogo está, y la API todavía no se llamó.
+        expect(await screen.findByText(/de tu agenda\?/i)).toBeInTheDocument()
+        expect(api.eliminarFilaPropia).not.toHaveBeenCalled()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Sacar' }))
+        await waitFor(() => expect(api.eliminarFilaPropia).toHaveBeenCalledWith(42))
+        expect(await screen.findByText('Lo sacamos de tu agenda')).toBeInTheDocument()
+    })
+
+    it('cancelar el diálogo no llama a la API', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({
+            ...semanaVacia,
+            LUN: [{ ...clienteLunes, esExtra: true }],
+        })
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByText('Sacar de mi agenda'))
+        fireEvent.click(await screen.findByRole('button', { name: 'Cancelar' }))
+
+        expect(api.eliminarFilaPropia).not.toHaveBeenCalled()
+    })
+
+    it('una fila planificada no ofrece la salida', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({
+            ...semanaVacia,
+            LUN: [{ ...clienteLunes, esExtra: false }],
+        })
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        await screen.findByText('No visité')
+        expect(screen.queryByText('Sacar de mi agenda')).not.toBeInTheDocument()
+    })
+
+    it('si la fila ya se resolvió, el 409 se lee con palabras del vendedor', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({
+            ...semanaVacia,
+            LUN: [{ ...clienteLunes, esExtra: true }],
+        })
+        ;(api.eliminarFilaPropia as any).mockRejectedValue({
+            response: { data: { code: 'FILA_RESUELTA' } },
+        })
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByText('Sacar de mi agenda'))
+        fireEvent.click(screen.getByRole('button', { name: 'Sacar' }))
+
+        expect(await screen.findByText(/ya se resolvió/i)).toBeInTheDocument()
+    })
+})

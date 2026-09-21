@@ -310,6 +310,14 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `PUT /visitas/:id/cerrar` acepta cerrar con cero resoluciones, así que un bundle viejo
   cacheado se lo saltea igual.
 - **"Cliente nuevo" (visita de alta) es una fila del plan con `tipo='alta'`, no una tabla ni un cliente genérico.** Código sintético `ALTA-<id>`, datos del comercio en `pl_rotacion_cliente.detalle`, contacto en `pl_resolucion.detalle`. Sin propuesta, sin mapa, sin gate de distancia; gate de cierre propio (un ofrecimiento o una observación, `puedeCerrarAlta`). Cromo va al genérico 09895 con etiqueta `ALTA`. Ver `docs/dominio/modelo.md`, "La visita de alta".
+- **"Sacar de mi agenda" solo alcanza a lo que el vendedor agregó a mano** (`es_extra = 1`:
+  extras del buscador y altas) y solo mientras esté pendiente. Es un soft-delete de la fila
+  (`DELETE /planificacion/rotacion-cliente/:id`), **no un hecho**: no crea `pl_resolucion` ni
+  contamina el `GROUP BY` de motivos. Una fila planificada rebota `409 FILA_PLANIFICADA` — sacarla
+  achicaría el denominador de cobertura, y eso es de gerencia. El vendedor no tiene deshacer:
+  confirma antes, y restaura gerencia. Vive en `EstadoVisitaSheet` (`onEliminar`, que la página
+  pasa solo si corresponde) y en `VisitasService.quitarFilaPropia`. Ver
+  `docs/dominio/modelo.md`, "Sacar de la agenda lo que se agregó a mano".
 - **El cronómetro de la visita abierta es un semáforo, y sus umbrales NO son el criterio de
   validez.** `src/lib/estadoDuracion.ts`: ámbar <15 min (`arranque`), **verde 15–90**
   (`valida`, bordes inclusive), ámbar >90 (`larga`), y `alejado` gana sobre las tres. Lo

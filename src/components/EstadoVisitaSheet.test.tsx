@@ -79,4 +79,24 @@ describe('EstadoVisitaSheet', () => {
         render(<EstadoVisitaSheet {...PROPS_BASE} estadoActual="no_visita" />)
         expect(screen.getByRole('button', { name: /ya registrado/i })).toBeDisabled()
     })
+
+    it('sin onEliminar no ofrece sacar de la agenda: una fila planificada no se saca', () => {
+        render(<EstadoVisitaSheet {...PROPS_BASE} />)
+        expect(screen.queryByRole('button', { name: /sacar de mi agenda/i })).not.toBeInTheDocument()
+    })
+
+    it('con onEliminar ofrece la salida y la llama al tocarla', () => {
+        const onEliminar = vi.fn()
+        render(<EstadoVisitaSheet {...PROPS_BASE} onEliminar={onEliminar} />)
+        fireEvent.click(screen.getByRole('button', { name: /sacar de mi agenda/i }))
+        expect(onEliminar).toHaveBeenCalledTimes(1)
+    })
+
+    it('sacar de la agenda no toca la selección de día: no es un reagendado', () => {
+        const onReagendar = vi.fn()
+        render(<EstadoVisitaSheet {...PROPS_BASE} onReagendar={onReagendar} onEliminar={vi.fn()} />)
+        fireEvent.click(screen.getByRole('button', { name: /sacar de mi agenda/i }))
+        expect(onReagendar).not.toHaveBeenCalled()
+        expect(screen.getByRole('button', { name: /elegí un día/i })).toBeDisabled()
+    })
 })

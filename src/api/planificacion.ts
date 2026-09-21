@@ -293,6 +293,12 @@ export const reintentarAlta = async (rotacionClienteId: number, dia: number): Pr
     return res.data.data
 }
 
+/** "Sacar de mi agenda": soft-delete de una fila que el vendedor agregó a mano (`es_extra`).
+ *  La API valida que sea suya y que no esté resuelta; el id del vendedor sale del token. */
+export const eliminarFilaPropia = async (rotacionClienteId: number): Promise<void> => {
+    await apiClient.delete(`/planificacion/rotacion-cliente/${rotacionClienteId}`)
+}
+
 // ── Identidad y vendedor de prueba ──────────────────────────────────────────────
 
 /** Qué puede hacer el usuario en planificación, según el backend. El front NO tiene tabla de

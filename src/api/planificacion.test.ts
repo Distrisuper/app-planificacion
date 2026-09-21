@@ -23,6 +23,7 @@ import {
     crearAlta,
     editarAlta,
     reintentarAlta,
+    eliminarFilaPropia,
     getMePlanificacion,
     reiniciarPrueba,
 } from './planificacion'
@@ -458,6 +459,12 @@ describe('altas', () => {
         expect(apiClient.post).toHaveBeenCalledWith('/planificacion/altas/9/reintentar', {
             dia: 4,
         })
+    })
+
+    it('eliminarFilaPropia pega al DELETE de la fila del vendedor', async () => {
+        ;(apiClient.delete as Mock).mockResolvedValue({ data: { ok: 1 } })
+        await eliminarFilaPropia(42)
+        expect(apiClient.delete).toHaveBeenCalledWith('/planificacion/rotacion-cliente/42')
     })
 })
 
