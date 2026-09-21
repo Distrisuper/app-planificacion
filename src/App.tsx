@@ -7,6 +7,7 @@ import { puedeOperarComoVendedor, supervisa } from '@/lib/roles'
 import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
 import CarteraPage from '@/pages/CarteraPage'
 import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
+import AnaliticaMetricasPage from '@/pages/AnaliticaMetricasPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
 import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
@@ -40,6 +41,7 @@ export default function App() {
                                 path="/analitica/vendedor/:codigo"
                                 element={<AnaliticaVendedorPage />}
                             />
+                            <Route path="/analitica/metricas" element={<AnaliticaMetricasPage />} />
                             <Route path="/analitica/ruta" element={<RutaPage />} />
                         </Route>
                         <Route path="/login" element={<LoginPage />} />
