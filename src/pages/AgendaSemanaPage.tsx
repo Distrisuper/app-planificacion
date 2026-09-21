@@ -446,8 +446,6 @@ export default function AgendaSemanaPage() {
             mostrar('exito', 'Lo sacamos de tu agenda')
         } catch (err) {
             mostrar('error', mensajeDeEliminar(err))
-        } finally {
-            setEliminarCliente(null)
         }
     }
 
@@ -697,7 +695,9 @@ export default function AgendaSemanaPage() {
                 // es la línea de base (lo saca gerencia desde /analitica/ruta), y una fila
                 // resuelta o en curso la rebota la API igual.
                 onEliminar={
-                    estadoVisitaCliente?.esExtra && estadoVisitaCliente.estado === 'pendiente'
+                    estadoVisitaCliente?.esExtra &&
+                    estadoVisitaCliente.estado === 'pendiente' &&
+                    !visitaAbiertaDe(estadoVisitaCliente)
                         ? onElegirEliminar
                         : undefined
                 }
