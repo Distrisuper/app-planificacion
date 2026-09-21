@@ -659,6 +659,7 @@ export default function AgendaSemanaPage() {
                 onAviso={mostrar}
                 onAbrirAppExterna={abrirAppExternaEnPestana}
                 onAlejadoChange={setAlejado}
+                onDatosComercio={setRelevamiento}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar

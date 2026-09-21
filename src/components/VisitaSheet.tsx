@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, WifiOff, X } from 'lucide-react'
+import { Loader2, Pencil, WifiOff, X } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -107,10 +107,18 @@ interface VisitaSheetProps {
     onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
     /** Abre MapaVisita en modo consulta. Sólo tiene sentido junto con `alejado`. */
     onVerPosicion?: () => void
-    /** Si se pasa y la visita está abierta, el menú `⋯` del header ofrece "No visité".
-     *  Recibe cuántos rubros llevaba completos, para que el llamador pueda avisarle al
-     *  vendedor que esos no van a contar. */
+    /** Si se pasa y la visita está abierta, la línea de identidad del header ofrece "No
+     *  visité". Recibe cuántos rubros llevaba completos, para que el llamador pueda
+     *  avisarle al vendedor que esos no van a contar. */
     onNoVisita?: (rubrosCargados: number) => void
+    /** Sólo `esAlta` con la visita abierta: abre "Datos del comercio" (RelevamientoSheet)
+     *  desde la línea de identidad del header, al lado de "No visité". Con la visita
+     *  cerrada no se muestra: el backend rebota FILA_RESUELTA y no hay nada que editar. */
+    onDatosComercio?: () => void
+    /** Sólo `esAlta`: `detalleAlta.contactoNombre`. Precarga "Con quién hablaste" si está
+     *  vacío; editable, y nunca pisa lo que el vendedor ya tipeó. Dos conceptos distintos
+     *  que conviven: el contacto del COMERCIO (plan) y con quién habló ESTA vez (hecho). */
+    contactoSugerido?: string | null
 }
 
 export default function VisitaSheet({
@@ -131,6 +139,8 @@ export default function VisitaSheet({
     onAbrirAppExterna,
     onVerPosicion,
     onNoVisita,
+    onDatosComercio,
+    contactoSugerido = null,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
     const estadoVivo = estadoVisitaVivo(segundos, alejado)
@@ -170,6 +180,12 @@ export default function VisitaSheet({
     // son opcionales y el flujo de alta es corto.
     const [contacto, setContacto] = useState('')
     const [fechaNacimiento, setFechaNacimiento] = useState('')
+    // Al abrir (y si el sugerido cambia), sólo si el campo está vacío. `contacto` no está en
+    // las deps a propósito: si estuviera, borrar el campo lo volvería a llenar.
+    useEffect(() => {
+        if (!open || !esAlta || !contactoSugerido) return
+        setContacto(prev => (prev.trim() === '' ? contactoSugerido : prev))
+    }, [open, esAlta, contactoSugerido])
     const [borradorListo, setBorradorListo] = useState(false)
     const [descuentosAbierto, setDescuentosAbierto] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
@@ -471,11 +487,26 @@ export default function VisitaSheet({
             </button>
         ) : null
 
+    // Mismo estilo que ChipDescuentos (consulta/edición, no la salida negativa), y ANTES de
+    // "No visité": lo negativo queda al borde. Sin menú intermedio (ver comentario de arriba).
+    const botonDatos =
+        esAlta && !visitaCerrada && onDatosComercio ? (
+            <button
+                type="button"
+                onClick={onDatosComercio}
+                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 text-[11px] font-bold text-violet-700"
+            >
+                <Pencil className="h-[12px] w-[12px]" strokeWidth={2.4} />
+                Datos
+            </button>
+        ) : null
+
     // El de descuentos primero: es el de consulta, y la salida negativa queda al borde.
     const acciones =
-        chipDescuentos || botonNoVisita ? (
+        chipDescuentos || botonDatos || botonNoVisita ? (
             <div className="flex items-center gap-1.5">
                 {chipDescuentos}
+                {botonDatos}
                 {botonNoVisita}
             </div>
         ) : undefined

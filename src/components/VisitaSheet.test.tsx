@@ -51,6 +51,16 @@ function renderSheet(over: Record<string, unknown> = {}) {
     return { onCerrarVisita }
 }
 
+function renderSheetConRerender(over: Record<string, unknown> = {}) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const base = { open: true, visitaId: 42, nombreCliente: 'Almacén Don José', visitaCerrada: false, onCerrarVisita: vi.fn(), onClose: () => {} }
+    const ui = (p: Record<string, unknown>) => (
+        <QueryClientProvider client={qc}><VisitaSheet {...(base as any)} {...p} /></QueryClientProvider>
+    )
+    const r = render(ui(over))
+    return { rerender: (p: Record<string, unknown>) => r.rerender(ui(p)) }
+}
+
 /** "Saqué pedido" es `ganado`, así que vive detrás del segmento Cierre del formulario
  *  de resolución — Objeción es el que abre por defecto. Estos tests son sobre el wizard
  *  y el borrador, no sobre el segmentado, así que el paso va en un helper. */
@@ -1144,6 +1154,37 @@ describe('cliente nuevo (esAlta)', () => {
 
         expect(await screen.findByText(/cliente nuevo/i)).toBeInTheDocument()
         expect(screen.queryByText(/propuesta comercial/i)).not.toBeInTheDocument()
+    })
+
+    it('muestra "Datos" en la línea de identidad solo con esAlta, visita abierta y handler', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        const onDatosComercio = vi.fn()
+        renderSheet({ esAlta: true, enCurso: true, onDatosComercio })
+        fireEvent.click(await screen.findByRole('button', { name: /^datos$/i }))
+        expect(onDatosComercio).toHaveBeenCalled()
+    })
+
+    it('con la visita cerrada no hay botón Datos aunque haya handler', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({ esAlta: true, visitaCerrada: true, onDatosComercio: vi.fn() })
+        await screen.findByText(/cliente nuevo/i)
+        expect(screen.queryByRole('button', { name: /^datos$/i })).not.toBeInTheDocument()
+    })
+
+    it('un cliente real no muestra Datos aunque se pase el handler', async () => {
+        renderSheet({ enCurso: true, onDatosComercio: vi.fn() })
+        await screen.findByText('Amortiguadores')
+        expect(screen.queryByRole('button', { name: /^datos$/i })).not.toBeInTheDocument()
+    })
+
+    it('precarga "Con quién hablaste" con contactoSugerido, y NO pisa lo ya tipeado', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        const { rerender } = renderSheetConRerender({ esAlta: true, enCurso: true, contactoSugerido: 'Gustavo' })
+        const input = await screen.findByLabelText(/con quién hablaste/i)
+        expect(input).toHaveValue('Gustavo')
+        fireEvent.change(input, { target: { value: 'Marta' } })
+        rerender({ esAlta: true, enCurso: true, contactoSugerido: 'Gustavo Pérez' })
+        expect(screen.getByLabelText(/con quién hablaste/i)).toHaveValue('Marta')
     })
 })
 

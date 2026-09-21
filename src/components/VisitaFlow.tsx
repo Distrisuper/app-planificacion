@@ -60,6 +60,9 @@ interface VisitaFlowProps {
      *  diferencia de VisitaSheet, que se minimiza); quien lo renderiza es el padre, en
      *  VisitaEnCursoBar. */
     onAlejadoChange?: (alejado: boolean) => void
+    /** Abre "Datos del comercio" del cliente de esta visita (sólo si es alta). Lo dueño es la
+     *  página: el RelevamientoSheet es uno solo, compartido con la card. */
+    onDatosComercio?: (cliente: IAgendaClient) => void
 }
 
 /**
@@ -79,6 +82,7 @@ export default function VisitaFlow({
     onAviso,
     onAbrirAppExterna,
     onAlejadoChange,
+    onDatosComercio,
 }: VisitaFlowProps) {
     const { capacidades } = useAuth()
     const iniciar = useIniciarVisita()
@@ -466,6 +470,8 @@ export default function VisitaFlow({
                     alejado={alejado && esClienteEnCurso}
                     onVerPosicion={() => setVerPosicion(true)}
                     onNoVisita={rubros => setNoVisitaRubros(rubros)}
+                    onDatosComercio={clienteEsAlta && onDatosComercio ? () => onDatosComercio(cliente) : undefined}
+                    contactoSugerido={clienteEsAlta ? cliente.detalleAlta?.contactoNombre ?? null : null}
                 />
             )}
             <ResolucionSheet
