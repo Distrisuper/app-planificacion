@@ -1,4 +1,6 @@
-import type { IAlcance, ResultadoMotivo, TipoOfrecimiento, TipoResolucion } from './planificacion'
+import type {
+    IAlcance, ResultadoMotivo, TipoOfrecimiento, TipoResolucion, EstadoCicloCliente, IDetalleAlta, IDetalleContactoAlta,
+} from './planificacion'
 
 export interface ICoord {
     lat: number
@@ -175,4 +177,17 @@ export interface IObjecionesResumen {
 export interface IVendedorOpcion {
     codigoParticularVendedor: string
     nombreVendedor: string
+}
+
+/** GET /planificacion/analitica/altas. Una por fila del plan tipo='alta' (un reintento
+ *  aparece aparte, a propósito). Espejo del backend. */
+export interface IAltaRelevada {
+    rotacionClienteId: number
+    vendedor: { codigo: string; nombre: string }
+    estado: EstadoCicloCliente
+    fechaVisita: string | null
+    detalle: IDetalleAlta | null
+    contacto: IDetalleContactoAlta | null
+    camposCargados: number
+    camposTotal: number
 }

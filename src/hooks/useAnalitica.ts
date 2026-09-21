@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import {
+    getAltas,
     getObjeciones,
     getResumen,
     getVendedores,
@@ -31,6 +32,8 @@ export const analiticaKeys = {
     objeciones: (a: IObjecionesArgs) =>
         ['analitica', 'objeciones', a.desde, a.hasta, a.zona ?? '', a.rubro ?? ''] as const,
     vendedores: () => ['analitica', 'vendedores'] as const,
+    altas: (f: IAnaliticaFiltro) =>
+        ['analitica', 'altas', f.desde, f.hasta, (f.vendedores ?? []).join(',')] as const,
 }
 
 export function useResumen(filtro: IAnaliticaFiltro) {
@@ -81,5 +84,12 @@ export function useVendedores(opts?: { enabled?: boolean }) {
         queryFn: getVendedores,
         staleTime: 30 * 60 * 1000,
         enabled: opts?.enabled ?? true,
+    })
+}
+
+export function useAltasRelevadas(filtro: IAnaliticaFiltro) {
+    return useQuery({
+        queryKey: analiticaKeys.altas(filtro),
+        queryFn: () => getAltas(filtro),
     })
 }
