@@ -292,7 +292,11 @@ Hay **tres capas separadas**, y una operación toca una sola:
   fix. `obtenerFix` en `src/lib/geolocation.ts` es ahora la única puerta —devuelve el fix
   crudo con `precisionM` y `timestamp`— y `capturarUbicacion()` es su formateo para el
   backend. El `maximumAge > 0` sigue siendo obligatorio y **no se toca**: el comentario de
-  ese archivo explica por qué 0 reintroduce la espera de 23 s.
+  ese archivo explica por qué 0 reintroduce la espera de 23 s. Y **un fix que el arbitraje
+  descarta no es un fix que falló**: son ramas distintas en `handleRecalcular`. Bajo techo
+  la etapa 2 puede devolver un fix de red MÁS VIEJO que el del watch, y ahí `aceptarFix` lo
+  rechaza con razón — pero avisar "No pudimos actualizar tu posición" sería el mismo cartel
+  que este arreglo vino a sacar, con la lectura hecha y la distancia correcta en pantalla.
 - **Cerrar sigue sin gate, pero pasa por el mapa si la coordenada definitiva ubica al
   vendedor lejos.** `VisitaFlow.onCerrarVisita` mide con el `geo` de `capturarUbicacion()`
   —el mismo que se persiste como `coord_final`, así que no agrega espera— y con

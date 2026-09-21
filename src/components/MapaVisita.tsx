@@ -398,12 +398,19 @@ export default function MapaVisita({
         setRecalculando(false)
         recalculandoRef.current = false
         setCalculando(false)
-        // `explicito`: lo pidió el vendedor, así que se le muestra la lectura que salga
-        // aunque sea más gruesa que la vigente. Ver `aceptarFix`.
-        if (!res.ok || !aceptarFix(res.fix, true)) {
+        if (!res.ok) {
             marcarFixFallido()
             return
         }
+        // Que el arbitraje lo descarte NO es un fracaso, y se sale sin cartel. La rama
+        // existe por el encuentro de dos arreglos de este mismo commit: bajo techo la
+        // etapa 1 falla y la 2 devuelve el fix de red, que puede ser MÁS VIEJO que el que
+        // el watch ya tenía (regla 1 de `aceptarFix`, la única que `explicito` no saltea).
+        // Descartarlo está bien —900 m de hace medio minuto son peor información que 10 m
+        // de recién— pero decirle "No pudimos actualizar tu posición" es mentirle: la
+        // lectura salió, y la distancia que está mirando es la buena. Sería encima el
+        // mismo cartel que este commit vino a sacar, en el mismo escenario bajo techo.
+        if (!aceptarFix(res.fix, true)) return
         const { lat: latitude, lng: longitude, precisionM } = res.fix
         onFix?.(latitude, longitude, precisionM)
         const map = mapInstance.current

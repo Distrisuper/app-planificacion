@@ -698,3 +698,51 @@ it('el recálculo reintenta con precisión gruesa cuando el GPS fino falla', asy
     expect((getCurrentPosition.mock.calls[1][2] as PositionOptions).enableHighAccuracy).toBe(false)
     expect(screen.queryByText(/no pudimos actualizar tu posición/i)).not.toBeInTheDocument()
 })
+
+it('un recálculo descartado por viejo no se le reporta como fallado', async () => {
+    // El caso donde se cruzan dos arreglos: bajo techo la etapa fina falla y la de
+    // wifi/antena devuelve un fix MÁS VIEJO que el que el watch ya tenía. `aceptarFix`
+    // lo descarta y hace bien, pero la lectura salió y la distancia en pantalla es la
+    // buena: "No pudimos actualizar tu posición" ahí es justo el cartel que este botón
+    // dejó de dar.
+    const ahora = Date.now()
+    const getCurrentPosition = vi.fn((ok: any, fail: any, opts: any) => {
+        if (opts.enableHighAccuracy) {
+            fail({ code: 2, message: 'timeout' })
+            return
+        }
+        ok({
+            coords: { latitude: -34.6002, longitude: -58.4, accuracy: 900 },
+            timestamp: ahora - 30_000,
+        })
+    })
+    const watchPosition = vi.fn((ok: any) =>
+        ok({
+            coords: { latitude: -34.61, longitude: -58.4, accuracy: 10 },
+            timestamp: ahora,
+        }),
+    )
+    vi.stubGlobal('navigator', {
+        geolocation: { watchPosition, getCurrentPosition, clearWatch: vi.fn() },
+    })
+    render(
+        <MapaVisita
+            open
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onIniciar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+    expect(await screen.findByText(/estás a 1112 m/i)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /recalcular posición/i }))
+
+    // Las dos etapas corrieron (la de red respondió), así que no hubo fracaso que avisar.
+    expect(getCurrentPosition).toHaveBeenCalledTimes(2)
+    expect(screen.queryByText(/no pudimos actualizar tu posición/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/no pudimos ubicarte/i)).not.toBeInTheDocument()
+    // Y se queda con el fix fino, que es el que vale.
+    expect(screen.getByText(/estás a 1112 m/i)).toBeInTheDocument()
+})
