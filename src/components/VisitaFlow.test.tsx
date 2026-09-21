@@ -1342,11 +1342,12 @@ it('si el cierre falla desde el mapa, avisa y no marca la visita como cerrada', 
     await waitFor(() => expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument())
 })
 
-it('la visita de alta cierra directo aunque esté lejos: no la desvía al mapa', async () => {
-    // El alta SÍ tiene coordenada (el mapa 'ubicar' la emite al iniciar y `onIniciar` la
-    // hornea en `clienteParaVisita`), así que sin el guard explícito el desvío se dispara.
-    // No corresponde: ese punto es donde estaba parado el vendedor al iniciar, no un
-    // domicilio verificado contra el cual tenga sentido confrontarlo.
+it('la visita de alta también se desvía al mapa, y ahí no se le muestra el código sintético', async () => {
+    // El alta tiene coordenada y es de primera mano: el mapa 'ubicar' no le pega el fix
+    // del GPS y listo — le ofrece "Marcar la ubicación" y le pide tocar el mapa donde está
+    // el comercio. Esa marca vale tanto como la del warehouse, así que el desvío aplica
+    // igual. Lo que NO puede aparecer es `#ALTA-000009`: el código sintético no es
+    // vocabulario de vendedor, y el resto de su UI se lo esconde.
     const clienteAltaEnCurso: IAgendaClient = {
         ...clienteConCoords,
         tipo: 'alta',
@@ -1366,8 +1367,9 @@ it('la visita de alta cierra directo aunque esté lejos: no la desvía al mapa',
     fireEvent.change(campo, { target: { value: 'Local con buena rotación' } })
 
     fireEvent.click(await screen.findByRole('button', { name: /^cerrar visita$/i }))
-    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledTimes(1))
-    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+    await screen.findByTestId('mapa-iniciar-visita')
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+    expect(screen.queryByText(/ALTA-000009/)).not.toBeInTheDocument()
 })
 
 it('si la visita en curso se suelta con el mapa abierto, no queda el diálogo huérfano', async () => {

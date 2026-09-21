@@ -424,15 +424,14 @@ export default function VisitaFlow({
                 // del warehouse mandaría al mapa a alguien parado justo donde reposicionó.
                 const clienteLat = visitaEnCurso?.cliente.latitud
                 const clienteLng = visitaEnCurso?.cliente.longitud
-                // El alta queda afuera, pero NO por lo que decía el spec ("no tiene
-                // coordenada"): sí la tiene — el mapa 'ubicar' emite el primer fix por
-                // `onReposicionar` y `onIniciar` lo hornea en `clienteParaVisita`. Queda
-                // afuera porque esa coordenada ES la posición del vendedor al iniciar, no
-                // un domicilio verificado: desviarlo al mapa sería confrontarlo con el
-                // punto donde él mismo estaba parado, y de paso mostrarle `#ALTA-000009`
-                // en el encabezado, código sintético que el resto de su UI le esconde.
-                const esAltaEnCurso = esAlta(visitaEnCurso?.cliente)
-                if (!esAltaEnCurso && clienteLat != null && clienteLng != null) {
+                // El alta entra igual que un cliente real, aunque el spec diga que no le
+                // aplica "porque no tiene coordenada": sí la tiene, y encima es de primera
+                // mano. El mapa 'ubicar' no le pega el fix del GPS y listo — le ofrece
+                // "Marcar la ubicación" y le pide tocar el mapa donde está el comercio; el
+                // fix es apenas el punto de partida. Esa marca deliberada es tan buena como
+                // la del warehouse (a veces mejor), así que medir contra ella significa lo
+                // mismo que para cualquier otro cliente.
+                if (clienteLat != null && clienteLng != null) {
                     const [lat, lon] = geo.coord.split(',').map(Number)
                     const d = distanciaMetros(lat, lon, clienteLat, clienteLng)
                     if (estaFueraDeRango(d, geo.precisionM)) {
@@ -525,6 +524,15 @@ export default function VisitaFlow({
     // `nombre` de arriba es el CARTEL; esta es la línea chica de abajo, que suma el código
     // particular y —solo si el título está mostrando el cartel— la razón social.
     const identidad = identidadCliente(cliente)
+    // Los dos mapas de la visita ya abierta rotulan al cliente EN CURSO, que puede no ser
+    // el que está en pantalla. En un alta no va: `identidadCliente` arma `#ALTA-000009` a
+    // partir del código sintético, vocabulario que el vendedor no conoce y que el resto de
+    // su UI le esconde (`clienteEsAlta ? undefined : identidad` en VisitaSheet). El nombre
+    // del comercio, que lo tipeó él mismo, alcanza para saber de quién se habla.
+    const identidadEnCurso =
+        visitaEnCurso && !esAlta(visitaEnCurso.cliente)
+            ? identidadCliente(visitaEnCurso.cliente)
+            : undefined
     const direccionTexto = cliente.direccion || cliente.barrio
     const nombreOtraVisita = bloqueadoPorOtraVisita
         ? visitaEnCurso!.cliente.nombreFantasia || visitaEnCurso!.cliente.nombreCliente
@@ -634,7 +642,7 @@ export default function VisitaFlow({
                             visitaEnCurso.cliente.nombreFantasia ||
                             visitaEnCurso.cliente.nombreCliente
                         }
-                        identidad={identidadCliente(visitaEnCurso.cliente)}
+                        identidad={identidadEnCurso}
                         direccion={visitaEnCurso.cliente.direccion || visitaEnCurso.cliente.barrio}
                         latitud={visitaEnCurso.cliente.latitud}
                         longitud={visitaEnCurso.cliente.longitud}
@@ -652,7 +660,7 @@ export default function VisitaFlow({
                             visitaEnCurso.cliente.nombreFantasia ||
                             visitaEnCurso.cliente.nombreCliente
                         }
-                        identidad={identidadCliente(visitaEnCurso.cliente)}
+                        identidad={identidadEnCurso}
                         direccion={visitaEnCurso.cliente.direccion || visitaEnCurso.cliente.barrio}
                         latitud={visitaEnCurso.cliente.latitud}
                         longitud={visitaEnCurso.cliente.longitud}
