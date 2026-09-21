@@ -8,6 +8,7 @@ import type {
     ICatalogoItem,
     ICrearAltaDTO,
     IEditarAltaDTO,
+    IEsquemaAlta,
     ICerrarVisitaDTO,
     ICerrarVisitaResult,
     ICicloActualResult,
@@ -275,6 +276,13 @@ export const buscarEnCartera = async (texto: string): Promise<IResultadoBuscador
 }
 
 // ── "Cliente nuevo" / altas (spec 2026-09-17) ──────────────────────────────────
+
+/** Secciones, campos y catálogos de "Datos del comercio". La lista de campos NO vive en la
+ *  app: se recorre esto. */
+export const getEsquemaAlta = async (): Promise<IEsquemaAlta> => {
+    const res = await apiClient.get('/planificacion/altas/esquema')
+    return res.data.data
+}
 
 /** "Cliente nuevo": crea la fila de alta en (zona vista, dia). Body plano, como lo normaliza el backend. */
 export const crearAlta = async (dto: ICrearAltaDTO): Promise<IAgendaClient> => {
