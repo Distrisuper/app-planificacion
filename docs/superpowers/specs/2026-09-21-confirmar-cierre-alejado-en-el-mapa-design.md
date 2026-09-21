@@ -62,7 +62,15 @@ Sólo el camino "tocar Cerrar visita estando lejos del cliente". Todo lo demás 
   posición"). Sigue siendo la puerta temprana; el botón de cerrar pasa a ser una segunda
   puerta a la misma pantalla.
 - **No aplica a `no_visita`**, que no captura ubicación a propósito, ni a la visita de alta
-  (`tipo='alta'`), que no tiene coordenada del cliente contra la cual medir.
+  (`tipo='alta'`). Ojo con el motivo de esta última: **no** es que no tenga coordenada —una
+  versión anterior de este spec decía eso y era falso—. El mapa `'ubicar'` emite el primer
+  fix del vendedor por `onReposicionar`, y `onIniciar` lo hornea en `clienteParaVisita`, así
+  que `visitaEnCurso.cliente` de un alta **sí** tiene lat/lng y el desvío se dispararía solo
+  si no se lo excluyera explícitamente (`esAlta(visitaEnCurso?.cliente)` en
+  `onCerrarVisita`). Queda afuera porque esa coordenada **es la posición del vendedor al
+  iniciar**, no un domicilio verificado: confrontarlo con el punto donde él mismo estaba
+  parado no prueba nada, y el encabezado del mapa le mostraría `#ALTA-000009`, el código
+  sintético que el resto de su UI le esconde a propósito.
 - **Un cliente sin coordenadas nunca llega acá**: no hay contra qué medir, así que no hay
   desvío posible y el flujo es idéntico a hoy.
 

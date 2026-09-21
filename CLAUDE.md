@@ -283,7 +283,10 @@ Hay **tres capas separadas**, y una operación toca una sola:
   deshabilita** —ni por `calculando`, ni por `sinUbicacion`, ni por distancia—: es la
   diferencia con `'iniciar'`, y reintroducirlo sería el bloqueo que el dominio saca a
   propósito. Un fix demasiado impreciso (`d − p` nunca supera el radio) **no desvía**: ante
-  la duda no se interrumpe, y es un agujero conocido y aceptado. El banner del pie de
+  la duda no se interrumpe, y es un agujero conocido y aceptado. **La visita de alta queda
+  afuera** (`esAlta(visitaEnCurso?.cliente)`), y no porque no tenga coordenada —sí la tiene,
+  el mapa `'ubicar'` la emite al iniciar— sino porque esa coordenada es dónde estaba parado
+  el vendedor, no un domicilio: no hay contra qué confrontarlo. El banner del pie de
   `VisitaSheet` no cambia. Detalle en
   [`docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md`](docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md).
 - **`VisitaFlow.onIniciar` repite el chequeo con la

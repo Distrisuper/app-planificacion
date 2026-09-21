@@ -1341,3 +1341,59 @@ it('si el cierre falla desde el mapa, avisa y no marca la visita como cerrada', 
     // reintentar y donde el toast queda legible.
     await waitFor(() => expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument())
 })
+
+it('la visita de alta cierra directo aunque esté lejos: no la desvía al mapa', async () => {
+    // El alta SÍ tiene coordenada (el mapa 'ubicar' la emite al iniciar y `onIniciar` la
+    // hornea en `clienteParaVisita`), así que sin el guard explícito el desvío se dispara.
+    // No corresponde: ese punto es donde estaba parado el vendedor al iniciar, no un
+    // domicilio verificado contra el cual tenga sentido confrontarlo.
+    const clienteAltaEnCurso: IAgendaClient = {
+        ...clienteConCoords,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+    }
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteAltaEnCurso })
+
+    // El alta tiene su propio gate de cierre (`puedeCerrarAlta`): sin un ofrecimiento ni
+    // una observación el botón ni siquiera dice "Cerrar visita".
+    const campo = await screen.findByRole('textbox', { name: /observaciones/i })
+    fireEvent.change(campo, { target: { value: 'Local con buena rotación' } })
+
+    fireEvent.click(await screen.findByRole('button', { name: /^cerrar visita$/i }))
+    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledTimes(1))
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+})
+
+it('si la visita en curso se suelta con el mapa abierto, no queda el diálogo huérfano', async () => {
+    // `sincronizar` al volver del background —justo el momento que esta feature persigue—
+    // puede soltar el puntero de visita en curso. El mapa cuelga de él y desmonta; el
+    // diálogo se renderiza aparte, así que sin la limpieza quedaba flotando sobre la
+    // agenda preguntando por una visita que ya no está.
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar igual/i }))
+    await screen.findByText('¿Cerrar la visita lejos del cliente?')
+
+    // `getByText` y no `getByRole`: el AlertDialog de Radix marca `aria-hidden` todo lo
+    // que queda afuera, así que el botón del harness ya no está en el árbol accesible.
+    fireEvent.click(screen.getByText('Soltar visita en curso'))
+
+    await waitFor(() =>
+        expect(screen.queryByText('¿Cerrar la visita lejos del cliente?')).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+})

@@ -185,6 +185,19 @@ export default function VisitaFlow({
         setAltaYaIniciada(false)
     }, [cliente?.rotacionClienteId])
 
+    // El mapa de cierre cuelga de `visitaEnCurso`, pero `cierrePendiente` y la confirmación
+    // son estado propio: si la visita en curso desaparece mientras el vendedor mira el mapa
+    // —`sincronizar` al volver del background, que es JUSTO el momento que esta feature
+    // persigue, o un refetch de la agenda—, el mapa desmonta y el diálogo, que se renderiza
+    // aparte, quedaría flotando huérfano sobre la agenda preguntando por una visita que ya
+    // no está. Se limpian juntos, que es lo que hace `onCancel` a mano.
+    useEffect(() => {
+        if (cierrePendiente === null) return
+        if (visitaEnCurso?.cliente.latitud != null && visitaEnCurso.cliente.longitud != null) return
+        setCierrePendiente(null)
+        setConfirmarCierreLejos(false)
+    }, [cierrePendiente, visitaEnCurso])
+
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
     // vendedor mire mientras tanto queda en modo consulta: el backend igual rechazaría un
     // segundo POST /visitas con VISITA_ACTIVA_EXISTENTE (no se puede estar en dos lugares
@@ -411,7 +424,15 @@ export default function VisitaFlow({
                 // del warehouse mandaría al mapa a alguien parado justo donde reposicionó.
                 const clienteLat = visitaEnCurso?.cliente.latitud
                 const clienteLng = visitaEnCurso?.cliente.longitud
-                if (clienteLat != null && clienteLng != null) {
+                // El alta queda afuera, pero NO por lo que decía el spec ("no tiene
+                // coordenada"): sí la tiene — el mapa 'ubicar' emite el primer fix por
+                // `onReposicionar` y `onIniciar` lo hornea en `clienteParaVisita`. Queda
+                // afuera porque esa coordenada ES la posición del vendedor al iniciar, no
+                // un domicilio verificado: desviarlo al mapa sería confrontarlo con el
+                // punto donde él mismo estaba parado, y de paso mostrarle `#ALTA-000009`
+                // en el encabezado, código sintético que el resto de su UI le esconde.
+                const esAltaEnCurso = esAlta(visitaEnCurso?.cliente)
+                if (!esAltaEnCurso && clienteLat != null && clienteLng != null) {
                     const [lat, lon] = geo.coord.split(',').map(Number)
                     const d = distanciaMetros(lat, lon, clienteLat, clienteLng)
                     if (estaFueraDeRango(d, geo.precisionM)) {
@@ -440,7 +461,12 @@ export default function VisitaFlow({
      * incluido su manejo de permiso denegado.
      */
     async function onConfirmarCierreEnMapa() {
-        if (cierrePendiente === null || cerrandoFlujo) return
+        // `visitaId` va explícito y no se da por sentado de `cierrePendiente`: es DERIVADO
+        // (`esClienteEnCurso ? visitaEnCurso.visitaId : cliente.visitaId`), así que entre el
+        // desvío y la confirmación —minutos, mirando el mapa— un refetch de la agenda puede
+        // dejarlo en null. `ejecutarCierre` lo desreferencia con `!`, que calla al
+        // compilador pero no evita el `PUT /visitas/null/cerrar`.
+        if (cierrePendiente === null || visitaId === null || cerrandoFlujo) return
         const { observaciones, detalle } = cierrePendiente
         setCerrandoFlujo(true)
         try {
@@ -649,8 +675,11 @@ export default function VisitaFlow({
                         }}
                     />
                 )}
+            {/* `cierrePendiente !== null` acá además del efecto de arriba: el efecto corre
+                DESPUÉS del render, así que sin esto queda un frame con el diálogo solo,
+                sin el mapa que lo justifica. */}
             <ConfirmDialog
-                open={confirmarCierreLejos}
+                open={confirmarCierreLejos && cierrePendiente !== null}
                 onOpenChange={setConfirmarCierreLejos}
                 title="¿Cerrar la visita lejos del cliente?"
                 description={
