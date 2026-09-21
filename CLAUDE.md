@@ -269,6 +269,23 @@ Hay **tres capas separadas**, y una operación toca una sola:
   del radio, así que ningún fix simulado desde ahí podía disparar el aviso. Tampoco restar la
   precisión en la salida (`d − p ≤ 100`): eso sí convierte un fix basura en evidencia de
   cercanía. Y ojo con el nombre: `IniciarVisitaMapa` pasó a llamarse **`MapaVisita`**.
+- **Cerrar sigue sin gate, pero pasa por el mapa si la coordenada definitiva ubica al
+  vendedor lejos.** `VisitaFlow.onCerrarVisita` mide con el `geo` de `capturarUbicacion()`
+  —el mismo que se persiste como `coord_final`, así que no agrega espera— y con
+  `estaFueraDeRango` decide: cerca cierra derecho, lejos abre `MapaVisita` en `modo='cerrar'`
+  (el cuarto modo: `'consulta'` con CTA, sin reposicionar) y llama a `evaluarFix` con esa
+  coordenada para poner al hook al día. **El disparador NO es `alejado`** a propósito:
+  `useAlejadoDelCliente` congela su watch con la app en background, así que su estado puede
+  decir "cerca" de hace diez minutos — y ése es justo el vendedor que hoy cierra a 400 m sin
+  que hubiera existido ningún cartel que ignorar. Desde el mapa, "Recalcular posición" corre
+  en alta precisión y puede apagar el aviso: ahí el CTA pasa de `Cerrar igual · estás a N m`
+  (con `ConfirmDialog`) a `Cerrar visita` (directo). **El CTA del modo `'cerrar'` nunca se
+  deshabilita** —ni por `calculando`, ni por `sinUbicacion`, ni por distancia—: es la
+  diferencia con `'iniciar'`, y reintroducirlo sería el bloqueo que el dominio saca a
+  propósito. Un fix demasiado impreciso (`d − p` nunca supera el radio) **no desvía**: ante
+  la duda no se interrumpe, y es un agujero conocido y aceptado. El banner del pie de
+  `VisitaSheet` no cambia. Detalle en
+  [`docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md`](docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md).
 - **`VisitaFlow.onIniciar` repite el chequeo con la
   coordenada definitiva**, para que tocar el botón en el instante en que el watch marcó "cerca" no
   lo saltee. El cierre no bloquea a propósito: para esa altura ya se puede haber ido del local
