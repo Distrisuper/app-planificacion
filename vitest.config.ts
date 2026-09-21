@@ -40,6 +40,7 @@ export default defineConfig({
             // apagar el mock para probar contra el backend local los hacía salir a la
             // red y fallar con "Network Error", que no dice nada de lo que se rompió.
             VITE_ANALITICA_MOCK: '1',
+            VITE_METRICAS_MOCK: '1',
         },
     },
 })
