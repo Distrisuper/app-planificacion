@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { X, Trash2 } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import { getWeekDates, formatDayDate } from '@/lib/weekDates'
@@ -23,6 +23,12 @@ interface EstadoVisitaSheetProps {
     semanasDisponibles: IZonaCiclo[]
     onReagendar: (semana: number, dia: Dia) => void
     onElegirNoVisita: () => void
+    /**
+     * Ausente = no se ofrece sacar de la agenda. La página la pasa SOLO para las filas
+     * que el vendedor agregó a mano y siguen pendientes (`esExtra && estado === 'pendiente'`):
+     * lo planificado no se saca desde acá, y lo resuelto no se saca en ningún lado.
+     */
+    onEliminar?: () => void
     onClose: () => void
 }
 
@@ -35,6 +41,7 @@ export default function EstadoVisitaSheet({
     semanasDisponibles,
     onReagendar,
     onElegirNoVisita,
+    onEliminar,
     onClose,
 }: EstadoVisitaSheetProps) {
     const weekDates = getWeekDates()
@@ -171,6 +178,23 @@ export default function EstadoVisitaSheet({
                 No visité
                 {yaNoVisita && <span className="text-dsmuted"> (ya registrado)</span>}
             </button>
+
+            {/* Tercera salida, separada de las otras dos: reagendar y "No visité" son
+                decisiones sobre la visita; esto es borrar una fila que nunca debió
+                existir. Por eso no entra en `seleccion` ni pasa por el botón del pie —
+                dispara su propia confirmación en la página. */}
+            {onEliminar && (
+                <>
+                    <div className="my-3 h-px bg-[#E7E9F0]" />
+                    <button
+                        onClick={onEliminar}
+                        className="flex h-11 w-full items-center gap-2 rounded-lg border-[1.5px] border-[#E1E6F0] px-4 text-left text-[14px] font-semibold text-dsred"
+                    >
+                        <Trash2 className="h-[14px] w-[14px]" strokeWidth={2.4} />
+                        Sacar de mi agenda
+                    </button>
+                </>
+            )}
         </BottomSheet>
     )
 }

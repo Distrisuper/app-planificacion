@@ -24,6 +24,7 @@ import {
     editarAlta,
     reintentarAlta,
     actualizarFicha,
+    eliminarFilaPropia,
     getMePlanificacion,
     reiniciarPrueba,
 } from './planificacion'
@@ -459,6 +460,12 @@ describe('altas', () => {
         expect(apiClient.post).toHaveBeenCalledWith('/planificacion/altas/9/reintentar', {
             dia: 4,
         })
+    })
+
+    it('eliminarFilaPropia pega al DELETE de la fila del vendedor', async () => {
+        ;(apiClient.delete as Mock).mockResolvedValue({ data: { ok: 1 } })
+        await eliminarFilaPropia(42)
+        expect(apiClient.delete).toHaveBeenCalledWith('/planificacion/rotacion-cliente/42')
     })
 
     it('actualizarFicha hace PUT /planificacion/clientes/:codigo/ficha con { valores } y devuelve la ficha', async () => {

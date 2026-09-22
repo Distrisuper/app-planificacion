@@ -220,6 +220,26 @@ nadie lo encuentra, y no hay vista agregada. `pl_reacomodacion` ya tiene los dat
 
 El comercio que todavía no es cliente **se representa con una fila del plan** (`tipo='alta'`), no con una tabla propia: la fila ya es una cita —vive en la agenda de un día, se mueve auditada con `reacomodar`, se resuelve una vez—, y eso era exactamente lo que hacía falta. El hecho es una `pl_resolucion` común. Sin ficha en el warehouse no hay coordenada (no hay gate de distancia: la `coord_inicio` **es** la ubicación del comercio) ni propuesta (el vendedor carga desde el catálogo). Cromo recibe el evento sobre el genérico **09895** con etiqueta `ALTA`, que es donde los vendedores escribían esto a mano. Un segundo intento tras un `no_visita` es **otra fila** con el detalle copiado (`FILA_RESUELTA` impide mover la primera). Costo aceptado: el alta queda atada a la rotación; si la vuelta cierra con un alta pendiente, no se arrastra. Spec: `2026-09-17-visita-de-alta-cliente-nuevo-design.md`.
 
+### Sacar de la agenda lo que se agregó a mano
+
+El vendedor puede **sacar de su agenda** una fila que él mismo creó —un "Agregado" del buscador
+o un "Cliente nuevo"— mientras siga pendiente: `DELETE /planificacion/rotacion-cliente/:id`,
+soft-delete de `pl_rotacion_cliente` (`deleted_at`/`deleted_by`), la misma operación que gerencia
+hace desde `/analitica/ruta`.
+
+- **No es un hecho.** No crea `pl_resolucion`, no es un `no_visita`, no entra en el `GROUP BY` de
+  motivos. Es "esta fila nunca debió existir". La alternativa que había —declarar "No visité"—
+  inventaba un hecho comercial que nadie declaró, y dejaba la fila irreversible.
+- **Solo `es_extra = 1`.** Las extras están fuera del denominador de cobertura y solo cuentan
+  cuando se resuelven, así que sacar una extra pendiente no mueve ningún número. Una fila
+  planificada sí achicaría el denominador: eso es editar la línea de base, y es de gerencia
+  (`409 FILA_PLANIFICADA`).
+- **Lo resuelto no se saca** (`FILA_RESUELTA`), ni lo que tiene una visita abierta
+  (`VISITA_EN_CURSO`). Resolver sigue siendo la única puerta sin retorno del dominio.
+- **El vendedor no tiene "deshacer"**: confirma antes, y la restauración la hace gerencia
+  (`PATCH .../rotacion-cliente/:id/restaurar`), sin límite de tiempo mientras la rotación sea
+  editable.
+
 ## Lo que NO hay que hacer
 
 Cuatro ideas que aparecen sistemáticamente, son razonables a primera vista, y están descartadas. Se

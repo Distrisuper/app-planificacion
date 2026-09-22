@@ -61,8 +61,16 @@ Sólo el camino "tocar Cerrar visita estando lejos del cliente". Todo lo demás 
 - **No se toca el banner del pie** de `VisitaSheet` ("Te alejaste del cliente · Ver mi
   posición"). Sigue siendo la puerta temprana; el botón de cerrar pasa a ser una segunda
   puerta a la misma pantalla.
-- **No aplica a `no_visita`**, que no captura ubicación a propósito, ni a la visita de alta
-  (`tipo='alta'`), que no tiene coordenada del cliente contra la cual medir.
+- **No aplica a `no_visita`**, que no captura ubicación a propósito. **Sí aplica a la visita
+  de alta** (`tipo='alta'`), al revés de lo que decía una versión anterior de este spec
+  ("no tiene coordenada del cliente contra la cual medir"): la tiene, y es de primera mano.
+  El mapa `'ubicar'` no le pega el fix del GPS y listo — le ofrece **"Marcar la ubicación"**
+  y le pide *"Tocá el mapa donde está el comercio"*; el fix es apenas el punto de partida, y
+  lo que queda es una marca deliberada del local, que `onIniciar` hornea en
+  `clienteParaVisita`. Medir contra ella significa lo mismo que contra la del warehouse (a
+  veces más: la puso alguien parado en la puerta). Lo único que el alta no puede mostrar en
+  ese mapa es `#ALTA-000009` — el código sintético no es vocabulario de vendedor, así que
+  `identidadEnCurso` va `undefined` y el encabezado queda con el nombre del comercio.
 - **Un cliente sin coordenadas nunca llega acá**: no hay contra qué medir, así que no hay
   desvío posible y el flujo es idéntico a hoy.
 

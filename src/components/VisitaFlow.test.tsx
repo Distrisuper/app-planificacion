@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import VisitaFlow, { type IVisitaEnCurso } from './VisitaFlow'
@@ -1273,4 +1273,294 @@ describe('gate de "Datos del comercio"', () => {
         await screen.findByRole('button', { name: /cerrar visita/i })
         expect(screen.queryByRole('button', { name: /datos del comercio/i })).not.toBeInTheDocument()
     })
+})
+
+/** Cliente con coordenada: es lo que habilita medir al cerrar. El fixture base no la
+ *  tiene, y por eso los tests de cierre que ya existían no pasan nunca por el desvío. */
+const clienteConCoords: IAgendaClient = {
+    ...cliente,
+    estado: 'en_curso',
+    visitaId: 55,
+    latitud: -34.6,
+    longitud: -58.4,
+}
+
+it('cerrar lejos del cliente no cierra: desvía al mapa', async () => {
+    // El vendedor está a ~1112 m con un fix preciso: evidencia positiva de lejanía.
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+})
+
+it('cerrar cerca del cliente cierra directo, sin mapa', async () => {
+    // Mismo punto que el cliente: no hay nada que mostrar.
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.6,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await waitFor(() =>
+        expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }),
+    )
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+})
+
+it('desvía aunque el aviso de alejado esté apagado por un fix viejo', async () => {
+    // EL CASO QUE MOTIVA LA FEATURE. El watch del hook nunca corrió (jsdom no expone
+    // geolocation acá), así que `alejado` es false: el estado congelado del background.
+    // La coordenada definitiva igual tiene que mandar al mapa.
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+})
+
+it('un fix demasiado impreciso no desvía: ante la duda no interrumpe', async () => {
+    // 1112 m de distancia pero 2000 m de precisión: no prueba lejanía. Es el agujero
+    // conocido y aceptado del spec — no convertirlo en desvío sin cambiar el spec.
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 2000,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalled())
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+})
+
+it('un cliente sin coordenadas cierra directo: no hay contra qué medir', async () => {
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: { ...cliente, estado: 'en_curso', visitaId: 55 } })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalled())
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+})
+
+it('cancelar el mapa de cierre no cierra la visita, y volver a tocar vuelve a medir', async () => {
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }))
+    await waitFor(() => expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument())
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+
+    // Segundo intento: mide de nuevo, y como se acercó, cierra derecho.
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.6,-58.4',
+        precisionM: 10,
+    })
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await waitFor(() =>
+        expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }),
+    )
+})
+
+it('con el permiso denegado no cierra ni abre el mapa', async () => {
+    ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: false, motivo: 'denegado' })
+    const { onGeoBloqueada } = renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await waitFor(() => expect(onGeoBloqueada).toHaveBeenCalledWith('denegado'))
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+})
+
+it('cerrar igual desde el mapa exige confirmar, y confirmar cierra una sola vez', async () => {
+    // El watch en vivo confirma la lejanía, así que el hook enciende `alejado` y el CTA
+    // sale en su cara de "Cerrar igual".
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar igual/i }))
+
+    // El diálogo se interpone: todavía no se escribió nada.
+    await screen.findByText('¿Cerrar la visita lejos del cliente?')
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: /^cerrar igual$/i }))
+    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledTimes(1))
+    expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.61,-58.4' })
+})
+
+// Este test usa `within`: agregarlo al import de '@testing-library/react' de la cabecera.
+it('cancelar la confirmación deja la visita abierta y el mapa a la vista', async () => {
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar igual/i }))
+    // `within` el diálogo y no `screen`: la X del mapa también tiene aria-label "Cancelar",
+    // así que con el diálogo abierto hay DOS botones con ese nombre accesible y una query
+    // global tira "found multiple elements".
+    const dialogo = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialogo).getByRole('button', { name: 'Cancelar' }))
+
+    await waitFor(() =>
+        expect(screen.queryByText('¿Cerrar la visita lejos del cliente?')).not.toBeInTheDocument(),
+    )
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+    // El mapa sigue ahí: cancelar la confirmación no es cancelar el desvío.
+    expect(screen.getByTestId('mapa-iniciar-visita')).toBeInTheDocument()
+})
+
+it('si el GPS del mapa lo ubica en el cliente, el CTA cierra sin confirmación', async () => {
+    // Llegó al mapa por una medición lejana, pero el watch de alta precisión del mapa
+    // lo ubica en el local: el hook apaga `alejado` y el desacuerdo se resolvió a su favor.
+    mockGeolocacionEnVivo({ latitude: -34.6, longitude: -58.4, accuracy: 5 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+
+    // Esperar a que el CTA pase a verde, y NO `findAllByRole(/^cerrar visita$/)`: esa
+    // query resuelve apenas hay UN match, y el botón del sheet de atrás siempre matchea
+    // — devolvía ese, el click reabría el desvío y nunca se cerraba nada. La señal real
+    // es que "Cerrar igual" desaparezca: el fix de alta precisión del mapa apagó el aviso.
+    await waitFor(() =>
+        expect(screen.queryByRole('button', { name: /cerrar igual/i })).not.toBeInTheDocument(),
+    )
+    // Ahora sí hay dos "Cerrar visita": el del sheet y el CTA del mapa, que va después.
+    const ctas = screen.getAllByRole('button', { name: /^cerrar visita$/i })
+    expect(ctas).toHaveLength(2)
+    fireEvent.click(ctas[ctas.length - 1])
+
+    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText('¿Cerrar la visita lejos del cliente?')).not.toBeInTheDocument()
+})
+
+it('si el cierre falla desde el mapa, avisa y no marca la visita como cerrada', async () => {
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockRejectedValue(new Error('red caída'))
+    const { onAviso, onVisitaCerrada } = renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar igual/i }))
+    await screen.findByText('¿Cerrar la visita lejos del cliente?')
+    fireEvent.click(screen.getByRole('button', { name: /^cerrar igual$/i }))
+
+    await waitFor(() =>
+        expect(onAviso).toHaveBeenCalledWith('error', 'No se pudo cerrar la visita. Volvé a intentar.'),
+    )
+    expect(onVisitaCerrada).not.toHaveBeenCalled()
+    // El mapa y el diálogo se van: el vendedor vuelve al sheet, donde está el botón para
+    // reintentar y donde el toast queda legible.
+    await waitFor(() => expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument())
+})
+
+it('la visita de alta también se desvía al mapa, y ahí no se le muestra el código sintético', async () => {
+    // El alta tiene coordenada y es de primera mano: el mapa 'ubicar' no le pega el fix
+    // del GPS y listo — le ofrece "Marcar la ubicación" y le pide tocar el mapa donde está
+    // el comercio. Esa marca vale tanto como la del warehouse, así que el desvío aplica
+    // igual. Lo que NO puede aparecer es `#ALTA-000009`: el código sintético no es
+    // vocabulario de vendedor, y el resto de su UI se lo esconde.
+    const clienteAltaEnCurso: IAgendaClient = {
+        ...clienteConCoords,
+        tipo: 'alta',
+        codigoParticularCliente: 'ALTA-000009',
+    }
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteAltaEnCurso })
+
+    // El alta tiene su propio gate de cierre (`puedeCerrarAlta`): sin un ofrecimiento ni
+    // una observación el botón ni siquiera dice "Cerrar visita".
+    const campo = await screen.findByRole('textbox', { name: /observaciones/i })
+    fireEvent.change(campo, { target: { value: 'Local con buena rotación' } })
+
+    fireEvent.click(await screen.findByRole('button', { name: /^cerrar visita$/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+    expect(screen.queryByText(/ALTA-000009/)).not.toBeInTheDocument()
+})
+
+it('si la visita en curso se suelta con el mapa abierto, no queda el diálogo huérfano', async () => {
+    // `sincronizar` al volver del background —justo el momento que esta feature persigue—
+    // puede soltar el puntero de visita en curso. El mapa cuelga de él y desmonta; el
+    // diálogo se renderiza aparte, así que sin la limpieza quedaba flotando sobre la
+    // agenda preguntando por una visita que ya no está.
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.61,-58.4',
+        precisionM: 10,
+    })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar igual/i }))
+    await screen.findByText('¿Cerrar la visita lejos del cliente?')
+
+    // `getByText` y no `getByRole`: el AlertDialog de Radix marca `aria-hidden` todo lo
+    // que queda afuera, así que el botón del harness ya no está en el árbol accesible.
+    fireEvent.click(screen.getByText('Soltar visita en curso'))
+
+    await waitFor(() =>
+        expect(screen.queryByText('¿Cerrar la visita lejos del cliente?')).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
 })

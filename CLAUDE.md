@@ -269,6 +269,55 @@ Hay **tres capas separadas**, y una operación toca una sola:
   del radio, así que ningún fix simulado desde ahí podía disparar el aviso. Tampoco restar la
   precisión en la salida (`d − p ≤ 100`): eso sí convierte un fix basura en evidencia de
   cercanía. Y ojo con el nombre: `IniciarVisitaMapa` pasó a llamarse **`MapaVisita`**.
+- **Entre dos fixes gana el mejor, no el último: todo fix pasa por `aceptarFix`.** El
+  `watchPosition` del mapa y el `getCurrentPosition` de "Recalcular posición" escriben en el
+  mismo estado, y el watch **no se pausa** durante el recálculo — sin arbitrar, el vendedor
+  corregía su posición, la veía corregida, y un tick de red de cientos de metros se la
+  revertía un segundo después (el síntoma que se reportaba como "queda lagueado"). Dos
+  reglas, sobre los campos que la propia API da para esto (`coords.accuracy` en metros al
+  95% de confianza, `position.timestamp` en Unix ms): una lectura **anterior** a la vigente
+  se descarta (es el fix cacheado que devuelve `maximumAge`, no información nueva), y una
+  **más nueva pero más gruesa** solo reemplaza si la vigente ya venció (`VIGENCIA_FIX_MS`,
+  30 s — un "estás cerca" de hace medio minuto es peor información que un "estás lejos" de
+  recién). "Recalcular posición" pasa `explicito` y saltea la segunda regla: el vendedor
+  pidió la lectura y hay que mostrarle la que salga, o el botón parece no hacer nada; no
+  abre un agujero porque `estaFueraDeRango` ya descuenta la precisión, así que un fix grueso
+  no puede afirmar lejanía. Y un **error del watch mientras hay un recálculo en vuelo se
+  ignora** (`marcarFixFallido({ deWatch: true })`): el vendedor está esperando SU lectura, y
+  el recálculo ya avisa si termina mal.
+- **"Recalcular posición" usa `obtenerFix()`, las mismas dos etapas que `capturarUbicacion()`.**
+  Era el único pedido de posición a demanda que hacía su propio `getCurrentPosition` de una
+  sola etapa en alta precisión: bajo techo agotaba el timeout y terminaba **siempre** en "No
+  pudimos actualizar tu posición", justo donde la segunda etapa (wifi/antena) sí consigue un
+  fix. `obtenerFix` en `src/lib/geolocation.ts` es ahora la única puerta —devuelve el fix
+  crudo con `precisionM` y `timestamp`— y `capturarUbicacion()` es su formateo para el
+  backend. El `maximumAge > 0` sigue siendo obligatorio y **no se toca**: el comentario de
+  ese archivo explica por qué 0 reintroduce la espera de 23 s. Y **un fix que el arbitraje
+  descarta no es un fix que falló**: son ramas distintas en `handleRecalcular`. Bajo techo
+  la etapa 2 puede devolver un fix de red MÁS VIEJO que el del watch, y ahí `aceptarFix` lo
+  rechaza con razón — pero avisar "No pudimos actualizar tu posición" sería el mismo cartel
+  que este arreglo vino a sacar, con la lectura hecha y la distancia correcta en pantalla.
+- **Cerrar sigue sin gate, pero pasa por el mapa si la coordenada definitiva ubica al
+  vendedor lejos.** `VisitaFlow.onCerrarVisita` mide con el `geo` de `capturarUbicacion()`
+  —el mismo que se persiste como `coord_final`, así que no agrega espera— y con
+  `estaFueraDeRango` decide: cerca cierra derecho, lejos abre `MapaVisita` en `modo='cerrar'`
+  (el cuarto modo: `'consulta'` con CTA, sin reposicionar) y llama a `evaluarFix` con esa
+  coordenada para poner al hook al día. **El disparador NO es `alejado`** a propósito:
+  `useAlejadoDelCliente` congela su watch con la app en background, así que su estado puede
+  decir "cerca" de hace diez minutos — y ése es justo el vendedor que hoy cierra a 400 m sin
+  que hubiera existido ningún cartel que ignorar. Desde el mapa, "Recalcular posición" corre
+  en alta precisión y puede apagar el aviso: ahí el CTA pasa de `Cerrar igual · estás a N m`
+  (con `ConfirmDialog`) a `Cerrar visita` (directo). **El CTA del modo `'cerrar'` nunca se
+  deshabilita** —ni por `calculando`, ni por `sinUbicacion`, ni por distancia—: es la
+  diferencia con `'iniciar'`, y reintroducirlo sería el bloqueo que el dominio saca a
+  propósito. Un fix demasiado impreciso (`d − p` nunca supera el radio) **no desvía**: ante
+  la duda no se interrumpe, y es un agujero conocido y aceptado. **La visita de alta entra
+  igual**: su coordenada no es "donde estaba parado el vendedor" sino la que él marcó
+  tocando el mapa en `'ubicar'` ("Marcar la ubicación" → *"Tocá el mapa donde está el
+  comercio"*), así que vale tanto como la del warehouse. Lo único que se le esconde ahí es
+  `#ALTA-000009` (`identidadEnCurso`), que no es vocabulario de vendedor. El banner del pie de
+  `VisitaSheet` no cambia. Detalle en
+  [`docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md`](docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md).
 - **`VisitaFlow.onIniciar` repite el chequeo con la
   coordenada definitiva**, para que tocar el botón en el instante en que el watch marcó "cerca" no
   lo saltee. El cierre no bloquea a propósito: para esa altura ya se puede haber ido del local
@@ -310,6 +359,14 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `PUT /visitas/:id/cerrar` acepta cerrar con cero resoluciones, así que un bundle viejo
   cacheado se lo saltea igual.
 - **"Cliente nuevo" (visita de alta) es una fila del plan con `tipo='alta'`, no una tabla ni un cliente genérico.** Código sintético `ALTA-<id>`, datos del comercio en `pl_rotacion_cliente.detalle`, contacto en `pl_resolucion.detalle`. Sin propuesta, sin mapa, sin gate de distancia; gate de cierre propio (un ofrecimiento o una observación, `puedeCerrarAlta`). Cromo va al genérico 09895 con etiqueta `ALTA`. Ver `docs/dominio/modelo.md`, "La visita de alta".
+- **"Sacar de mi agenda" solo alcanza a lo que el vendedor agregó a mano** (`es_extra = 1`:
+  extras del buscador y altas) y solo mientras esté pendiente. Es un soft-delete de la fila
+  (`DELETE /planificacion/rotacion-cliente/:id`), **no un hecho**: no crea `pl_resolucion` ni
+  contamina el `GROUP BY` de motivos. Una fila planificada rebota `409 FILA_PLANIFICADA` — sacarla
+  achicaría el denominador de cobertura, y eso es de gerencia. El vendedor no tiene deshacer:
+  confirma antes, y restaura gerencia. Vive en `EstadoVisitaSheet` (`onEliminar`, que la página
+  pasa solo si corresponde) y en `VisitasService.quitarFilaPropia`. Ver
+  `docs/dominio/modelo.md`, "Sacar de la agenda lo que se agregó a mano".
 - **"Datos del comercio" es una ficha del CLIENTE, no de la visita, y este dominio sólo la
   guarda.** `pl_ficha_campo` (catálogo, con `codigo_erp` nullable) + `pl_ficha_valor` (una fila
   por dato, vigente = `reemplazado_en IS NULL`): la forma de `camposDinamicos` del ERP, que es

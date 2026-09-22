@@ -21,6 +21,8 @@ import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
 import { esAlta } from '@/lib/alta'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
+import { formatDistancia } from '@/lib/analiticaFormat'
 import { useAuth } from '@/context/AuthContext'
 import { estaProbando } from '@/lib/roles'
 import type {
@@ -95,7 +97,7 @@ export default function VisitaFlow({
     // Coordenadas del cliente de LA VISITA EN CURSO, no del `cliente` que esté abierto en
     // pantalla — el vendedor puede estar mirando la propuesta de otro cliente mientras la
     // visita sigue corriendo en otro lado.
-    const { alejado, evaluarFix } = useAlejadoDelCliente({
+    const { alejado, distanciaM, evaluarFix } = useAlejadoDelCliente({
         activo: visitaEnCurso !== null,
         latitud: visitaEnCurso?.cliente.latitud,
         longitud: visitaEnCurso?.cliente.longitud,
@@ -130,6 +132,19 @@ export default function VisitaFlow({
     // volvería a tocar creyendo que no respondió, y se dispararían llamadas concurrentes.
     const [iniciandoFlujo, setIniciandoFlujo] = useState(false)
     const [cerrandoFlujo, setCerrandoFlujo] = useState(false)
+    // Gemelo de `propuestaPendiente` en el camino de cierre: el cierre ya está decidido y
+    // pagado (el batch de rubros se guardó en el sheet), pero la coordenada definitiva
+    // ubicó al vendedor lejos del cliente y antes de escribirlo tiene que verlo en el
+    // mapa. Guarda lo que venía del sheet para poder reanudarlo al confirmar. Ver
+    // docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md.
+    const [cierrePendiente, setCierrePendiente] = useState<{
+        observaciones: string | null
+        detalle: IDetalleContactoAlta | null
+    } | null>(null)
+    // El vendedor tocó "Cerrar igual" con el aviso vigente. Es estado propio y no derivado
+    // de `alejado`: si mientras el diálogo está abierto llega un fix que apaga el aviso, la
+    // pregunta que el vendedor está leyendo no puede desaparecerle de abajo del dedo.
+    const [confirmarCierreLejos, setConfirmarCierreLejos] = useState(false)
     // Ajuste efímero del pin del cliente (MapaVisita.onReposicionar). Solo
     // importa para ESTE intento de iniciar: viaja como coordCliente y se usa en la
     // segunda verificación de distancia de acá abajo. Nunca se guarda en ningún otro
@@ -193,6 +208,19 @@ export default function VisitaFlow({
         setErrorFicha(null)
         setEditandoFicha(false)
     }, [cliente?.rotacionClienteId])
+
+    // El mapa de cierre cuelga de `visitaEnCurso`, pero `cierrePendiente` y la confirmación
+    // son estado propio: si la visita en curso desaparece mientras el vendedor mira el mapa
+    // —`sincronizar` al volver del background, que es JUSTO el momento que esta feature
+    // persigue, o un refetch de la agenda—, el mapa desmonta y el diálogo, que se renderiza
+    // aparte, quedaría flotando huérfano sobre la agenda preguntando por una visita que ya
+    // no está. Se limpian juntos, que es lo que hace `onCancel` a mano.
+    useEffect(() => {
+        if (cierrePendiente === null) return
+        if (visitaEnCurso?.cliente.latitud != null && visitaEnCurso.cliente.longitud != null) return
+        setCierrePendiente(null)
+        setConfirmarCierreLejos(false)
+    }, [cierrePendiente, visitaEnCurso])
 
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
     // vendedor mire mientras tanto queda en modo consulta: el backend igual rechazaría un
@@ -368,8 +396,16 @@ export default function VisitaFlow({
         }
     }
 
-    async function onCerrarVisita(observaciones: string | null, detalle: IDetalleContactoAlta | null) {
-        if (visitaId === null || cerrandoFlujo) return
+    /**
+     * Escribe el cierre. Recibe el `geo` ya capturado en vez de capturarlo: el llamador lo
+     * necesitó antes para decidir si desviaba al mapa, y recapturar acá mandaría al backend
+     * una coordenada distinta de la que se midió.
+     */
+    async function ejecutarCierre(
+        geo: Extract<GeoResult, { ok: true }>,
+        observaciones: string | null,
+        detalle: IDetalleContactoAlta | null,
+    ) {
         // Común a "cerró bien" y a "ya estaba cerrada" (tratado como éxito, ver abajo): las
         // dos anclas locales de la visita se limpian igual, sea cual sea el motivo por el
         // que se da por cerrada. Un solo lugar para esto evita que una tercera clave que se
@@ -380,46 +416,118 @@ export default function VisitaFlow({
             limpiarInicioVisita(visitaId!)
             limpiarVisitaEnCurso()
         }
+        try {
+            const res = await cerrar.mutateAsync({
+                visitaId: visitaId!,
+                coordFinal: geo.coord,
+                ...(observaciones ? { observaciones } : {}),
+                ...(detalle ? { detalle } : {}),
+            })
+            if (res.ofrecimientosPendientes > 0) {
+                // Resultado normal, no un error: el gate pide un mínimo de 2 rubros,
+                // así que cerrar con pendientes es esperable. Pero el aviso NO invita
+                // a cargarlos después — el sheet de una visita cerrada es read-only
+                // (`visitaCerrada` en VisitaSheet), así que esos rubros ya no se
+                // pueden completar. Decir "te quedan por cargar" mandaba al vendedor
+                // a buscar una pantalla que no existe.
+                onAviso?.(
+                    'info',
+                    `Visita cerrada. Quedaron ${res.ofrecimientosPendientes} rubros sin cargar.`,
+                )
+            } else {
+                onAviso?.('exito', 'Visita cerrada')
+            }
+            limpiarAnclasDeLaVisita()
+            onVisitaCerrada()
+            cerrarFlujo()
+        } catch (err) {
+            if (errorCode(err) === 'VISITA_YA_CERRADA') {
+                // Tratar como éxito: la visita está cerrada, que es lo que se quería.
+                limpiarAnclasDeLaVisita()
+                onVisitaCerrada()
+                cerrarFlujo()
+                return
+            }
+            onAviso?.('error', 'No se pudo cerrar la visita. Volvé a intentar.')
+        }
+    }
+
+    /**
+     * Mide con la coordenada DEFINITIVA —la que se persiste— y recién entonces decide. Es el
+     * espejo del chequeo que `onIniciar` ya hace, y por un motivo distinto del de allá: acá
+     * no hay gate que falsear, hay un estado que puede estar viejo. `useAlejadoDelCliente`
+     * congela su watch con la app en background, así que `alejado` puede decir "cerca" de
+     * hace diez minutos; si el desvío colgara de él, el vendedor que se fue con el celu
+     * guardado cerraría lejos sin que hubiera existido ningún cartel que ignorar.
+     *
+     * No agrega ninguna espera: `capturarUbicacion` ya corría igual antes de cerrar.
+     */
+    async function onCerrarVisita(
+        observaciones: string | null,
+        detalle: IDetalleContactoAlta | null,
+    ) {
+        if (visitaId === null || cerrandoFlujo) return
         setCerrandoFlujo(true)
         try {
             await conUbicacion(async geo => {
-                try {
-                    const res = await cerrar.mutateAsync({
-                        visitaId,
-                        coordFinal: geo.coord,
-                        ...(observaciones ? { observaciones } : {}),
-                        ...(detalle ? { detalle } : {}),
-                    })
-                    if (res.ofrecimientosPendientes > 0) {
-                        // Resultado normal, no un error: el gate pide un mínimo de 2 rubros,
-                        // así que cerrar con pendientes es esperable. Pero el aviso NO invita
-                        // a cargarlos después — el sheet de una visita cerrada es read-only
-                        // (`visitaCerrada` en VisitaSheet), así que esos rubros ya no se
-                        // pueden completar. Decir "te quedan por cargar" mandaba al vendedor
-                        // a buscar una pantalla que no existe.
-                        onAviso?.(
-                            'info',
-                            `Visita cerrada. Quedaron ${res.ofrecimientosPendientes} rubros sin cargar.`,
-                        )
-                    } else {
-                        onAviso?.('exito', 'Visita cerrada')
-                    }
-                    limpiarAnclasDeLaVisita()
-                    onVisitaCerrada()
-                    cerrarFlujo()
-                } catch (err) {
-                    if (errorCode(err) === 'VISITA_YA_CERRADA') {
-                        // Tratar como éxito: la visita está cerrada, que es lo que se quería.
-                        limpiarAnclasDeLaVisita()
-                        onVisitaCerrada()
-                        cerrarFlujo()
+                // `visitaEnCurso.cliente` y NO `cliente`: si el vendedor reposicionó el pin
+                // al iniciar, el ancla de toda la visita es la corregida. Medir contra la
+                // del warehouse mandaría al mapa a alguien parado justo donde reposicionó.
+                const clienteLat = visitaEnCurso?.cliente.latitud
+                const clienteLng = visitaEnCurso?.cliente.longitud
+                // El alta entra igual que un cliente real, aunque el spec diga que no le
+                // aplica "porque no tiene coordenada": sí la tiene, y encima es de primera
+                // mano. El mapa 'ubicar' no le pega el fix del GPS y listo — le ofrece
+                // "Marcar la ubicación" y le pide tocar el mapa donde está el comercio; el
+                // fix es apenas el punto de partida. Esa marca deliberada es tan buena como
+                // la del warehouse (a veces mejor), así que medir contra ella significa lo
+                // mismo que para cualquier otro cliente.
+                if (clienteLat != null && clienteLng != null) {
+                    const [lat, lon] = geo.coord.split(',').map(Number)
+                    const d = distanciaMetros(lat, lon, clienteLat, clienteLng)
+                    if (estaFueraDeRango(d, geo.precisionM)) {
+                        // Poner el hook al día con la medición que acaba de disparar el
+                        // desvío: sin esto podría seguir en `alejado: false` por su fix
+                        // viejo, y el mapa abriría en verde "Cerrar visita", contradiciendo
+                        // el motivo por el que se abrió. El criterio de entrada de
+                        // `evaluarFix` es el mismo `estaFueraDeRango` que acaba de dar true.
+                        evaluarFix(lat, lon, geo.precisionM)
+                        setCierrePendiente({ observaciones, detalle })
                         return
                     }
-                    onAviso?.('error', 'No se pudo cerrar la visita. Volvé a intentar.')
                 }
+                await ejecutarCierre(geo, observaciones, detalle)
             })
         } finally {
             setCerrandoFlujo(false)
+        }
+    }
+
+    /**
+     * El vendedor resolvió el desvío y cierra. Vuelve a capturar en vez de reusar el `geo`
+     * de la medición: entre un momento y otro pudo pasar minutos recalculando y mirando el
+     * mapa, y `coord_final` tiene que ser dónde estaba al cerrar, no dónde estaba al empezar
+     * a dudar. La segunda captura es rápida (el GPS quedó caliente) y reusa `conUbicacion`,
+     * incluido su manejo de permiso denegado.
+     */
+    async function onConfirmarCierreEnMapa() {
+        // `visitaId` va explícito y no se da por sentado de `cierrePendiente`: es DERIVADO
+        // (`esClienteEnCurso ? visitaEnCurso.visitaId : cliente.visitaId`), así que entre el
+        // desvío y la confirmación —minutos, mirando el mapa— un refetch de la agenda puede
+        // dejarlo en null. `ejecutarCierre` lo desreferencia con `!`, que calla al
+        // compilador pero no evita el `PUT /visitas/null/cerrar`.
+        if (cierrePendiente === null || visitaId === null || cerrandoFlujo) return
+        const { observaciones, detalle } = cierrePendiente
+        setCerrandoFlujo(true)
+        try {
+            await conUbicacion(geo => ejecutarCierre(geo, observaciones, detalle))
+        } finally {
+            setCerrandoFlujo(false)
+            // Tanto si cerró como si falló: el diálogo y el mapa se van, y el vendedor
+            // vuelve al sheet, que es donde está el botón para reintentar y donde el toast
+            // queda legible.
+            setConfirmarCierreLejos(false)
+            setCierrePendiente(null)
         }
     }
 
@@ -467,6 +575,15 @@ export default function VisitaFlow({
     // `nombre` de arriba es el CARTEL; esta es la línea chica de abajo, que suma el código
     // particular y —solo si el título está mostrando el cartel— la razón social.
     const identidad = identidadCliente(cliente)
+    // Los dos mapas de la visita ya abierta rotulan al cliente EN CURSO, que puede no ser
+    // el que está en pantalla. En un alta no va: `identidadCliente` arma `#ALTA-000009` a
+    // partir del código sintético, vocabulario que el vendedor no conoce y que el resto de
+    // su UI le esconde (`clienteEsAlta ? undefined : identidad` en VisitaSheet). El nombre
+    // del comercio, que lo tipeó él mismo, alcanza para saber de quién se habla.
+    const identidadEnCurso =
+        visitaEnCurso && !esAlta(visitaEnCurso.cliente)
+            ? identidadCliente(visitaEnCurso.cliente)
+            : undefined
     const direccionTexto = cliente.direccion || cliente.barrio
     const nombreOtraVisita = bloqueadoPorOtraVisita
         ? visitaEnCurso!.cliente.nombreFantasia || visitaEnCurso!.cliente.nombreCliente
@@ -584,7 +701,7 @@ export default function VisitaFlow({
                             visitaEnCurso.cliente.nombreFantasia ||
                             visitaEnCurso.cliente.nombreCliente
                         }
-                        identidad={identidadCliente(visitaEnCurso.cliente)}
+                        identidad={identidadEnCurso}
                         direccion={visitaEnCurso.cliente.direccion || visitaEnCurso.cliente.barrio}
                         latitud={visitaEnCurso.cliente.latitud}
                         longitud={visitaEnCurso.cliente.longitud}
@@ -592,6 +709,65 @@ export default function VisitaFlow({
                         onCancel={() => setVerPosicion(false)}
                     />
                 )}
+            {cierrePendiente !== null &&
+                visitaEnCurso?.cliente.latitud != null &&
+                visitaEnCurso.cliente.longitud != null && (
+                    <MapaVisita
+                        open
+                        modo="cerrar"
+                        nombreCliente={
+                            visitaEnCurso.cliente.nombreFantasia ||
+                            visitaEnCurso.cliente.nombreCliente
+                        }
+                        identidad={identidadEnCurso}
+                        direccion={visitaEnCurso.cliente.direccion || visitaEnCurso.cliente.barrio}
+                        latitud={visitaEnCurso.cliente.latitud}
+                        longitud={visitaEnCurso.cliente.longitud}
+                        alejado={alejado}
+                        cerrando={cerrandoFlujo}
+                        // El watch de este mapa es de ALTA precisión, a diferencia del del
+                        // hook: es lo que le permite al vendedor mal ubicado por señal
+                        // desmentir la medición y ver el CTA pasar a verde.
+                        onFix={evaluarFix}
+                        onCerrar={() => {
+                            // Con el aviso vigente la pregunta se hace explícita. Sin él, el
+                            // vendedor ya desmintió la medición con un fix de alta precisión
+                            // y esto es un cierre normal.
+                            if (alejado) setConfirmarCierreLejos(true)
+                            else void onConfirmarCierreEnMapa()
+                        }}
+                        onCancel={() => {
+                            setConfirmarCierreLejos(false)
+                            setCierrePendiente(null)
+                        }}
+                    />
+                )}
+            {/* `cierrePendiente !== null` acá además del efecto de arriba: el efecto corre
+                DESPUÉS del render, así que sin esto queda un frame con el diálogo solo,
+                sin el mapa que lo justifica. */}
+            <ConfirmDialog
+                open={confirmarCierreLejos && cierrePendiente !== null}
+                onOpenChange={setConfirmarCierreLejos}
+                title="¿Cerrar la visita lejos del cliente?"
+                description={
+                    distanciaM === null
+                        ? `La visita de ${
+                              visitaEnCurso?.cliente.nombreFantasia ??
+                              visitaEnCurso?.cliente.nombreCliente ??
+                              'este cliente'
+                          } va a quedar registrada con tu ubicación actual.`
+                        : `Estás a ${formatDistancia(distanciaM)} de ${
+                              visitaEnCurso?.cliente.nombreFantasia ??
+                              visitaEnCurso?.cliente.nombreCliente ??
+                              'este cliente'
+                          }. La visita va a quedar registrada igual, con esta ubicación.`
+                }
+                confirmLabel="Cerrar igual"
+                cancelLabel="Cancelar"
+                // No `destructivo`: el rojo está reservado para lo que descarta trabajo, y
+                // esto registra un hecho legítimo. Que sea irreversible lo dice el texto.
+                onConfirm={onConfirmarCierreEnMapa}
+            />
             {cargandoDirecto &&
                 !propuestaDirecta &&
                 (fallóPropuestaDirecta ? (
