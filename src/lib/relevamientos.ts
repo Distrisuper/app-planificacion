@@ -48,6 +48,17 @@ export const ESPECIALIDADES: EspecialidadOpcion[] = [
     { codigo: 'lubricentro', label: 'Lubricentro' },
     { codigo: 'taller', label: 'Taller' },
     { codigo: 'estacion-servicio', label: 'Estación de servicio' },
+    // Las cinco de abajo vienen de la taxonomía del ERP (campo dinámico 139 "ACTIVIDAD") y no
+    // estaban en la lista del negocio. El catálogo es la UNIÓN de las dos: el ERP está
+    // desactualizado en lo nuestro, y lo nuestro no tenía lo de ellos. Fuente de verdad:
+    // pl_ficha_campo.opciones en api-vendedores; si difieren, manda el backend.
+    { codigo: 'colocador', label: 'Colocador' },
+    { codigo: 'industria', label: 'Industria' },
+    { codigo: 'camiones-pesados', label: 'Camiones y pesados' },
+    { codigo: 'servicios-accesorios', label: 'Servicios y accesorios' },
+    { codigo: 'dropshipping', label: 'Dropshipping' },
+    { codigo: 'filtros', label: 'Filtros' },
+    { codigo: 'distribuidora', label: 'Distribuidora' },
 ]
 
 export const ESPECIALIDAD_CON_DETALLE = 'monomarca'
