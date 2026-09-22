@@ -207,7 +207,12 @@ export default function PerfilComercioSheet({
                         </button>
                         <input
                             id="pc-personas"
-                            className={`${INPUT} w-[72px] shrink-0 text-center`}
+                            // `!w-[72px]` con important: mezclado con `w-full` de INPUT en la
+                            // misma clase, el orden de las utilities en el CSS compilado no
+                            // sigue el orden del string y a veces ganaba `w-full` — el input
+                            // se estiraba a todo el ancho del sheet y generaba scroll
+                            // horizontal en toda la fila (incluido "Incluido el dueño").
+                            className={`${INPUT} !w-[72px] shrink-0 text-center`}
                             // `inputMode` y no `type="number"`: las flechitas no sirven en
                             // mobile, y en desktop un scroll accidental sobre el campo
                             // enfocado le cambia el valor sin que nadie lo note.
@@ -231,10 +236,8 @@ export default function PerfilComercioSheet({
                         >
                             <Plus className="h-4 w-4" strokeWidth={3} />
                         </button>
-                        <span className="text-[11.5px] leading-snug text-dsmuted">
-                            Incluido
-                            <br />
-                            el dueño
+                        <span className="whitespace-nowrap text-[11.5px] leading-snug text-dsmuted">
+                            Incluido el dueño
                         </span>
                     </div>
                 </section>
