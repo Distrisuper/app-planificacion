@@ -7,6 +7,7 @@ import type {
     IVendedorOpcion,
     IVisitaDetalle,
     IVisitaFila,
+    IFichaRelevadaFila,
 } from '@/types/analitica'
 
 /** Arma un vendedor completo a partir de unos pocos números, para que el fixture
@@ -570,3 +571,42 @@ export const MOCK_OBJECIONES: IObjecionesResumen = {
         { motivoId: 7, descripcion: 'DS', resultado: 'perdido', cantidad: 22, pct: 0.045 },
     ],
 }
+
+/** "Datos del comercio" cargados, para el modo demo (VITE_ANALITICA_MOCK=1). Los `valores`
+ *  van con los CÓDIGOS del catálogo, igual que los manda la API: la tabla los traduce. El
+ *  último tiene una marca fuera de la lista ('Chery'), que es lo que guarda la opción
+ *  abierta, y uno de alta con su código sintético. */
+export const MOCK_FICHAS: IFichaRelevadaFila[] = [
+    {
+        codigoParticularCliente: '06856',
+        nombreCliente: 'NONNO SUSPENSION',
+        valores: { especialidad: ['suspension', 'frenos'], personas: ['4'], facturacion: ['3'] },
+        codigoParticularVendedor: 'V 2',
+        nombreVendedor: 'PEREZ JUAN',
+        relevadoEn: '2026-09-22T17:30:00.000Z',
+    },
+    {
+        codigoParticularCliente: '07248',
+        nombreCliente: 'REPUESTOS CRA',
+        valores: { especialidad: ['monomarca'], monomarca_marca: ['ford'], personas: ['2'], facturacion: ['5'] },
+        codigoParticularVendedor: 'V 2',
+        nombreVendedor: 'PEREZ JUAN',
+        relevadoEn: '2026-09-22T14:05:00.000Z',
+    },
+    {
+        codigoParticularCliente: '07249',
+        nombreCliente: 'GOMERIA EL PUENTE',
+        valores: { especialidad: ['gomeria'], personas: ['9'] },
+        codigoParticularVendedor: 'V 18',
+        nombreVendedor: 'GOMEZ ANA',
+        relevadoEn: '2026-09-21T13:40:00.000Z',
+    },
+    {
+        codigoParticularCliente: 'ALTA-000009',
+        nombreCliente: 'PICHE REPUESTOS',
+        valores: { especialidad: ['monomarca'], monomarca_marca: ['Chery'], personas: ['1'], facturacion: ['5'] },
+        codigoParticularVendedor: 'V 18',
+        nombreVendedor: 'GOMEZ ANA',
+        relevadoEn: '2026-09-18T11:15:00.000Z',
+    },
+]
