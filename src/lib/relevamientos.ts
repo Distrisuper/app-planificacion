@@ -1,16 +1,16 @@
 /**
- * "Datos del comercio": catálogos, el seam del gate y la traducción entre el borrador del
- * formulario y los `valores` que viajan al backend (spec 2026-09-22).
+ * "Datos del comercio": el seam del gate y la lógica del borrador del formulario.
  *
- * El backend ya calculó qué le falta a cada cliente (`cliente.ficha.pendientes`, contra
- * pl_ficha_campo). Acá no hay lógica de "está cargado": sólo se lee eso, y se dibujan y
- * validan los campos que ahí aparezcan.
+ * **Acá ya no viven las listas de opciones.** Salen del catálogo
+ * (`GET /planificacion/ficha/campos`, hook `useCamposFicha`): qué campos hay, de qué tipo y
+ * con qué opciones es DATO, no código. Antes estaban duplicadas entre `pl_ficha_campo` y este
+ * archivo, y el 2026-09-22 las siete especialidades de la taxonomía del ERP se agregaron dos
+ * veces, a mano, en los dos lados. Spec: 2026-09-22-catalogo-de-ficha-dirigido-por-la-base.
+ *
+ * Lo que sí vive acá es la traducción entre el borrador del formulario y los `valores` que
+ * viajan al backend, más la única regla que el catálogo no modela (ver `CAMPO_MARCA`).
  */
-import type { IAgendaClient } from '@/types/planificacion'
-
-/** Orden de pantalla. Coincide con `orden` de pl_ficha_campo. */
-export const CAMPOS_FICHA = ['especialidad', 'monomarca_marca', 'personas', 'facturacion'] as const
-export type CampoFicha = (typeof CAMPOS_FICHA)[number]
+import type { IAgendaClient, IFichaCampoDef, IFichaOpcion } from '@/types/planificacion'
 
 /** Qué campos obligatorios le faltan al cliente. `[]` sin ficha: un backend viejo que no
  *  la mande no tiene que bloquear el inicio de la visita. */
@@ -23,132 +23,149 @@ export function relevamientoPendiente(cliente: Pick<IAgendaClient, 'ficha'>): bo
     return camposPendientes(cliente).length > 0
 }
 
-export interface EspecialidadOpcion {
-    codigo: string
-    label: string
-    /** true = al elegirla se habilita un campo de texto extra ("¿cuál?"). */
-    pideDetalle?: boolean
-}
-
-/** Orden tal cual lo dictó el negocio. No alfabético a propósito: las primeras son las
- *  más frecuentes en la cartera, así que la mayoría resuelve sin scrollear. */
-export const ESPECIALIDADES: EspecialidadOpcion[] = [
-    { codigo: 'suspension', label: 'Suspensión, dirección y transmisión' },
-    { codigo: 'embragues', label: 'Embragues' },
-    { codigo: 'frenos', label: 'Frenos' },
-    { codigo: 'motor', label: 'Motor' },
-    { codigo: 'rulemanero', label: 'Rulemanero' },
-    { codigo: 'generalista', label: 'Generalista' },
-    { codigo: 'electricidad', label: 'Electricidad' },
-    { codigo: 'agro', label: 'Agro' },
-    { codigo: 'monomarca', label: 'Monomarca', pideDetalle: true },
-    { codigo: 'gomeria', label: 'Gomería' },
-    { codigo: 'alineadora', label: 'Alineadora' },
-    { codigo: 'concesionario', label: 'Concesionario' },
-    { codigo: 'lubricentro', label: 'Lubricentro' },
-    { codigo: 'taller', label: 'Taller' },
-    { codigo: 'estacion-servicio', label: 'Estación de servicio' },
-    // Las cinco de abajo vienen de la taxonomía del ERP (campo dinámico 139 "ACTIVIDAD") y no
-    // estaban en la lista del negocio. El catálogo es la UNIÓN de las dos: el ERP está
-    // desactualizado en lo nuestro, y lo nuestro no tenía lo de ellos. Fuente de verdad:
-    // pl_ficha_campo.opciones en api-vendedores; si difieren, manda el backend.
-    { codigo: 'colocador', label: 'Colocador' },
-    { codigo: 'industria', label: 'Industria' },
-    { codigo: 'camiones-pesados', label: 'Camiones y pesados' },
-    { codigo: 'servicios-accesorios', label: 'Servicios y accesorios' },
-    { codigo: 'dropshipping', label: 'Dropshipping' },
-    { codigo: 'filtros', label: 'Filtros' },
-    { codigo: 'distribuidora', label: 'Distribuidora' },
-]
-
+/**
+ * La ÚNICA dependencia entre campos, y sigue hardcodeada a propósito: elegir "Monomarca" en
+ * `especialidad` es lo que hace aparecer la pregunta de la marca.
+ *
+ * No se modela en el catálogo (`depende_de`) porque eso obligaría al gate del backend a
+ * entender la semántica de un campo puntual — que es justamente lo que el spec original
+ * descartó al dejar `monomarca_marca` con `obligatorio = 0` y su faltante calculado acá,
+ * fuera del gate.
+ */
 export const ESPECIALIDAD_CON_DETALLE = 'monomarca'
+export const CAMPO_ESPECIALIDAD = 'especialidad'
+export const CAMPO_MARCA = 'monomarca_marca'
 
-export interface TramoFacturacion {
-    /** El código viene invertido del negocio (5 = el más chico, 1 = el más grande).
-     *  Se respeta tal cual para no tener que traducir al analizar. */
-    codigo: number
-    label: string
-    /** Lo que se dibuja dentro del segmento: cinco de estos tienen que entrar en el
-     *  ancho de un teléfono. El `label` completo queda como `aria-label`, así que el
-     *  lector de pantalla sigue diciendo "Mayor a 30M" y no "más 30 eme". */
-    labelCorto: string
+/** Aclaraciones al pie del título que no son dato del catálogo, sino copy de pantalla. Un
+ *  campo nuevo simplemente no tiene, y no pasa nada. */
+export const AYUDA_POR_CAMPO: Record<string, string> = {
+    personas: 'incluido el dueño',
 }
 
-/** De menor a mayor en pantalla, aunque el código vaya al revés: leídos de mayor a
- *  menor, los tramos dejan de parecer una escala. */
-export const TRAMOS_FACTURACION: TramoFacturacion[] = [
-    { codigo: 5, label: 'Menor a 10M', labelCorto: '<10M' },
-    { codigo: 4, label: 'Mayor a 10M', labelCorto: '+10M' },
-    { codigo: 3, label: 'Mayor a 30M', labelCorto: '+30M' },
-    { codigo: 2, label: 'Mayor a 50M', labelCorto: '+50M' },
-    { codigo: 1, label: 'Mayor a 100M', labelCorto: '+100M' },
-]
-
-/** Un perfil parcial, tal como vive en el estado del formulario mientras se carga. */
-export interface BorradorPerfil {
-    especialidades: string[]
-    monomarcaDetalle: string
-    personas: string
-    facturacion: number | null
+/**
+ * El borrador del formulario. `valores` es lo que viaja al PUT (campo → lista de valores, la
+ * misma forma que `pl_ficha_valor`), y `abiertas` marca en qué campos el vendedor eligió la
+ * opción de escape ("Otros") y está escribiendo texto libre.
+ *
+ * Hace falta el segundo mapa porque lo que se guarda para "Otros" es **el texto**, no el
+ * código de la opción: sin esta marca, "Otros elegido pero todavía sin escribir" sería
+ * indistinguible de "no eligió nada".
+ */
+export interface BorradorFicha {
+    valores: Record<string, string[]>
+    abiertas: Record<string, boolean>
 }
 
-export const BORRADOR_VACIO: BorradorPerfil = {
-    especialidades: [],
-    monomarcaDetalle: '',
-    personas: '',
-    facturacion: null,
+export const BORRADOR_VACIO: BorradorFicha = { valores: {}, abiertas: {} }
+
+/** La opción de escape del campo, si tiene una. */
+export function opcionAbierta(def: IFichaCampoDef): IFichaOpcion | undefined {
+    return def.opciones?.find(o => o.abierta)
 }
 
-export const PERSONAS_MAX = 999
-
-export function personasValidas(texto: string): boolean {
-    if (!/^\d+$/.test(texto.trim())) return false
-    const n = Number(texto)
-    return n >= 1 && n <= PERSONAS_MAX
+/** Los campos del catálogo que hay que dibujar, en orden. `pedidos` undefined = todos
+ *  (modo edición); si viene, se filtra por él (modo gate: sólo los pendientes).
+ *
+ *  `monomarca_marca` NUNCA entra por esta puerta: no es un campo que se pida por su nombre,
+ *  se dibuja colgado de la especialidad. */
+export function camposADibujar(
+    catalogo: IFichaCampoDef[],
+    pedidos?: readonly string[],
+): IFichaCampoDef[] {
+    return catalogo
+        .filter(c => c.campo !== CAMPO_MARCA)
+        .filter(c => pedidos === undefined || pedidos.includes(c.campo))
+        .sort((a, b) => a.orden - b.orden)
 }
 
-/** Qué le falta al borrador entre los campos que se están mostrando, en orden de pantalla.
- *  Lista y no booleano para poder nombrarlo en el botón. `monomarca_marca` no se pide por
- *  su nombre: cuelga de que `especialidad` esté en juego e incluya Monomarca. */
-export function faltantesPerfil(b: BorradorPerfil, campos: readonly string[]): string[] {
-    const faltan: string[] = []
-    if (campos.includes('especialidad')) {
-        if (b.especialidades.length === 0) faltan.push('la especialidad')
-        else if (b.especialidades.includes(ESPECIALIDAD_CON_DETALLE) && b.monomarcaDetalle.trim() === '')
-            faltan.push('qué marca')
+/** Reconstruye el borrador desde los valores vigentes del cliente. Un valor que no matchea
+ *  ningún código de las opciones sólo puede venir de la opción abierta, así que se precarga
+ *  como "Otros" + ese texto. */
+export function borradorDesdeValores(
+    catalogo: IFichaCampoDef[],
+    valoresIniciales?: Record<string, string[]>,
+): BorradorFicha {
+    const valores: Record<string, string[]> = {}
+    const abiertas: Record<string, boolean> = {}
+    if (!valoresIniciales) return { valores, abiertas }
+    for (const def of catalogo) {
+        const actuales = valoresIniciales[def.campo]
+        if (!actuales || actuales.length === 0) continue
+        valores[def.campo] = [...actuales]
+        if (def.tipo === 'opcion' && opcionAbierta(def)) {
+            const codigos = new Set((def.opciones ?? []).map(o => o.codigo))
+            if (actuales.some(v => !codigos.has(v))) abiertas[def.campo] = true
+        }
     }
-    if (campos.includes('personas') && !personasValidas(b.personas)) faltan.push('cuántas personas trabajan')
-    if (campos.includes('facturacion') && b.facturacion === null) faltan.push('la facturación')
+    return { valores, abiertas }
+}
+
+/** Si el valor cargado en ese campo es válido para su definición. No duplica la validación
+ *  del backend (que es la que manda): es lo que decide si el botón del pie se habilita. */
+function valorCompleto(def: IFichaCampoDef, borrador: BorradorFicha): boolean {
+    const vs = (borrador.valores[def.campo] ?? []).filter(v => v.trim() !== '')
+    if (vs.length === 0) return false
+    if (def.tipo === 'entero') {
+        return vs.every(v => {
+            if (!/^\d+$/.test(v.trim())) return false
+            const n = Number(v)
+            return (def.minimo === null || n >= def.minimo) && (def.maximo === null || n <= def.maximo)
+        })
+    }
+    if (def.tipo === 'texto' || borrador.abiertas[def.campo]) {
+        return vs.every(
+            v =>
+                (def.minimo === null || v.trim().length >= def.minimo) &&
+                (def.maximo === null || v.trim().length <= def.maximo),
+        )
+    }
+    return true
+}
+
+/**
+ * Qué falta cargar, como títulos del catálogo, en orden de pantalla. Lista y no booleano
+ * para poder nombrarlo en el botón.
+ *
+ * `monomarca_marca` se evalúa aparte porque no está en `campos`: cuelga de que la
+ * especialidad esté en juego e incluya Monomarca (ver `ESPECIALIDAD_CON_DETALLE`).
+ */
+export function faltantesFicha(
+    campos: IFichaCampoDef[],
+    borrador: BorradorFicha,
+    defMarca?: IFichaCampoDef,
+): string[] {
+    const faltan: string[] = []
+    for (const def of campos) {
+        if (!valorCompleto(def, borrador)) {
+            faltan.push(def.descripcion)
+            continue
+        }
+        if (def.campo === CAMPO_ESPECIALIDAD && pideMarca(borrador) && defMarca) {
+            if (!valorCompleto(defMarca, borrador)) faltan.push(defMarca.descripcion)
+        }
+    }
     return faltan
 }
 
-/** El body del PUT: sólo los campos pedidos, como strings con el formato del ERP. null si
- *  falta algo. `monomarca_marca` va junto con `especialidad` cuando incluye Monomarca. */
-export function aValoresFicha(
-    b: BorradorPerfil,
-    campos: readonly string[],
-): Record<string, string[]> | null {
-    if (faltantesPerfil(b, campos).length > 0) return null
-    const valores: Record<string, string[]> = {}
-    if (campos.includes('especialidad')) {
-        valores.especialidad = b.especialidades
-        if (b.especialidades.includes(ESPECIALIDAD_CON_DETALLE)) {
-            valores.monomarca_marca = [b.monomarcaDetalle.trim()]
-        }
-    }
-    if (campos.includes('personas')) valores.personas = [String(Number(b.personas))]
-    if (campos.includes('facturacion')) valores.facturacion = [String(b.facturacion)]
-    return valores
+/** true cuando la especialidad elegida incluye Monomarca, o sea cuando hay que pedir la marca. */
+export function pideMarca(borrador: BorradorFicha): boolean {
+    return (borrador.valores[CAMPO_ESPECIALIDAD] ?? []).includes(ESPECIALIDAD_CON_DETALLE)
 }
 
-/** Precarga del borrador para la edición posterior, desde `cliente.ficha.valores`. */
-export function deValoresFicha(valores: Record<string, string[]> | undefined): BorradorPerfil {
-    if (!valores) return BORRADOR_VACIO
-    const fact = Number(valores.facturacion?.[0])
-    return {
-        especialidades: valores.especialidad ?? [],
-        monomarcaDetalle: valores.monomarca_marca?.[0] ?? '',
-        personas: valores.personas?.[0] ?? '',
-        facturacion: TRAMOS_FACTURACION.some(t => t.codigo === fact) ? fact : null,
+/** El body del PUT: sólo los campos que se estaban mostrando, trimmeados. null si falta algo.
+ *  `monomarca_marca` viaja junto con `especialidad` cuando incluye Monomarca. */
+export function aValoresFicha(
+    campos: IFichaCampoDef[],
+    borrador: BorradorFicha,
+    defMarca?: IFichaCampoDef,
+): Record<string, string[]> | null {
+    if (faltantesFicha(campos, borrador, defMarca).length > 0) return null
+    const valores: Record<string, string[]> = {}
+    const agregar = (campo: string) => {
+        const vs = (borrador.valores[campo] ?? []).map(v => v.trim()).filter(v => v !== '')
+        if (vs.length > 0) valores[campo] = vs
     }
+    for (const def of campos) agregar(def.campo)
+    if (defMarca && pideMarca(borrador)) agregar(CAMPO_MARCA)
+    return valores
 }

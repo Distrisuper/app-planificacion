@@ -5,7 +5,7 @@ import PropuestaSheet, { toPropuestaDTO } from './PropuestaSheet'
 import VisitaSheet from './VisitaSheet'
 import MapaVisita from './MapaVisita'
 import PerfilComercioSheet from './relevamiento/PerfilComercioSheet'
-import { CAMPOS_FICHA, camposPendientes, relevamientoPendiente } from '@/lib/relevamientos'
+import { camposPendientes, relevamientoPendiente } from '@/lib/relevamientos'
 import ResolucionSheet from './ResolucionSheet'
 import { useCerrarVisita, useIniciarVisita, useNoVisitaSobreVisitaAbierta } from '@/hooks/useVisitas'
 import { useActualizarFicha } from '@/hooks/useFicha'
@@ -835,7 +835,8 @@ export default function VisitaFlow({
             <PerfilComercioSheet
                 open={perfilPendiente !== null || editandoFicha}
                 modo={editandoFicha ? 'edicion' : 'gate'}
-                campos={editandoFicha ? CAMPOS_FICHA : camposPendientes(cliente)}
+                // `undefined` = todos los del catálogo. En el gate, sólo los pendientes.
+                campos={editandoFicha ? undefined : camposPendientes(cliente)}
                 valoresIniciales={cliente.ficha?.valores}
                 nombreCliente={nombre}
                 identidad={clienteEsAlta ? undefined : identidad}

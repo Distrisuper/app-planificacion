@@ -8,6 +8,7 @@ import type {
     ICatalogoItem,
     ICrearAltaDTO,
     IEditarAltaDTO,
+    IFichaCampoDef,
     IFichaCliente,
     ICerrarVisitaDTO,
     ICerrarVisitaResult,
@@ -301,6 +302,14 @@ export const eliminarFilaPropia = async (rotacionClienteId: number): Promise<voi
 }
 
 // ── Datos del comercio ──────────────────────────────────────────────────────────
+
+/** El catálogo con el que se dibuja el formulario: qué campos hay, de qué tipo y con qué
+ *  opciones. Global y casi inmutable — el hook lo cachea toda la sesión. Agregar una opción
+ *  es un UPDATE en `pl_ficha_campo`, no un deploy del front. */
+export const getCamposFicha = async (): Promise<IFichaCampoDef[]> => {
+    const res = await apiClient.get('/planificacion/ficha/campos')
+    return res.data.data
+}
 
 /** Guarda los campos que trae `valores` (sólo esos). Devuelve la ficha resultante, con los
  *  pendientes recalculados. Se llama ANTES del POST de iniciar visita, y lo condiciona. */

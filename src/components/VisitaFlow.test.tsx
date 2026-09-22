@@ -157,6 +157,33 @@ function renderFlow(
     return { onGeoBloqueada, onClose, onAviso, onVisitaIniciada, onVisitaCerrada }
 }
 
+/** El catálogo de "Datos del comercio" tal cual lo manda la API. Acá va el mínimo con el
+ *  que los tests del gate completan el formulario. */
+const CATALOGO_FICHA = [
+    {
+        campo: 'especialidad', descripcion: 'Especialidad', tipo: 'opcion', multiple: true,
+        obligatorio: true, orden: 1, minimo: null, maximo: null,
+        opciones: [{ codigo: 'frenos', label: 'Frenos' }, { codigo: 'monomarca', label: 'Monomarca' }],
+    },
+    {
+        campo: 'monomarca_marca', descripcion: '¿De qué marca?', tipo: 'opcion', multiple: false,
+        obligatorio: false, orden: 2, minimo: 1, maximo: 60,
+        opciones: [{ codigo: 'ford', label: 'Ford' }, { codigo: 'otros', label: 'Otros', abierta: true }],
+    },
+    {
+        campo: 'personas', descripcion: 'Personas que trabajan', tipo: 'entero', multiple: false,
+        obligatorio: true, orden: 3, minimo: 1, maximo: 999, opciones: null,
+    },
+    {
+        campo: 'facturacion', descripcion: 'Facturación mensual', tipo: 'opcion', multiple: false,
+        obligatorio: true, orden: 4, minimo: null, maximo: null,
+        opciones: [
+            { codigo: '5', label: 'Menor a 10M', labelCorto: '<10M' },
+            { codigo: '3', label: 'Mayor a 30M', labelCorto: '+30M' },
+        ],
+    },
+]
+
 beforeEach(() => {
     localStorage.clear()
     vi.clearAllMocks()
@@ -165,6 +192,9 @@ beforeEach(() => {
     ;(api.getMotivos as any).mockResolvedValue([])
     ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 99, ofrecimientos: 3 })
     ;(api.actualizarFicha as any).mockResolvedValue({ pendientes: [], valores: {} })
+    // El sheet de la ficha dibuja desde el catálogo (GET /ficha/campos): sin esto no hay
+    // controles y el gate no se puede completar en ningún test.
+    ;(api.getCamposFicha as any).mockResolvedValue(CATALOGO_FICHA)
     ;(geo.capturarUbicacion as any).mockResolvedValue({
         ok: true,
         coord: '-34.6,-58.4',
@@ -1116,9 +1146,12 @@ describe('gate de "Datos del comercio"', () => {
         ...cliente,
         ficha: { pendientes: ['especialidad', 'personas', 'facturacion'], valores: {} },
     }
-    function completarFicha() {
-        fireEvent.click(screen.getByRole('button', { name: /^frenos$/i }))
-        fireEvent.change(screen.getByLabelText(/personas que trabajan/i), { target: { value: '4' } })
+    /** Espera a que el catálogo llegue: el sheet dibuja los controles recién con él, así que
+     *  el eyebrow "Datos del comercio" puede estar en pantalla con el cuerpo todavía en
+     *  spinner. */
+    async function completarFicha() {
+        fireEvent.click(await screen.findByRole('button', { name: /^frenos$/i }))
+        fireEvent.change(screen.getByRole('textbox', { name: /personas que trabajan/i }), { target: { value: '4' } })
         fireEvent.click(screen.getByRole('radio', { name: /mayor a 30m/i }))
     }
 
@@ -1147,7 +1180,7 @@ describe('gate de "Datos del comercio"', () => {
         renderFlow({ cliente: conPendientes })
         fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
         await screen.findByText(/datos del comercio/i)
-        completarFicha()
+        await completarFicha()
         // Dentro del sheet el botón también dice "Iniciar visita": tomar el habilitado.
         const botones = screen.getAllByRole('button', { name: /iniciar visita/i })
         fireEvent.click(botones[botones.length - 1])
@@ -1164,7 +1197,7 @@ describe('gate de "Datos del comercio"', () => {
         renderFlow({ cliente: conPendientes })
         fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
         await screen.findByText(/datos del comercio/i)
-        completarFicha()
+        await completarFicha()
         const botones = screen.getAllByRole('button', { name: /iniciar visita/i })
         fireEvent.click(botones[botones.length - 1])
         expect(await screen.findByRole('alert')).toHaveTextContent(/no pudimos guardar/i)
@@ -1194,7 +1227,7 @@ describe('gate de "Datos del comercio"', () => {
         expect(await screen.findByText(/datos del comercio/i)).toBeInTheDocument()
         expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
 
-        completarFicha()
+        await completarFicha()
         const botones = screen.getAllByRole('button', { name: /iniciar visita/i })
         fireEvent.click(botones[botones.length - 1])
 
@@ -1243,9 +1276,9 @@ describe('gate de "Datos del comercio"', () => {
     it('pide sólo el campo pendiente', async () => {
         renderFlow({ cliente: { ...cliente, ficha: { pendientes: ['facturacion'], valores: { especialidad: ['frenos'], personas: ['2'] } } } })
         fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
-        await screen.findByText(/datos del comercio/i)
-        expect(screen.queryByLabelText(/personas que trabajan/i)).not.toBeInTheDocument()
-        expect(screen.getByRole('button', { name: /falta la facturación/i })).toBeDisabled()
+        // El botón aparece recién con el catálogo: hasta entonces no hay nada que dibujar.
+        expect(await screen.findByRole('button', { name: /falta: facturación mensual/i })).toBeDisabled()
+        expect(screen.queryByRole('textbox', { name: /personas que trabajan/i })).not.toBeInTheDocument()
     })
 
     it('con la ficha completa, VisitaSheet ofrece "Datos del comercio" y editar hace el PUT con todos los campos, sin tocar la visita', async () => {
@@ -1257,8 +1290,8 @@ describe('gate de "Datos del comercio"', () => {
         fireEvent.click(await screen.findByRole('button', { name: /datos del comercio/i }))
         // Precargado y en modo edición.
         expect(await screen.findByRole('button', { name: /^guardar$/i })).toBeEnabled()
-        expect(screen.getByLabelText(/personas que trabajan/i)).toHaveValue('2')
-        fireEvent.change(screen.getByLabelText(/personas que trabajan/i), { target: { value: '3' } })
+        expect(screen.getByRole('textbox', { name: /personas que trabajan/i })).toHaveValue('2')
+        fireEvent.change(screen.getByRole('textbox', { name: /personas que trabajan/i }), { target: { value: '3' } })
         fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
         await waitFor(() => expect(api.actualizarFicha).toHaveBeenCalledWith('10034', {
             especialidad: ['frenos'], personas: ['3'], facturacion: ['5'],

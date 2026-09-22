@@ -379,6 +379,22 @@ Hay **tres capas separadas**, y una operación toca una sola:
   nunca vence. Corrección posterior: chip "Datos del comercio" en `VisitaSheet`, sólo sin
   pendientes. Spec
   `docs/superpowers/specs/2026-09-22-relevamiento-datos-del-comercio-design.md`.
+- **El formulario de la ficha lo dibuja el CATÁLOGO, no el front.** `GET /planificacion/ficha/campos`
+  (hook `useCamposFicha`, `staleTime: Infinity`) trae qué campos hay, de qué tipo y con qué
+  opciones; `PerfilComercioSheet` elige el control por `tipo` + `multiple` (chips / segmented /
+  stepper / input) y el título sale de `descripcion`, que **es texto de pantalla, no una nota
+  interna**. Agregar una opción es un `UPDATE` en `pl_ficha_campo`. Antes las listas estaban
+  duplicadas en `src/lib/relevamientos.ts` y el 22/09 las 7 especialidades del ERP se cargaron
+  dos veces a mano. **`etiquetaErp`/`codigoErp` no salen al front**: son el contrato con el cron
+  del ERP. **"Otros" es una opción con `abierta: true`**, no un caso especial del código: habilita
+  texto libre y se guarda **el texto** ('Chery'), nunca el código — si no, el `GROUP BY` de
+  gerencia devuelve un cajón de sastre; al reabrir, un valor fuera de la lista se relee como
+  "Otros". Lo único que sigue hardcodeado es que **Monomarca dispare la pregunta de la marca**
+  (`ESPECIALIDAD_CON_DETALLE`): modelarlo obligaría al gate del backend a entender la semántica
+  de un campo puntual. **El botón del pie no se renderiza sin catálogo**: con el GET en vuelo no
+  hay campos, `faltantes` es `[]` y el gate se auto-satisfaría — la misma trampa que
+  `ofrecimientosCargados` en `VisitaSheet`. Spec
+  `docs/superpowers/specs/2026-09-22-catalogo-de-ficha-dirigido-por-la-base-design.md`.
 - **El gate corta en `VisitaFlow.onConfirmarPropuesta`, ANTES del mapa, no en `onIniciar`.**
   Los dos "Iniciar visita" que abren el camino —el verde de la card (vía el efecto de
   `cargandoDirecto`) y el del pie de `PropuestaSheet`— convergen ahí, así que sigue siendo un
