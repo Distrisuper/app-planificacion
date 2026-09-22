@@ -310,6 +310,18 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `PUT /visitas/:id/cerrar` acepta cerrar con cero resoluciones, así que un bundle viejo
   cacheado se lo saltea igual.
 - **"Cliente nuevo" (visita de alta) es una fila del plan con `tipo='alta'`, no una tabla ni un cliente genérico.** Código sintético `ALTA-<id>`, datos del comercio en `pl_rotacion_cliente.detalle`, contacto en `pl_resolucion.detalle`. Sin propuesta, sin mapa, sin gate de distancia; gate de cierre propio (un ofrecimiento o una observación, `puedeCerrarAlta`). Cromo va al genérico 09895 con etiqueta `ALTA`. Ver `docs/dominio/modelo.md`, "La visita de alta".
+- **"Datos del comercio" es una ficha del CLIENTE, no de la visita, y este dominio sólo la
+  guarda.** `pl_ficha_campo` (catálogo, con `codigo_erp` nullable) + `pl_ficha_valor` (una fila
+  por dato, vigente = `reemplazado_en IS NULL`): la forma de `camposDinamicos` del ERP, que es
+  donde termina. **Nada sale hacia client-service desde acá**: lo hace un cron ajeno leyendo
+  `codigo_erp` y marcando `sincronizado_en`. El gate de `VisitaFlow.onIniciar` lee
+  `cliente.ficha.pendientes` (calculado en `AgendaService.enriquecer` contra el catálogo) y pide
+  **sólo** eso; sumar un dato es una fila en el catálogo + un control en `PerfilComercioSheet`,
+  sin tocar el gate. El `PUT /planificacion/clientes/:codigo/ficha` va **antes** del POST de la
+  visita y lo condiciona. Se pide hasta que la ficha esté completa y nunca vence. Corrección
+  posterior: chip "Datos del comercio" en `VisitaSheet`, sólo sin pendientes. GPS roto: no se
+  releva ese día, el cliente sigue pendiente. Spec
+  `docs/superpowers/specs/2026-09-22-relevamiento-datos-del-comercio-design.md`.
 - **El cronómetro de la visita abierta es un semáforo, y sus umbrales NO son el criterio de
   validez.** `src/lib/estadoDuracion.ts`: ámbar <15 min (`arranque`), **verde 15–90**
   (`valida`, bordes inclusive), ámbar >90 (`larga`), y `alejado` gana sobre las tres. Lo

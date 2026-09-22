@@ -1,8 +1,9 @@
 # Relevamiento "Datos del comercio": la ficha del cliente se completa antes de abrir la visita
 
 Fecha: 2026-09-22 (reemplaza la versión inconclusa del mismo día, que sólo cubría el front)
-Estado: diseño aprobado. Front implementado con persistencia mock en
-`feat/relevamiento-datos-comercio`; backend y edición posterior por implementar.
+Estado: implementado. Backend (tablas, PUT, ficha en la card) y front (gate real,
+PUT antes de la visita, edición posterior) en `feat/relevamiento-datos-comercio` /
+`feat/ficha-cliente`.
 Repos afectados: `app-planificacion` (front) y `api-vendedores` (dominio `planificacion`).
 
 ## 1. El problema
@@ -190,7 +191,8 @@ que el cron puede existir antes de que existan los códigos.
 
 ## 6. Cómo sabe el front que ya se cargó
 
-La card del cliente (`IVisitClientCard`) suma un campo:
+La card del cliente (`IAgendaClient`, la card enriquecida — no `IVisitClientCard`, que es lo
+que sale crudo de `fct_clients`/`cardDeAlta`) suma un campo:
 
 ```ts
 ficha: {
@@ -210,7 +212,7 @@ válida.
 En el front, `relevamientoPendiente` deja de ser el mock `return true`:
 
 ```ts
-export function relevamientoPendiente(cliente: IVisitClientCard): boolean {
+export function relevamientoPendiente(cliente: IAgendaClient): boolean {
     return cliente.ficha.pendientes.length > 0
 }
 ```
@@ -376,10 +378,11 @@ la salida negativa queda al borde, como hoy.
 | `src/services/planificacion/FichaService.ts` | `actualizar(user, codigo, valores)`: cartera, validación, transacción |
 | `src/services/planificacion/AgendaService.ts` | `enriquecer` suma `ficha`; `cardDeAlta` idem |
 | `src/routes/planificacion.ts`, `planificacionController.ts`, `docs/planificacion.yaml` | el `PUT` |
-| `src/types/planificacion.ts` | `IFichaCliente` en `IVisitClientCard` |
+| `src/types/planificacion.ts` | `IFichaCliente` en `IAgendaClient` |
 
-Tests: `fichaValidation.spec`, `FichaService.spec` (transacción cierra e inserta; `403` fuera
-de cartera; el alta y el vendedor de prueba guardan igual), `FichaRepository.spec`
+Tests: `fichaValidation.spec`, `FichaService.spec` (transacción cierra e inserta; `404
+CLIENTE_FUERA_DE_CARTERA` fuera de cartera — no `403`, mismo criterio que `filaPropia`: no
+confirmar que el código existe; el alta y el vendedor de prueba guardan igual), `FichaRepository.spec`
 (vigentes por cliente con historia), `AgendaService.spec` (pendientes calculados contra el
 catálogo; cliente completo → `[]`).
 
@@ -387,7 +390,7 @@ catálogo; cliente completo → `[]`).
 
 | archivo | qué cambia |
 |---|---|
-| `src/types/planificacion.ts` | `ficha` en `IVisitClientCard` |
+| `src/types/planificacion.ts` | `ficha` en `IAgendaClient` |
 | `src/lib/relevamientos.ts` | `relevamientoPendiente(cliente)` lee `ficha.pendientes`; `aValoresFicha(borrador, campos)` arma el cuerpo del `PUT`; `deValoresFicha(valores)` precarga el borrador |
 | `src/hooks/useFicha.ts` | `useActualizarFicha()` (mutation + `setQueryData` sobre la agenda) |
 | `src/components/relevamiento/PerfilComercioSheet.tsx` | props `campos`, `valoresIniciales`, `modo: 'gate' \| 'edicion'`; estados en vuelo / error |
