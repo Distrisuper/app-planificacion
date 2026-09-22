@@ -23,6 +23,7 @@ import {
     crearAlta,
     editarAlta,
     reintentarAlta,
+    actualizarFicha,
     getMePlanificacion,
     reiniciarPrueba,
 } from './planificacion'
@@ -458,6 +459,22 @@ describe('altas', () => {
         expect(apiClient.post).toHaveBeenCalledWith('/planificacion/altas/9/reintentar', {
             dia: 4,
         })
+    })
+
+    it('actualizarFicha hace PUT /planificacion/clientes/:codigo/ficha con { valores } y devuelve la ficha', async () => {
+        const ficha = { pendientes: [], valores: { facturacion: ['3'] } }
+        ;(apiClient.put as any).mockResolvedValue(ok(ficha))
+        const r = await actualizarFicha('10034', { facturacion: ['3'] })
+        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/clientes/10034/ficha', {
+            valores: { facturacion: ['3'] },
+        })
+        expect(r).toEqual(ficha)
+    })
+
+    it('actualizarFicha escapa el código en la URL', async () => {
+        ;(apiClient.put as any).mockResolvedValue(ok({ pendientes: [], valores: {} }))
+        await actualizarFicha('A B/1', { facturacion: ['3'] })
+        expect(apiClient.put).toHaveBeenCalledWith('/planificacion/clientes/A%20B%2F1/ficha', expect.anything())
     })
 })
 

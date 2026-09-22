@@ -8,6 +8,7 @@ import type {
     ICatalogoItem,
     ICrearAltaDTO,
     IEditarAltaDTO,
+    IFichaCliente,
     ICerrarVisitaDTO,
     ICerrarVisitaResult,
     ICicloActualResult,
@@ -290,6 +291,21 @@ export const editarAlta = async (rotacionClienteId: number, dto: IEditarAltaDTO)
 /** Después de un "No visité": otra fila para el mismo comercio, en `dia`. */
 export const reintentarAlta = async (rotacionClienteId: number, dia: number): Promise<IAgendaClient> => {
     const res = await apiClient.post(`/planificacion/altas/${rotacionClienteId}/reintentar`, { dia })
+    return res.data.data
+}
+
+// ── Datos del comercio ──────────────────────────────────────────────────────────
+
+/** Guarda los campos que trae `valores` (sólo esos). Devuelve la ficha resultante, con los
+ *  pendientes recalculados. Se llama ANTES del POST de iniciar visita, y lo condiciona. */
+export const actualizarFicha = async (
+    codigoParticularCliente: string,
+    valores: Record<string, string[]>,
+): Promise<IFichaCliente> => {
+    const res = await apiClient.put(
+        `/planificacion/clientes/${encodeURIComponent(codigoParticularCliente)}/ficha`,
+        { valores },
+    )
     return res.data.data
 }
 

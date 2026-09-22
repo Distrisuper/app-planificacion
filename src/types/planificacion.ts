@@ -123,6 +123,14 @@ export interface ISeguimiento {
     mensaje: string | null
 }
 
+/** "Datos del comercio" del cliente, calculado por el backend (api-vendedores,
+ *  AgendaService.enriquecer). `pendientes` alimenta el gate de iniciar visita: si tiene algo,
+ *  se pide eso antes del POST. `valores` precarga la edición desde VisitaSheet. */
+export interface IFichaCliente {
+    pendientes: string[]
+    valores: Record<string, string[]>
+}
+
 /** Card de la vuelta abierta O de una semana previsualizada — ver decisión de diseño en el
  *  plan de este dominio: ambas fuentes ya traen un rotacionClienteId real. Los cinco campos
  *  son requeridos a propósito: con rotacionClienteId opcional, iniciarVisita({
@@ -153,6 +161,10 @@ export interface IAgendaClient extends IVisitClientCard {
      *  `tipo: 'alta'`, pero se tipea opcional/nullable para no asumir de más sobre lo
      *  que manda el backend. */
     detalleAlta?: IDetalleAlta | null
+    /** Opcional a propósito por los fixtures de test existentes. En producción SIEMPRE viene.
+     *  Ausente se trata como "nada pendiente": un bundle nuevo contra un backend viejo no
+     *  tiene que bloquear el inicio de la visita. */
+    ficha?: IFichaCliente
 }
 
 /** El plan de una semana que no es necesariamente la abierta, con el estado REAL de
