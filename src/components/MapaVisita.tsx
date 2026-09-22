@@ -46,14 +46,15 @@ interface MapaVisitaProps {
     error?: string | null
     /** Sólo se usa en modo 'iniciar'. */
     onIniciar?: () => void
-    /** Sólo en modo 'cerrar'. Si `alejado`, el llamador es quien pide la confirmación —
-     *  este componente no la muestra. */
-    onCerrar?: () => void
-    /** Sólo en modo 'cerrar': decide la cara del CTA. Viene de `useAlejadoDelCliente`, y
-     *  NO del `fueraDeRango` que este componente calcula para el texto de la distancia:
-     *  la histéresis simétrica del hook (entra con `d − p > radio`, sale con
-     *  `d + p <= radio`) tiene que ser la única fuente de verdad, o las dos pantallas
-     *  terminan discrepando. */
+    /** Sólo en modo 'cerrar'. Recibe si el cierre necesita confirmarse: la decisión la
+     *  toma ESTE componente (ver `avisarLejos`) y no el llamador, porque es la misma que
+     *  pinta el CTA — separarlas es lo que dejaba un botón verde "Cerrar visita" abriendo
+     *  igual el diálogo de "¿cerrar lejos?". El diálogo lo muestra el llamador. */
+    onCerrar?: (requiereConfirmacion: boolean) => void
+    /** El aviso de "te alejaste" vigente, de `useAlejadoDelCliente`. Es condición
+     *  NECESARIA para advertir, no suficiente: si el fix ubica al vendedor dentro del
+     *  círculo, el mapa no advierte nada por más que el aviso siga prendido. Ver
+     *  `cercaSegunFix`. */
     alejado?: boolean
     /** Sólo en modo 'cerrar': el cierre está en vuelo. Paralelo a `iniciando` y no un
      *  renombre — los dos modos nunca están montados a la vez, pero un prop compartido
@@ -154,9 +155,13 @@ export default function MapaVisita({
     // refrescar. Se limpia en el próximo fix exitoso o al reabrir el mapa.
     const [errorActualizando, setErrorActualizando] = useState(false)
     // null = todavía no hay fix propio: no se sabe la distancia, así que no se bloquea.
-    const [posicion, setPosicion] = useState<{ distanciaM: number; fueraDeRango: boolean } | null>(
-        null,
-    )
+    const [posicion, setPosicion] = useState<{
+        distanciaM: number
+        fueraDeRango: boolean
+        /** La del fix con que se midió. Va acá porque la pantalla tiene que poder decir
+         *  CUÁNTO vale la distancia que muestra, no solo cuál es. */
+        precisionM: number
+    } | null>(null)
     // Espejo de `posicion` en un ref: los callbacks de `watchPosition` se crean UNA sola
     // vez por apertura del mapa y quedan vivos mientras dure (no se redefinen en cada
     // fix), así que leer el estado `posicion` ahí adentro devolvería siempre el valor de
@@ -220,8 +225,8 @@ export default function MapaVisita({
         }
     }
 
-    function marcarFixExitoso(distanciaM: number, fueraDeRango: boolean) {
-        posicionRef.current = { distanciaM, fueraDeRango }
+    function marcarFixExitoso(distanciaM: number, fueraDeRango: boolean, precisionM: number) {
+        posicionRef.current = { distanciaM, fueraDeRango, precisionM }
         setPosicion(posicionRef.current)
         setSinUbicacion(false)
         setErrorActualizando(false)
@@ -233,6 +238,31 @@ export default function MapaVisita({
     // se hubiera confirmado la cercanía, cuando en realidad no se sabe nada todavía.
     const [calculando, setCalculando] = useState(true)
     const fueraDeRango = posicion?.fueraDeRango ?? false
+    /**
+     * El punto del vendedor cae DENTRO del círculo que está mirando. Es el criterio de
+     * este mapa, y a propósito no es el de `useAlejadoDelCliente`: acá manda lo que se ve.
+     *
+     * La histéresis del hook sale con `d + p <= radio`, así que con un fix grueso es
+     * insatisfacible —parado encima del cliente, `0 + 150 > 100`— y el aviso no se apaga
+     * nunca. Eso está bien para el aviso de la visita en curso (un fix de ±150 m no PRUEBA
+     * que llegó, y ahí el costo de equivocarse es no avisar). Pero acá deja la pantalla
+     * diciendo un absurdo: el pin adentro del círculo, "Estás a 0 m del cliente", y un
+     * botón que ofrece "Cerrar igual · estás a 0 m" con su diálogo de confirmación.
+     *
+     * Usar la distancia visible no afloja nada de lo que la regla protege: **cerrar no
+     * tiene gate** —siempre se pudo cerrar de cualquier lado— así que lo único que decide
+     * este criterio es si vale la pena interrumpir con una advertencia. El gate de INICIAR
+     * y el aviso de "te alejaste" siguen con la histéresis intacta.
+     */
+    const cercaSegunFix = posicion !== null && posicion.distanciaM <= RADIO_INICIO_METROS
+    /** Hay aviso vigente y este fix no lo desmiente: recién ahí se advierte. */
+    const avisarLejos = alejado === true && !cercaSegunFix
+    /**
+     * Está fuera del círculo pero el fix no alcanza para afirmarlo (`d − p <= radio`): se
+     * muestra la distancia CON su margen en vez de darla por buena en verde, que era la
+     * otra mitad de la contradicción. Explica además para qué sirve "Recalcular posición".
+     */
+    const fixNoConcluyente = avisarLejos && posicion !== null && !posicion.fueraDeRango
 
     useEffect(() => {
         if (!open || !mapRef.current) return
@@ -295,7 +325,7 @@ export default function MapaVisita({
             if (vendedorFixRef.current) {
                 const { lat: vLat, lng: vLng, precisionM } = vendedorFixRef.current
                 const distanciaM = distanciaMetros(lat, lng, vLat, vLng)
-                marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, precisionM))
+                marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, precisionM), precisionM)
             }
             onReposicionar?.({ lat, lng })
         }
@@ -336,9 +366,9 @@ export default function MapaVisita({
                         (tienePinInicial ? { lat: latitud, lng: longitud } : null)
                     if (punto) {
                         const distanciaM = distanciaMetros(punto.lat, punto.lng, latitude, longitude)
-                        marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy))
+                        marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, accuracy), accuracy)
                     } else {
-                        marcarFixExitoso(0, false)
+                        marcarFixExitoso(0, false, accuracy)
                     }
                     if (!vendedorMarker.current) {
                         vendedorMarker.current = L.marker([latitude, longitude], {
@@ -428,9 +458,9 @@ export default function MapaVisita({
             overrideRef.current ?? (tienePinInicial ? { lat: latitud, lng: longitud } : null)
         if (punto) {
             const distanciaM = distanciaMetros(punto.lat, punto.lng, latitude, longitude)
-            marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, precisionM))
+            marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, precisionM), precisionM)
         } else {
-            marcarFixExitoso(0, false)
+            marcarFixExitoso(0, false, precisionM)
         }
         if (!map) return
         if (!vendedorMarker.current) {
@@ -476,7 +506,7 @@ export default function MapaVisita({
         if (vendedorFixRef.current) {
             const { lat, lng, precisionM } = vendedorFixRef.current
             const distanciaM = distanciaMetros(latitud, longitud, lat, lng)
-            marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, precisionM))
+            marcarFixExitoso(distanciaM, estaFueraDeRango(distanciaM, precisionM), precisionM)
         }
         onReposicionar?.(null)
     }
@@ -544,7 +574,14 @@ export default function MapaVisita({
                             : ` — acercate a menos de ${RADIO_INICIO_METROS} m para iniciar.`}
                     </p>
                 )}
-                {!esUbicar && posicion && !posicion.fueraDeRango && (
+                {!esUbicar && posicion && fixNoConcluyente && (
+                    <p className="mb-3 text-[12.5px] font-semibold text-[#B45309]">
+                        Estás a {formatDistancia(posicion.distanciaM)} del cliente, pero tu
+                        ubicación tiene un margen de {formatDistancia(posicion.precisionM)}: no
+                        alcanza para confirmarlo. Probá "Recalcular posición".
+                    </p>
+                )}
+                {!esUbicar && posicion && !posicion.fueraDeRango && !fixNoConcluyente && (
                     <p className="mb-3 text-[12.5px] font-semibold text-dsgreen">
                         Estás a {formatDistancia(posicion.distanciaM)} del cliente.
                     </p>
@@ -667,21 +704,24 @@ export default function MapaVisita({
                  *  un cierre. El desvío hasta acá ya cumplió su función: que lo vea. */}
                 {esCerrar && (
                     <Button
-                        onClick={onCerrar}
+                        onClick={() => onCerrar?.(avisarLejos)}
                         loading={cerrando}
                         className={
-                            alejado
+                            avisarLejos
                                 ? 'h-12 w-full bg-[#B45309] text-[15px] hover:bg-[#92400E]'
                                 : 'h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90'
                         }
                     >
                         {cerrando
                             ? 'Cerrando…'
-                            : alejado
-                              ? // Sin fix todavía no hay metros que mostrar, pero el botón
-                                // igual va en su cara de "lejos": es el estado con el que
-                                // se entró al mapa.
-                                posicion
+                            : avisarLejos
+                              ? // Los metros van en el botón solo cuando ESTE fix prueba
+                                // la lejanía. Sin fix todavía no hay ninguno que mostrar,
+                                // y con un fix no concluyente mostrarlo daba el absurdo
+                                // "Cerrar igual · estás a 0 m" — ahí el margen ya lo
+                                // explica el texto de arriba. El botón igual va en su cara
+                                // de "lejos": es el estado con el que se entró al mapa.
+                                posicion && posicion.fueraDeRango
                                   ? `Cerrar igual · estás a ${formatDistancia(posicion.distanciaM)}`
                                   : 'Cerrar igual'
                               : 'Cerrar visita'}

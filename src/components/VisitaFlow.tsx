@@ -646,6 +646,13 @@ export default function VisitaFlow({
                         direccion={visitaEnCurso.cliente.direccion || visitaEnCurso.cliente.barrio}
                         latitud={visitaEnCurso.cliente.latitud}
                         longitud={visitaEnCurso.cliente.longitud}
+                        // Sin esto el mapa de consulta afirmaba en verde "Estás a 0 m del
+                        // cliente" mientras el pie del sheet que lo abrió seguía diciendo
+                        // "te alejaste": es la misma contradicción del modo 'cerrar', sin
+                        // el CTA que la hacía evidente. Acá no hay botón que pintar — el
+                        // prop se usa solo para no afirmar una cercanía que el fix no
+                        // prueba.
+                        alejado={alejado}
                         onFix={evaluarFix}
                         onCancel={() => setVerPosicion(false)}
                     />
@@ -670,11 +677,13 @@ export default function VisitaFlow({
                         // hook: es lo que le permite al vendedor mal ubicado por señal
                         // desmentir la medición y ver el CTA pasar a verde.
                         onFix={evaluarFix}
-                        onCerrar={() => {
-                            // Con el aviso vigente la pregunta se hace explícita. Sin él, el
-                            // vendedor ya desmintió la medición con un fix de alta precisión
-                            // y esto es un cierre normal.
-                            if (alejado) setConfirmarCierreLejos(true)
+                        onCerrar={requiereConfirmacion => {
+                            // La decisión la toma el mapa y NO se recalcula acá con
+                            // `alejado`: es el mismo valor que pintó el CTA que el vendedor
+                            // acaba de tocar. Con `alejado` a secas, un botón verde "Cerrar
+                            // visita" —porque el fix lo ubica adentro del círculo— abría
+                            // igual el diálogo de "¿cerrar lejos?".
+                            if (requiereConfirmacion) setConfirmarCierreLejos(true)
                             else void onConfirmarCierreEnMapa()
                         }}
                         onCancel={() => {
