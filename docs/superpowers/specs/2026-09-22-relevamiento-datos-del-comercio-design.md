@@ -36,15 +36,17 @@ permitidos, lista separada por coma).
 
 **La decisión de negocio es que los datos del comercio terminen siendo campos dinámicos del
 ERP.** Hoy no todos existen con su código. Este sistema **no es el dueño de esa
-sincronización**, pero sí deja el dato con la forma exacta que ese sync necesita, y lo empuja
-cuando puede (§5).
+sincronización**, pero sí deja el dato con la forma exacta que ese sync necesita.
 
-Hay precedente de escritura al maestro **desde este mismo dominio**: `VisitasService.iniciar`
-corrige la coordenada del cliente con un `PATCH` a client-service vía
-`ClientServiceCoordPatchService`, best-effort, después de que la visita ya quedó creada — el
-mismo contrato que usa Lupa en `Visitas.jsx` → `updateClientsCoordinates`. Ese servicio es el
-molde del push de la ficha: mismo endpoint, mismo cuerpo JSON:API, mismas guardas (`!esAlta`,
-`!esVendedorDePrueba`), misma regla de nunca lanzar.
+**La sincronización hacia el ERP la hace un proceso ajeno** (lo más probable, un cron fuera de
+este dominio). Este sistema **sólo guarda**: no llama a client-service, no reintenta, no sabe si
+llegó. Lo que sí hace es dejar el dato en la forma y con las marcas que ese proceso va a
+necesitar (§4): una fila por `(cliente, campo, valor)`, el código ERP de cada campo en el
+catálogo, y una columna `sincronizado_en` que el cron marca cuando lo empuja.
+
+Existe un `PATCH` a client-service que ya se usa desde este dominio para corregir coordenadas
+(`ClientServiceCoordPatchService`, molde de Lupa `Visitas.jsx` → `updateClientsCoordinates`).
+Queda anotado como el canal más probable para ese cron, **no como algo que se implementa acá**.
 
 ## 3. La decisión de fondo: un gate genérico, un formulario concreto
 
@@ -93,7 +95,7 @@ INSERT IGNORE INTO pl_ficha_campo (campo, descripcion, obligatorio, multiple, co
 ```
 
 Sembrado con `INSERT IGNORE`, idempotente, como `pl_motivo`. Los `codigo_erp` se cargan con un
-`UPDATE` el día que el ERP los tenga; hasta entonces el push los saltea (§5).
+`UPDATE` el día que el ERP los tenga; hasta entonces la query de "qué empujar" (§5.2) da vacío.
 
 **`monomarca_marca` es su propio campo, no obligatorio.** El formulario lo exige sólo cuando
 la especialidad incluye `monomarca`, pero esa regla condicional vive en el front
@@ -136,7 +138,7 @@ CREATE TABLE IF NOT EXISTS pl_ficha_valor (
   Facturación: el código **invertido** que vino del negocio (`'5'` = menor a 10M, `'1'` = mayor
   a 100M), que se respeta tal cual porque huele a código de ERP y no hay que traducir al
   analizar. Cuando el ERP fije los valores definitivos de un campo, la traducción se hace en
-  una sola función del push, no en la tabla.
+  el cron que sincroniza, no en la tabla.
 - **`sincronizado_en`** es lo que hace nombrable el hueco del ERP: "qué falta empujar" es
   `WHERE sincronizado_en IS NULL AND reemplazado_en IS NULL`. No se usa para nada del lado del
   vendedor.
@@ -146,7 +148,7 @@ CREATE TABLE IF NOT EXISTS pl_ficha_valor (
 los dos grupos, que es lo correcto). Por tramo de facturación, igual con `campo='facturacion'`.
 No se agrega ninguna vista ni tabla derivada hasta que alguien la pida.
 
-## 5. Escritura, y el push al ERP
+## 5. Escritura, y el contrato con el cron que sincroniza
 
 ### 5.1 `PUT /planificacion/clientes/:codigoParticular/ficha`
 
@@ -168,41 +170,23 @@ En **una transacción**: por cada campo recibido, cerrar las filas vigentes de
 `resolveSellerCode` y `relevado_en = NOW()`. Devuelve la ficha resultante con la misma forma
 que viaja en la card (§6).
 
-### 5.2 Push a client-service, best-effort
+### 5.2 Lo que NO hace el `PUT`: empujar al ERP
 
-**Fuera de la transacción, después de confirmar.** Mismo orden que Cromo y que la corrección de
-coordenadas: primero el hecho en nuestra tabla, después la notificación. Un client-service caído
-es un dato demorado, no un dato perdido.
+Nada sale hacia client-service. El `PUT` termina cuando la transacción confirma. La
+sincronización es de un proceso ajeno, y el contrato con ese proceso es sólo la tabla:
 
-`FichaClientServicePushService.aplicar(codigoParticular)`:
+- **Qué empujar:** `SELECT … FROM pl_ficha_valor v JOIN pl_ficha_campo c USING (campo) WHERE
+  v.reemplazado_en IS NULL AND v.sincronizado_en IS NULL AND c.codigo_erp IS NOT NULL`.
+- **Cómo armarlo:** `camposDinamicos: [{ codigo: c.codigo_erp, valor }]`; un campo `multiple`
+  va como un solo par con los valores unidos por coma, igual que el campo 99.
+- **Qué marcar:** `UPDATE pl_ficha_valor SET sincronizado_en = NOW()` sobre las filas empujadas.
+- **A quién no empujar:** `relevado_por LIKE 'PRUEBA-%'` (vendedor de prueba: sus datos no
+  salen de `pl_*`) y `codigo_particular_cliente LIKE 'ALTA-%'` (no existe en client-service).
+  Las dos guardas ya existen en `ClientServiceCoordPatchService`, que es el molde natural del
+  cron si vive en api-vendedores.
 
-1. Lee las filas vigentes del cliente cuyo campo tenga `codigo_erp IS NOT NULL`. Si no hay
-   ninguna (hoy: siempre, hasta que se carguen los códigos), **no hace nada** y no loguea error.
-2. Arma `camposDinamicos: [{ codigo, valor }]`. Un campo `multiple` viaja como un solo par con
-   los valores unidos por coma, igual que el campo 99.
-3. `PATCH ${clientServiceConfig.apiUrl}${codigoParticular}` con cuerpo JSON:API
-   `{ data: { type: 'clients', id, attributes: { camposDinamicos } } }`, timeout de
-   `clientServiceConfig.timeoutMs`. Es el molde de `ClientServiceCoordPatchService`, con otro
-   `attributes`.
-4. Si responde OK, marca `sincronizado_en = NOW()` en esas filas. Si falla, loguea y las deja
-   en `NULL`. **Nunca lanza.**
-
-Guardas, copiadas de la corrección de coordenadas:
-
-- **`esVendedorDePrueba(vendedor)` → no se empuja.** Invariante del vendedor de prueba: sus
-  datos nunca salen de `pl_*`. La ficha sí se guarda (el gate del tester se destraba), pero el
-  ERP no se entera.
-- **Alta (`ALTA-<id>`) → no se empuja.** Ese comercio no existe en client-service.
-
-**Abierto, a propósito:** si el `PATCH` de client-service acepta `camposDinamicos` hoy, o sólo
-`coordinates`. No se pudo verificar (el repo de client-service no está disponible). Mientras
-`codigo_erp` sea `NULL` en todos los campos, el push no dispara ningún request, así que el
-sistema es correcto sin esa respuesta. El día que se carguen códigos, hay que probarlo contra
-el ambiente de client-service antes de habilitarlo en producción.
-
-**Sin cola ni reintento.** Las filas con `sincronizado_en IS NULL` son la lista de pendientes;
-quién y cuándo las reintenta se define cuando exista el sync del otro lado. No se implementa un
-job especulativo.
+Mientras `codigo_erp` sea `NULL` en todos los campos, la query de "qué empujar" da vacío, así
+que el cron puede existir antes de que existan los códigos.
 
 ## 6. Cómo sabe el front que ya se cargó
 
@@ -389,14 +373,13 @@ la salida negativa queda al borde, como hoy.
 | `src/models/planificacion/FichaCampo.ts`, `FichaValor.ts` | modelos Sequelize |
 | `src/repositories/FichaRepository.ts` | `findVigentesPorClientes(codigos)`, `reemplazar(cliente, campo, valores, vendedor, tx)`, `marcarSincronizadas(ids)` |
 | `src/services/planificacion/fichaValidation.ts` | catálogos de valores y reglas de §5.1 |
-| `src/services/planificacion/FichaService.ts` | `actualizar(user, codigo, valores)`: cartera, transacción, push |
-| `src/services/clientService/FichaClientServicePushService.ts` | §5.2, molde de `ClientServiceCoordPatchService` |
+| `src/services/planificacion/FichaService.ts` | `actualizar(user, codigo, valores)`: cartera, validación, transacción |
 | `src/services/planificacion/AgendaService.ts` | `enriquecer` suma `ficha`; `cardDeAlta` idem |
 | `src/routes/planificacion.ts`, `planificacionController.ts`, `docs/planificacion.yaml` | el `PUT` |
 | `src/types/planificacion.ts` | `IFichaCliente` en `IVisitClientCard` |
 
-Tests: `fichaValidation.spec`, `FichaService.spec` (transacción cierra e inserta; el push no
-corre para prueba ni alta; el push no dispara sin `codigo_erp`), `FichaRepository.spec`
+Tests: `fichaValidation.spec`, `FichaService.spec` (transacción cierra e inserta; `403` fuera
+de cartera; el alta y el vendedor de prueba guardan igual), `FichaRepository.spec`
 (vigentes por cliente con historia), `AgendaService.spec` (pendientes calculados contra el
 catálogo; cliente completo → `[]`).
 
@@ -420,16 +403,15 @@ false` de `VisitaFlow.test` y `AgendaSemanaPage.test` se reemplazan por `ficha: 
 
 ### 11.3 Orden
 
-1. Backend: DDL + repo + servicio + `PUT` + `ficha` en la card, con el push implementado pero
-   inerte (todos los `codigo_erp` en `NULL`).
+1. Backend: DDL + repo + servicio + `PUT` + `ficha` en la card.
 2. Front: reemplazar el mock, el gate real, la edición posterior, los tests del gate.
-3. Cuando el negocio entregue los códigos: `UPDATE pl_ficha_campo SET codigo_erp = …`, probar el
-   `PATCH` contra client-service, y recién ahí queda prendido.
+3. Cuando el negocio entregue los códigos: `UPDATE pl_ficha_campo SET codigo_erp = …`. Es lo
+   único que este dominio hace por el sync.
 
 ## 12. Fuera de alcance, con razón
 
-- **Reintento del push.** Las filas con `sincronizado_en IS NULL` son la lista. Quién las
-  reintenta se decide con el dueño del sync.
+- **Empujar al ERP.** Lo hace un proceso ajeno. Este dominio no llama a client-service por la
+  ficha, ni reintenta, ni sabe si llegó. El contrato es la tabla (§5.2).
 - **Religar la ficha de un alta** al código real cuando el comercio se da de alta como cliente.
   Hoy queda bajo `ALTA-<id>`; el día que exista "convertir alta en cliente" (no existe), ese
   flujo la migra.
