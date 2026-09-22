@@ -1,6 +1,6 @@
 # "Datos del comercio" en gerencia: la tabla de lo relevado
 
-Fecha: 2026-09-22
+Fecha: 2026-09-22 (revisado el mismo día, después de que se mergeara el back de la ficha)
 Estado: diseñado.
 Continúa [`2026-09-22-relevamiento-datos-del-comercio-design.md`](2026-09-22-relevamiento-datos-del-comercio-design.md),
 que dejó el relevamiento escribiendo en `pl_ficha_valor` sin ninguna forma de mirarlo.
@@ -25,12 +25,20 @@ Una fila por **cliente con al menos un dato vigente**, lo más reciente primero.
 | #06856 · Nonno Suspension | Suspensión, Frenos | 4 | Mayor a 30M | V 2 · Pérez | 22/09 14:30 |
 
 - **Especialidad** es `multiple = 1` en el catálogo: van todas, separadas por coma. Si incluye
-  Monomarca, la marca va entre paréntesis — `Monomarca (Bosch)` — porque `monomarca_marca` no se
+  Monomarca, la marca va entre paréntesis — `Monomarca (Ford)` — porque `monomarca_marca` no se
   entiende suelto.
-- **Facturación** se muestra con el label del tramo, no con el código. El valor guardado es
-  `'3'` y el catálogo (`TRAMOS_FACTURACION` en `src/lib/relevamientos.ts`) dice `Mayor a 30M`.
-  **El código va invertido a propósito** (5 es el más chico): traducirlo es del front, no de la
-  base.
+- **Los códigos se traducen con el CATÁLOGO, no con una constante del front.** `pl_ficha_valor`
+  guarda el código (`'3'`, `'ford'`) y el label vive en `pl_ficha_campo.opciones`. La tabla lee
+  el mismo `useCamposFicha` que dibuja el formulario del vendedor: un `Map<campo, Map<codigo,
+  label>>` armado una vez. Es la consecuencia directa del spec del catálogo dirigido por la
+  base — `TRAMOS_FACTURACION` y `ESPECIALIDADES` ya no existen en `src/lib/relevamientos.ts`, y
+  reponerlas acá volvería a partir el dato en dos lugares.
+- **Un valor que no matchea ningún código se muestra tal cual**: es lo que cargó la opción
+  abierta ("Otros"), que guarda el texto y no el código. `Chery` se lee `Chery`, sin decoración.
+  Es el mismo criterio con el que el formulario lo relee como "Otros".
+- **Con el catálogo todavía en vuelo, la tabla no dibuja las celdas de opción con el código
+  crudo**: espera. Ver un `3` en la columna Facturación es peor que ver la fila un instante más
+  tarde, y el catálogo se cachea con `staleTime: Infinity` así que sólo pasa la primera vez.
 - **Sólo el valor vigente** (`reemplazado_en IS NULL`). Corregir un dato **actualiza la fila**,
   no agrega una segunda: el cliente aparece una vez. `Relevado` es la fecha del dato más
   reciente de ese cliente.
@@ -60,9 +68,10 @@ fecha. El filtro de vendedores funciona siempre.
 
 `GET /planificacion/analitica/fichas?desde&hasta&vendedores`, en api-vendedores.
 
-**Va sobre la rama `MatiasH11/feat-ficha-cliente`**, no sobre `master`: ahí viven las tablas y el
-`PUT` de la ficha (7 commits, todavía sin mergear). Un endpoint que lea `pl_ficha_valor` desde
-`master` no compila contra nada.
+**Sale de `master`.** Cuando se escribió este spec las tablas vivían en una rama sin mergear;
+el PR #126 se mergeó el 22/09 a la tarde y `pl_ficha_campo` / `pl_ficha_valor` ya están creadas
+en `planificacion-prod`, con `idx_listado` incluido en el `CREATE`. O sea que **la sección 5 de
+este spec ya está aplicada**: no hay `ALTER` pendiente.
 
 Respeta el scope de vendedores como el resto (`resolverVendedoresPermitidos`), así que el
 vendedor de prueba no se mezcla con la cartera real.
@@ -90,7 +99,7 @@ service**, no con `GROUP BY` + `MAX(CASE campo = … )`. A este volumen la query
 nada y cuesta legibilidad y tests; y el día que el catálogo tenga un quinto campo, el pivote en
 memoria no hay que tocarlo. Es el patrón que ya usa `AnaliticaService`.
 
-## 5. Los índices: la tabla NO estaba optimizada para esto
+## 5. Los índices: la tabla NO estaba optimizada para esto (YA APLICADO)
 
 `pl_ficha_valor` nació con dos índices, para las dos únicas lecturas que existían:
 
@@ -111,6 +120,11 @@ plan no tiene nada que lo sostenga cuando la tabla crezca. Y cuesta una línea:
 ```sql
 ALTER TABLE pl_ficha_valor ADD INDEX idx_listado (reemplazado_en, relevado_en);
 ```
+
+**Esto ya está hecho.** El índice entró en el `CREATE TABLE` de
+`planificacion-ficha-cliente.sql` antes de que ese script se aplicara a producción, así que
+en `planificacion-prod` nació con los tres índices y no quedó ningún `ALTER` pendiente. El
+`ALTER` de arriba sólo sirve para un entorno donde la tabla ya existiera de antes.
 
 **El orden importa:** `reemplazado_en IS NULL` se resuelve como lookup sobre la primera columna,
 y dentro de ese tramo el índice ya viene ordenado por `relevado_en` — sirve para el `WHERE` **y**
@@ -165,13 +179,22 @@ del comercio") en vez de una tabla con encabezados y nada abajo.
   (`reemplazado_en`) y se consulta el día que alguien lo pida.
 - **Paginación, orden por columna y export.** Cuando el volumen lo justifique. Hoy no.
 
-## 8. Qué se toca
+## 8. El vendedor de prueba no entra en este listado
 
-**api-vendedores** (rama `MatiasH11/feat-ficha-cliente`):
+Después de escrito este spec apareció `ambitoDe` (FichaRepository): las filas de un
+`PRUEBA-<userId>` son suyas y no se mezclan con las reales. **El listado de gerencia usa el
+ámbito REAL**, que es el default de `findVigentesPorClientes` — o sea que las fichas cargadas
+en una demo no aparecen acá, y el denominador no las cuenta.
+
+No es un filtro nuevo que haya que escribir: sale gratis de no pasar vendedor. Lo que sí hay
+que respetar es **no pasarlo**, y por eso queda escrito.
+
+## 9. Qué se toca
+
+**api-vendedores** (rama nueva sobre `master`):
 
 | archivo | qué |
 |---|---|
-| `docs/db-notes/planificacion-ficha-cliente.sql` | el `ALTER` de `idx_listado` |
 | `src/repositories/FichaRepository.ts` | `findVigentesParaListado(filtro)` y el conteo del denominador |
 | `src/services/planificacion/AnaliticaService.ts` | `getFichas`: pivote, nombres, degradación |
 | `src/routes/planificacion.ts` | `GET /planificacion/analitica/fichas` |
@@ -184,16 +207,19 @@ del comercio") en vez de una tabla con encabezados y nada abajo.
 | `src/api/analitica.ts` | `getFichas(filtro)`, con su rama `USA_MOCK` |
 | `src/mocks/analiticaMock.ts` | `MOCK_FICHAS`, para el modo demo |
 | `src/hooks/useFichasRelevadas.ts` | el query |
-| `src/components/analitica/TablaFichas.tsx` | la tabla |
+| `src/components/analitica/TablaFichas.tsx` | la tabla; traduce códigos con `useCamposFicha` |
 | `src/pages/AnaliticaFichasPage.tsx` | tabs + filtros + total + tabla |
 | `src/components/analitica/AnaliticaTabs.tsx` | la cuarta tab |
 | `src/App.tsx` | la ruta dentro de `supervisa` |
 
-## 9. Tests
+## 10. Tests
 
 - **Repo:** sólo vigentes; el rango de fechas es opcional; el filtro de vendedores acota.
 - **Service:** cuatro filas de un cliente arman un renglón; una especialidad múltiple se junta;
   Monomarca arrastra la marca; el cliente `ALTA-*` toma el nombre del detalle y **no** se le
   pregunta al warehouse; con el warehouse caído las filas salen igual con nombre vacío.
-- **Front:** la tabla dibuja el label del tramo y no el código; la hora sale en TZ de negocio; el
-  vacío muestra su texto; los filtros de la URL viajan al endpoint.
+- **Front:** la tabla dibuja el label del CATÁLOGO y no el código (`'3'` → `Mayor a 30M`,
+  `'ford'` → `Ford`); un valor fuera de la lista —el de la opción abierta— sale tal cual
+  (`Chery`); Monomarca arrastra su marca entre paréntesis; con el catálogo en vuelo no se
+  dibujan códigos crudos; la hora sale en TZ de negocio; el vacío muestra su texto; los filtros
+  de la URL viajan al endpoint.
