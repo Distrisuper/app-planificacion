@@ -190,6 +190,13 @@ export default function PerfilComercioSheet({
                 <section>
                     <label htmlFor="pc-personas" className={LABEL}>
                         Personas que trabajan
+                        {/* Aclaración pegada al título, no al stepper: es contexto de la
+                            pregunta ("¿cuento al dueño?"), no una instrucción del control.
+                            Normal-case y sin negrita para que no compita con el título en
+                            mayúsculas — es una aclaración, no otro título. */}
+                        <span className="ml-1 font-normal normal-case tracking-normal text-dsmuted/70">
+                            · incluido el dueño
+                        </span>
                     </label>
                     {/* Stepper y no un input pelado: era el único control del formulario
                         que abría teclado, y en un bottom sheet el teclado empuja el
@@ -236,9 +243,6 @@ export default function PerfilComercioSheet({
                         >
                             <Plus className="h-4 w-4" strokeWidth={3} />
                         </button>
-                        <span className="whitespace-nowrap text-[11.5px] leading-snug text-dsmuted">
-                            Incluido el dueño
-                        </span>
                     </div>
                 </section>
                 )}
