@@ -269,6 +269,19 @@ Hay **tres capas separadas**, y una operación toca una sola:
   del radio, así que ningún fix simulado desde ahí podía disparar el aviso. Tampoco restar la
   precisión en la salida (`d − p ≤ 100`): eso sí convierte un fix basura en evidencia de
   cercanía. Y ojo con el nombre: `IniciarVisitaMapa` pasó a llamarse **`MapaVisita`**.
+- **Con un fix grueso el aviso NO se puede apagar, y la pantalla tiene que decirlo en vez de
+  contradecirse.** La salida exige `d + p ≤ 100`, así que con `p` grande es insatisfacible:
+  parado ENCIMA del cliente, `0 + 150 > 100` y el aviso queda prendido. Es lo esperado (un
+  fix de ±150 m no prueba que llegó) y pasa justo adentro del local, donde el GPS es peor.
+  Lo que estaba mal era que `MapaVisita` pintaba la misma medición con dos criterios
+  distintos: el párrafo miraba su `fueraDeRango` y afirmaba en **verde** "Estás a 0 m del
+  cliente" mientras el CTA, que mira `alejado`, decía **"Cerrar igual · estás a 0 m"**. Esa
+  banda ahora es un estado propio, `fixNoConcluyente` (hay aviso vigente y este fix no
+  prueba lejanía): muestra la distancia **con su margen** —"pero tu ubicación tiene un
+  margen de 150 m: no alcanza para confirmarlo"— y el CTA deja de prometer metros
+  (`Cerrar igual` pelado). El `alejado` se le pasa también al mapa de `'consulta'`, que no
+  tiene CTA pero mentía igual. **No se arregla aflojando la histéresis** — ver el bullet de
+  arriba.
 - **Entre dos fixes gana el mejor, no el último: todo fix pasa por `aceptarFix`.** El
   `watchPosition` del mapa y el `getCurrentPosition` de "Recalcular posición" escriben en el
   mismo estado, y el watch **no se pausa** durante el recálculo — sin arbitrar, el vendedor

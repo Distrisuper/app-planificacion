@@ -646,6 +646,13 @@ export default function VisitaFlow({
                         direccion={visitaEnCurso.cliente.direccion || visitaEnCurso.cliente.barrio}
                         latitud={visitaEnCurso.cliente.latitud}
                         longitud={visitaEnCurso.cliente.longitud}
+                        // Sin esto el mapa de consulta afirmaba en verde "Estás a 0 m del
+                        // cliente" mientras el pie del sheet que lo abrió seguía diciendo
+                        // "te alejaste": es la misma contradicción del modo 'cerrar', sin
+                        // el CTA que la hacía evidente. Acá no hay botón que pintar — el
+                        // prop se usa solo para no afirmar una cercanía que el fix no
+                        // prueba.
+                        alejado={alejado}
                         onFix={evaluarFix}
                         onCancel={() => setVerPosicion(false)}
                     />

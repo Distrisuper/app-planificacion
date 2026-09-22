@@ -746,3 +746,82 @@ it('un recálculo descartado por viejo no se le reporta como fallado', async () 
     // Y se queda con el fix fino, que es el que vale.
     expect(screen.getByText(/estás a 1112 m/i)).toBeInTheDocument()
 })
+
+it('parado en el cliente con un fix grueso: no afirma cercanía ni promete metros en el CTA', async () => {
+    // El caso de la captura. El vendedor está ENCIMA del cliente (0 m) pero su fix tiene
+    // 150 m de margen, así que la salida de la histéresis (`d + p <= 100`) es
+    // insatisfacible y `alejado` queda prendido. Antes la pantalla se contradecía: verde
+    // "Estás a 0 m del cliente." arriba de un "Cerrar igual · estás a 0 m".
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 150 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            alejado
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    // La distancia se sigue mostrando —es la mejor estimación que hay— pero con su margen
+    // y sin el verde que la daba por confirmada.
+    const aviso = await screen.findByText(/margen de 150 m/i)
+    expect(aviso).toHaveTextContent('Estás a 0 m del cliente')
+    expect(aviso).toHaveTextContent('no alcanza para confirmarlo')
+    expect(aviso.className).not.toMatch(/dsgreen/)
+
+    // Y el botón no promete una distancia que el fix no probó.
+    expect(screen.getByRole('button', { name: /^cerrar igual$/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /cerrar igual · estás a/i })).not.toBeInTheDocument()
+})
+
+it('con un fix fino que sí prueba lejanía, el CTA sigue mostrando los metros', async () => {
+    // La contracara: acá el fix es concluyente (1112 m con 10 m de margen), así que el
+    // botón sí puede decir cuánto — es la información que hace pensar al vendedor.
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.61, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            alejado
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    expect(await screen.findByRole('button', { name: /cerrar igual · estás a 1112 m/i })).toBeInTheDocument()
+    expect(screen.queryByText(/no alcanza para confirmarlo/i)).not.toBeInTheDocument()
+})
+
+it('sin aviso vigente, un fix cercano se sigue afirmando en verde', async () => {
+    // El `fixNoConcluyente` no puede comerse el caso normal: sin `alejado`, un fix que
+    // ubica al vendedor en el cliente se muestra como siempre.
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 150 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    expect(await screen.findByText('Estás a 0 m del cliente.')).toBeInTheDocument()
+    expect(screen.queryByText(/no alcanza para confirmarlo/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^cerrar visita$/i })).toBeInTheDocument()
+})
