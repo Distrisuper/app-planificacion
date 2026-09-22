@@ -152,10 +152,17 @@ export default function VisitaFlow({
     const [altaYaIniciada, setAltaYaIniciada] = useState(false)
 
     // Gate de "Datos del comercio". Guarda la propuesta ya confirmada mientras el
-    // vendedor carga la ficha; no null = sheet abierto. El corte va ANTES del POST a
-    // propósito: el cronómetro no corre mientras se carga, y abandonar no deja una
-    // visita abierta sin ficha.
+    // vendedor carga la ficha; no null = sheet abierto. El corte va ANTES del mapa a
+    // propósito (spec 2026-09-22-ficha-antes-del-mapa): así "Iniciar visita" del mapa
+    // vuelve a significar iniciar, en vez de abrir un formulario de cuatro pasos. Sigue
+    // estando antes del POST, así que el cronómetro no corre mientras se carga y
+    // abandonar no deja una visita abierta sin ficha.
     const [perfilPendiente, setPerfilPendiente] = useState<IPropuestaRubroDTO[] | null>(null)
+    // "La ficha ya no bloquea a este cliente en este flujo". Estado local y no
+    // `cliente.ficha.pendientes` a secas: el PUT ya parcheó la caché de la agenda, pero el
+    // `cliente` que llega por props puede ser el del render anterior, y sin esto el gate se
+    // volvería a disparar sobre sí mismo.
+    const [fichaLista, setFichaLista] = useState(false)
     const [errorFicha, setErrorFicha] = useState<string | null>(null)
     // Edición posterior, desde el chip "Datos del comercio" de VisitaSheet.
     const [editandoFicha, setEditandoFicha] = useState(false)
@@ -182,6 +189,7 @@ export default function VisitaFlow({
         setNoVisitaRubros(null)
         setAltaYaIniciada(false)
         setPerfilPendiente(null)
+        setFichaLista(false)
         setErrorFicha(null)
         setEditandoFicha(false)
     }, [cliente?.rotacionClienteId])
@@ -230,7 +238,11 @@ export default function VisitaFlow({
     } = usePropuesta(cargandoDirecto ? (cliente?.codigoParticularCliente ?? null) : null)
     useEffect(() => {
         if (!cargandoDirecto || !propuestaDirecta) return
-        setPropuestaPendiente(propuestaDirecta.rubros.map(toPropuestaDTO))
+        // Por `onConfirmarPropuesta` y no seteando `propuestaPendiente` derecho: los dos
+        // botones "Iniciar visita" (el de la card, que entra por acá, y el del pie de la
+        // propuesta) tienen que cruzar el MISMO gate de ficha, en un solo lugar.
+        onConfirmarPropuesta(propuestaDirecta.rubros.map(toPropuestaDTO))
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cargandoDirecto, propuestaDirecta])
 
     if (!cliente) return null
@@ -246,12 +258,26 @@ export default function VisitaFlow({
 
     // Solo con coordenadas del cliente vale la pena mostrar el mapa (confirmar cercanía);
     // sin ellas se arranca directo, igual que antes.
-    function onConfirmarPropuesta(propuesta: IPropuestaRubroDTO[]) {
+    //
+    // Y es el punto de corte del gate de "Datos del comercio": acá el vendedor ya declaró
+    // que va a visitar, y todavía no vio el mapa. `fichaConfirmada` lo pasa el sheet después
+    // de un PUT OK, para no depender de que `setFichaLista` se vea en el mismo tick.
+    function onConfirmarPropuesta(
+        propuesta: IPropuestaRubroDTO[],
+        opts: { fichaConfirmada?: boolean } = {},
+    ) {
         if (bloqueadoPorOtraVisita) return
+        if (!opts.fichaConfirmada && !fichaLista && relevamientoPendiente(cliente!)) {
+            setErrorIniciar(null)
+            setPerfilPendiente(propuesta)
+            return
+        }
         if (tieneCoords) {
             setPropuestaPendiente(propuesta)
         } else {
-            onIniciar(propuesta)
+            // `opts` se reenvía: sin mapa de por medio, el POST sale en este mismo tick y el
+            // guard de `onIniciar` todavía no ve el `setFichaLista` de recién.
+            void onIniciar(propuesta, opts)
         }
     }
 
@@ -261,11 +287,11 @@ export default function VisitaFlow({
 
     async function onIniciar(propuesta: IPropuestaRubroDTO[], opts: { fichaConfirmada?: boolean } = {}) {
         if (iniciandoFlujo || bloqueadoPorOtraVisita) return
-        // Único punto de corte del gate: los tres caminos de inicio (mapa, sin
-        // coordenadas y alta) terminan acá. `fichaConfirmada` lo pasa el sheet después de
-        // un PUT OK: la card en caché ya se actualizó, pero el `cliente` de este closure
-        // es el de antes.
-        if (!opts.fichaConfirmada && relevamientoPendiente(cliente!)) {
+        // Red de seguridad del gate, no su puerta principal: el camino normal ya cortó en
+        // `onConfirmarPropuesta`, antes del mapa. Esto queda para la visita de ALTA —que no
+        // pasa por la propuesta y tiene su propio mapa en modo 'ubicar'— y para cualquier
+        // camino de inicio que se agregue mañana.
+        if (!opts.fichaConfirmada && !fichaLista && relevamientoPendiente(cliente!)) {
             setErrorIniciar(null)
             setPerfilPendiente(propuesta)
             return
@@ -657,14 +683,30 @@ export default function VisitaFlow({
                         setEditandoFicha(false)
                         return
                     }
+                    // Reanuda el camino que el gate cortó: mapa si el cliente tiene
+                    // coordenadas, POST directo si no. NO arranca la visita acá — el
+                    // vendedor todavía tiene que confirmar la cercanía en el mapa.
                     const propuesta = perfilPendiente ?? []
                     setPerfilPendiente(null)
-                    void onIniciar(propuesta, { fichaConfirmada: true })
+                    setFichaLista(true)
+                    onConfirmarPropuesta(propuesta, { fichaConfirmada: true })
                 }}
                 onClose={() => {
+                    if (editandoFicha) {
+                        // Edición: cerrar es sólo cerrar el sheet, la visita sigue abierta.
+                        setEditandoFicha(false)
+                        setErrorFicha(null)
+                        return
+                    }
+                    // Gate: cerrar el formulario cierra la card. No hay medio estado —o
+                    // carga la ficha y entra, o vuelve a la agenda. Además es lo único que
+                    // corta el ciclo en el camino directo: limpiar sólo `perfilPendiente`
+                    // deja `cargandoDirecto` habilitado y el efecto reabre el sheet al
+                    // instante con la propuesta cacheada (mismo caso que el `onCancel` del
+                    // mapa).
                     setPerfilPendiente(null)
-                    setEditandoFicha(false)
                     setErrorFicha(null)
+                    cerrarFlujo()
                 }}
             />
         </>

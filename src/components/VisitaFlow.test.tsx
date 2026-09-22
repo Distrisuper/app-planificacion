@@ -1172,8 +1172,8 @@ describe('gate de "Datos del comercio"', () => {
         expect(screen.getByText(/datos del comercio/i)).toBeInTheDocument()
     })
 
-    it('cerrar sin cargar no hace PUT ni POST y vuelve a la pantalla de atrás', async () => {
-        renderFlow({ cliente: conPendientes })
+    it('cerrar sin cargar no hace PUT ni POST y cierra el flujo entero', async () => {
+        const { onClose } = renderFlow({ cliente: conPendientes })
         fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
         await screen.findByText(/datos del comercio/i)
         // PropuestaSheet, atrás, también expone su propio "Cerrar": el de la ficha es el
@@ -1183,20 +1183,60 @@ describe('gate de "Datos del comercio"', () => {
         await waitFor(() => expect(screen.queryByText(/datos del comercio/i)).not.toBeInTheDocument())
         expect(api.actualizarFicha).not.toHaveBeenCalled()
         expect(api.iniciarVisita).not.toHaveBeenCalled()
-        // La propuesta (pantalla de atrás) sigue abierta.
-        expect(screen.getByRole('button', { name: /iniciar visita/i })).toBeInTheDocument()
+        // Cerrar el formulario cierra la card: no hay medio estado del que salir.
+        expect(onClose).toHaveBeenCalled()
     })
 
-    it('con coordenadas del cliente, el gate corta después del mapa: primero mapa, al tocar iniciar aparece la ficha', async () => {
+    it('con coordenadas del cliente, el gate corta ANTES del mapa', async () => {
         mockGeolocacionEnVivo({ latitude: -34.6, longitude: -58.4, accuracy: 10 })
         renderFlow({ cliente: { ...conPendientes, latitud: -34.6, longitud: -58.4 } })
         fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        expect(await screen.findByText(/datos del comercio/i)).toBeInTheDocument()
+        expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+
+        completarFicha()
+        const botones = screen.getAllByRole('button', { name: /iniciar visita/i })
+        fireEvent.click(botones[botones.length - 1])
+
+        // Confirmar la ficha abre el MAPA, no la visita: el vendedor todavía tiene que
+        // confirmar la cercanía. "Iniciar visita" del mapa vuelve a significar iniciar.
         expect(await screen.findByTestId('mapa-iniciar-visita')).toBeInTheDocument()
-        expect(screen.queryByText(/datos del comercio/i)).not.toBeInTheDocument()
-        const iniciarEnMapa = await screen.findByRole('button', { name: /iniciar visita/i })
+        await waitFor(() => expect(api.actualizarFicha).toHaveBeenCalledTimes(1))
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+
+        const iniciarEnMapa = screen.getByRole('button', { name: /^iniciar visita$/i })
         await waitFor(() => expect(iniciarEnMapa).toBeEnabled())
         fireEvent.click(iniciarEnMapa)
+        // Y no vuelve a pedir la ficha: el gate ya quedó destrabado para este cliente.
+        await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+        expect(api.actualizarFicha).toHaveBeenCalledTimes(1)
+    })
+
+    it('"Iniciar visita" directo desde la card también corta antes del mapa', async () => {
+        mockGeolocacionEnVivo({ latitude: -34.6, longitude: -58.4, accuracy: 10 })
+        renderFlow({
+            cliente: { ...conPendientes, latitud: -34.6, longitud: -58.4 },
+            directoAMapa: true,
+        })
         expect(await screen.findByText(/datos del comercio/i)).toBeInTheDocument()
+        expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+    })
+
+    it('en el camino directo, cerrar la ficha vuelve a la agenda y no la reabre sola', async () => {
+        // `cargandoDirecto` sigue habilitado mientras `propuestaPendiente` es null, así que
+        // limpiar sólo el estado del sheet dejaría que el efecto lo reabra con la propuesta
+        // cacheada: el vendedor no podía salir. Mismo caso que el `onCancel` del mapa.
+        const { onClose } = renderFlow({
+            cliente: { ...conPendientes, latitud: -34.6, longitud: -58.4 },
+            directoAMapa: true,
+        })
+        await screen.findByText(/datos del comercio/i)
+        const cerrarBotones = screen.getAllByRole('button', { name: /cerrar/i })
+        fireEvent.click(cerrarBotones[cerrarBotones.length - 1])
+        await waitFor(() => expect(onClose).toHaveBeenCalled())
+        await new Promise(r => setTimeout(r, 150))
+        expect(screen.queryByText(/datos del comercio/i)).not.toBeInTheDocument()
         expect(api.iniciarVisita).not.toHaveBeenCalled()
     })
 
