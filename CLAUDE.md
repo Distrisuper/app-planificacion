@@ -269,19 +269,22 @@ Hay **tres capas separadas**, y una operación toca una sola:
   del radio, así que ningún fix simulado desde ahí podía disparar el aviso. Tampoco restar la
   precisión en la salida (`d − p ≤ 100`): eso sí convierte un fix basura en evidencia de
   cercanía. Y ojo con el nombre: `IniciarVisitaMapa` pasó a llamarse **`MapaVisita`**.
-- **Con un fix grueso el aviso NO se puede apagar, y la pantalla tiene que decirlo en vez de
-  contradecirse.** La salida exige `d + p ≤ 100`, así que con `p` grande es insatisfacible:
-  parado ENCIMA del cliente, `0 + 150 > 100` y el aviso queda prendido. Es lo esperado (un
-  fix de ±150 m no prueba que llegó) y pasa justo adentro del local, donde el GPS es peor.
-  Lo que estaba mal era que `MapaVisita` pintaba la misma medición con dos criterios
-  distintos: el párrafo miraba su `fueraDeRango` y afirmaba en **verde** "Estás a 0 m del
-  cliente" mientras el CTA, que mira `alejado`, decía **"Cerrar igual · estás a 0 m"**. Esa
-  banda ahora es un estado propio, `fixNoConcluyente` (hay aviso vigente y este fix no
-  prueba lejanía): muestra la distancia **con su margen** —"pero tu ubicación tiene un
-  margen de 150 m: no alcanza para confirmarlo"— y el CTA deja de prometer metros
-  (`Cerrar igual` pelado). El `alejado` se le pasa también al mapa de `'consulta'`, que no
-  tiene CTA pero mentía igual. **No se arregla aflojando la histéresis** — ver el bullet de
-  arriba.
+- **En el mapa de cierre manda lo que el vendedor VE, no la histéresis: si el punto cae
+  dentro del círculo, es un "Cerrar visita" normal.** Con un fix grueso la salida del hook
+  (`d + p ≤ 100`) es insatisfacible —parado ENCIMA del cliente, `0 + 150 > 100`— así que
+  `alejado` queda prendido para siempre, y eso pasa justo adentro del local, donde el GPS es
+  peor. Para el aviso de la visita en curso está bien (±150 m no PRUEBAN que llegó), pero
+  colgar de ahí el CTA daba un absurdo: el pin adentro del círculo, "Estás a 0 m del
+  cliente", y un botón ofreciendo **"Cerrar igual · estás a 0 m"** con su diálogo. El
+  criterio del mapa es `cercaSegunFix` (`distancia ≤ RADIO_INICIO_METROS`) y `alejado` pasó
+  a ser condición **necesaria pero no suficiente** (`avisarLejos`). Esto **no afloja la
+  histéresis** —el gate de iniciar y el aviso siguen intactos— porque **cerrar no tiene
+  gate**: lo único que decide este criterio es si vale la pena interrumpir. Dos corolarios:
+  (1) la decisión la toma `MapaVisita` y viaja al llamador por `onCerrar(requiereConfirmacion)`
+  — recalcularla en `VisitaFlow` con `alejado` devolvía el botón verde que igual abría el
+  diálogo; (2) afuera del círculo pero sin poder probarlo (`d − p ≤ radio`), la distancia se
+  muestra **con su margen** ("no alcanza para confirmarlo") en vez de darse por buena en
+  verde — es `fixNoConcluyente`, y el CTA ahí no promete metros.
 - **Entre dos fixes gana el mejor, no el último: todo fix pasa por `aceptarFix`.** El
   `watchPosition` del mapa y el `getCurrentPosition` de "Recalcular posición" escriben en el
   mismo estado, y el watch **no se pausa** durante el recálculo — sin arbitrar, el vendedor

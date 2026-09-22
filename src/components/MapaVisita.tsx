@@ -46,15 +46,15 @@ interface MapaVisitaProps {
     error?: string | null
     /** Sólo se usa en modo 'iniciar'. */
     onIniciar?: () => void
-    /** Sólo en modo 'cerrar'. Si `alejado`, el llamador es quien pide la confirmación —
-     *  este componente no la muestra. */
-    onCerrar?: () => void
-    /** El aviso de "te alejaste" vigente. En 'cerrar' decide además la cara del CTA; en
-     *  'consulta' se usa solo para no afirmar una cercanía que el fix no prueba. Viene de
-     *  `useAlejadoDelCliente`, y NO del `fueraDeRango` que este componente calcula para el
-     *  texto de la distancia: la histéresis simétrica del hook (entra con `d − p > radio`,
-     *  sale con `d + p <= radio`) tiene que ser la única fuente de verdad, o las dos
-     *  pantallas terminan discrepando — ver `fixNoConcluyente`. */
+    /** Sólo en modo 'cerrar'. Recibe si el cierre necesita confirmarse: la decisión la
+     *  toma ESTE componente (ver `avisarLejos`) y no el llamador, porque es la misma que
+     *  pinta el CTA — separarlas es lo que dejaba un botón verde "Cerrar visita" abriendo
+     *  igual el diálogo de "¿cerrar lejos?". El diálogo lo muestra el llamador. */
+    onCerrar?: (requiereConfirmacion: boolean) => void
+    /** El aviso de "te alejaste" vigente, de `useAlejadoDelCliente`. Es condición
+     *  NECESARIA para advertir, no suficiente: si el fix ubica al vendedor dentro del
+     *  círculo, el mapa no advierte nada por más que el aviso siga prendido. Ver
+     *  `cercaSegunFix`. */
     alejado?: boolean
     /** Sólo en modo 'cerrar': el cierre está en vuelo. Paralelo a `iniciando` y no un
      *  renombre — los dos modos nunca están montados a la vez, pero un prop compartido
@@ -239,24 +239,30 @@ export default function MapaVisita({
     const [calculando, setCalculando] = useState(true)
     const fueraDeRango = posicion?.fueraDeRango ?? false
     /**
-     * El aviso de `useAlejadoDelCliente` sigue prendido pero ESTE fix no lo corrobora:
-     * cae en la banda donde no prueba ni lejanía (`d − p > radio`) ni cercanía
-     * (`d + p <= radio`). Pasa parado adentro del local, que es justo donde el GPS es
-     * peor: con `p` grande la salida es directamente insatisfacible —`0 + 150 > 100`— y
-     * el aviso no se puede apagar por más cerca que esté.
+     * El punto del vendedor cae DENTRO del círculo que está mirando. Es el criterio de
+     * este mapa, y a propósito no es el de `useAlejadoDelCliente`: acá manda lo que se ve.
      *
-     * Hay que distinguirlo porque las dos caras del mismo dato se calculan con criterios
-     * distintos, y sin esto la pantalla se contradice: el párrafo miraba solo
-     * `fueraDeRango` y afirmaba en verde "Estás a 0 m del cliente" mientras el CTA, que
-     * mira `alejado`, decía "Cerrar igual · estás a 0 m". La distancia no es el problema
-     * —es la mejor estimación que hay—: el problema es afirmarla con una certeza que el
-     * fix no tiene. Acá se dice con su margen, que además explica por qué el CTA sigue
-     * en su cara de lejos y para qué sirve "Recalcular posición".
+     * La histéresis del hook sale con `d + p <= radio`, así que con un fix grueso es
+     * insatisfacible —parado encima del cliente, `0 + 150 > 100`— y el aviso no se apaga
+     * nunca. Eso está bien para el aviso de la visita en curso (un fix de ±150 m no PRUEBA
+     * que llegó, y ahí el costo de equivocarse es no avisar). Pero acá deja la pantalla
+     * diciendo un absurdo: el pin adentro del círculo, "Estás a 0 m del cliente", y un
+     * botón que ofrece "Cerrar igual · estás a 0 m" con su diálogo de confirmación.
      *
-     * NO se arregla aflojando la salida de la histéresis (`d − p <= radio`): eso convierte
-     * un fix basura en evidencia de cercanía, y está descartado en CLAUDE.md.
+     * Usar la distancia visible no afloja nada de lo que la regla protege: **cerrar no
+     * tiene gate** —siempre se pudo cerrar de cualquier lado— así que lo único que decide
+     * este criterio es si vale la pena interrumpir con una advertencia. El gate de INICIAR
+     * y el aviso de "te alejaste" siguen con la histéresis intacta.
      */
-    const fixNoConcluyente = alejado === true && posicion !== null && !posicion.fueraDeRango
+    const cercaSegunFix = posicion !== null && posicion.distanciaM <= RADIO_INICIO_METROS
+    /** Hay aviso vigente y este fix no lo desmiente: recién ahí se advierte. */
+    const avisarLejos = alejado === true && !cercaSegunFix
+    /**
+     * Está fuera del círculo pero el fix no alcanza para afirmarlo (`d − p <= radio`): se
+     * muestra la distancia CON su margen en vez de darla por buena en verde, que era la
+     * otra mitad de la contradicción. Explica además para qué sirve "Recalcular posición".
+     */
+    const fixNoConcluyente = avisarLejos && posicion !== null && !posicion.fueraDeRango
 
     useEffect(() => {
         if (!open || !mapRef.current) return
@@ -698,17 +704,17 @@ export default function MapaVisita({
                  *  un cierre. El desvío hasta acá ya cumplió su función: que lo vea. */}
                 {esCerrar && (
                     <Button
-                        onClick={onCerrar}
+                        onClick={() => onCerrar?.(avisarLejos)}
                         loading={cerrando}
                         className={
-                            alejado
+                            avisarLejos
                                 ? 'h-12 w-full bg-[#B45309] text-[15px] hover:bg-[#92400E]'
                                 : 'h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90'
                         }
                     >
                         {cerrando
                             ? 'Cerrando…'
-                            : alejado
+                            : avisarLejos
                               ? // Los metros van en el botón solo cuando ESTE fix prueba
                                 // la lejanía. Sin fix todavía no hay ninguno que mostrar,
                                 // y con un fix no concluyente mostrarlo daba el absurdo
