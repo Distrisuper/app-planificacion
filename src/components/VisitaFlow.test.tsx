@@ -11,14 +11,6 @@ import type { IAgendaClient } from '@/types/planificacion'
 
 vi.mock('@/api/planificacion')
 vi.mock('@/lib/geolocation')
-// El gate de relevamiento ("Datos del comercio") se interpone entre tocar "Iniciar
-// visita" y el POST, en los tres caminos de inicio. Estos tests son sobre el flujo de
-// la visita, no sobre el gate: se lo saca de en medio declarando que el cliente ya
-// está relevado. El gate tiene su propio archivo de tests.
-vi.mock('@/lib/relevamientos', async importOriginal => ({
-    ...(await importOriginal<typeof import('@/lib/relevamientos')>()),
-    relevamientoPendiente: () => false,
-}))
 const authMock = vi.fn(() => ({
     capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false },
 }))
@@ -172,6 +164,7 @@ beforeEach(() => {
     ;(api.getOfrecimientos as any).mockResolvedValue([])
     ;(api.getMotivos as any).mockResolvedValue([])
     ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 99, ofrecimientos: 3 })
+    ;(api.actualizarFicha as any).mockResolvedValue({ pendientes: [], valores: {} })
     ;(geo.capturarUbicacion as any).mockResolvedValue({
         ok: true,
         coord: '-34.6,-58.4',
@@ -1115,5 +1108,101 @@ describe('identidad del cliente en el header', () => {
         renderFlow()
         expect(await screen.findByText('ALMACEN DON JOSE')).toBeInTheDocument()
         expect(screen.getByText('#10034')).toBeInTheDocument()
+    })
+})
+
+describe('gate de "Datos del comercio"', () => {
+    const conPendientes: IAgendaClient = {
+        ...cliente,
+        ficha: { pendientes: ['especialidad', 'personas', 'facturacion'], valores: {} },
+    }
+    function completarFicha() {
+        fireEvent.click(screen.getByRole('button', { name: /^frenos$/i }))
+        fireEvent.change(screen.getByLabelText(/personas que trabajan/i), { target: { value: '4' } })
+        fireEvent.click(screen.getByRole('radio', { name: /mayor a 30m/i }))
+    }
+
+    it('sin pendientes no aparece y la visita arranca directo', async () => {
+        renderFlow({ cliente: { ...cliente, ficha: { pendientes: [], valores: {} } } })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+        expect(screen.queryByText(/datos del comercio/i)).not.toBeInTheDocument()
+        expect(api.actualizarFicha).not.toHaveBeenCalled()
+    })
+
+    it('con pendientes intercepta ANTES del POST (camino sin coordenadas)', async () => {
+        renderFlow({ cliente: conPendientes })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        expect(await screen.findByText(/datos del comercio/i)).toBeInTheDocument()
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+        expect(geo.capturarUbicacion).not.toHaveBeenCalled()
+    })
+
+    it('confirmar hace el PUT y DESPUÉS el POST, en ese orden, sin volver a pedir la ficha', async () => {
+        const orden: string[] = []
+        ;(api.actualizarFicha as any).mockImplementation(async () => { orden.push('ficha'); return { pendientes: [], valores: {} } })
+        ;(api.iniciarVisita as any).mockImplementation(async () => { orden.push('visita'); return { visitaId: 99, ofrecimientos: 3 } })
+        renderFlow({ cliente: conPendientes })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        await screen.findByText(/datos del comercio/i)
+        completarFicha()
+        // Dentro del sheet el botón también dice "Iniciar visita": tomar el habilitado.
+        const botones = screen.getAllByRole('button', { name: /iniciar visita/i })
+        fireEvent.click(botones[botones.length - 1])
+        await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+        expect(api.actualizarFicha).toHaveBeenCalledWith('10034', {
+            especialidad: ['frenos'], personas: ['4'], facturacion: ['3'],
+        })
+        expect(orden).toEqual(['ficha', 'visita'])
+        expect(api.actualizarFicha).toHaveBeenCalledTimes(1)
+    })
+
+    it('si el PUT falla, muestra el error en el sheet y la visita NO arranca', async () => {
+        ;(api.actualizarFicha as any).mockRejectedValue(new Error('500'))
+        renderFlow({ cliente: conPendientes })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        await screen.findByText(/datos del comercio/i)
+        completarFicha()
+        const botones = screen.getAllByRole('button', { name: /iniciar visita/i })
+        fireEvent.click(botones[botones.length - 1])
+        expect(await screen.findByRole('alert')).toHaveTextContent(/no pudimos guardar/i)
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+        expect(screen.getByText(/datos del comercio/i)).toBeInTheDocument()
+    })
+
+    it('cerrar sin cargar no hace PUT ni POST y vuelve a la pantalla de atrás', async () => {
+        renderFlow({ cliente: conPendientes })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        await screen.findByText(/datos del comercio/i)
+        // PropuestaSheet, atrás, también expone su propio "Cerrar": el de la ficha es el
+        // último montado (PerfilComercioSheet se renderiza al final de VisitaFlow).
+        const cerrarBotones = screen.getAllByRole('button', { name: /cerrar/i })
+        fireEvent.click(cerrarBotones[cerrarBotones.length - 1])
+        await waitFor(() => expect(screen.queryByText(/datos del comercio/i)).not.toBeInTheDocument())
+        expect(api.actualizarFicha).not.toHaveBeenCalled()
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+        // La propuesta (pantalla de atrás) sigue abierta.
+        expect(screen.getByRole('button', { name: /iniciar visita/i })).toBeInTheDocument()
+    })
+
+    it('con coordenadas del cliente, el gate corta después del mapa: primero mapa, al tocar iniciar aparece la ficha', async () => {
+        mockGeolocacionEnVivo({ latitude: -34.6, longitude: -58.4, accuracy: 10 })
+        renderFlow({ cliente: { ...conPendientes, latitud: -34.6, longitud: -58.4 } })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        expect(await screen.findByTestId('mapa-iniciar-visita')).toBeInTheDocument()
+        expect(screen.queryByText(/datos del comercio/i)).not.toBeInTheDocument()
+        const iniciarEnMapa = await screen.findByRole('button', { name: /iniciar visita/i })
+        await waitFor(() => expect(iniciarEnMapa).toBeEnabled())
+        fireEvent.click(iniciarEnMapa)
+        expect(await screen.findByText(/datos del comercio/i)).toBeInTheDocument()
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+    })
+
+    it('pide sólo el campo pendiente', async () => {
+        renderFlow({ cliente: { ...cliente, ficha: { pendientes: ['facturacion'], valores: { especialidad: ['frenos'], personas: ['2'] } } } })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        await screen.findByText(/datos del comercio/i)
+        expect(screen.queryByLabelText(/personas que trabajan/i)).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /falta la facturación/i })).toBeDisabled()
     })
 })

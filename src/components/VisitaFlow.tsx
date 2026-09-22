@@ -5,9 +5,10 @@ import PropuestaSheet, { toPropuestaDTO } from './PropuestaSheet'
 import VisitaSheet from './VisitaSheet'
 import MapaVisita from './MapaVisita'
 import PerfilComercioSheet from './relevamiento/PerfilComercioSheet'
-import { relevamientoPendiente } from '@/lib/relevamientos'
+import { camposPendientes, relevamientoPendiente } from '@/lib/relevamientos'
 import ResolucionSheet from './ResolucionSheet'
 import { useCerrarVisita, useIniciarVisita, useNoVisitaSobreVisitaAbierta } from '@/hooks/useVisitas'
+import { useActualizarFicha } from '@/hooks/useFicha'
 import { usePropuesta } from '@/hooks/usePropuesta'
 import { useMotivos } from '@/hooks/useMotivos'
 import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geolocation'
@@ -84,6 +85,7 @@ export default function VisitaFlow({
 }: VisitaFlowProps) {
     const { capacidades } = useAuth()
     const iniciar = useIniciarVisita()
+    const actualizarFicha = useActualizarFicha()
     const cerrar = useCerrarVisita()
     const noVisitaAbierta = useNoVisitaSobreVisitaAbierta()
     const { data: motivosVisita = [] } = useMotivos('visita')
@@ -149,16 +151,12 @@ export default function VisitaFlow({
     // VISITA_ACTIVA_EXISTENTE.
     const [altaYaIniciada, setAltaYaIniciada] = useState(false)
 
-    // Gate de relevamiento (MOCK — "Datos del comercio"). Guarda la propuesta ya
-    // confirmada mientras el vendedor carga el formulario; no null = sheet abierto.
-    // El corte va ANTES del POST a propósito: el cronómetro no corre mientras se
-    // carga, y abandonar no deja una visita abierta sin perfil.
+    // Gate de "Datos del comercio". Guarda la propuesta ya confirmada mientras el
+    // vendedor carga la ficha; no null = sheet abierto. El corte va ANTES del POST a
+    // propósito: el cronómetro no corre mientras se carga, y abandonar no deja una
+    // visita abierta sin ficha.
     const [perfilPendiente, setPerfilPendiente] = useState<IPropuestaRubroDTO[] | null>(null)
-    // MOCK: hoy alcanza con "ya lo cargó en esta pasada" porque no hay dónde
-    // consultar si el cliente fue perfilado. Cuando exista el backend, esto pasa a
-    // ser `cliente.perfilCargado` (o el registro de relevamientos pendientes) y el
-    // sheet deja de aparecer en el segundo intento del mismo cliente.
-    const perfilListo = useRef(false)
+    const [errorFicha, setErrorFicha] = useState<string | null>(null)
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
@@ -182,7 +180,7 @@ export default function VisitaFlow({
         setNoVisitaRubros(null)
         setAltaYaIniciada(false)
         setPerfilPendiente(null)
-        perfilListo.current = false
+        setErrorFicha(null)
     }, [cliente?.rotacionClienteId])
 
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
@@ -258,12 +256,13 @@ export default function VisitaFlow({
         onIniciar(propuestaPendiente ?? [])
     }
 
-    async function onIniciar(propuesta: IPropuestaRubroDTO[]) {
+    async function onIniciar(propuesta: IPropuestaRubroDTO[], opts: { fichaConfirmada?: boolean } = {}) {
         if (iniciandoFlujo || bloqueadoPorOtraVisita) return
         // Único punto de corte del gate: los tres caminos de inicio (mapa, sin
-        // coordenadas y alta) terminan acá, así que envolver este handler los cubre a
-        // los tres sin tocar ninguna de las tres pantallas.
-        if (!perfilListo.current && relevamientoPendiente(cliente!.rotacionClienteId)) {
+        // coordenadas y alta) terminan acá. `fichaConfirmada` lo pasa el sheet después de
+        // un PUT OK: la card en caché ya se actualizó, pero el `cliente` de este closure
+        // es el de antes.
+        if (!opts.fichaConfirmada && relevamientoPendiente(cliente!)) {
             setErrorIniciar(null)
             setPerfilPendiente(propuesta)
             return
@@ -619,24 +618,37 @@ export default function VisitaFlow({
             )}
             {/* Último del árbol a propósito: se monta POR ENCIMA del mapa (o de la
                 propuesta) que quedó atrás, que es justo la pantalla a la que vuelve
-                si cierra sin cargar. MOCK: aparece siempre, en todos los clientes. */}
+                si cierra sin cargar. */}
             <PerfilComercioSheet
                 open={perfilPendiente !== null}
+                modo="gate"
+                campos={camposPendientes(cliente)}
+                valoresIniciales={cliente.ficha?.valores}
                 nombreCliente={nombre}
                 identidad={clienteEsAlta ? undefined : identidad}
-                onConfirmar={perfil => {
-                    // MOCK: todavía no hay dónde guardarlo. Queda en consola para poder
-                    // ver la forma del dato mientras se define la tabla.
-                    console.info('[mock] Datos del comercio', {
-                        rotacionClienteId: cliente!.rotacionClienteId,
-                        perfil,
-                    })
+                guardando={actualizarFicha.isPending || iniciandoFlujo}
+                error={errorFicha}
+                onConfirmar={async valores => {
+                    setErrorFicha(null)
+                    try {
+                        // PRIMERO la ficha, DESPUÉS la visita, y sólo si la ficha se guardó: al
+                        // revés, el gate se destrabaría sin que el dato exista.
+                        await actualizarFicha.mutateAsync({
+                            codigoParticularCliente: cliente.codigoParticularCliente,
+                            valores,
+                        })
+                    } catch {
+                        setErrorFicha('No pudimos guardar los datos. Revisá la conexión y volvé a intentar.')
+                        return
+                    }
                     const propuesta = perfilPendiente ?? []
-                    perfilListo.current = true
                     setPerfilPendiente(null)
-                    void onIniciar(propuesta)
+                    void onIniciar(propuesta, { fichaConfirmada: true })
                 }}
-                onClose={() => setPerfilPendiente(null)}
+                onClose={() => {
+                    setPerfilPendiente(null)
+                    setErrorFicha(null)
+                }}
             />
         </>
     )

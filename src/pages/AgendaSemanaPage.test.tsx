@@ -8,13 +8,6 @@ import { getDiaDeHoy } from '@/lib/weekDates'
 import { guardarVisitaEnCurso, leerVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
 
 vi.mock('@/api/planificacion')
-// Ver la nota en VisitaFlow.test.tsx: el gate de "Datos del comercio" se interpone
-// entre "Iniciar visita" y el POST. Acá se lo saca de en medio igual — estos tests son
-// sobre la agenda, no sobre el relevamiento.
-vi.mock('@/lib/relevamientos', async importOriginal => ({
-    ...(await importOriginal<typeof import('@/lib/relevamientos')>()),
-    relevamientoPendiente: () => false,
-}))
 // El botón de "Cliente nuevo" está apagado por flag (ver src/lib/flags.ts). El test de
 // wiring de abajo lo prende para poder recorrer el flujo completo; el que verifica el
 // apagado lo baja. Getter y no valor fijo: la página lee la constante en cada render.
