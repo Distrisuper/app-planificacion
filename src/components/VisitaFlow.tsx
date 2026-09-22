@@ -5,7 +5,7 @@ import PropuestaSheet, { toPropuestaDTO } from './PropuestaSheet'
 import VisitaSheet from './VisitaSheet'
 import MapaVisita from './MapaVisita'
 import PerfilComercioSheet from './relevamiento/PerfilComercioSheet'
-import { camposPendientes, relevamientoPendiente } from '@/lib/relevamientos'
+import { CAMPOS_FICHA, camposPendientes, relevamientoPendiente } from '@/lib/relevamientos'
 import ResolucionSheet from './ResolucionSheet'
 import { useCerrarVisita, useIniciarVisita, useNoVisitaSobreVisitaAbierta } from '@/hooks/useVisitas'
 import { useActualizarFicha } from '@/hooks/useFicha'
@@ -157,6 +157,8 @@ export default function VisitaFlow({
     // visita abierta sin ficha.
     const [perfilPendiente, setPerfilPendiente] = useState<IPropuestaRubroDTO[] | null>(null)
     const [errorFicha, setErrorFicha] = useState<string | null>(null)
+    // Edición posterior, desde el chip "Datos del comercio" de VisitaSheet.
+    const [editandoFicha, setEditandoFicha] = useState(false)
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
@@ -181,6 +183,7 @@ export default function VisitaFlow({
         setAltaYaIniciada(false)
         setPerfilPendiente(null)
         setErrorFicha(null)
+        setEditandoFicha(false)
     }, [cliente?.rotacionClienteId])
 
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
@@ -488,6 +491,14 @@ export default function VisitaFlow({
                     alejado={alejado && esClienteEnCurso}
                     onVerPosicion={() => setVerPosicion(true)}
                     onNoVisita={rubros => setNoVisitaRubros(rubros)}
+                    // Sólo con la ficha completa: si falta algo, el gate ya la pide al
+                    // iniciar, y dos puertas para lo mismo confunden. Sin `ficha` (backend
+                    // viejo) tampoco.
+                    onEditarDatosComercio={
+                        cliente.ficha && cliente.ficha.pendientes.length === 0
+                            ? () => setEditandoFicha(true)
+                            : undefined
+                    }
                 />
             )}
             <ResolucionSheet
@@ -620,9 +631,9 @@ export default function VisitaFlow({
                 propuesta) que quedó atrás, que es justo la pantalla a la que vuelve
                 si cierra sin cargar. */}
             <PerfilComercioSheet
-                open={perfilPendiente !== null}
-                modo="gate"
-                campos={camposPendientes(cliente)}
+                open={perfilPendiente !== null || editandoFicha}
+                modo={editandoFicha ? 'edicion' : 'gate'}
+                campos={editandoFicha ? CAMPOS_FICHA : camposPendientes(cliente)}
                 valoresIniciales={cliente.ficha?.valores}
                 nombreCliente={nombre}
                 identidad={clienteEsAlta ? undefined : identidad}
@@ -641,12 +652,18 @@ export default function VisitaFlow({
                         setErrorFicha('No pudimos guardar los datos. Revisá la conexión y volvé a intentar.')
                         return
                     }
+                    if (editandoFicha) {
+                        // Edición: guardar y cerrar. No arranca ni toca la visita.
+                        setEditandoFicha(false)
+                        return
+                    }
                     const propuesta = perfilPendiente ?? []
                     setPerfilPendiente(null)
                     void onIniciar(propuesta, { fichaConfirmada: true })
                 }}
                 onClose={() => {
                     setPerfilPendiente(null)
+                    setEditandoFicha(false)
                     setErrorFicha(null)
                 }}
             />

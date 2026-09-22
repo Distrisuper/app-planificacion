@@ -1126,7 +1126,9 @@ describe('gate de "Datos del comercio"', () => {
         renderFlow({ cliente: { ...cliente, ficha: { pendientes: [], valores: {} } } })
         fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
         await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
-        expect(screen.queryByText(/datos del comercio/i)).not.toBeInTheDocument()
+        // La visita ya arrancada ofrece el chip de edición (Task 13) — lo que no puede
+        // aparecer acá es el SHEET del gate (su botón "Guardar"/"Iniciar visita" propio).
+        expect(screen.queryByRole('button', { name: /^guardar$/i })).not.toBeInTheDocument()
         expect(api.actualizarFicha).not.toHaveBeenCalled()
     })
 
@@ -1204,5 +1206,31 @@ describe('gate de "Datos del comercio"', () => {
         await screen.findByText(/datos del comercio/i)
         expect(screen.queryByLabelText(/personas que trabajan/i)).not.toBeInTheDocument()
         expect(screen.getByRole('button', { name: /falta la facturación/i })).toBeDisabled()
+    })
+
+    it('con la ficha completa, VisitaSheet ofrece "Datos del comercio" y editar hace el PUT con todos los campos, sin tocar la visita', async () => {
+        const completo: IAgendaClient = {
+            ...cliente, estado: 'en_curso', visitaId: 77,
+            ficha: { pendientes: [], valores: { especialidad: ['frenos'], personas: ['2'], facturacion: ['5'] } },
+        }
+        renderFlow({ cliente: completo })
+        fireEvent.click(await screen.findByRole('button', { name: /datos del comercio/i }))
+        // Precargado y en modo edición.
+        expect(await screen.findByRole('button', { name: /^guardar$/i })).toBeEnabled()
+        expect(screen.getByLabelText(/personas que trabajan/i)).toHaveValue('2')
+        fireEvent.change(screen.getByLabelText(/personas que trabajan/i), { target: { value: '3' } })
+        fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
+        await waitFor(() => expect(api.actualizarFicha).toHaveBeenCalledWith('10034', {
+            especialidad: ['frenos'], personas: ['3'], facturacion: ['5'],
+        }))
+        await waitFor(() => expect(screen.queryByRole('button', { name: /^guardar$/i })).not.toBeInTheDocument())
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+        expect(api.cerrarVisita).not.toHaveBeenCalled()
+    })
+
+    it('con pendientes, VisitaSheet NO ofrece el chip (la puerta es el gate)', async () => {
+        renderFlow({ cliente: { ...conPendientes, estado: 'en_curso', visitaId: 77 } })
+        await screen.findByRole('button', { name: /cerrar visita/i })
+        expect(screen.queryByRole('button', { name: /datos del comercio/i })).not.toBeInTheDocument()
     })
 })
