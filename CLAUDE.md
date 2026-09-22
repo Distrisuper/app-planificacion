@@ -367,6 +367,47 @@ Hay **tres capas separadas**, y una operación toca una sola:
   confirma antes, y restaura gerencia. Vive en `EstadoVisitaSheet` (`onEliminar`, que la página
   pasa solo si corresponde) y en `VisitasService.quitarFilaPropia`. Ver
   `docs/dominio/modelo.md`, "Sacar de la agenda lo que se agregó a mano".
+- **"Datos del comercio" es una ficha del CLIENTE, no de la visita, y este dominio sólo la
+  guarda.** `pl_ficha_campo` (catálogo, con `codigo_erp` nullable) + `pl_ficha_valor` (una fila
+  por dato, vigente = `reemplazado_en IS NULL`): la forma de `camposDinamicos` del ERP, que es
+  donde termina. **Nada sale hacia client-service desde acá**: lo hace un cron ajeno leyendo
+  `codigo_erp` y marcando `sincronizado_en`. El gate lee `cliente.ficha.pendientes` (calculado
+  en `AgendaService.enriquecer` contra el catálogo, y ya viaja en la card de la agenda: cero
+  requests extra) y pide **sólo** eso; sumar un dato es una fila en el catálogo + un control en
+  `PerfilComercioSheet`, sin tocar el gate. El `PUT /planificacion/clientes/:codigo/ficha` va
+  **antes** del POST de la visita y lo condiciona. Se pide hasta que la ficha esté completa y
+  nunca vence. Corrección posterior: chip "Datos del comercio" en `VisitaSheet`, sólo sin
+  pendientes. Spec
+  `docs/superpowers/specs/2026-09-22-relevamiento-datos-del-comercio-design.md`.
+- **El formulario de la ficha lo dibuja el CATÁLOGO, no el front.** `GET /planificacion/ficha/campos`
+  (hook `useCamposFicha`, `staleTime: Infinity`) trae qué campos hay, de qué tipo y con qué
+  opciones; `PerfilComercioSheet` elige el control por `tipo` + `multiple` (chips / segmented /
+  stepper / input) y el título sale de `descripcion`, que **es texto de pantalla, no una nota
+  interna**. Agregar una opción es un `UPDATE` en `pl_ficha_campo`. Antes las listas estaban
+  duplicadas en `src/lib/relevamientos.ts` y el 22/09 las 7 especialidades del ERP se cargaron
+  dos veces a mano. **`etiquetaErp`/`codigoErp` no salen al front**: son el contrato con el cron
+  del ERP. **"Otros" es una opción con `abierta: true`**, no un caso especial del código: habilita
+  texto libre y se guarda **el texto** ('Chery'), nunca el código — si no, el `GROUP BY` de
+  gerencia devuelve un cajón de sastre; al reabrir, un valor fuera de la lista se relee como
+  "Otros". Lo único que sigue hardcodeado es que **Monomarca dispare la pregunta de la marca**
+  (`ESPECIALIDAD_CON_DETALLE`): modelarlo obligaría al gate del backend a entender la semántica
+  de un campo puntual. **El botón del pie no se renderiza sin catálogo**: con el GET en vuelo no
+  hay campos, `faltantes` es `[]` y el gate se auto-satisfaría — la misma trampa que
+  `ofrecimientosCargados` en `VisitaSheet`. Spec
+  `docs/superpowers/specs/2026-09-22-catalogo-de-ficha-dirigido-por-la-base-design.md`.
+- **El gate corta en `VisitaFlow.onConfirmarPropuesta`, ANTES del mapa, no en `onIniciar`.**
+  Los dos "Iniciar visita" que abren el camino —el verde de la card (vía el efecto de
+  `cargandoDirecto`) y el del pie de `PropuestaSheet`— convergen ahí, así que sigue siendo un
+  solo corte. Confirmar la ficha **abre el mapa**, no la visita: "Iniciar visita" del mapa
+  vuelve a significar iniciar, que es todo el punto — antes el CTA final abría un formulario de
+  cuatro pasos. `onIniciar` conserva el chequeo como **red de seguridad** (cubre la visita de
+  alta, que no pasa por la propuesta), contra el estado local `fichaLista` y no contra la caché.
+  **Cerrar el formulario cierra la card** (`cerrarFlujo()`), no vuelve a la pantalla de atrás:
+  sin eso, en el camino directo el efecto de `cargandoDirecto` lo reabre al instante. Revierte a
+  propósito la sección 8 del spec del relevamiento: se pierde la garantía de completar la ficha
+  estando en el local, se gana que el vendedor con el GPS roto ahora **sí** releve (antes el
+  formulario nunca aparecía porque "Iniciar visita" quedaba deshabilitado en el mapa). Spec
+  `docs/superpowers/specs/2026-09-22-ficha-antes-del-mapa-design.md`.
 - **El cronómetro de la visita abierta es un semáforo, y sus umbrales NO son el criterio de
   validez.** `src/lib/estadoDuracion.ts`: ámbar <15 min (`arranque`), **verde 15–90**
   (`valida`, bordes inclusive), ámbar >90 (`larga`), y `alejado` gana sobre las tres. Lo

@@ -111,6 +111,11 @@ interface VisitaSheetProps {
      *  Recibe cuántos rubros llevaba completos, para que el llamador pueda avisarle al
      *  vendedor que esos no van a contar. */
     onNoVisita?: (rubrosCargados: number) => void
+    /** Si se pasa, el header muestra el chip "Datos del comercio" que abre la edición de la
+     *  ficha. Se muestra con la visita abierta Y cerrada (es corrección, no carga de rubros).
+     *  El llamador decide cuándo pasarlo (VisitaFlow: sólo si no hay pendientes, para no
+     *  duplicar la puerta del gate). */
+    onEditarDatosComercio?: () => void
 }
 
 export default function VisitaSheet({
@@ -131,6 +136,7 @@ export default function VisitaSheet({
     onAbrirAppExterna,
     onVerPosicion,
     onNoVisita,
+    onEditarDatosComercio,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
     const estadoVivo = estadoVisitaVivo(segundos, alejado)
@@ -471,11 +477,23 @@ export default function VisitaSheet({
             </button>
         ) : null
 
-    // El de descuentos primero: es el de consulta, y la salida negativa queda al borde.
+    const chipDatosComercio = onEditarDatosComercio ? (
+        <button
+            type="button"
+            onClick={onEditarDatosComercio}
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[#C9D2E3] bg-[#F1F4F9] px-2 text-[11px] font-bold text-dsnavy"
+        >
+            Datos del comercio
+        </button>
+    ) : null
+
+    // Descuentos primero (consulta), después la ficha (corrección), y la salida negativa al
+    // borde, como hoy.
     const acciones =
-        chipDescuentos || botonNoVisita ? (
+        chipDescuentos || chipDatosComercio || botonNoVisita ? (
             <div className="flex items-center gap-1.5">
                 {chipDescuentos}
+                {chipDatosComercio}
                 {botonNoVisita}
             </div>
         ) : undefined

@@ -157,6 +157,33 @@ function renderFlow(
     return { onGeoBloqueada, onClose, onAviso, onVisitaIniciada, onVisitaCerrada }
 }
 
+/** El catálogo de "Datos del comercio" tal cual lo manda la API. Acá va el mínimo con el
+ *  que los tests del gate completan el formulario. */
+const CATALOGO_FICHA = [
+    {
+        campo: 'especialidad', descripcion: 'Especialidad', tipo: 'opcion', multiple: true,
+        obligatorio: true, orden: 1, minimo: null, maximo: null,
+        opciones: [{ codigo: 'frenos', label: 'Frenos' }, { codigo: 'monomarca', label: 'Monomarca' }],
+    },
+    {
+        campo: 'monomarca_marca', descripcion: '¿De qué marca?', tipo: 'opcion', multiple: false,
+        obligatorio: false, orden: 2, minimo: 1, maximo: 60,
+        opciones: [{ codigo: 'ford', label: 'Ford' }, { codigo: 'otros', label: 'Otros', abierta: true }],
+    },
+    {
+        campo: 'personas', descripcion: 'Personas que trabajan', tipo: 'entero', multiple: false,
+        obligatorio: true, orden: 3, minimo: 1, maximo: 999, opciones: null,
+    },
+    {
+        campo: 'facturacion', descripcion: 'Facturación mensual', tipo: 'opcion', multiple: false,
+        obligatorio: true, orden: 4, minimo: null, maximo: null,
+        opciones: [
+            { codigo: '5', label: 'Menor a 10M', labelCorto: '<10M' },
+            { codigo: '3', label: 'Mayor a 30M', labelCorto: '+30M' },
+        ],
+    },
+]
+
 beforeEach(() => {
     localStorage.clear()
     vi.clearAllMocks()
@@ -164,6 +191,10 @@ beforeEach(() => {
     ;(api.getOfrecimientos as any).mockResolvedValue([])
     ;(api.getMotivos as any).mockResolvedValue([])
     ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 99, ofrecimientos: 3 })
+    ;(api.actualizarFicha as any).mockResolvedValue({ pendientes: [], valores: {} })
+    // El sheet de la ficha dibuja desde el catálogo (GET /ficha/campos): sin esto no hay
+    // controles y el gate no se puede completar en ningún test.
+    ;(api.getCamposFicha as any).mockResolvedValue(CATALOGO_FICHA)
     ;(geo.capturarUbicacion as any).mockResolvedValue({
         ok: true,
         coord: '-34.6,-58.4',
@@ -1107,6 +1138,173 @@ describe('identidad del cliente en el header', () => {
         renderFlow()
         expect(await screen.findByText('ALMACEN DON JOSE')).toBeInTheDocument()
         expect(screen.getByText('#10034')).toBeInTheDocument()
+    })
+})
+
+describe('gate de "Datos del comercio"', () => {
+    const conPendientes: IAgendaClient = {
+        ...cliente,
+        ficha: { pendientes: ['especialidad', 'personas', 'facturacion'], valores: {} },
+    }
+    /** Espera a que el catálogo llegue: el sheet dibuja los controles recién con él, así que
+     *  el eyebrow "Datos del comercio" puede estar en pantalla con el cuerpo todavía en
+     *  spinner. */
+    async function completarFicha() {
+        fireEvent.click(await screen.findByRole('button', { name: /^frenos$/i }))
+        fireEvent.change(screen.getByRole('textbox', { name: /personas que trabajan/i }), { target: { value: '4' } })
+        fireEvent.click(screen.getByRole('radio', { name: /mayor a 30m/i }))
+    }
+
+    it('sin pendientes no aparece y la visita arranca directo', async () => {
+        renderFlow({ cliente: { ...cliente, ficha: { pendientes: [], valores: {} } } })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+        // La visita ya arrancada ofrece el chip de edición (Task 13) — lo que no puede
+        // aparecer acá es el SHEET del gate (su botón "Guardar"/"Iniciar visita" propio).
+        expect(screen.queryByRole('button', { name: /^guardar$/i })).not.toBeInTheDocument()
+        expect(api.actualizarFicha).not.toHaveBeenCalled()
+    })
+
+    it('con pendientes intercepta ANTES del POST (camino sin coordenadas)', async () => {
+        renderFlow({ cliente: conPendientes })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        expect(await screen.findByText(/datos del comercio/i)).toBeInTheDocument()
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+        expect(geo.capturarUbicacion).not.toHaveBeenCalled()
+    })
+
+    it('confirmar hace el PUT y DESPUÉS el POST, en ese orden, sin volver a pedir la ficha', async () => {
+        const orden: string[] = []
+        ;(api.actualizarFicha as any).mockImplementation(async () => { orden.push('ficha'); return { pendientes: [], valores: {} } })
+        ;(api.iniciarVisita as any).mockImplementation(async () => { orden.push('visita'); return { visitaId: 99, ofrecimientos: 3 } })
+        renderFlow({ cliente: conPendientes })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        await screen.findByText(/datos del comercio/i)
+        await completarFicha()
+        // Dentro del sheet el botón también dice "Iniciar visita": tomar el habilitado.
+        const botones = screen.getAllByRole('button', { name: /iniciar visita/i })
+        fireEvent.click(botones[botones.length - 1])
+        await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+        expect(api.actualizarFicha).toHaveBeenCalledWith('10034', {
+            especialidad: ['frenos'], personas: ['4'], facturacion: ['3'],
+        })
+        expect(orden).toEqual(['ficha', 'visita'])
+        expect(api.actualizarFicha).toHaveBeenCalledTimes(1)
+    })
+
+    it('si el PUT falla, muestra el error en el sheet y la visita NO arranca', async () => {
+        ;(api.actualizarFicha as any).mockRejectedValue(new Error('500'))
+        renderFlow({ cliente: conPendientes })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        await screen.findByText(/datos del comercio/i)
+        await completarFicha()
+        const botones = screen.getAllByRole('button', { name: /iniciar visita/i })
+        fireEvent.click(botones[botones.length - 1])
+        expect(await screen.findByRole('alert')).toHaveTextContent(/no pudimos guardar/i)
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+        expect(screen.getByText(/datos del comercio/i)).toBeInTheDocument()
+    })
+
+    it('cerrar sin cargar no hace PUT ni POST y cierra el flujo entero', async () => {
+        const { onClose } = renderFlow({ cliente: conPendientes })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        await screen.findByText(/datos del comercio/i)
+        // PropuestaSheet, atrás, también expone su propio "Cerrar": el de la ficha es el
+        // último montado (PerfilComercioSheet se renderiza al final de VisitaFlow).
+        const cerrarBotones = screen.getAllByRole('button', { name: /cerrar/i })
+        fireEvent.click(cerrarBotones[cerrarBotones.length - 1])
+        await waitFor(() => expect(screen.queryByText(/datos del comercio/i)).not.toBeInTheDocument())
+        expect(api.actualizarFicha).not.toHaveBeenCalled()
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+        // Cerrar el formulario cierra la card: no hay medio estado del que salir.
+        expect(onClose).toHaveBeenCalled()
+    })
+
+    it('con coordenadas del cliente, el gate corta ANTES del mapa', async () => {
+        mockGeolocacionEnVivo({ latitude: -34.6, longitude: -58.4, accuracy: 10 })
+        renderFlow({ cliente: { ...conPendientes, latitud: -34.6, longitud: -58.4 } })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        expect(await screen.findByText(/datos del comercio/i)).toBeInTheDocument()
+        expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+
+        await completarFicha()
+        const botones = screen.getAllByRole('button', { name: /iniciar visita/i })
+        fireEvent.click(botones[botones.length - 1])
+
+        // Confirmar la ficha abre el MAPA, no la visita: el vendedor todavía tiene que
+        // confirmar la cercanía. "Iniciar visita" del mapa vuelve a significar iniciar.
+        expect(await screen.findByTestId('mapa-iniciar-visita')).toBeInTheDocument()
+        await waitFor(() => expect(api.actualizarFicha).toHaveBeenCalledTimes(1))
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+
+        const iniciarEnMapa = screen.getByRole('button', { name: /^iniciar visita$/i })
+        await waitFor(() => expect(iniciarEnMapa).toBeEnabled())
+        fireEvent.click(iniciarEnMapa)
+        // Y no vuelve a pedir la ficha: el gate ya quedó destrabado para este cliente.
+        await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+        expect(api.actualizarFicha).toHaveBeenCalledTimes(1)
+    })
+
+    it('"Iniciar visita" directo desde la card también corta antes del mapa', async () => {
+        mockGeolocacionEnVivo({ latitude: -34.6, longitude: -58.4, accuracy: 10 })
+        renderFlow({
+            cliente: { ...conPendientes, latitud: -34.6, longitud: -58.4 },
+            directoAMapa: true,
+        })
+        expect(await screen.findByText(/datos del comercio/i)).toBeInTheDocument()
+        expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+    })
+
+    it('en el camino directo, cerrar la ficha vuelve a la agenda y no la reabre sola', async () => {
+        // `cargandoDirecto` sigue habilitado mientras `propuestaPendiente` es null, así que
+        // limpiar sólo el estado del sheet dejaría que el efecto lo reabra con la propuesta
+        // cacheada: el vendedor no podía salir. Mismo caso que el `onCancel` del mapa.
+        const { onClose } = renderFlow({
+            cliente: { ...conPendientes, latitud: -34.6, longitud: -58.4 },
+            directoAMapa: true,
+        })
+        await screen.findByText(/datos del comercio/i)
+        const cerrarBotones = screen.getAllByRole('button', { name: /cerrar/i })
+        fireEvent.click(cerrarBotones[cerrarBotones.length - 1])
+        await waitFor(() => expect(onClose).toHaveBeenCalled())
+        await new Promise(r => setTimeout(r, 150))
+        expect(screen.queryByText(/datos del comercio/i)).not.toBeInTheDocument()
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+    })
+
+    it('pide sólo el campo pendiente', async () => {
+        renderFlow({ cliente: { ...cliente, ficha: { pendientes: ['facturacion'], valores: { especialidad: ['frenos'], personas: ['2'] } } } })
+        fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+        // El botón aparece recién con el catálogo: hasta entonces no hay nada que dibujar.
+        expect(await screen.findByRole('button', { name: /falta: facturación mensual/i })).toBeDisabled()
+        expect(screen.queryByRole('textbox', { name: /personas que trabajan/i })).not.toBeInTheDocument()
+    })
+
+    it('con la ficha completa, VisitaSheet ofrece "Datos del comercio" y editar hace el PUT con todos los campos, sin tocar la visita', async () => {
+        const completo: IAgendaClient = {
+            ...cliente, estado: 'en_curso', visitaId: 77,
+            ficha: { pendientes: [], valores: { especialidad: ['frenos'], personas: ['2'], facturacion: ['5'] } },
+        }
+        renderFlow({ cliente: completo })
+        fireEvent.click(await screen.findByRole('button', { name: /datos del comercio/i }))
+        // Precargado y en modo edición.
+        expect(await screen.findByRole('button', { name: /^guardar$/i })).toBeEnabled()
+        expect(screen.getByRole('textbox', { name: /personas que trabajan/i })).toHaveValue('2')
+        fireEvent.change(screen.getByRole('textbox', { name: /personas que trabajan/i }), { target: { value: '3' } })
+        fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
+        await waitFor(() => expect(api.actualizarFicha).toHaveBeenCalledWith('10034', {
+            especialidad: ['frenos'], personas: ['3'], facturacion: ['5'],
+        }))
+        await waitFor(() => expect(screen.queryByRole('button', { name: /^guardar$/i })).not.toBeInTheDocument())
+        expect(api.iniciarVisita).not.toHaveBeenCalled()
+        expect(api.cerrarVisita).not.toHaveBeenCalled()
+    })
+
+    it('con pendientes, VisitaSheet NO ofrece el chip (la puerta es el gate)', async () => {
+        renderFlow({ cliente: { ...conPendientes, estado: 'en_curso', visitaId: 77 } })
+        await screen.findByRole('button', { name: /cerrar visita/i })
+        expect(screen.queryByRole('button', { name: /datos del comercio/i })).not.toBeInTheDocument()
     })
 })
 
