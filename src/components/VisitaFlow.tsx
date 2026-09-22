@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button'
 import PropuestaSheet, { toPropuestaDTO } from './PropuestaSheet'
 import VisitaSheet from './VisitaSheet'
 import MapaVisita from './MapaVisita'
+import PerfilComercioSheet from './relevamiento/PerfilComercioSheet'
+import { relevamientoPendiente } from '@/lib/relevamientos'
 import ResolucionSheet from './ResolucionSheet'
 import { useCerrarVisita, useIniciarVisita, useNoVisitaSobreVisitaAbierta } from '@/hooks/useVisitas'
 import { usePropuesta } from '@/hooks/usePropuesta'
@@ -147,6 +149,17 @@ export default function VisitaFlow({
     // VISITA_ACTIVA_EXISTENTE.
     const [altaYaIniciada, setAltaYaIniciada] = useState(false)
 
+    // Gate de relevamiento (MOCK — "Datos del comercio"). Guarda la propuesta ya
+    // confirmada mientras el vendedor carga el formulario; no null = sheet abierto.
+    // El corte va ANTES del POST a propósito: el cronómetro no corre mientras se
+    // carga, y abandonar no deja una visita abierta sin perfil.
+    const [perfilPendiente, setPerfilPendiente] = useState<IPropuestaRubroDTO[] | null>(null)
+    // MOCK: hoy alcanza con "ya lo cargó en esta pasada" porque no hay dónde
+    // consultar si el cliente fue perfilado. Cuando exista el backend, esto pasa a
+    // ser `cliente.perfilCargado` (o el registro de relevamientos pendientes) y el
+    // sheet deja de aparecer en el segundo intento del mismo cliente.
+    const perfilListo = useRef(false)
+
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
     //
@@ -168,6 +181,8 @@ export default function VisitaFlow({
         setClienteOverride(null)
         setNoVisitaRubros(null)
         setAltaYaIniciada(false)
+        setPerfilPendiente(null)
+        perfilListo.current = false
     }, [cliente?.rotacionClienteId])
 
     // Solo el cliente de la visita en curso entra por acá. Cualquier otro cliente que el
@@ -245,6 +260,14 @@ export default function VisitaFlow({
 
     async function onIniciar(propuesta: IPropuestaRubroDTO[]) {
         if (iniciandoFlujo || bloqueadoPorOtraVisita) return
+        // Único punto de corte del gate: los tres caminos de inicio (mapa, sin
+        // coordenadas y alta) terminan acá, así que envolver este handler los cubre a
+        // los tres sin tocar ninguna de las tres pantallas.
+        if (!perfilListo.current && relevamientoPendiente(cliente!.rotacionClienteId)) {
+            setErrorIniciar(null)
+            setPerfilPendiente(propuesta)
+            return
+        }
         setErrorIniciar(null)
         setIniciandoFlujo(true)
         try {
@@ -594,6 +617,27 @@ export default function VisitaFlow({
                     }}
                 />
             )}
+            {/* Último del árbol a propósito: se monta POR ENCIMA del mapa (o de la
+                propuesta) que quedó atrás, que es justo la pantalla a la que vuelve
+                si cierra sin cargar. MOCK: aparece siempre, en todos los clientes. */}
+            <PerfilComercioSheet
+                open={perfilPendiente !== null}
+                nombreCliente={nombre}
+                identidad={clienteEsAlta ? undefined : identidad}
+                onConfirmar={perfil => {
+                    // MOCK: todavía no hay dónde guardarlo. Queda en consola para poder
+                    // ver la forma del dato mientras se define la tabla.
+                    console.info('[mock] Datos del comercio', {
+                        rotacionClienteId: cliente!.rotacionClienteId,
+                        perfil,
+                    })
+                    const propuesta = perfilPendiente ?? []
+                    perfilListo.current = true
+                    setPerfilPendiente(null)
+                    void onIniciar(propuesta)
+                }}
+                onClose={() => setPerfilPendiente(null)}
+            />
         </>
     )
 }

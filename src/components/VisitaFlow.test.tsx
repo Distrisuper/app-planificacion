@@ -11,6 +11,14 @@ import type { IAgendaClient } from '@/types/planificacion'
 
 vi.mock('@/api/planificacion')
 vi.mock('@/lib/geolocation')
+// El gate de relevamiento ("Datos del comercio") se interpone entre tocar "Iniciar
+// visita" y el POST, en los tres caminos de inicio. Estos tests son sobre el flujo de
+// la visita, no sobre el gate: se lo saca de en medio declarando que el cliente ya
+// está relevado. El gate tiene su propio archivo de tests.
+vi.mock('@/lib/relevamientos', async importOriginal => ({
+    ...(await importOriginal<typeof import('@/lib/relevamientos')>()),
+    relevamientoPendiente: () => false,
+}))
 const authMock = vi.fn(() => ({
     capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false },
 }))
