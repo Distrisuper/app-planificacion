@@ -1,25 +1,26 @@
 /**
- * Catálogos del relevamiento "Perfil del comercio" — el primer formulario que se le
- * pide al vendedor ANTES de abrir la visita (ver el diseño en curso: gate genérico +
- * formulario concreto).
+ * "Datos del comercio": catálogos, el seam del gate y la traducción entre el borrador del
+ * formulario y los `valores` que viajan al backend (spec 2026-09-22).
  *
- * MOCK: por ahora esto es sólo el front. No hay tabla ni endpoint todavía; el perfil
- * cargado se descarta al confirmar. Cuando exista el backend, lo único que cambia acá
- * es de dónde salen los catálogos (probablemente sigan hardcodeados: son cerrados y
- * chicos) y a dónde se manda `IPerfilComercio`.
+ * El backend ya calculó qué le falta a cada cliente (`cliente.ficha.pendientes`, contra
+ * pl_ficha_campo). Acá no hay lógica de "está cargado": sólo se lee eso, y se dibujan y
+ * validan los campos que ahí aparezcan.
  */
+import type { IAgendaClient } from '@/types/planificacion'
 
-/**
- * ¿Hay algún relevamiento sin cargar para este cliente? Es el seam del gate: lo único
- * que `VisitaFlow` le pregunta al dominio antes de dejar iniciar la visita.
- *
- * MOCK: devuelve true siempre, porque todavía no hay dónde consultar si el cliente ya
- * fue perfilado. Cuando exista el backend, acá se mira el campo que lo diga (o la
- * lista de relevamientos pendientes, cuando haya más de uno) y el sheet deja de
- * aparecer en los clientes ya cargados.
- */
-export function relevamientoPendiente(_rotacionClienteId: number): boolean {
-    return true
+/** Orden de pantalla. Coincide con `orden` de pl_ficha_campo. */
+export const CAMPOS_FICHA = ['especialidad', 'monomarca_marca', 'personas', 'facturacion'] as const
+export type CampoFicha = (typeof CAMPOS_FICHA)[number]
+
+/** Qué campos obligatorios le faltan al cliente. `[]` sin ficha: un backend viejo que no
+ *  la mande no tiene que bloquear el inicio de la visita. */
+export function camposPendientes(cliente: Pick<IAgendaClient, 'ficha'>): string[] {
+    return cliente.ficha?.pendientes ?? []
+}
+
+/** El seam del gate: lo único que VisitaFlow le pregunta antes de dejar iniciar. */
+export function relevamientoPendiente(cliente: Pick<IAgendaClient, 'ficha'>): boolean {
+    return camposPendientes(cliente).length > 0
 }
 
 export interface EspecialidadOpcion {
@@ -72,16 +73,6 @@ export const TRAMOS_FACTURACION: TramoFacturacion[] = [
     { codigo: 1, label: 'Mayor a 100M', labelCorto: '+100M' },
 ]
 
-export interface IPerfilComercio {
-    especialidades: string[]
-    /** Sólo cuando `especialidades` incluye 'monomarca'. Texto libre: el catálogo de
-     *  marcas no cubre las que no vendemos, y acá lo que importa es de qué marca es el
-     *  taller, no qué marca le vendemos. */
-    monomarcaDetalle?: string
-    personas: number
-    facturacion: number
-}
-
 /** Un perfil parcial, tal como vive en el estado del formulario mientras se carga. */
 export interface BorradorPerfil {
     especialidades: string[]
@@ -99,34 +90,54 @@ export const BORRADOR_VACIO: BorradorPerfil = {
 
 export const PERSONAS_MAX = 999
 
-/** Qué le falta al borrador para poder confirmarse, en orden de aparición en pantalla.
- *  Se devuelve la lista entera (y no un booleano) para poder decirle al vendedor qué
- *  falta en el botón, igual que hace el cierre de visita con los rubros. */
-export function faltantesPerfil(b: BorradorPerfil): string[] {
-    const faltan: string[] = []
-    if (b.especialidades.length === 0) faltan.push('la especialidad')
-    if (b.especialidades.includes(ESPECIALIDAD_CON_DETALLE) && b.monomarcaDetalle.trim() === '')
-        faltan.push('qué marca')
-    if (!personasValidas(b.personas)) faltan.push('cuántas personas trabajan')
-    if (b.facturacion === null) faltan.push('la facturación')
-    return faltan
-}
-
 export function personasValidas(texto: string): boolean {
     if (!/^\d+$/.test(texto.trim())) return false
     const n = Number(texto)
     return n >= 1 && n <= PERSONAS_MAX
 }
 
-/** El borrador ya validado, listo para mandar. Devuelve null si falta algo. */
-export function aPerfil(b: BorradorPerfil): IPerfilComercio | null {
-    if (faltantesPerfil(b).length > 0) return null
+/** Qué le falta al borrador entre los campos que se están mostrando, en orden de pantalla.
+ *  Lista y no booleano para poder nombrarlo en el botón. `monomarca_marca` no se pide por
+ *  su nombre: cuelga de que `especialidad` esté en juego e incluya Monomarca. */
+export function faltantesPerfil(b: BorradorPerfil, campos: readonly string[]): string[] {
+    const faltan: string[] = []
+    if (campos.includes('especialidad')) {
+        if (b.especialidades.length === 0) faltan.push('la especialidad')
+        else if (b.especialidades.includes(ESPECIALIDAD_CON_DETALLE) && b.monomarcaDetalle.trim() === '')
+            faltan.push('qué marca')
+    }
+    if (campos.includes('personas') && !personasValidas(b.personas)) faltan.push('cuántas personas trabajan')
+    if (campos.includes('facturacion') && b.facturacion === null) faltan.push('la facturación')
+    return faltan
+}
+
+/** El body del PUT: sólo los campos pedidos, como strings con el formato del ERP. null si
+ *  falta algo. `monomarca_marca` va junto con `especialidad` cuando incluye Monomarca. */
+export function aValoresFicha(
+    b: BorradorPerfil,
+    campos: readonly string[],
+): Record<string, string[]> | null {
+    if (faltantesPerfil(b, campos).length > 0) return null
+    const valores: Record<string, string[]> = {}
+    if (campos.includes('especialidad')) {
+        valores.especialidad = b.especialidades
+        if (b.especialidades.includes(ESPECIALIDAD_CON_DETALLE)) {
+            valores.monomarca_marca = [b.monomarcaDetalle.trim()]
+        }
+    }
+    if (campos.includes('personas')) valores.personas = [String(Number(b.personas))]
+    if (campos.includes('facturacion')) valores.facturacion = [String(b.facturacion)]
+    return valores
+}
+
+/** Precarga del borrador para la edición posterior, desde `cliente.ficha.valores`. */
+export function deValoresFicha(valores: Record<string, string[]> | undefined): BorradorPerfil {
+    if (!valores) return BORRADOR_VACIO
+    const fact = Number(valores.facturacion?.[0])
     return {
-        especialidades: b.especialidades,
-        monomarcaDetalle: b.especialidades.includes(ESPECIALIDAD_CON_DETALLE)
-            ? b.monomarcaDetalle.trim()
-            : undefined,
-        personas: Number(b.personas),
-        facturacion: b.facturacion as number,
+        especialidades: valores.especialidad ?? [],
+        monomarcaDetalle: valores.monomarca_marca?.[0] ?? '',
+        personas: valores.personas?.[0] ?? '',
+        facturacion: TRAMOS_FACTURACION.some(t => t.codigo === fact) ? fact : null,
     }
 }

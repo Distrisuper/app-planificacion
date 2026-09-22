@@ -3,15 +3,14 @@ import { Check, Minus, Plus } from 'lucide-react'
 import BottomSheet from '@/components/ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import {
-    BORRADOR_VACIO,
     ESPECIALIDAD_CON_DETALLE,
     ESPECIALIDADES,
     PERSONAS_MAX,
     TRAMOS_FACTURACION,
-    aPerfil,
+    aValoresFicha,
+    deValoresFicha,
     faltantesPerfil,
     type BorradorPerfil,
-    type IPerfilComercio,
 } from '@/lib/relevamientos'
 
 const LABEL = 'mb-2 block text-[9.5px] font-bold uppercase tracking-wide text-dsmuted'
@@ -22,23 +21,25 @@ interface PerfilComercioSheetProps {
     open: boolean
     nombreCliente: string
     identidad?: string
-    /** true mientras corre el POST de iniciar visita disparado por este sheet. */
-    iniciando?: boolean
-    onConfirmar: (perfil: IPerfilComercio) => void
-    /** Salir sin cargar. NO inicia la visita: el relevamiento es obligatorio duro, así
-     *  que la única forma de saltearlo es no iniciar. Vuelve a la pantalla de atrás
-     *  (el mapa o la propuesta), no a la agenda. */
+    /** Qué campos dibujar: en el gate, `cliente.ficha.pendientes`; en edición, CAMPOS_FICHA. */
+    campos: readonly string[]
+    /** 'gate' = botón "Iniciar visita" y texto de apoyo; 'edicion' = botón "Guardar", precarga. */
+    modo: 'gate' | 'edicion'
+    valoresIniciales?: Record<string, string[]>
+    /** true mientras corre el PUT (y, en el gate, el POST que le sigue). */
+    guardando?: boolean
+    /** Mensaje del último PUT fallido. El botón queda habilitado para reintentar. */
+    error?: string | null
+    onConfirmar: (valores: Record<string, string[]>) => void
     onClose: () => void
 }
 
 /**
  * "Datos del comercio": el relevamiento que se le pide al vendedor ANTES de abrir la
- * visita. Obligatorio duro — sin completarlo no se manda el POST, así que el cronómetro
- * todavía no corre mientras se carga y abandonar no deja una visita abierta huérfana.
- *
- * MOCK: hoy el perfil se descarta al confirmar (no hay tabla ni endpoint). La pantalla
- * es la definitiva; lo que falta es a dónde se manda y cómo se sabe que un cliente YA
- * fue perfilado (con eso, el sheet deja de aparecer por segunda vez).
+ * visita (modo 'gate'), y que puede corregir después desde `VisitaSheet` (modo 'edicion').
+ * `campos` viene de `cliente.ficha.pendientes` en el gate, o de `CAMPOS_FICHA` completo en
+ * la edición. El `PUT /planificacion/clientes/:codigo/ficha` lo hace el padre (VisitaFlow),
+ * no este componente: acá sólo se arma `{ campo: string[] }` y se avisa.
  *
  * Vocabulario de vendedor: "Datos del comercio", nunca "relevamiento" ni "perfilado".
  */
@@ -46,21 +47,26 @@ export default function PerfilComercioSheet({
     open,
     nombreCliente,
     identidad,
-    iniciando = false,
+    campos,
+    modo,
+    valoresIniciales,
+    guardando = false,
+    error,
     onConfirmar,
     onClose,
 }: PerfilComercioSheetProps) {
-    const [borrador, setBorrador] = useState<BorradorPerfil>(BORRADOR_VACIO)
+    const [borrador, setBorrador] = useState<BorradorPerfil>(() => deValoresFicha(valoresIniciales))
 
-    // Cada apertura arranca limpia: el sheet es por cliente y no hay borrador
-    // persistido (a diferencia de la resolución de rubros, esto se completa de una).
+    // Cada apertura arranca desde lo que hay: vacío en el gate (el cliente no tiene esos
+    // campos), precargado en la edición.
     useEffect(() => {
-        if (open) setBorrador(BORRADOR_VACIO)
-    }, [open])
+        if (open) setBorrador(deValoresFicha(valoresIniciales))
+    }, [open, valoresIniciales])
 
-    const faltan = faltantesPerfil(borrador)
+    const faltan = faltantesPerfil(borrador, campos)
     const completo = faltan.length === 0
     const pideMarca = borrador.especialidades.includes(ESPECIALIDAD_CON_DETALLE)
+    const muestra = (c: string) => campos.includes(c)
 
     function toggleEspecialidad(codigo: string) {
         setBorrador(b => ({
@@ -88,16 +94,14 @@ export default function PerfilComercioSheet({
     }
 
     function confirmar() {
-        const perfil = aPerfil(borrador)
-        if (!perfil) return
-        onConfirmar(perfil)
+        const valores = aValoresFicha(borrador, campos)
+        if (!valores) return
+        onConfirmar(valores)
     }
 
     const labelBoton = completo
-        ? 'Iniciar visita'
-        : faltan.length === 1
-          ? `Falta ${faltan[0]}`
-          : `Faltan ${faltan.length} datos`
+        ? modo === 'gate' ? 'Iniciar visita' : 'Guardar'
+        : faltan.length === 1 ? `Falta ${faltan[0]}` : `Faltan ${faltan.length} datos`
 
     return (
         <BottomSheet
@@ -110,8 +114,8 @@ export default function PerfilComercioSheet({
             footer={
                 <Button
                     onClick={confirmar}
-                    disabled={!completo || iniciando}
-                    loading={iniciando}
+                    disabled={!completo || guardando}
+                    loading={guardando}
                     // Gris mientras falte algo — mismo criterio que el cierre de visita:
                     // el verde al 40% del `disabled:` del variant se lee como un CTA roto
                     // en vez de como "te falta cargar algo". `disabled:opacity-100` es
@@ -128,13 +132,16 @@ export default function PerfilComercioSheet({
             }
         >
             <div className="flex flex-col gap-5">
-                {/* Una línea, no dos: el bloque de arriba del sheet es el que menos
-                    rinde por píxel, y lo único que hay que justificar es por qué se
-                    interrumpe el inicio de la visita. */}
-                <p className="-mt-1 text-[12.5px] leading-snug text-dsmuted">
-                    Se carga una sola vez, antes de arrancar.
-                </p>
+                {modo === 'gate' && (
+                    // Una línea, no dos: el bloque de arriba del sheet es el que menos
+                    // rinde por píxel, y lo único que hay que justificar es por qué se
+                    // interrumpe el inicio de la visita.
+                    <p className="-mt-1 text-[12.5px] leading-snug text-dsmuted">
+                        Se carga una sola vez, antes de arrancar.
+                    </p>
+                )}
 
+                {muestra('especialidad') && (
                 <section>
                     <span className={LABEL}>Especialidad · una o varias</span>
                     <div className="flex flex-wrap gap-1.5">
@@ -177,7 +184,9 @@ export default function PerfilComercioSheet({
                         </div>
                     )}
                 </section>
+                )}
 
+                {muestra('personas') && (
                 <section>
                     <label htmlFor="pc-personas" className={LABEL}>
                         Personas que trabajan
@@ -229,7 +238,9 @@ export default function PerfilComercioSheet({
                         </span>
                     </div>
                 </section>
+                )}
 
+                {muestra('facturacion') && (
                 <section>
                     <span className={LABEL}>Facturación mensual</span>
                     {/* Segmented control, no cinco filas con radio: son etiquetas de tres
@@ -265,6 +276,13 @@ export default function PerfilComercioSheet({
                         })}
                     </div>
                 </section>
+                )}
+
+                {error && (
+                    <p role="alert" className="rounded-[11px] bg-dsred/8 px-3 py-2.5 text-[12.5px] font-semibold leading-snug text-dsred">
+                        {error}
+                    </p>
+                )}
             </div>
         </BottomSheet>
     )
