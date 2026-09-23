@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import MapaVisita from './MapaVisita'
@@ -578,12 +578,13 @@ it('modo cerrar: ofrece recalcular la posición pero no reposicionar al cliente'
 })
 
 it('modo cerrar: el eyebrow dice "Cerrar visita", no "Iniciar visita"', async () => {
+    // Lejos Y con un fix que lo prueba (1112 m ± 10): sólo así el CTA dice "Cerrar igual
+    // …" y "Cerrar visita" queda como texto único, apuntando al eyebrow sin ambigüedad.
+    // `alejado` solo no alcanza — si el fix lo ubicara dentro del círculo, el CTA diría
+    // también "Cerrar visita" y habría dos matches.
     mockGeolocation((ok: any) =>
-        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } }),
+        ok({ coords: { latitude: -34.61, longitude: -58.4, accuracy: 10 } }),
     )
-    // Con `alejado` el CTA dice "Cerrar igual …", así que "Cerrar visita" queda como
-    // texto único y la aserción apunta al eyebrow sin ambigüedad. Sin `alejado` el CTA
-    // también diría "Cerrar visita" — correcto en producto, pero dos matches en el test.
     render(
         <MapaVisita
             open
@@ -745,4 +746,108 @@ it('un recálculo descartado por viejo no se le reporta como fallado', async () 
     expect(screen.queryByText(/no pudimos ubicarte/i)).not.toBeInTheDocument()
     // Y se queda con el fix fino, que es el que vale.
     expect(screen.getByText(/estás a 1112 m/i)).toBeInTheDocument()
+})
+
+it('parado adentro del círculo, el cierre es normal aunque el aviso siga prendido', async () => {
+    // El caso de la captura. El vendedor está ENCIMA del cliente (0 m) pero su fix tiene
+    // 150 m de margen, así que la salida de la histéresis (`d + p <= 100`) es
+    // insatisfacible y `alejado` queda prendido para siempre. Si el punto se ve adentro
+    // del círculo, advertirle no tiene sentido: el CTA es un "Cerrar visita" y listo.
+    const onCerrar = vi.fn()
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 150 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            alejado
+            onCerrar={onCerrar}
+            onCancel={() => {}}
+        />,
+    )
+
+    expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /cerrar igual/i })).not.toBeInTheDocument()
+    expect(screen.getByText('Estás a 0 m del cliente.')).toBeInTheDocument()
+    expect(screen.queryByText(/no alcanza para confirmarlo/i)).not.toBeInTheDocument()
+
+    // Y no pide confirmación: el llamador recibe `false`.
+    fireEvent.click(screen.getByRole('button', { name: /^cerrar visita$/i }))
+    expect(onCerrar).toHaveBeenCalledWith(false)
+})
+
+it('fuera del círculo pero sin poder probarlo, muestra la distancia con su margen', async () => {
+    // 178 m con 150 m de margen: afuera del círculo, pero `d − p` no supera el radio, así
+    // que el fix no lo prueba. Se advierte igual —el aviso está vigente— pero la distancia
+    // va con su margen en vez de darse por buena, y el botón no promete metros.
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6016, longitude: -58.4, accuracy: 150 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            alejado
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    const aviso = await screen.findByText(/margen de 150 m/i)
+    expect(aviso).toHaveTextContent('no alcanza para confirmarlo')
+    expect(aviso.className).not.toMatch(/dsgreen/)
+    expect(screen.getByRole('button', { name: /^cerrar igual$/i })).toBeInTheDocument()
+})
+
+it('con un fix fino que sí prueba lejanía, el CTA sigue mostrando los metros', async () => {
+    // La contracara: acá el fix es concluyente (1112 m con 10 m de margen), así que el
+    // botón sí puede decir cuánto — es la información que hace pensar al vendedor.
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.61, longitude: -58.4, accuracy: 10 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            alejado
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    expect(await screen.findByRole('button', { name: /cerrar igual · estás a 1112 m/i })).toBeInTheDocument()
+    expect(screen.queryByText(/no alcanza para confirmarlo/i)).not.toBeInTheDocument()
+})
+
+it('sin aviso vigente, un fix cercano se sigue afirmando en verde', async () => {
+    // El `fixNoConcluyente` no puede comerse el caso normal: sin `alejado`, un fix que
+    // ubica al vendedor en el cliente se muestra como siempre.
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 150 } }),
+    )
+    render(
+        <MapaVisita
+            open
+            modo="cerrar"
+            nombreCliente="Kiosco Sur"
+            latitud={-34.6}
+            longitud={-58.4}
+            onCerrar={() => {}}
+            onCancel={() => {}}
+        />,
+    )
+
+    expect(await screen.findByText('Estás a 0 m del cliente.')).toBeInTheDocument()
+    expect(screen.queryByText(/no alcanza para confirmarlo/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^cerrar visita$/i })).toBeInTheDocument()
 })
