@@ -1,10 +1,7 @@
 import { useState } from 'react'
+import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
 import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
-import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import TablaFichas from '@/components/analitica/TablaFichas'
-import AccountMenu from '@/components/AccountMenu'
-import { useAccionesDeCuenta } from '@/hooks/useAccionesDeCuenta'
-import { useAuth } from '@/context/AuthContext'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
 import { useVendedores } from '@/hooks/useAnalitica'
 import { useCamposFicha } from '@/hooks/useCamposFicha'
@@ -20,8 +17,6 @@ import { buscarFichas } from '@/lib/buscarFichas'
  */
 export default function AnaliticaFichasPage() {
     const [busqueda, setBusqueda] = useState('')
-    const { user, logout } = useAuth()
-    const accionesDeCuenta = useAccionesDeCuenta()
     const { filtro, hayRango, setRango, toggleVendedor, limpiarVendedores, limpiarRango } =
         useFiltroAnalitica()
 
@@ -48,22 +43,17 @@ export default function AnaliticaFichasPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <header className="flex items-center justify-between gap-4 bg-white px-6 pt-4">
-                <div className="flex-1">
-                    <AnaliticaTabs />
-                </div>
-                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
-            </header>
-
-            <FiltrosAnalitica
-                filtro={filtro}
-                vendedoresDisponibles={opciones}
-                onRango={setRango}
-                onToggleVendedor={toggleVendedor}
-                onLimpiar={limpiarVendedores}
-                onTodoElPeriodo={limpiarRango}
-                sinRango={!hayRango}
-            />
+            <EncabezadoAnalitica>
+                <FiltrosAnalitica
+                    filtro={filtro}
+                    vendedoresDisponibles={opciones}
+                    onRango={setRango}
+                    onToggleVendedor={toggleVendedor}
+                    onLimpiar={limpiarVendedores}
+                    onTodoElPeriodo={limpiarRango}
+                    sinRango={!hayRango}
+                />
+            </EncabezadoAnalitica>
 
             <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
                 {data && data.fichas.length > 0 && (

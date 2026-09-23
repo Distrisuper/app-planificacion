@@ -41,6 +41,7 @@ export default function TablaVisitas({ visitas, onElegirVisita }: TablaVisitasPr
                         <th className="px-3 py-2 text-left">Inicio</th>
                         <th className="px-3 py-2 text-right">Duración</th>
                         <th className="px-3 py-2 text-right">Dist.</th>
+                        <th className="px-3 py-2 text-left">Código</th>
                         <th className="px-3 py-2 text-left">Cliente</th>
                         <th className="px-3 py-2 text-left">Motivo</th>
                         <th className="px-3 py-2 text-left">Resultado</th>
@@ -70,6 +71,9 @@ export default function TablaVisitas({ visitas, onElegirVisita }: TablaVisitasPr
                                 >
                                     {formatDistancia(peorDistancia(v.distanciaInicioMetros, v.distanciaFinMetros))}
                                 </span>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500">
+                                {v.codigoParticularCliente}
                             </td>
                             <td className="px-3 py-2 text-slate-900">{v.nombreCliente}</td>
                             <td className="px-3 py-2 text-slate-600">

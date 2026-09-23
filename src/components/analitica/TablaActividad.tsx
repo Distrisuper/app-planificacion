@@ -52,6 +52,7 @@ export default function TablaActividad({ filas, onElegirVisita }: TablaActividad
                         <th className="px-3 py-2 text-left">Hora</th>
                         <th className="px-3 py-2 text-left">Estado</th>
                         <th className="px-3 py-2 text-left">Vendedor</th>
+                        <th className="px-3 py-2 text-left">Código</th>
                         <th className="px-3 py-2 text-left">Cliente</th>
                         <th className="px-3 py-2 text-right">Duración</th>
                         <th className="px-3 py-2 text-right">Dist.</th>
@@ -81,6 +82,9 @@ export default function TablaActividad({ filas, onElegirVisita }: TablaActividad
                                     </span>
                                 </td>
                                 <td className="px-3 py-2 text-slate-700">{f.nombreVendedor}</td>
+                                <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500">
+                                    {f.codigoParticularCliente}
+                                </td>
                                 <td className="px-3 py-2 text-slate-900">{f.nombreCliente}</td>
                                 <td className="px-3 py-2 text-right text-slate-700">
                                     {formatDuracion(f.duracionMin)}
