@@ -21,6 +21,9 @@ interface OfrecimientoTableProps {
     /** ofrecimientoIds cuyas mutaciones de "eliminar" están en vuelo: esos
      *  botones muestran spinner y quedan deshabilitados. */
     eliminandoIds?: Set<number>
+    /** Rótulo del bloque de arriba en la tabla de una visita. La visita de alta no tiene
+     *  propuesta: ahí arriba sólo van los rubros que el vendedor fue agregando. */
+    tituloArriba?: string
 }
 
 /** Sin acentos ni mayúsculas: nadie tipea la tilde de "BATERÍAS" parado en un mostrador
@@ -629,6 +632,7 @@ export default function OfrecimientoTable({
     onEliminar,
     agregandoCodes,
     eliminandoIds,
+    tituloArriba = 'Tu propuesta',
 }: OfrecimientoTableProps) {
     const [busqueda, setBusqueda] = useState('')
     // Una sola fila desplegada a la vez: abrir otra cierra la anterior.
@@ -704,9 +708,12 @@ export default function OfrecimientoTable({
         <div className="-mx-1.5">
         {/* El gesto se explica en el "?" del header del sheet (`BottomSheet.onHelp` +
             `ayudaContenido`), no acá: esta banda es solo el rótulo de sección. */}
-        {conChip && (
+        {/* Sin filas arriba no hay sección que rotular: el rótulo quedaba colgando sobre
+            el header de columnas, pegado a la banda de abajo (la visita de alta recién
+            iniciada, sin nada agregado todavía). */}
+        {conChip && bloqueArriba.length > 0 && (
             <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted leading-[1.35]">
-                Tu propuesta
+                {tituloArriba}
             </p>
         )}
         <div className="w-full">
@@ -785,7 +792,8 @@ export default function OfrecimientoTable({
                             hay rubros que el cliente nunca compró (es lo que hace que un
                             cliente sin movimientos tenga algo que ofrecer). */}
                         <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
-                            Otros rubros
+                            {/* "Otros" sólo si hay un bloque arriba del que ser otros. */}
+                            {bloqueArriba.length > 0 ? 'Otros rubros' : 'Rubros'}
                             {bloqueExtraEsAgregable && ' · tocá uno para agregarlo'}
                         </p>
                         <div className="relative">

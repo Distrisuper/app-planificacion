@@ -924,6 +924,7 @@ export default function VisitaSheet({
                                 onEliminar={eliminarDesdeTabla}
                                 agregandoCodes={agregandoCodes}
                                 eliminandoIds={eliminandoIds}
+                                tituloArriba={esAlta ? 'Lo que ofreciste' : undefined}
                             />
                         )}
                     </div>

@@ -1117,8 +1117,8 @@ describe('cliente nuevo (esAlta)', () => {
         })
         expect(boton).toBeDisabled()
         expect(api.getRubroStatus).not.toHaveBeenCalled()
-        // la tabla muestra el catálogo 80/20 para agregar
-        expect(screen.getByText(/otros rubros/i)).toBeInTheDocument()
+        // la tabla muestra el catálogo 80/20 para agregar; sin nada arriba, "Rubros" y no "Otros"
+        expect(screen.getByText(/^rubros · tocá uno para agregarlo/i)).toBeInTheDocument()
 
         fireEvent.change(screen.getByLabelText(/observaciones/i), { target: { value: 'lo piensa' } })
         fireEvent.change(screen.getByLabelText(/con quién hablaste/i), { target: { value: 'Gustavo' } })
