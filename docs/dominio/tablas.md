@@ -188,6 +188,34 @@ motivo es un `INSERT`, no un deploy.
   anteriores. `PUT /visitas/:id/ofrecimientos/:id` con `marcas` reemplaza SOLO las filas
   `tipo='marca'`; el resto del alcance es del alta y no se edita desde ahí.
 
+## `pl_ficha_campo` y `pl_ficha_valor` — "Datos del comercio"
+
+La ficha del comercio que el vendedor releva parado en el local, antes de abrir la visita
+(especialidad, personas, facturación). Spec
+`docs/superpowers/specs/2026-09-22-relevamiento-datos-del-comercio-design.md`.
+
+- **`pl_ficha_campo`**: el catálogo (`campo, descripcion, obligatorio, multiple, codigo_erp,
+  orden`). `codigo_erp` es `NULL` mientras el ERP no tenga ese campo dinámico todavía — el cron
+  que sincroniza lo saltea sin romper nada. `multiple = 1` sólo en `especialidad` (el único que
+  admite varias filas vigentes a la vez).
+- **`pl_ficha_valor`**: **una fila por dato declarado**, keyed por `codigo_particular_cliente`
+  (el comercio, no `rotacion_cliente_id`: el dato es del cliente, sobrevive a la rotación) y
+  `campo`. Es la misma forma que `camposDinamicos` del ERP —pares `{codigo, valor}`— y no una
+  columna por dato, a propósito: sumar un campo nuevo es un `INSERT` en el catálogo, no un
+  `ALTER`. `valor` es siempre `VARCHAR`, con el formato invertido/codificado que espera el ERP
+  (ver spec §4.2) — nunca se decodifica ni se tipa en esta tabla.
+- **`reemplazado_en` en vez de `UPDATE`**: corregir un dato cierra las filas vigentes del
+  `(cliente, campo)` (`reemplazado_en = NOW()`) e inserta las nuevas. Vigente =
+  `reemplazado_en IS NULL`. El valor nunca se pisa, así que queda la historia de quién dijo qué
+  y cuándo — mismo criterio que `pl_reacomodacion` para el plan.
+- **`sincronizado_en` es el contrato con el cron ajeno**, no con este dominio: `NULL` = todavía
+  no llegó al ERP. Este backend nunca lo lee para decidir nada — sólo lo escribe el proceso de
+  sincronización, que vive en otro repo.
+- **`monomarca_marca` es un campo del catálogo como cualquier otro, no obligatorio.** El gate no
+  conoce la regla "sólo si especialidad incluye Monomarca" — esa condición vive en el front
+  (`faltantesPerfil`), que es lo único que sabe que los dos campos están relacionados. El
+  catálogo, y por lo tanto `pl_ficha_valor`, no tiene forma de expresar "obligatorio si".
+
 ## Tablas que ya no existen
 
 Si las ves mencionadas en un spec viejo, un comentario o una conversación, están eliminadas:

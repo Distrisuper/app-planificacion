@@ -123,6 +123,42 @@ export interface ISeguimiento {
     mensaje: string | null
 }
 
+/** Una opción de un campo `tipo: 'opcion'`, tal como la declara `pl_ficha_campo.opciones`. */
+export interface IFichaOpcion {
+    codigo: string
+    /** Lo que ve el vendedor. Es el dato: el front no tiene una copia de estas listas. */
+    label: string
+    /** Lo que se dibuja cuando el ancho aprieta (segmented), con `label` como aria-label. */
+    labelCorto?: string
+    /** La opción de escape ("Otros"): habilita un texto libre. Lo que se guarda es ese texto,
+     *  no este código — ver el spec del catálogo dirigido por la base. */
+    abierta?: boolean
+}
+
+/** Un campo del catálogo (`GET /planificacion/ficha/campos`). Con esto el sheet dibuja el
+ *  control: `tipo` + `multiple` eligen cuál, `opciones` lo llena, `minimo`/`maximo` lo acotan.
+ *  `etiquetaErp`/`codigoErp` no llegan acá a propósito: son el contrato con el cron del ERP. */
+export interface IFichaCampoDef {
+    campo: string
+    /** El TÍTULO que se muestra. Viene del catálogo, no de una constante del front. */
+    descripcion: string
+    tipo: 'texto' | 'entero' | 'opcion'
+    opciones: IFichaOpcion[] | null
+    minimo: number | null
+    maximo: number | null
+    obligatorio: boolean
+    multiple: boolean
+    orden: number
+}
+
+/** "Datos del comercio" del cliente, calculado por el backend (api-vendedores,
+ *  AgendaService.enriquecer). `pendientes` alimenta el gate de iniciar visita: si tiene algo,
+ *  se pide eso antes del POST. `valores` precarga la edición desde VisitaSheet. */
+export interface IFichaCliente {
+    pendientes: string[]
+    valores: Record<string, string[]>
+}
+
 /** Card de la vuelta abierta O de una semana previsualizada — ver decisión de diseño en el
  *  plan de este dominio: ambas fuentes ya traen un rotacionClienteId real. Los cinco campos
  *  son requeridos a propósito: con rotacionClienteId opcional, iniciarVisita({
@@ -153,6 +189,10 @@ export interface IAgendaClient extends IVisitClientCard {
      *  `tipo: 'alta'`, pero se tipea opcional/nullable para no asumir de más sobre lo
      *  que manda el backend. */
     detalleAlta?: IDetalleAlta | null
+    /** Opcional a propósito por los fixtures de test existentes. En producción SIEMPRE viene.
+     *  Ausente se trata como "nada pendiente": un bundle nuevo contra un backend viejo no
+     *  tiene que bloquear el inicio de la visita. */
+    ficha?: IFichaCliente
 }
 
 /** El plan de una semana que no es necesariamente la abierta, con el estado REAL de

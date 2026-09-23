@@ -4,6 +4,7 @@ import {
     MOCK_OBJECIONES,
     MOCK_OTRAS_RESOLUCIONES,
     MOCK_RESUMEN,
+    MOCK_FICHAS,
     MOCK_VENDEDORES,
     MOCK_VISITAS,
     MOCK_VISITAS_HOY,
@@ -14,6 +15,8 @@ import type {
     IAnaliticaResumen,
     IObjecionesResumen,
     IVendedorMetricas,
+    IFichasArgs,
+    IFichasRelevadasResponse,
     IVendedorOpcion,
     IVisitaDetalle,
     IVisitasArgs,
@@ -146,5 +149,26 @@ export const getVendedores = async (): Promise<IVendedorOpcion[]> => {
         return MOCK_VENDEDORES
     }
     const res = await apiClient.get('/planificacion/analitica/vendedores')
+    return res.data.data
+}
+
+/**
+ * "Datos del comercio" cargados. **El período es opcional**: sin `desde`/`hasta` devuelve todo
+ * lo acumulado, porque la ficha se llena una vez por cliente y nunca más — no es actividad.
+ * Los `valores` vienen con los códigos del catálogo; el label lo pone la tabla.
+ */
+export const getFichas = async (args: IFichasArgs): Promise<IFichasRelevadasResponse> => {
+    if (USA_MOCK) {
+        await esperar()
+        const fichas = MOCK_FICHAS.filter(
+            f => !args.vendedores?.length || args.vendedores.includes(f.codigoParticularVendedor),
+        ).filter(f => {
+            if (!args.desde || !args.hasta) return true
+            const dia = f.relevadoEn.slice(0, 10)
+            return dia >= args.desde && dia <= args.hasta
+        })
+        return { total: fichas.length, totalPlan: 380, fichas }
+    }
+    const res = await apiClient.get('/planificacion/analitica/fichas', { params: args })
     return res.data.data
 }

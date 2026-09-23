@@ -9,6 +9,7 @@ import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
 import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
+import AnaliticaFichasPage from '@/pages/AnaliticaFichasPage'
 import RutaPage from '@/pages/RutaPage'
 import SinPermisosPage from '@/pages/SinPermisosPage'
 
@@ -39,6 +40,7 @@ export default function App() {
                                 element={<AnaliticaVendedorPage />}
                             />
                             <Route path="/analitica/ruta" element={<RutaPage />} />
+                            <Route path="/analitica/fichas" element={<AnaliticaFichasPage />} />
                         </Route>
                         <Route path="/login" element={<LoginPage />} />
                         <Route path="/sin-permisos" element={<SinPermisosPage />} />

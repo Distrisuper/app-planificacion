@@ -6,6 +6,9 @@ import type { IReacomodarDTO } from '@/types/planificacion'
 export const cicloKeys = {
     actual: ['ciclo', 'actual'] as const,
     preview: (semana: number | undefined) => ['ciclo', 'preview', semana] as const,
+    /** Prefijo de TODOS los previews, sin importar la semana: para parchear o invalidar en
+     *  bloque cuando no se sabe cuál está montado. */
+    previewTodos: ['ciclo', 'preview'] as const,
 }
 
 export function useCicloActual() {
