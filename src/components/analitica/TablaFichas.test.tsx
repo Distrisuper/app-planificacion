@@ -90,3 +90,14 @@ it('sin nombre de vendedor cae al código', () => {
     dibujar([fila({ nombreVendedor: '' })])
     expect(screen.getByText('V 2')).toBeInTheDocument()
 })
+
+it('cada celda es de UNA línea: el texto completo queda en el title para cuando se corta', () => {
+    dibujar([fila({ valores: { especialidad: ['frenos', 'monomarca'] } })])
+    const celda = screen.getByText('Frenos, Monomarca')
+    expect(celda).toHaveClass('truncate')
+    expect(celda).toHaveAttribute('title', 'Frenos, Monomarca')
+    expect(screen.getByText(/NONNO SUSPENSION/)).toHaveAttribute(
+        'title',
+        '#06856 NONNO SUSPENSION',
+    )
+})

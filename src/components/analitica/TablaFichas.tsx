@@ -1,7 +1,19 @@
+import type { ReactNode } from 'react'
 import { fechaHoraNegocio } from '@/lib/fechas'
 import { CAMPO_ESPECIALIDAD, CAMPO_MARCA, ESPECIALIDAD_CON_DETALLE } from '@/lib/relevamientos'
 import type { IFichaCampoDef } from '@/types/planificacion'
 import type { IFichaRelevadaFila } from '@/types/analitica'
+
+/** Todo en una línea: lo que no entra se corta con "…" y el texto completo va en el `title`.
+ *  El corte va en un bloque ADENTRO de la celda: un `max-width` sobre el `<td>` mismo no lo
+ *  respetan los navegadores con el layout automático de tabla. */
+function Linea({ ancho, title, children }: { ancho?: string; title?: string; children: ReactNode }) {
+    return (
+        <div className={`truncate ${ancho ?? ''}`} title={title}>
+            {children}
+        </div>
+    )
+}
 
 interface TablaFichasProps {
     fichas: IFichaRelevadaFila[]
@@ -50,14 +62,14 @@ export default function TablaFichas({ fichas, catalogo }: TablaFichasProps) {
             <table className="w-full text-sm">
                 <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
-                        <th className="px-3 py-2 text-left">Cliente</th>
+                        <th className="whitespace-nowrap px-3 py-2 text-left">Cliente</th>
                         {columnas.map(c => (
                             <th key={c.campo} className="px-3 py-2 text-left">
                                 {c.descripcion}
                             </th>
                         ))}
-                        <th className="px-3 py-2 text-left">Vendedor</th>
-                        <th className="px-3 py-2 text-left">Relevado</th>
+                        <th className="whitespace-nowrap px-3 py-2 text-left">Vendedor</th>
+                        <th className="whitespace-nowrap px-3 py-2 text-left">Relevado</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -67,22 +79,37 @@ export default function TablaFichas({ fichas, catalogo }: TablaFichasProps) {
                             className="border-b border-slate-100 hover:bg-blue-50"
                         >
                             <td className="px-3 py-2 text-slate-900">
-                                <span className="text-slate-400">#{f.codigoParticularCliente}</span>{' '}
-                                {f.nombreCliente || '—'}
+                                <Linea
+                                    ancho="max-w-xs"
+                                    title={`#${f.codigoParticularCliente} ${f.nombreCliente}`.trim()}
+                                >
+                                    <span className="text-slate-400">#{f.codigoParticularCliente}</span>{' '}
+                                    {f.nombreCliente || '—'}
+                                </Linea>
                             </td>
-                            {columnas.map(c => (
-                                <td key={c.campo} className="px-3 py-2 text-slate-700">
-                                    {celda(f, c)}
-                                </td>
-                            ))}
+                            {columnas.map(c => {
+                                const texto = celda(f, c)
+                                return (
+                                    <td key={c.campo} className="px-3 py-2 text-slate-700">
+                                        <Linea ancho="max-w-[16rem]" title={texto}>
+                                            {texto}
+                                        </Linea>
+                                    </td>
+                                )
+                            })}
                             <td className="px-3 py-2 text-slate-600">
-                                {f.nombreVendedor || f.codigoParticularVendedor}
+                                <Linea
+                                    ancho="max-w-[12rem]"
+                                    title={f.nombreVendedor || f.codigoParticularVendedor}
+                                >
+                                    {f.nombreVendedor || f.codigoParticularVendedor}
+                                </Linea>
                             </td>
                             {/* `fechaHoraNegocio` y no un slice sobre el ISO: el backend
                                 manda UTC, así que cortar el string muestra Greenwich — y no
                                 sólo corre la hora, también el DÍA (un relevamiento de las
                                 22:00 argentinas cae al día siguiente en UTC). */}
-                            <td className="px-3 py-2 text-slate-600">
+                            <td className="whitespace-nowrap px-3 py-2 text-slate-600">
                                 {fechaHoraNegocio(f.relevadoEn)}
                             </td>
                         </tr>

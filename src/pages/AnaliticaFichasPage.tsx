@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import TablaFichas from '@/components/analitica/TablaFichas'
@@ -8,7 +9,7 @@ import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
 import { useVendedores } from '@/hooks/useAnalitica'
 import { useCamposFicha } from '@/hooks/useCamposFicha'
 import { useFichasRelevadas } from '@/hooks/useFichasRelevadas'
-import { formatNumero } from '@/lib/analiticaFormat'
+import { buscarFichas } from '@/lib/buscarFichas'
 
 /**
  * "Datos del comercio": qué se cargó, de quién y cuándo.
@@ -18,6 +19,7 @@ import { formatNumero } from '@/lib/analiticaFormat'
  * treinta clientes de la semana se ve mirando las filas, no un porcentaje.
  */
 export default function AnaliticaFichasPage() {
+    const [busqueda, setBusqueda] = useState('')
     const { user, logout } = useAuth()
     const accionesDeCuenta = useAccionesDeCuenta()
     const { filtro, hayRango, setRango, toggleVendedor, limpiarVendedores, limpiarRango } =
@@ -36,6 +38,8 @@ export default function AnaliticaFichasPage() {
     const { data: roster } = useVendedores()
     const { data: catalogo } = useCamposFicha()
     const { data, isLoading, isError } = useFichasRelevadas(args)
+
+    const visibles = data ? buscarFichas(data.fichas, busqueda) : []
 
     const opciones = (roster ?? []).map(v => ({
         codigo: v.codigoParticularVendedor,
@@ -62,19 +66,15 @@ export default function AnaliticaFichasPage() {
             />
 
             <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
-                {data && (
-                    <p className="text-sm text-slate-600">
-                        <span className="font-semibold text-slate-900">
-                            {formatNumero(data.total)} de {formatNumero(data.totalPlan)}
-                        </span>{' '}
-                        clientes del plan relevados
-                        {hayRango && (
-                            <span className="text-slate-500">
-                                {' '}
-                                · cargados entre {filtro.desde} y {filtro.hasta}
-                            </span>
-                        )}
-                    </p>
+                {data && data.fichas.length > 0 && (
+                    <input
+                        type="search"
+                        aria-label="Buscar cliente"
+                        placeholder="Buscar por código o nombre de cliente"
+                        value={busqueda}
+                        onChange={e => setBusqueda(e.target.value)}
+                        className="w-full max-w-sm rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900"
+                    />
                 )}
 
                 {(isLoading || !catalogo) && !isError && (
@@ -98,8 +98,12 @@ export default function AnaliticaFichasPage() {
                     label sale de ahí. Mostrar la tabla antes de tenerlo pintaría códigos
                     crudos, que es peor que esperar — y como se cachea con staleTime infinito,
                     esta espera pasa una sola vez por sesión. */}
-                {data && catalogo && data.fichas.length > 0 && (
-                    <TablaFichas fichas={data.fichas} catalogo={catalogo} />
+                {data && data.fichas.length > 0 && visibles.length === 0 && (
+                    <p className="text-sm text-slate-500">Ningún cliente coincide con “{busqueda}”.</p>
+                )}
+
+                {data && catalogo && visibles.length > 0 && (
+                    <TablaFichas fichas={visibles} catalogo={catalogo} />
                 )}
             </main>
         </div>
