@@ -35,7 +35,7 @@ export default function TarjetaDatosAlta({
     return (
         <section
             aria-label="Datos del comercio"
-            className={`mb-3.5 overflow-hidden rounded-xl border-[1.5px] ${
+            className={`mb-5 overflow-hidden rounded-xl border-[1.5px] ${
                 fichaPendiente ? 'border-amber-300 bg-amber-50/60' : 'border-[#E4E8F0] bg-white'
             }`}
         >
@@ -73,7 +73,9 @@ export default function TarjetaDatosAlta({
                     </button>
                 </>
             )}
-            {children && <div className={conRenglones ? 'border-t border-[#EEF1F6]' : ''}>{children}</div>}
+            {children && (
+                <div className={`bg-[#FAFBFD] ${conRenglones ? 'border-t border-[#EEF1F6]' : ''}`}>{children}</div>
+            )}
         </section>
     )
 }
