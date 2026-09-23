@@ -86,3 +86,35 @@ it('el atajo Hoy pone el mismo día en desde y hasta', async () => {
     expect(desde).toBe(hasta)
     expect(desde).toMatch(/^\d{4}-\d{2}-\d{2}$/)
 })
+
+it('con onTodoElPeriodo muestra el atajo y lo dispara', async () => {
+    const onTodo = vi.fn()
+    render(
+        <FiltrosAnalitica
+            filtro={FILTRO}
+            vendedoresDisponibles={[]}
+            onRango={vi.fn()}
+            onToggleVendedor={vi.fn()}
+            onLimpiar={vi.fn()}
+            onTodoElPeriodo={onTodo}
+        />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Todo el período' }))
+    expect(onTodo).toHaveBeenCalled()
+})
+
+it('sin rango elegido las fechas se ven vacías, no con el default', () => {
+    render(
+        <FiltrosAnalitica
+            filtro={FILTRO}
+            sinRango
+            vendedoresDisponibles={[]}
+            onRango={vi.fn()}
+            onToggleVendedor={vi.fn()}
+            onLimpiar={vi.fn()}
+            onTodoElPeriodo={vi.fn()}
+        />,
+    )
+    expect(screen.getByLabelText('Desde')).toHaveValue('')
+    expect(screen.getByLabelText('Hasta')).toHaveValue('')
+})

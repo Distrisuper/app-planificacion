@@ -1201,3 +1201,16 @@ it('cliente real: onCerrarVisita recibe detalle null', async () => {
 
     await waitFor(() => expect(onCerrarVisita).toHaveBeenCalledWith(null, null))
 })
+
+describe('chip "Datos del comercio"', () => {
+    it('aparece si se pasa onEditarDatosComercio, con la visita abierta o cerrada, y lo llama al tocar', () => {
+        const onEditar = vi.fn()
+        renderSheet({ onEditarDatosComercio: onEditar, visitaCerrada: true })
+        fireEvent.click(screen.getByRole('button', { name: /datos del comercio/i }))
+        expect(onEditar).toHaveBeenCalledTimes(1)
+    })
+    it('no aparece sin la prop', () => {
+        renderSheet({})
+        expect(screen.queryByRole('button', { name: /datos del comercio/i })).not.toBeInTheDocument()
+    })
+})

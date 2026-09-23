@@ -119,6 +119,11 @@ interface VisitaSheetProps {
      *  vacío; editable, y nunca pisa lo que el vendedor ya tipeó. Dos conceptos distintos
      *  que conviven: el contacto del COMERCIO (plan) y con quién habló ESTA vez (hecho). */
     contactoSugerido?: string | null
+    /** Si se pasa, el header muestra el chip "Datos del comercio" que abre la edición de la
+     *  ficha. Se muestra con la visita abierta Y cerrada (es corrección, no carga de rubros).
+     *  El llamador decide cuándo pasarlo (VisitaFlow: sólo si no hay pendientes, para no
+     *  duplicar la puerta del gate). */
+    onEditarDatosComercio?: () => void
 }
 
 export default function VisitaSheet({
@@ -141,6 +146,7 @@ export default function VisitaSheet({
     onNoVisita,
     onDatosComercio,
     contactoSugerido = null,
+    onEditarDatosComercio,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
     const estadoVivo = estadoVisitaVivo(segundos, alejado)
@@ -501,12 +507,24 @@ export default function VisitaSheet({
             </button>
         ) : null
 
-    // El de descuentos primero: es el de consulta, y la salida negativa queda al borde.
+    const chipDatosComercio = onEditarDatosComercio ? (
+        <button
+            type="button"
+            onClick={onEditarDatosComercio}
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-[#C9D2E3] bg-[#F1F4F9] px-2 text-[11px] font-bold text-dsnavy"
+        >
+            Datos del comercio
+        </button>
+    ) : null
+
+    // Descuentos primero (consulta), después los datos (relevamiento del alta / corrección
+    // de la ficha), y la salida negativa al borde.
     const acciones =
-        chipDescuentos || botonDatos || botonNoVisita ? (
+        chipDescuentos || botonDatos || chipDatosComercio || botonNoVisita ? (
             <div className="flex items-center gap-1.5">
                 {chipDescuentos}
                 {botonDatos}
+                {chipDatosComercio}
                 {botonNoVisita}
             </div>
         ) : undefined

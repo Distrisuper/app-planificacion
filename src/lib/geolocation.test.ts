@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { capturarUbicacion } from './geolocation'
+import { capturarUbicacion, obtenerFix } from './geolocation'
 
 const PERMISSION_DENIED = 1
 const POSITION_UNAVAILABLE = 2
@@ -112,4 +112,17 @@ it('sin API de geolocalización devuelve no_soportado', async () => {
     const res = await capturarUbicacion()
 
     expect(res).toEqual({ ok: false, motivo: 'no_soportado' })
+})
+
+it('obtenerFix devuelve el timestamp del fix, que es con lo que se arbitra entre lecturas', async () => {
+    mockGeolocation((ok: any) =>
+        ok({ coords: { latitude: -34.6, longitude: -58.38, accuracy: 12 }, timestamp: 1_700_000_000 }),
+    )
+
+    const res = await obtenerFix()
+
+    expect(res).toEqual({
+        ok: true,
+        fix: { lat: -34.6, lng: -58.38, precisionM: 12, timestamp: 1_700_000_000 },
+    })
 })

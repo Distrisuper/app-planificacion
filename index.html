@@ -1,7 +1,13 @@
 <!doctype html>
-<html lang="en">
+<!-- lang="es" + translate="no" + meta notranslate: la app es interna y monolingüe. Con
+     lang="en" Chrome la tomaba por inglesa y en teléfonos con "traducir siempre" la
+     traducía al castellano ("VIE" → "RIVALIZAR"); Google Translate reemplaza los textos
+     por <font> que React no conoce y el siguiente re-render (tocar un chip de la ficha)
+     tiraba NotFoundError removeChild/insertBefore y dejaba la pantalla gris. -->
+<html lang="es" translate="no">
   <head>
     <meta charset="UTF-8" />
+    <meta name="google" content="notranslate" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!-- interactive-widget=resizes-content: al abrirse el teclado virtual, el layout
          viewport se encoge, así que el pie fijo del BottomSheet sube con el teclado en

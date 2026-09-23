@@ -269,6 +269,71 @@ Hay **tres capas separadas**, y una operación toca una sola:
   del radio, así que ningún fix simulado desde ahí podía disparar el aviso. Tampoco restar la
   precisión en la salida (`d − p ≤ 100`): eso sí convierte un fix basura en evidencia de
   cercanía. Y ojo con el nombre: `IniciarVisitaMapa` pasó a llamarse **`MapaVisita`**.
+- **En el mapa de cierre manda lo que el vendedor VE, no la histéresis: si el punto cae
+  dentro del círculo, es un "Cerrar visita" normal.** Con un fix grueso la salida del hook
+  (`d + p ≤ 100`) es insatisfacible —parado ENCIMA del cliente, `0 + 150 > 100`— así que
+  `alejado` queda prendido para siempre, y eso pasa justo adentro del local, donde el GPS es
+  peor. Para el aviso de la visita en curso está bien (±150 m no PRUEBAN que llegó), pero
+  colgar de ahí el CTA daba un absurdo: el pin adentro del círculo, "Estás a 0 m del
+  cliente", y un botón ofreciendo **"Cerrar igual · estás a 0 m"** con su diálogo. El
+  criterio del mapa es `cercaSegunFix` (`distancia ≤ RADIO_INICIO_METROS`) y `alejado` pasó
+  a ser condición **necesaria pero no suficiente** (`avisarLejos`). Esto **no afloja la
+  histéresis** —el gate de iniciar y el aviso siguen intactos— porque **cerrar no tiene
+  gate**: lo único que decide este criterio es si vale la pena interrumpir. Dos corolarios:
+  (1) la decisión la toma `MapaVisita` y viaja al llamador por `onCerrar(requiereConfirmacion)`
+  — recalcularla en `VisitaFlow` con `alejado` devolvía el botón verde que igual abría el
+  diálogo; (2) afuera del círculo pero sin poder probarlo (`d − p ≤ radio`), la distancia se
+  muestra **con su margen** ("no alcanza para confirmarlo") en vez de darse por buena en
+  verde — es `fixNoConcluyente`, y el CTA ahí no promete metros.
+- **Entre dos fixes gana el mejor, no el último: todo fix pasa por `aceptarFix`.** El
+  `watchPosition` del mapa y el `getCurrentPosition` de "Recalcular posición" escriben en el
+  mismo estado, y el watch **no se pausa** durante el recálculo — sin arbitrar, el vendedor
+  corregía su posición, la veía corregida, y un tick de red de cientos de metros se la
+  revertía un segundo después (el síntoma que se reportaba como "queda lagueado"). Dos
+  reglas, sobre los campos que la propia API da para esto (`coords.accuracy` en metros al
+  95% de confianza, `position.timestamp` en Unix ms): una lectura **anterior** a la vigente
+  se descarta (es el fix cacheado que devuelve `maximumAge`, no información nueva), y una
+  **más nueva pero más gruesa** solo reemplaza si la vigente ya venció (`VIGENCIA_FIX_MS`,
+  30 s — un "estás cerca" de hace medio minuto es peor información que un "estás lejos" de
+  recién). "Recalcular posición" pasa `explicito` y saltea la segunda regla: el vendedor
+  pidió la lectura y hay que mostrarle la que salga, o el botón parece no hacer nada; no
+  abre un agujero porque `estaFueraDeRango` ya descuenta la precisión, así que un fix grueso
+  no puede afirmar lejanía. Y un **error del watch mientras hay un recálculo en vuelo se
+  ignora** (`marcarFixFallido({ deWatch: true })`): el vendedor está esperando SU lectura, y
+  el recálculo ya avisa si termina mal.
+- **"Recalcular posición" usa `obtenerFix()`, las mismas dos etapas que `capturarUbicacion()`.**
+  Era el único pedido de posición a demanda que hacía su propio `getCurrentPosition` de una
+  sola etapa en alta precisión: bajo techo agotaba el timeout y terminaba **siempre** en "No
+  pudimos actualizar tu posición", justo donde la segunda etapa (wifi/antena) sí consigue un
+  fix. `obtenerFix` en `src/lib/geolocation.ts` es ahora la única puerta —devuelve el fix
+  crudo con `precisionM` y `timestamp`— y `capturarUbicacion()` es su formateo para el
+  backend. El `maximumAge > 0` sigue siendo obligatorio y **no se toca**: el comentario de
+  ese archivo explica por qué 0 reintroduce la espera de 23 s. Y **un fix que el arbitraje
+  descarta no es un fix que falló**: son ramas distintas en `handleRecalcular`. Bajo techo
+  la etapa 2 puede devolver un fix de red MÁS VIEJO que el del watch, y ahí `aceptarFix` lo
+  rechaza con razón — pero avisar "No pudimos actualizar tu posición" sería el mismo cartel
+  que este arreglo vino a sacar, con la lectura hecha y la distancia correcta en pantalla.
+- **Cerrar sigue sin gate, pero pasa por el mapa si la coordenada definitiva ubica al
+  vendedor lejos.** `VisitaFlow.onCerrarVisita` mide con el `geo` de `capturarUbicacion()`
+  —el mismo que se persiste como `coord_final`, así que no agrega espera— y con
+  `estaFueraDeRango` decide: cerca cierra derecho, lejos abre `MapaVisita` en `modo='cerrar'`
+  (el cuarto modo: `'consulta'` con CTA, sin reposicionar) y llama a `evaluarFix` con esa
+  coordenada para poner al hook al día. **El disparador NO es `alejado`** a propósito:
+  `useAlejadoDelCliente` congela su watch con la app en background, así que su estado puede
+  decir "cerca" de hace diez minutos — y ése es justo el vendedor que hoy cierra a 400 m sin
+  que hubiera existido ningún cartel que ignorar. Desde el mapa, "Recalcular posición" corre
+  en alta precisión y puede apagar el aviso: ahí el CTA pasa de `Cerrar igual · estás a N m`
+  (con `ConfirmDialog`) a `Cerrar visita` (directo). **El CTA del modo `'cerrar'` nunca se
+  deshabilita** —ni por `calculando`, ni por `sinUbicacion`, ni por distancia—: es la
+  diferencia con `'iniciar'`, y reintroducirlo sería el bloqueo que el dominio saca a
+  propósito. Un fix demasiado impreciso (`d − p` nunca supera el radio) **no desvía**: ante
+  la duda no se interrumpe, y es un agujero conocido y aceptado. **La visita de alta entra
+  igual**: su coordenada no es "donde estaba parado el vendedor" sino la que él marcó
+  tocando el mapa en `'ubicar'` ("Marcar la ubicación" → *"Tocá el mapa donde está el
+  comercio"*), así que vale tanto como la del warehouse. Lo único que se le esconde ahí es
+  `#ALTA-000009` (`identidadEnCurso`), que no es vocabulario de vendedor. El banner del pie de
+  `VisitaSheet` no cambia. Detalle en
+  [`docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md`](docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md).
 - **`VisitaFlow.onIniciar` repite el chequeo con la
   coordenada definitiva**, para que tocar el botón en el instante en que el watch marcó "cerca" no
   lo saltee. El cierre no bloquea a propósito: para esa altura ya se puede haber ido del local
@@ -328,6 +393,47 @@ Hay **tres capas separadas**, y una operación toca una sola:
   confirma antes, y restaura gerencia. Vive en `EstadoVisitaSheet` (`onEliminar`, que la página
   pasa solo si corresponde) y en `VisitasService.quitarFilaPropia`. Ver
   `docs/dominio/modelo.md`, "Sacar de la agenda lo que se agregó a mano".
+- **"Datos del comercio" es una ficha del CLIENTE, no de la visita, y este dominio sólo la
+  guarda.** `pl_ficha_campo` (catálogo, con `codigo_erp` nullable) + `pl_ficha_valor` (una fila
+  por dato, vigente = `reemplazado_en IS NULL`): la forma de `camposDinamicos` del ERP, que es
+  donde termina. **Nada sale hacia client-service desde acá**: lo hace un cron ajeno leyendo
+  `codigo_erp` y marcando `sincronizado_en`. El gate lee `cliente.ficha.pendientes` (calculado
+  en `AgendaService.enriquecer` contra el catálogo, y ya viaja en la card de la agenda: cero
+  requests extra) y pide **sólo** eso; sumar un dato es una fila en el catálogo + un control en
+  `PerfilComercioSheet`, sin tocar el gate. El `PUT /planificacion/clientes/:codigo/ficha` va
+  **antes** del POST de la visita y lo condiciona. Se pide hasta que la ficha esté completa y
+  nunca vence. Corrección posterior: chip "Datos del comercio" en `VisitaSheet`, sólo sin
+  pendientes. Spec
+  `docs/superpowers/specs/2026-09-22-relevamiento-datos-del-comercio-design.md`.
+- **El formulario de la ficha lo dibuja el CATÁLOGO, no el front.** `GET /planificacion/ficha/campos`
+  (hook `useCamposFicha`, `staleTime: Infinity`) trae qué campos hay, de qué tipo y con qué
+  opciones; `PerfilComercioSheet` elige el control por `tipo` + `multiple` (chips / segmented /
+  stepper / input) y el título sale de `descripcion`, que **es texto de pantalla, no una nota
+  interna**. Agregar una opción es un `UPDATE` en `pl_ficha_campo`. Antes las listas estaban
+  duplicadas en `src/lib/relevamientos.ts` y el 22/09 las 7 especialidades del ERP se cargaron
+  dos veces a mano. **`etiquetaErp`/`codigoErp` no salen al front**: son el contrato con el cron
+  del ERP. **"Otros" es una opción con `abierta: true`**, no un caso especial del código: habilita
+  texto libre y se guarda **el texto** ('Chery'), nunca el código — si no, el `GROUP BY` de
+  gerencia devuelve un cajón de sastre; al reabrir, un valor fuera de la lista se relee como
+  "Otros". Lo único que sigue hardcodeado es que **Monomarca dispare la pregunta de la marca**
+  (`ESPECIALIDAD_CON_DETALLE`): modelarlo obligaría al gate del backend a entender la semántica
+  de un campo puntual. **El botón del pie no se renderiza sin catálogo**: con el GET en vuelo no
+  hay campos, `faltantes` es `[]` y el gate se auto-satisfaría — la misma trampa que
+  `ofrecimientosCargados` en `VisitaSheet`. Spec
+  `docs/superpowers/specs/2026-09-22-catalogo-de-ficha-dirigido-por-la-base-design.md`.
+- **El gate corta en `VisitaFlow.onConfirmarPropuesta`, ANTES del mapa, no en `onIniciar`.**
+  Los dos "Iniciar visita" que abren el camino —el verde de la card (vía el efecto de
+  `cargandoDirecto`) y el del pie de `PropuestaSheet`— convergen ahí, así que sigue siendo un
+  solo corte. Confirmar la ficha **abre el mapa**, no la visita: "Iniciar visita" del mapa
+  vuelve a significar iniciar, que es todo el punto — antes el CTA final abría un formulario de
+  cuatro pasos. `onIniciar` conserva el chequeo como **red de seguridad** (cubre la visita de
+  alta, que no pasa por la propuesta), contra el estado local `fichaLista` y no contra la caché.
+  **Cerrar el formulario cierra la card** (`cerrarFlujo()`), no vuelve a la pantalla de atrás:
+  sin eso, en el camino directo el efecto de `cargandoDirecto` lo reabre al instante. Revierte a
+  propósito la sección 8 del spec del relevamiento: se pierde la garantía de completar la ficha
+  estando en el local, se gana que el vendedor con el GPS roto ahora **sí** releve (antes el
+  formulario nunca aparecía porque "Iniciar visita" quedaba deshabilitado en el mapa). Spec
+  `docs/superpowers/specs/2026-09-22-ficha-antes-del-mapa-design.md`.
 - **El cronómetro de la visita abierta es un semáforo, y sus umbrales NO son el criterio de
   validez.** `src/lib/estadoDuracion.ts`: ámbar <15 min (`arranque`), **verde 15–90**
   (`valida`, bordes inclusive), ámbar >90 (`larga`), y `alejado` gana sobre las tres. Lo

@@ -191,3 +191,34 @@ export interface IAltaRelevada {
     camposCargados: number
     camposTotal: number
 }
+
+/** Un renglón del listado de "Datos del comercio": UN cliente con lo que tiene cargado hoy.
+ *  `valores` trae los CÓDIGOS del catálogo (`'3'`, `'ford'`), no sus labels — la traducción
+ *  la hace la tabla con `useCamposFicha`, el mismo catálogo que dibuja el formulario del
+ *  vendedor. Un valor que no matchee ningún código es el texto de la opción abierta. */
+export interface IFichaRelevadaFila {
+    codigoParticularCliente: string
+    /** '' si el warehouse estaba caído: el listado no depende de él para existir. */
+    nombreCliente: string
+    valores: Record<string, string[]>
+    codigoParticularVendedor: string
+    nombreVendedor: string
+    /** ISO en UTC del dato MÁS RECIENTE del cliente. La hora visible sale de `horaNegocio`. */
+    relevadoEn: string
+}
+
+export interface IFichasRelevadasResponse {
+    total: number
+    /** Clientes distintos en las rotaciones abiertas del filtro: el denominador de
+     *  "124 de 380 clientes del plan relevados". */
+    totalPlan: number
+    fichas: IFichaRelevadaFila[]
+}
+
+/** El filtro de esta pantalla: el período es OPCIONAL (la ficha es un padrón acumulado, no
+ *  actividad), a diferencia de `IAnaliticaFiltro`. */
+export interface IFichasArgs {
+    desde?: string
+    hasta?: string
+    vendedores?: string[]
+}

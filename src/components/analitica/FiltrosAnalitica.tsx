@@ -15,6 +15,12 @@ interface FiltrosAnaliticaProps {
     onRango: (desde: string, hasta: string) => void
     onToggleVendedor: (codigo: string) => void
     onLimpiar: () => void
+    /** El atajo "Todo el período". Sólo lo pasa la pantalla que admite no filtrar por fecha
+     *  ("Datos del comercio"); sin él, el botón no se dibuja. */
+    onTodoElPeriodo?: () => void
+    /** No hay rango elegido: las fechas se muestran vacías en vez del default del hook,
+     *  que no es lo que se está aplicando. */
+    sinRango?: boolean
 }
 
 function hoy() {
@@ -54,6 +60,8 @@ export default function FiltrosAnalitica({
     onRango,
     onToggleVendedor,
     onLimpiar,
+    onTodoElPeriodo,
+    sinRango = false,
 }: FiltrosAnaliticaProps) {
     const [abierto, setAbierto] = useState(false)
     const elegidos = filtro.vendedores ?? []
@@ -66,7 +74,7 @@ export default function FiltrosAnalitica({
                 <input
                     type="date"
                     aria-label="Desde"
-                    value={filtro.desde}
+                    value={sinRango ? '' : filtro.desde}
                     onChange={e => onRango(e.target.value, filtro.hasta)}
                     className="mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
                 />
@@ -76,7 +84,7 @@ export default function FiltrosAnalitica({
                 <input
                     type="date"
                     aria-label="Hasta"
-                    value={filtro.hasta}
+                    value={sinRango ? '' : filtro.hasta}
                     onChange={e => onRango(filtro.desde, e.target.value)}
                     className="mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900"
                 />
@@ -95,6 +103,11 @@ export default function FiltrosAnalitica({
                 <Button variant="outline" size="sm" onClick={() => onRango(...mesPasado())}>
                     Mes pasado
                 </Button>
+                {onTodoElPeriodo && (
+                    <Button variant="outline" size="sm" onClick={onTodoElPeriodo}>
+                        Todo el período
+                    </Button>
+                )}
             </div>
 
             <div className="relative">
