@@ -32,6 +32,17 @@ import type {
     IVisitClientCard,
 } from '@/types/planificacion'
 
+/**
+ * La visita que la app tiene por abierta ya no existe para este vendedor: se borró
+ * (VISITA_NOT_FOUND — p. ej. "Reiniciar" en modo prueba) o no es de su rotación abierta
+ * (VISITA_AJENA). Reintentar no la va a cerrar nunca, así que se suelta el puntero local en
+ * vez de dejar la barra "Visitando a…" trabada con un error en cada intento.
+ */
+function esVisitaInexistente(code: string | null): boolean {
+    return code === 'VISITA_NOT_FOUND' || code === 'VISITA_AJENA'
+}
+const AVISO_VISITA_INEXISTENTE = 'Esta visita ya no existe. Actualizamos tu agenda.'
+
 /** La visita que está en curso ahora mismo, sea cual sea el cliente cuyo sheet esté
  *  abierto (o ninguno) — ver comentario en VisitaFlowProps.visitaEnCurso. */
 export interface IVisitaEnCurso {
@@ -441,9 +452,17 @@ export default function VisitaFlow({
             onVisitaCerrada()
             cerrarFlujo()
         } catch (err) {
-            if (errorCode(err) === 'VISITA_YA_CERRADA') {
+            const code = errorCode(err)
+            if (code === 'VISITA_YA_CERRADA') {
                 // Tratar como éxito: la visita está cerrada, que es lo que se quería.
                 limpiarAnclasDeLaVisita()
+                onVisitaCerrada()
+                cerrarFlujo()
+                return
+            }
+            if (esVisitaInexistente(code)) {
+                limpiarAnclasDeLaVisita()
+                onAviso?.('info', AVISO_VISITA_INEXISTENTE)
                 onVisitaCerrada()
                 cerrarFlujo()
                 return
@@ -554,6 +573,15 @@ export default function VisitaFlow({
             if (code === 'VISITA_YA_CERRADA' || code === 'RESOLUCION_NO_ES_VISITA') {
                 setNoVisitaRubros(null)
                 onAviso?.('info', 'Este cliente ya estaba resuelto. Actualizamos tu agenda.')
+                onVisitaCerrada()
+                cerrarFlujo()
+                return
+            }
+            if (esVisitaInexistente(code)) {
+                limpiarInicioVisita(visitaId)
+                limpiarVisitaEnCurso()
+                setNoVisitaRubros(null)
+                onAviso?.('info', AVISO_VISITA_INEXISTENTE)
                 onVisitaCerrada()
                 cerrarFlujo()
                 return

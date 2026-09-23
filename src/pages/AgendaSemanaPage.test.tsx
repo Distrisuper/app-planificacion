@@ -82,15 +82,20 @@ function renderPage(url = '/') {
         router.current = useLocation()
         return null
     }
-    render(
+    const arbol = (
         <QueryClientProvider client={qc}>
             <MemoryRouter initialEntries={[url]}>
                 <AgendaSemanaPage />
                 <EspiaURL />
             </MemoryRouter>
-        </QueryClientProvider>,
+        </QueryClientProvider>
     )
-    return { urlActual: () => `${router.current.pathname}${router.current.search}`, qc }
+    const { rerender } = render(arbol)
+    return {
+        urlActual: () => `${router.current.pathname}${router.current.search}`,
+        qc,
+        rerender: () => rerender(arbol),
+    }
 }
 
 beforeEach(() => {
@@ -985,6 +990,33 @@ it('con capacidades de prueba muestra el banner arriba de la agenda', async () =
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage()
     expect(await screen.findByText(/Modo prueba · Cartera de V 2/)).toBeInTheDocument()
+})
+
+it('al reiniciar la prueba suelta la visita en curso aunque no haya agenda para reconciliar', async () => {
+    // Regresión: "Reiniciar" borra las resoluciones en el backend y deja la rotación sin
+    // ciclo (standby), así que la query de la agenda queda deshabilitada y el efecto que
+    // reconcilia contra el servidor nunca corre. La barra "Visitando a…" quedaba viva en
+    // memoria apuntando a una visita inexistente.
+    const prueba = {
+        user: { name: 'Ana' }, logout: vi.fn(),
+        capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+        vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: 'Cartera de V 2', origenesDisponibles: ['V 2'] },
+    }
+    authMock.mockReturnValue(prueba)
+    guardarVisitaEnCurso({ cliente: { ...clienteLunes, esExtra: false, estado: 'en_curso', visitaId: 7 }, visitaId: 7 })
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_STANDBY)
+    const { rerender } = renderPage()
+    await screen.findByTestId('visita-en-curso-bar')
+
+    // Lo que hace useReiniciarPrueba al volver: limpia el storage y refresca /me.
+    limpiarVisitaEnCurso()
+    authMock.mockReturnValue({
+        ...prueba,
+        vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: 'Sin cartera', origenesDisponibles: ['V 2'] },
+    })
+    rerender()
+
+    await waitFor(() => expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument())
 })
 
 describe('sacar de la agenda', () => {

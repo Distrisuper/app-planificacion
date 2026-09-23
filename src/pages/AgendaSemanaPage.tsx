@@ -83,7 +83,7 @@ function mensajeDeCuenta(code: string | null): string | null {
 }
 
 export default function AgendaSemanaPage() {
-    const { user, logout, capacidades } = useAuth()
+    const { user, logout, capacidades, vendedorDePrueba } = useAuth()
     const probando = estaProbando(capacidades)
     const [eligiendoCartera, setEligiendoCartera] = useState(false)
     const { data: cicloActual, error: cicloActualError, isSuccess: cicloResuelto } =
@@ -359,6 +359,15 @@ export default function AgendaSemanaPage() {
             setVisitaEnCurso({ cliente: clienteAAdoptar, visitaId: enCurso.visitaId })
         }
     }, [agenda, visitaEnCurso])
+
+    // "Reiniciar" (modo prueba) borra las visitas en el backend y el storage local
+    // (useReiniciarPrueba), pero `visitaEnCurso` vive en memoria, y el efecto de arriba no
+    // la suelta: tras el reinicio la rotación queda sin ciclo y la agenda ni se pide. Lo que
+    // cambia seguro es `vendedorDePrueba` (refrescarMe devuelve un objeto nuevo): si para
+    // entonces el ancla local ya no está, la visita en memoria es fantasma.
+    useEffect(() => {
+        if (leerVisitaEnCurso() === null) setVisitaEnCurso(null)
+    }, [vendedorDePrueba])
 
     // Barra flotante visible siempre que haya una visita en curso Y el sheet abierto ahora
     // no sea justo el de esa visita (incluye "sheet cerrado del todo").
