@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Pencil, WifiOff, X } from 'lucide-react'
+import { Loader2, WifiOff, X } from 'lucide-react'
+import TarjetaDatosAlta from '@/components/relevamiento/TarjetaDatosAlta'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -111,10 +112,14 @@ interface VisitaSheetProps {
      *  visité". Recibe cuántos rubros llevaba completos, para que el llamador pueda
      *  avisarle al vendedor que esos no van a contar. */
     onNoVisita?: (rubrosCargados: number) => void
-    /** Sólo `esAlta` con la visita abierta: abre "Datos del comercio" (RelevamientoSheet)
-     *  desde la línea de identidad del header, al lado de "No visité". Con la visita
-     *  cerrada no se muestra: el backend rebota FILA_RESUELTA y no hay nada que editar. */
+    /** Sólo `esAlta` con la visita abierta: el renglón "Datos para el alta" de la tarjeta
+     *  "Datos del comercio" (TarjetaDatosAlta). Con la visita cerrada no se muestra: el
+     *  backend rebota FILA_RESUELTA y no hay nada que editar. */
     onDatosComercio?: () => void
+    /** Sólo `esAlta`: el renglón "Ficha del comercio" de la misma tarjeta. */
+    onAbrirFicha?: () => void
+    /** Sólo `esAlta`: campos del relevamiento cargados / total. null = esquema en vuelo. */
+    progresoAlta?: { cargados: number; total: number } | null
     /** Sólo `esAlta`: `detalleAlta.contactoNombre`. Precarga "Con quién hablaste" si está
      *  vacío; editable, y nunca pisa lo que el vendedor ya tipeó. Dos conceptos distintos
      *  que conviven: el contacto del COMERCIO (plan) y con quién habló ESTA vez (hecho). */
@@ -152,6 +157,8 @@ export default function VisitaSheet({
     contactoSugerido = null,
     fichaPendiente = false,
     onCompletarFicha,
+    onAbrirFicha,
+    progresoAlta = null,
     onEditarDatosComercio,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
@@ -502,18 +509,16 @@ export default function VisitaSheet({
             </button>
         ) : null
 
-    // Mismo estilo que ChipDescuentos (consulta/edición, no la salida negativa), y ANTES de
-    // "No visité": lo negativo queda al borde. Sin menú intermedio (ver comentario de arriba).
-    const botonDatos =
-        esAlta && !visitaCerrada && onDatosComercio ? (
-            <button
-                type="button"
-                onClick={onDatosComercio}
-                className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-violet-200 bg-violet-50 px-2 text-[11px] font-bold text-violet-700"
-            >
-                <Pencil className="h-[12px] w-[12px]" strokeWidth={2.4} />
-                Datos
-            </button>
+    // En el alta los datos del comercio no van en el header sino en una tarjeta arriba del
+    // cuerpo: son la mitad del trabajo de esa visita y necesitan mostrar qué falta.
+    const tarjetaAlta =
+        esAlta && !visitaCerrada && onDatosComercio && onAbrirFicha ? (
+            <TarjetaDatosAlta
+                fichaPendiente={fichaPendiente}
+                progreso={progresoAlta}
+                onAbrirFicha={onAbrirFicha}
+                onAbrirRelevamiento={onDatosComercio}
+            />
         ) : null
 
     const chipDatosComercio = onEditarDatosComercio ? (
@@ -526,13 +531,12 @@ export default function VisitaSheet({
         </button>
     ) : null
 
-    // Descuentos primero (consulta), después los datos (relevamiento del alta / corrección
-    // de la ficha), y la salida negativa al borde.
+    // Descuentos primero (consulta), después la corrección de la ficha, y la salida negativa
+    // al borde.
     const acciones =
-        chipDescuentos || botonDatos || chipDatosComercio || botonNoVisita ? (
+        chipDescuentos || chipDatosComercio || botonNoVisita ? (
             <div className="flex items-center gap-1.5">
                 {chipDescuentos}
-                {botonDatos}
                 {chipDatosComercio}
                 {botonNoVisita}
             </div>
@@ -801,7 +805,7 @@ export default function VisitaSheet({
                     // justo el único texto que el vendedor necesita leer en ese momento.
                     className={
                         pideFicha || !cierreHabilitado
-                            ? 'h-12 w-full border border-[#D8DEEA] bg-[#F1F4F9] text-[15px] text-dsnavy disabled:opacity-100'
+                            ? 'h-auto min-h-12 w-full whitespace-normal border border-[#D8DEEA] bg-[#F1F4F9] py-2 text-[15px] leading-tight text-dsnavy disabled:opacity-100'
                             : 'h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90'
                     }
                 >
@@ -815,10 +819,10 @@ export default function VisitaSheet({
                         : cerrando
                           ? 'Cerrando…'
                           : pideFicha
-                            ? 'Completá los datos del comercio'
+                            ? 'Falta la ficha del comercio'
                             : !cierreHabilitado
                             ? esAlta
-                                ? 'Cargá lo que ofreciste o dejá una observación'
+                                ? 'Falta un rubro u observación'
                                 : `Cargá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
                             : 'Cerrar visita'}
                 </Button>
@@ -855,6 +859,7 @@ export default function VisitaSheet({
                 altura="completa"
                 footer={footer}
             >
+                {!wizard && tarjetaAlta}
                 {wizard ? (
                     <ResolucionWizard
                         visitaId={visitaId}

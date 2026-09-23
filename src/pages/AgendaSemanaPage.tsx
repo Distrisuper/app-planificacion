@@ -786,7 +786,12 @@ export default function AgendaSemanaPage() {
                 cliente={relevamiento}
                 onClose={() => setRelevamiento(null)}
                 onAviso={mostrar}
-                onGuardado={() => mostrar('exito', 'Datos guardados')}
+                onGuardado={actualizado => {
+                    // `visitaCliente` es una foto tomada al abrir la visita: sin esto, la
+                    // tarjeta "Datos del comercio" del alta seguía mostrando el progreso viejo.
+                    setVisitaCliente(v => (v && v.rotacionClienteId === actualizado.rotacionClienteId ? { ...v, detalleAlta: actualizado.detalleAlta } : v))
+                    mostrar('exito', 'Datos guardados')
+                }}
             />
             <Notification notificacion={notificacion} onDismiss={ocultar} />
         </div>

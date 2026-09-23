@@ -1113,7 +1113,7 @@ describe('cliente nuevo (esAlta)', () => {
         const { onCerrarVisita } = renderSheet({ esAlta: true, enCurso: true })
 
         const boton = await screen.findByRole('button', {
-            name: /cargá lo que ofreciste o dejá una observación/i,
+            name: /falta un rubro u observación/i,
         })
         expect(boton).toBeDisabled()
         expect(api.getRubroStatus).not.toHaveBeenCalled()
@@ -1156,25 +1156,43 @@ describe('cliente nuevo (esAlta)', () => {
         expect(screen.queryByText(/propuesta comercial/i)).not.toBeInTheDocument()
     })
 
-    it('muestra "Datos" en la línea de identidad solo con esAlta, visita abierta y handler', async () => {
+    it('el alta con la visita abierta muestra la tarjeta "Datos del comercio" con sus dos puertas', async () => {
         ;(api.getOfrecimientos as any).mockResolvedValue([])
         const onDatosComercio = vi.fn()
-        renderSheet({ esAlta: true, enCurso: true, onDatosComercio })
-        fireEvent.click(await screen.findByRole('button', { name: /^datos$/i }))
-        expect(onDatosComercio).toHaveBeenCalled()
+        const onAbrirFicha = vi.fn()
+        renderSheet({
+            esAlta: true, enCurso: true, onDatosComercio, onAbrirFicha,
+            fichaPendiente: true, progresoAlta: { cargados: 3, total: 16 },
+        })
+        const ficha = await screen.findByRole('button', { name: /ficha del comercio/i })
+        expect(ficha).toHaveTextContent(/falta · obligatoria/i)
+        const relevamiento = screen.getByRole('button', { name: /datos para el alta/i })
+        expect(relevamiento).toHaveTextContent('3 de 16')
+        fireEvent.click(ficha)
+        expect(onAbrirFicha).toHaveBeenCalledTimes(1)
+        fireEvent.click(relevamiento)
+        expect(onDatosComercio).toHaveBeenCalledTimes(1)
+        // Ya no hay botón "Datos" en el header.
+        expect(screen.queryByRole('button', { name: /^datos$/i })).not.toBeInTheDocument()
     })
 
-    it('con la visita cerrada no hay botón Datos aunque haya handler', async () => {
+    it('con la ficha completa la tarjeta la marca Completa', async () => {
         ;(api.getOfrecimientos as any).mockResolvedValue([])
-        renderSheet({ esAlta: true, visitaCerrada: true, onDatosComercio: vi.fn() })
-        await screen.findByText(/cliente nuevo/i)
-        expect(screen.queryByRole('button', { name: /^datos$/i })).not.toBeInTheDocument()
+        renderSheet({ esAlta: true, enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn() })
+        expect(await screen.findByRole('button', { name: /ficha del comercio/i })).toHaveTextContent(/completa/i)
     })
 
-    it('un cliente real no muestra Datos aunque se pase el handler', async () => {
-        renderSheet({ enCurso: true, onDatosComercio: vi.fn() })
+    it('con la visita cerrada no hay tarjeta aunque haya handlers', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({ esAlta: true, visitaCerrada: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn() })
+        await screen.findByText(/cliente nuevo/i)
+        expect(screen.queryByRole('region', { name: /datos del comercio/i })).not.toBeInTheDocument()
+    })
+
+    it('un cliente real no muestra la tarjeta aunque se pasen los handlers', async () => {
+        renderSheet({ enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn() })
         await screen.findByText('Amortiguadores')
-        expect(screen.queryByRole('button', { name: /^datos$/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('region', { name: /datos del comercio/i })).not.toBeInTheDocument()
     })
 
     it('precarga "Con quién hablaste" con contactoSugerido, y NO pisa lo ya tipeado', async () => {

@@ -21,6 +21,8 @@ import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
 import { esAlta } from '@/lib/alta'
+import { contarCargados, estadoInicial } from '@/lib/camposAlta'
+import { useEsquemaAlta } from '@/hooks/useEsquemaAlta'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { formatDistancia } from '@/lib/analiticaFormat'
 import { useAuth } from '@/context/AuthContext'
@@ -188,8 +190,9 @@ export default function VisitaFlow({
     // Visita de ALTA: la ficha no corta el inicio (del prospecto no se sabe nada antes de
     // entrar); se carga con la visita abierta y es condición para cerrarla. null = cerrada;
     // 'relevamiento' = se abrió desde "Datos" y, guardada, sigue a RelevamientoSheet;
-    // 'cierre' = se abrió desde el pie, y guardada vuelve al sheet a cerrar.
-    const [fichaAlta, setFichaAlta] = useState<'relevamiento' | 'cierre' | null>(null)
+    // 'sola' = se abrió desde el pie o desde su renglón de la tarjeta: guardada, vuelve al
+    // sheet de la visita.
+    const [fichaAlta, setFichaAlta] = useState<'relevamiento' | 'sola' | null>(null)
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
@@ -257,6 +260,19 @@ export default function VisitaFlow({
     // El gate previo a la visita es sólo para clientes reales; el alta la pide adentro.
     const fichaCortaElInicio = !clienteEsAlta && !fichaLista && !!cliente && relevamientoPendiente(cliente)
     const fichaFaltaAlAlta = clienteEsAlta && !fichaLista && !!cliente && relevamientoPendiente(cliente)
+    // Progreso del relevamiento para la tarjeta del alta. Mismo esquema (y misma caché) que
+    // dibuja RelevamientoSheet, así que "3 de 16" cuenta exactamente lo que ese form muestra.
+    const esquemaAlta = useEsquemaAlta(clienteEsAlta)
+    const progresoAlta =
+        clienteEsAlta && cliente && esquemaAlta.data
+            ? {
+                  cargados: contarCargados(
+                      esquemaAlta.data.campos,
+                      estadoInicial(esquemaAlta.data.campos, cliente.detalleAlta, cliente.nombreCliente),
+                  ),
+                  total: esquemaAlta.data.campos.length,
+              }
+            : null
 
     // "Iniciar visita" tocado directo desde la card: se salta la propuesta y va derecho
     // al mapa. Solo aplica con coordenadas (si no las hay, no hay mapa que mostrar, así
@@ -654,13 +670,19 @@ export default function VisitaFlow({
                             : undefined
                     }
                     fichaPendiente={fichaFaltaAlAlta}
-                    onCompletarFicha={() => setFichaAlta('cierre')}
+                    onCompletarFicha={() => setFichaAlta('sola')}
+                    // Ficha pendiente: sólo los pendientes, con "Continuar". Completa: la
+                    // edición de siempre (todos los campos, "Guardar").
+                    onAbrirFicha={() => (fichaFaltaAlAlta ? setFichaAlta('sola') : setEditandoFicha(true))}
+                    progresoAlta={progresoAlta}
                     contactoSugerido={clienteEsAlta ? cliente.detalleAlta?.contactoNombre ?? null : null}
                     // Sólo con la ficha completa: si falta algo, el gate ya la pide al
                     // iniciar, y dos puertas para lo mismo confunden. Sin `ficha` (backend
                     // viejo) tampoco.
+                    // En el alta la corrección vive en la tarjeta "Datos del comercio": el chip
+                    // sería una segunda puerta con el mismo nombre.
                     onEditarDatosComercio={
-                        cliente.ficha && cliente.ficha.pendientes.length === 0
+                        !clienteEsAlta && cliente.ficha && cliente.ficha.pendientes.length === 0
                             ? () => setEditandoFicha(true)
                             : undefined
                     }

@@ -1332,7 +1332,7 @@ describe('gate de "Datos del comercio"', () => {
 
         it('"Datos" pide primero la ficha y, guardada, sigue al relevamiento', async () => {
             const { onDatosComercio } = renderFlow({ cliente: altaEnCurso })
-            fireEvent.click(await screen.findByRole('button', { name: /^datos$/i }))
+            fireEvent.click(await screen.findByRole('button', { name: /datos para el alta/i }))
             await completarFicha()
             fireEvent.click(screen.getByRole('button', { name: /^continuar$/i }))
             await waitFor(() => expect(api.actualizarFicha).toHaveBeenCalledWith('ALTA-000009', {
@@ -1346,7 +1346,7 @@ describe('gate de "Datos del comercio"', () => {
             const { onDatosComercio } = renderFlow({
                 cliente: { ...altaEnCurso, ficha: { pendientes: [], valores: { especialidad: ['frenos'], personas: ['2'], facturacion: ['5'] } } },
             })
-            fireEvent.click(await screen.findByRole('button', { name: /^datos$/i }))
+            fireEvent.click(await screen.findByRole('button', { name: /datos para el alta/i }))
             expect(onDatosComercio).toHaveBeenCalledTimes(1)
             expect(screen.queryByRole('button', { name: /^continuar$/i })).not.toBeInTheDocument()
         })
@@ -1357,7 +1357,7 @@ describe('gate de "Datos del comercio"', () => {
                 target: { value: 'Local con buena rotación' },
             })
             expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
-            fireEvent.click(screen.getByRole('button', { name: /completá los datos del comercio/i }))
+            fireEvent.click(screen.getByRole('button', { name: /falta la ficha del comercio/i }))
             await completarFicha()
             fireEvent.click(screen.getByRole('button', { name: /^continuar$/i }))
             expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
@@ -1366,15 +1366,25 @@ describe('gate de "Datos del comercio"', () => {
             expect(api.cerrarVisita).not.toHaveBeenCalled()
         })
 
+        it('con la ficha completa, su renglón abre la edición y el header no suma el chip de master', async () => {
+            renderFlow({
+                cliente: { ...altaEnCurso, ficha: { pendientes: [], valores: { especialidad: ['frenos'], personas: ['2'], facturacion: ['5'] } } },
+            })
+            fireEvent.click(await screen.findByRole('button', { name: /ficha del comercio/i }))
+            expect(await screen.findByRole('button', { name: /^guardar$/i })).toBeEnabled()
+            expect(screen.getByRole('textbox', { name: /personas que trabajan/i })).toHaveValue('2')
+            expect(screen.queryByRole('button', { name: /^datos del comercio$/i })).not.toBeInTheDocument()
+        })
+
         it('cerrar la ficha sin guardar deja la visita abierta', async () => {
             const { onClose } = renderFlow({ cliente: altaEnCurso })
-            fireEvent.click(await screen.findByRole('button', { name: /^datos$/i }))
+            fireEvent.click(await screen.findByRole('button', { name: /ficha del comercio/i }))
             await screen.findByRole('button', { name: /^frenos$/i })
             const cerrar = screen.getAllByRole('button', { name: /cerrar/i })
             fireEvent.click(cerrar[cerrar.length - 1])
             await waitFor(() => expect(screen.queryByRole('button', { name: /^frenos$/i })).not.toBeInTheDocument())
             expect(onClose).not.toHaveBeenCalled()
-            expect(screen.getByRole('button', { name: /completá los datos del comercio/i })).toBeInTheDocument()
+            expect(screen.getByRole('button', { name: /falta la ficha del comercio/i })).toBeInTheDocument()
         })
     })
 
