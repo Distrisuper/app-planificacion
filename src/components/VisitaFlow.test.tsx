@@ -56,6 +56,7 @@ interface HarnessProps {
     onClose: () => void
     onVisitaIniciada: (cliente: IAgendaClient, visitaId: number) => void
     onVisitaCerrada: () => void
+    onDatosComercio?: (c: IAgendaClient) => void
 }
 
 /**
@@ -74,6 +75,7 @@ function Harness({
     onClose,
     onVisitaIniciada,
     onVisitaCerrada,
+    onDatosComercio,
 }: HarnessProps) {
     const [cliente, setCliente] = useState<IAgendaClient | null>(clienteInicial)
     const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(
@@ -107,6 +109,7 @@ function Harness({
                     setVisitaEnCurso(null)
                     onVisitaCerrada()
                 }}
+                onDatosComercio={onDatosComercio}
                 onClose={() => {
                     setCliente(null)
                     onClose()
@@ -134,6 +137,7 @@ function renderFlow(
         directoAMapa?: boolean
     } = {},
 ) {
+    const onDatosComercio = vi.fn()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onGeoBloqueada = vi.fn()
     const onClose = vi.fn()
@@ -151,10 +155,11 @@ function renderFlow(
                 onClose={onClose}
                 onVisitaIniciada={onVisitaIniciada}
                 onVisitaCerrada={onVisitaCerrada}
+                onDatosComercio={onDatosComercio}
             />
         </QueryClientProvider>,
     )
-    return { onGeoBloqueada, onClose, onAviso, onVisitaIniciada, onVisitaCerrada }
+    return { onGeoBloqueada, onClose, onAviso, onVisitaIniciada, onVisitaCerrada, onDatosComercio }
 }
 
 /** El catálogo de "Datos del comercio" tal cual lo manda la API. Acá va el mínimo con el
@@ -1299,6 +1304,78 @@ describe('gate de "Datos del comercio"', () => {
         await waitFor(() => expect(screen.queryByRole('button', { name: /^guardar$/i })).not.toBeInTheDocument())
         expect(api.iniciarVisita).not.toHaveBeenCalled()
         expect(api.cerrarVisita).not.toHaveBeenCalled()
+    })
+
+    describe('visita de alta: la ficha se pide ADENTRO de la visita, no antes', () => {
+        // Del prospecto no se sabe nada antes de entrar: pedir la ficha antes de iniciar lo
+        // frena en la puerta. Se carga con la visita abierta y es condición para cerrarla.
+        const altaPendiente: IAgendaClient = {
+            ...conPendientes,
+            tipo: 'alta',
+            codigoParticularCliente: 'ALTA-000009',
+            latitud: undefined,
+            longitud: undefined,
+        }
+        const altaEnCurso: IAgendaClient = { ...altaPendiente, estado: 'en_curso', visitaId: 77 }
+
+        it('iniciar la visita de alta con la ficha pendiente NO muestra el gate', async () => {
+            mockGeolocacionEnVivo({ latitude: -34.62, longitude: -58.42, accuracy: 8 })
+            ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: true, coord: '-34.6,-58.4', precisionM: 10 })
+            ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 77, ofrecimientos: 0 })
+            renderFlow({ cliente: altaPendiente, directoAMapa: true })
+            await screen.findByTestId('mapa-iniciar-visita')
+            fireEvent.click(screen.getByRole('button', { name: /iniciar visita/i }))
+            await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+            expect(api.actualizarFicha).not.toHaveBeenCalled()
+            expect(screen.queryByText(/se carga una sola vez/i)).not.toBeInTheDocument()
+        })
+
+        it('"Datos" pide primero la ficha y, guardada, sigue al relevamiento', async () => {
+            const { onDatosComercio } = renderFlow({ cliente: altaEnCurso })
+            fireEvent.click(await screen.findByRole('button', { name: /^datos$/i }))
+            await completarFicha()
+            fireEvent.click(screen.getByRole('button', { name: /^continuar$/i }))
+            await waitFor(() => expect(api.actualizarFicha).toHaveBeenCalledWith('ALTA-000009', {
+                especialidad: ['frenos'], personas: ['4'], facturacion: ['3'],
+            }))
+            await waitFor(() => expect(onDatosComercio).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 })))
+            expect(api.cerrarVisita).not.toHaveBeenCalled()
+        })
+
+        it('con la ficha completa, "Datos" va derecho al relevamiento', async () => {
+            const { onDatosComercio } = renderFlow({
+                cliente: { ...altaEnCurso, ficha: { pendientes: [], valores: { especialidad: ['frenos'], personas: ['2'], facturacion: ['5'] } } },
+            })
+            fireEvent.click(await screen.findByRole('button', { name: /^datos$/i }))
+            expect(onDatosComercio).toHaveBeenCalledTimes(1)
+            expect(screen.queryByRole('button', { name: /^continuar$/i })).not.toBeInTheDocument()
+        })
+
+        it('sin la ficha no se cierra: el botón la pide, y guardada habilita el cierre', async () => {
+            const { onDatosComercio } = renderFlow({ cliente: altaEnCurso })
+            fireEvent.change(await screen.findByRole('textbox', { name: /observaciones/i }), {
+                target: { value: 'Local con buena rotación' },
+            })
+            expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
+            fireEvent.click(screen.getByRole('button', { name: /completá los datos del comercio/i }))
+            await completarFicha()
+            fireEvent.click(screen.getByRole('button', { name: /^continuar$/i }))
+            expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
+            // Desde el cierre no se desvía al relevamiento: el vendedor venía a cerrar.
+            expect(onDatosComercio).not.toHaveBeenCalled()
+            expect(api.cerrarVisita).not.toHaveBeenCalled()
+        })
+
+        it('cerrar la ficha sin guardar deja la visita abierta', async () => {
+            const { onClose } = renderFlow({ cliente: altaEnCurso })
+            fireEvent.click(await screen.findByRole('button', { name: /^datos$/i }))
+            await screen.findByRole('button', { name: /^frenos$/i })
+            const cerrar = screen.getAllByRole('button', { name: /cerrar/i })
+            fireEvent.click(cerrar[cerrar.length - 1])
+            await waitFor(() => expect(screen.queryByRole('button', { name: /^frenos$/i })).not.toBeInTheDocument())
+            expect(onClose).not.toHaveBeenCalled()
+            expect(screen.getByRole('button', { name: /completá los datos del comercio/i })).toBeInTheDocument()
+        })
     })
 
     it('con pendientes, VisitaSheet NO ofrece el chip (la puerta es el gate)', async () => {

@@ -119,6 +119,10 @@ interface VisitaSheetProps {
      *  vacío; editable, y nunca pisa lo que el vendedor ya tipeó. Dos conceptos distintos
      *  que conviven: el contacto del COMERCIO (plan) y con quién habló ESTA vez (hecho). */
     contactoSugerido?: string | null
+    /** Sólo `esAlta`: la ficha del comercio tiene obligatorios sin cargar. Traba el cierre y
+     *  el botón del pie pasa a pedirla (`onCompletarFicha`) en vez de cerrar. */
+    fichaPendiente?: boolean
+    onCompletarFicha?: () => void
     /** Si se pasa, el header muestra el chip "Datos del comercio" que abre la edición de la
      *  ficha. Se muestra con la visita abierta Y cerrada (es corrección, no carga de rubros).
      *  El llamador decide cuándo pasarlo (VisitaFlow: sólo si no hay pendientes, para no
@@ -146,6 +150,8 @@ export default function VisitaSheet({
     onNoVisita,
     onDatosComercio,
     contactoSugerido = null,
+    fichaPendiente = false,
+    onCompletarFicha,
     onEditarDatosComercio,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
@@ -457,6 +463,9 @@ export default function VisitaSheet({
     // acá. `puedeCerrarAlta` pide que haya quedado ALGO — un ofrecimiento completo o una
     // observación — en su lugar. Ver src/lib/alta.ts.
     const cierreHabilitado = esAlta ? puedeCerrarAlta(completos, observaciones) : faltanParaMinimo === 0
+    // Alta con la ficha incompleta: el pie no cierra, la pide. Va ANTES que el faltante de
+    // ofrecimientos porque es lo único que no se puede completar después de cerrar.
+    const pideFicha = esAlta && fichaPendiente && !!onCompletarFicha
 
     // En la línea de identidad del header (junto a `#10034 · FERNANDEZ MARIA ISABEL`) y
     // NO detrás de un menú: un control de un solo ítem escondido atrás de un "⋯" le suma
@@ -776,8 +785,8 @@ export default function VisitaSheet({
              *  mientras tanto el spinner o el error con "Volver a intentar". */}
             {!visitaCerrada && ofrecimientosCargados && (
                 <Button
-                    onClick={cerrarConBorrador}
-                    disabled={!cierreHabilitado}
+                    onClick={pideFicha ? onCompletarFicha : cerrarConBorrador}
+                    disabled={!pideFicha && !cierreHabilitado}
                     loading={cerrando || guardandoBorrador}
                     // El naranja queda reservado para "ya podés cerrar". Mientras falten
                     // rubros va gris con texto navy, y NO el naranja al 40% de opacidad
@@ -791,7 +800,7 @@ export default function VisitaSheet({
                     // lavaría el gris y dejaría el texto del faltante ilegible, que es
                     // justo el único texto que el vendedor necesita leer en ese momento.
                     className={
-                        !cierreHabilitado
+                        pideFicha || !cierreHabilitado
                             ? 'h-12 w-full border border-[#D8DEEA] bg-[#F1F4F9] text-[15px] text-dsnavy disabled:opacity-100'
                             : 'h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90'
                     }
@@ -805,7 +814,9 @@ export default function VisitaSheet({
                         ? 'Guardando…'
                         : cerrando
                           ? 'Cerrando…'
-                          : !cierreHabilitado
+                          : pideFicha
+                            ? 'Completá los datos del comercio'
+                            : !cierreHabilitado
                             ? esAlta
                                 ? 'Cargá lo que ofreciste o dejá una observación'
                                 : `Cargá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
