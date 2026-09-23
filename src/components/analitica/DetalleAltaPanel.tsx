@@ -1,4 +1,5 @@
-import { X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Check, Copy, X } from 'lucide-react'
 import { camposPorSeccion } from '@/lib/camposAlta'
 import { ETIQUETA_ESTADO_ALTA, valorVisible } from '@/lib/altasCsv'
 import type { IAltaRelevada } from '@/types/analitica'
@@ -10,7 +11,63 @@ interface DetalleAltaPanelProps {
     onCerrar: () => void
 }
 
-const o = (v: string | null | undefined) => (v && v !== '' ? v : '—')
+const FILA = 'grid grid-cols-[minmax(0,40%)_1fr] gap-3 px-3 py-2 text-sm'
+
+/**
+ * Una fila `etiqueta → valor`. Con valor, el valor ES un botón que lo copia: administración
+ * carga estos datos a mano en el ERP, campo por campo, y seleccionar con el mouse un `<dd>`
+ * de un panel angosto es justo el gesto que hace perder el dato de al lado. Se copia lo que
+ * se VE (un catálogo va por su descripción, igual que el CSV), no el código guardado.
+ * Sin valor no hay botón: no hay nada que copiar, y un target muerto se toca igual.
+ */
+function FilaDato({ etiqueta, valor }: { etiqueta: string; valor: string | null | undefined }) {
+    return (
+        <div className={FILA}>
+            <dt className="text-slate-500">{etiqueta}</dt>
+            <dd>
+                {valor
+                    ? <ValorCopiable etiqueta={etiqueta} valor={valor} />
+                    : <span className="text-slate-400">—</span>}
+            </dd>
+        </div>
+    )
+}
+
+const CONFIRMACION_MS = 1500
+
+function ValorCopiable({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+    const [copiado, setCopiado] = useState(false)
+    const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
+
+    async function copiar() {
+        // El portapapeles puede no existir (contexto inseguro) o estar denegado por permisos:
+        // ahí no se confirma nada, porque no se copió nada.
+        try {
+            await navigator.clipboard.writeText(valor)
+        } catch {
+            return
+        }
+        setCopiado(true)
+        if (timer.current) clearTimeout(timer.current)
+        timer.current = setTimeout(() => setCopiado(false), CONFIRMACION_MS)
+    }
+
+    return (
+        <button type="button" onClick={copiar} aria-label={`Copiar ${etiqueta}`}
+            className="group flex w-full items-start gap-2 text-left">
+            <span className="whitespace-pre-wrap break-words text-slate-900">{valor}</span>
+            {copiado ? (
+                <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600">
+                    <Check className="h-3.5 w-3.5" /> Copiado
+                </span>
+            ) : (
+                <Copy className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-300 group-hover:text-slate-500" />
+            )}
+        </button>
+    )
+}
 
 /**
  * Solo lectura: `pl_rotacion_cliente.detalle` se congela al cerrar la visita y gerencia no
@@ -41,10 +98,7 @@ export default function DetalleAltaPanel({ alta, esquema, onCerrar }: DetalleAlt
                         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{seccion.titulo}</h3>
                         <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200">
                             {campos.map(c => (
-                                <div key={c.clave} className="grid grid-cols-[minmax(0,40%)_1fr] gap-3 px-3 py-2 text-sm">
-                                    <dt className="text-slate-500">{c.etiqueta}</dt>
-                                    <dd className="whitespace-pre-wrap break-words text-slate-900">{o(valorVisible(esquema, alta, c.clave))}</dd>
-                                </div>
+                                <FilaDato key={c.clave} etiqueta={c.etiqueta} valor={valorVisible(esquema, alta, c.clave)} />
                             ))}
                         </dl>
                     </section>
@@ -53,14 +107,8 @@ export default function DetalleAltaPanel({ alta, esquema, onCerrar }: DetalleAlt
                 <section>
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Contacto de la visita</h3>
                     <dl className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-                        <div className="grid grid-cols-[minmax(0,40%)_1fr] gap-3 px-3 py-2 text-sm">
-                            <dt className="text-slate-500">Con quién habló</dt>
-                            <dd className="text-slate-900">{o(alta.contacto?.contacto)}</dd>
-                        </div>
-                        <div className="grid grid-cols-[minmax(0,40%)_1fr] gap-3 px-3 py-2 text-sm">
-                            <dt className="text-slate-500">Cumpleaños</dt>
-                            <dd className="text-slate-900">{o(alta.contacto?.fechaNacimiento)}</dd>
-                        </div>
+                        <FilaDato etiqueta="Con quién habló" valor={alta.contacto?.contacto} />
+                        <FilaDato etiqueta="Cumpleaños" valor={alta.contacto?.fechaNacimiento} />
                     </dl>
                 </section>
             </div>

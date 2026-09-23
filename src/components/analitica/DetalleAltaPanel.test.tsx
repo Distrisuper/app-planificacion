@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import DetalleAltaPanel from './DetalleAltaPanel'
 import type { IAltaRelevada } from '@/types/analitica'
@@ -38,4 +38,38 @@ it('cerrar', () => {
     render(<DetalleAltaPanel alta={alta} esquema={ESQUEMA} onCerrar={onCerrar} />)
     fireEvent.click(screen.getByRole('button', { name: /cerrar/i }))
     expect(onCerrar).toHaveBeenCalled()
+})
+
+function mockarPortapapeles() {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    return writeText
+}
+
+it('tocar un dato lo copia al portapapeles y lo confirma en pantalla', async () => {
+    const writeText = mockarPortapapeles()
+    render(<DetalleAltaPanel alta={alta} esquema={ESQUEMA} onCerrar={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /copiar nombre del comercio/i }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('Piche'))
+    expect(await screen.findByText(/copiado/i)).toBeInTheDocument()
+})
+
+it('de un catálogo copia la DESCRIPCIÓN, que es lo que se ve, no el código', async () => {
+    const writeText = mockarPortapapeles()
+    render(<DetalleAltaPanel alta={alta} esquema={ESQUEMA} onCerrar={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /copiar condición de iva/i }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('Responsable Inscripto'))
+})
+
+it('copia también el contacto de la visita', async () => {
+    const writeText = mockarPortapapeles()
+    render(<DetalleAltaPanel alta={alta} esquema={ESQUEMA} onCerrar={() => {}} />)
+    fireEvent.click(screen.getByRole('button', { name: /copiar con quién habló/i }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('Gustavo'))
+})
+
+it('un campo vacío no es tocable: no hay nada que copiar', () => {
+    mockarPortapapeles()
+    render(<DetalleAltaPanel alta={alta} esquema={ESQUEMA} onCerrar={() => {}} />)
+    expect(screen.queryByRole('button', { name: /copiar cuit/i })).not.toBeInTheDocument()
 })
