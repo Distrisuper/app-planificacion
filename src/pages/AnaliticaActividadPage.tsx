@@ -1,11 +1,8 @@
 import { useState } from 'react'
+import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
 import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import TablaActividad from '@/components/analitica/TablaActividad'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
-import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
-import AccountMenu from '@/components/AccountMenu'
-import { useAccionesDeCuenta } from '@/hooks/useAccionesDeCuenta'
-import { useAuth } from '@/context/AuthContext'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
 import { useResumen, useVendedores, useVisitas } from '@/hooks/useAnalitica'
 import { incluyeHoy, rangoHoy } from '@/lib/fechas'
@@ -16,8 +13,6 @@ import { formatNumero, formatPct } from '@/lib/analiticaFormat'
 const REFRESCO_MS = 60_000
 
 export default function AnaliticaActividadPage() {
-    const { user, logout } = useAuth()
-    const accionesDeCuenta = useAccionesDeCuenta()
     const { filtro, setRango, toggleVendedor, limpiarVendedores } = useFiltroAnalitica(rangoHoy())
     const [visitaElegida, setVisitaElegida] = useState<number | null>(null)
 
@@ -48,16 +43,7 @@ export default function AnaliticaActividadPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            {/* El bloque de navegación y filtros queda fijo al scrollear: las tablas de gerencia
-                son largas y sin esto tabs y filtros desaparecen a la primera pantalla. */}
-            <div className="sticky top-0 z-20 bg-white">
-                <header className="flex items-center justify-between gap-4 bg-white px-6 pt-4">
-                    <div className="flex-1">
-                        <AnaliticaTabs enVivo={enVivo} />
-                    </div>
-                    <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
-                </header>
-
+            <EncabezadoAnalitica enVivo={enVivo}>
                 <FiltrosAnalitica
                     filtro={filtro}
                     vendedoresDisponibles={opciones}
@@ -65,7 +51,7 @@ export default function AnaliticaActividadPage() {
                     onToggleVendedor={toggleVendedor}
                     onLimpiar={limpiarVendedores}
                 />
-            </div>
+            </EncabezadoAnalitica>
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
