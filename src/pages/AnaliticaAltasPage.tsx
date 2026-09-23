@@ -8,11 +8,11 @@ import { Button } from '@/components/ui/button'
 import { useAccionesDeCuenta } from '@/hooks/useAccionesDeCuenta'
 import { useAuth } from '@/context/AuthContext'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
-import { useAltasRelevadas, useVendedores } from '@/hooks/useAnalitica'
+import { useAltasRelevadas, useVendedores, useVincularAlta } from '@/hooks/useAnalitica'
+import { errorData } from '@/lib/apiError'
 import { useEsquemaAlta } from '@/hooks/useEsquemaAlta'
 import { aCsv, descargarCsv } from '@/lib/csv'
 import { filasCsvAltas, nombreArchivoAltas } from '@/lib/altasCsv'
-import type { IAltaRelevada } from '@/types/analitica'
 
 /**
  * Relevamiento de los clientes nuevos para administración (spec 2026-09-21): qué cargó cada
@@ -24,7 +24,10 @@ export default function AnaliticaAltasPage() {
     const { user, logout } = useAuth()
     const accionesDeCuenta = useAccionesDeCuenta()
     const { filtro, setRango, toggleVendedor, limpiarVendedores } = useFiltroAnalitica()
-    const [elegida, setElegida] = useState<IAltaRelevada | null>(null)
+    // Por id y no la fila: al vincular, el listado se refresca y el panel tiene que mostrar la
+    // fila nueva (con su vínculo), no la foto de cuando se abrió.
+    const [elegidaId, setElegidaId] = useState<number | null>(null)
+    const vincular = useVincularAlta()
 
     const { data: roster } = useVendedores()
     const esquema = useEsquemaAlta()
@@ -32,6 +35,18 @@ export default function AnaliticaAltasPage() {
 
     const opciones = (roster ?? []).map(v => ({ codigo: v.codigoParticularVendedor, nombre: v.nombreVendedor }))
     const listo = esquema.data && altas
+    const elegida = altas?.find(a => a.rotacionClienteId === elegidaId) ?? null
+
+    async function onVincular(codigo: string): Promise<string | null> {
+        if (!elegida) return null
+        try {
+            await vincular.mutateAsync({ rotacionClienteId: elegida.rotacionClienteId, codigo })
+            return null
+        } catch (err) {
+            const mensaje = errorData<{ error?: string }>(err)?.error
+            return typeof mensaje === 'string' ? mensaje : 'No se pudo vincular. Volvé a intentar.'
+        }
+    }
 
     function exportar() {
         if (!esquema.data || !altas) return
@@ -67,10 +82,10 @@ export default function AnaliticaAltasPage() {
                     </div>
                 )}
 
-                {listo && altas.length > 0 && <TablaAltas filas={altas} esquema={esquema.data} onElegir={setElegida} />}
+                {listo && altas.length > 0 && <TablaAltas filas={altas} esquema={esquema.data} onElegir={a => setElegidaId(a.rotacionClienteId)} />}
 
                 {elegida && esquema.data && (
-                    <DetalleAltaPanel alta={elegida} esquema={esquema.data} onCerrar={() => setElegida(null)} />
+                    <DetalleAltaPanel alta={elegida} esquema={esquema.data} onCerrar={() => setElegidaId(null)} onVincular={onVincular} />
                 )}
             </main>
         </div>

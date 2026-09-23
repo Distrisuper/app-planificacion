@@ -190,6 +190,21 @@ export interface IAltaRelevada {
     contacto: IDetalleContactoAlta | null
     camposCargados: number
     camposTotal: number
+    /** El cliente real de Flexxus con el que administración la vinculó. Opcional: un backend
+     *  previo al vínculo no lo manda. */
+    vinculo?: IAltaVinculo | null
+}
+
+/** Espejo de pl_alta_vinculo (spec api-vendedores 2026-09-23-vincular-alta). */
+export interface IAltaVinculo {
+    codigoParticularCliente: string
+    vinculadoPor: string
+    /** ISO UTC. */
+    vinculadoEn: string
+}
+
+export interface IVincularAltaResult extends IAltaVinculo {
+    fichaMovida: number
 }
 
 /** Un renglón del listado de "Datos del comercio": UN cliente con lo que tiene cargado hoy.

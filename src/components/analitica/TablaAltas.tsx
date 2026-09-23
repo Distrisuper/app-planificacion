@@ -44,6 +44,13 @@ export default function TablaAltas({ filas, esquema, onElegir }: TablaAltasProps
                                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${CLASE_ESTADO[a.estado]}`}>
                                     {ETIQUETA_ESTADO_ALTA[a.estado]}
                                 </span>
+                                {/* Lo que falta es lo visitado SIN esta marca: el alta ya se
+                                    dio de alta en Flexxus y su ficha pasó al cliente. */}
+                                {a.vinculo && (
+                                    <span className="ml-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                        En Flexxus · {a.vinculo.codigoParticularCliente}
+                                    </span>
+                                )}
                             </td>
                             <td className="whitespace-nowrap px-3 py-2 text-slate-600">{o(a.fechaVisita)}</td>
                             <td className="px-3 py-2 text-right tabular-nums text-slate-600">{a.camposCargados}/{a.camposTotal}</td>

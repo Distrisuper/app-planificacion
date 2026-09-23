@@ -24,6 +24,7 @@ export function filasCsvAltas(esquema: IEsquemaAlta, altas: IAltaRelevada[]): (s
     const encabezado = [
         ...esquema.campos.map(c => c.etiqueta),
         'Vendedor', 'Estado', 'Fecha', 'Contacto de la visita', 'Cumpleaños del contacto', 'Datos cargados',
+        'Código Flexxus',
     ]
     const filas = altas.map(a => [
         ...esquema.campos.map(c => valorVisible(esquema, a, c.clave)),
@@ -33,6 +34,7 @@ export function filasCsvAltas(esquema: IEsquemaAlta, altas: IAltaRelevada[]): (s
         a.contacto?.contacto ?? null,
         a.contacto?.fechaNacimiento ?? null,
         `${a.camposCargados}/${a.camposTotal}`,
+        a.vinculo?.codigoParticularCliente ?? null,
     ])
     return [encabezado, ...filas]
 }

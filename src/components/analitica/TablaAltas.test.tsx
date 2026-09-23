@@ -35,3 +35,14 @@ it('sin detalle muestra "Cliente nuevo" y —', () => {
     expect(screen.getByText('Cliente nuevo')).toBeInTheDocument()
     expect(screen.getAllByText('—').length).toBeGreaterThan(0)
 })
+
+it('una alta vinculada muestra la marca "En Flexxus" con el código', () => {
+    render(
+        <TablaAltas
+            filas={[{ ...alta, vinculo: { codigoParticularCliente: '10034', vinculadoPor: 'admin@x.com', vinculadoEn: '2026-09-23T14:00:00.000Z' } }]}
+            esquema={ESQUEMA}
+            onElegir={() => {}}
+        />,
+    )
+    expect(screen.getByText(/en flexxus · 10034/i)).toBeInTheDocument()
+})

@@ -21,12 +21,12 @@ const alta = (over: Partial<IAltaRelevada> = {}): IAltaRelevada => ({
 describe('filasCsvAltas', () => {
     it('encabezado = etiquetas del esquema + columnas fijas; catálogo como descripción', () => {
         const filas = filasCsvAltas(ESQUEMA, [alta()])
-        expect(filas[0]).toEqual(['Nombre del comercio', 'Condición de IVA', 'Vendedor', 'Estado', 'Fecha', 'Contacto de la visita', 'Cumpleaños del contacto', 'Datos cargados'])
-        expect(filas[1]).toEqual(['Piche', 'Responsable Inscripto', 'Gómez', 'Visitada', '2026-09-21', 'Gustavo', '1978-03-14', '2/2'])
+        expect(filas[0]).toEqual(['Nombre del comercio', 'Condición de IVA', 'Vendedor', 'Estado', 'Fecha', 'Contacto de la visita', 'Cumpleaños del contacto', 'Datos cargados', 'Código Flexxus'])
+        expect(filas[1]).toEqual(['Piche', 'Responsable Inscripto', 'Gómez', 'Visitada', '2026-09-21', 'Gustavo', '1978-03-14', '2/2', null])
     })
     it('detalle null y contacto null salen vacíos, y el vendedor sin nombre cae al código', () => {
         const [, fila] = filasCsvAltas(ESQUEMA, [alta({ detalle: null, contacto: null, vendedor: { codigo: 'V 9', nombre: '' }, estado: 'pendiente', fechaVisita: null, camposCargados: 0 })])
-        expect(fila).toEqual([null, null, 'V 9', 'Pendiente', null, null, null, '0/2'])
+        expect(fila).toEqual([null, null, 'V 9', 'Pendiente', null, null, null, '0/2', null])
     })
 })
 

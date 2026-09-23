@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     getAltas,
     getObjeciones,
@@ -6,6 +6,7 @@ import {
     getVendedores,
     getVisitaDetalle,
     getVisitas,
+    vincularAlta,
     type IObjecionesArgs,
     type IVisitasArgs,
 } from '@/api/analitica'
@@ -91,5 +92,18 @@ export function useAltasRelevadas(filtro: IAnaliticaFiltro) {
     return useQuery({
         queryKey: analiticaKeys.altas(filtro),
         queryFn: () => getAltas(filtro),
+    })
+}
+
+/** El vínculo cambia la fila del listado (y mueve la ficha, que ve la tab de fichas). */
+export function useVincularAlta() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: ({ rotacionClienteId, codigo }: { rotacionClienteId: number; codigo: string }) =>
+            vincularAlta(rotacionClienteId, codigo),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: ['analitica', 'altas'] })
+            qc.invalidateQueries({ queryKey: ['analitica', 'fichas'] })
+        },
     })
 }

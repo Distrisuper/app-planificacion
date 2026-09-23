@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, X } from 'lucide-react'
 import { camposPorSeccion } from '@/lib/camposAlta'
 import { ETIQUETA_ESTADO_ALTA, valorVisible } from '@/lib/altasCsv'
+import VinculoFlexxus from '@/components/analitica/VinculoFlexxus'
 import type { IAltaRelevada } from '@/types/analitica'
 import type { IEsquemaAlta } from '@/types/planificacion'
 
@@ -9,6 +10,8 @@ interface DetalleAltaPanelProps {
     alta: IAltaRelevada
     esquema: IEsquemaAlta
     onCerrar: () => void
+    /** Vincular con el cliente de Flexxus. Devuelve el mensaje de error, o null si salió bien. */
+    onVincular?: (codigo: string) => Promise<string | null>
 }
 
 const FILA = 'grid grid-cols-[minmax(0,40%)_1fr] gap-3 px-3 py-2 text-sm'
@@ -74,7 +77,7 @@ function ValorCopiable({ etiqueta, valor }: { etiqueta: string; valor: string })
  * edita datos del vendedor. Muestra TODOS los campos del esquema, vacíos incluidos, en las
  * mismas secciones que ve el vendedor — es la misma ficha desde el otro lado.
  */
-export default function DetalleAltaPanel({ alta, esquema, onCerrar }: DetalleAltaPanelProps) {
+export default function DetalleAltaPanel({ alta, esquema, onCerrar, onVincular }: DetalleAltaPanelProps) {
     const titulo = valorVisible(esquema, alta, 'nombre') ?? 'Cliente nuevo'
     return (
         <aside className="fixed inset-y-0 right-0 z-30 w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
@@ -93,6 +96,9 @@ export default function DetalleAltaPanel({ alta, esquema, onCerrar }: DetalleAlt
             </div>
 
             <div className="space-y-5 px-5 py-4">
+                {/* Arriba de todo: es lo único accionable del panel, y lo último que se hace
+                    con un alta (después de cargarla en Flexxus con los datos de abajo). */}
+                <VinculoFlexxus alta={alta} onVincular={onVincular} />
                 {camposPorSeccion(esquema).map(({ seccion, campos }) => (
                     <section key={seccion.clave}>
                         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{seccion.titulo}</h3>
