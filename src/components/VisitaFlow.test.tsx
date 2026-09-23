@@ -1330,25 +1330,23 @@ describe('gate de "Datos del comercio"', () => {
             expect(screen.queryByText(/se carga una sola vez/i)).not.toBeInTheDocument()
         })
 
-        it('"Datos" pide primero la ficha y, guardada, sigue al relevamiento', async () => {
+        it('"Datos para el alta" abre el relevamiento aunque falte la ficha: cada renglón abre lo suyo', async () => {
             const { onDatosComercio } = renderFlow({ cliente: altaEnCurso })
             fireEvent.click(await screen.findByRole('button', { name: /datos para el alta/i }))
+            expect(onDatosComercio).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
+            expect(screen.queryByRole('button', { name: /^frenos$/i })).not.toBeInTheDocument()
+        })
+
+        it('el renglón de la ficha pendiente la guarda en ALTA-… y no abre el relevamiento', async () => {
+            const { onDatosComercio } = renderFlow({ cliente: altaEnCurso })
+            fireEvent.click(await screen.findByRole('button', { name: /ficha del comercio/i }))
             await completarFicha()
-            fireEvent.click(screen.getByRole('button', { name: /^continuar$/i }))
+            fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
             await waitFor(() => expect(api.actualizarFicha).toHaveBeenCalledWith('ALTA-000009', {
                 especialidad: ['frenos'], personas: ['4'], facturacion: ['3'],
             }))
-            await waitFor(() => expect(onDatosComercio).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 })))
-            expect(api.cerrarVisita).not.toHaveBeenCalled()
-        })
-
-        it('con la ficha completa, "Datos" va derecho al relevamiento', async () => {
-            const { onDatosComercio } = renderFlow({
-                cliente: { ...altaEnCurso, ficha: { pendientes: [], valores: { especialidad: ['frenos'], personas: ['2'], facturacion: ['5'] } } },
-            })
-            fireEvent.click(await screen.findByRole('button', { name: /datos para el alta/i }))
-            expect(onDatosComercio).toHaveBeenCalledTimes(1)
-            expect(screen.queryByRole('button', { name: /^continuar$/i })).not.toBeInTheDocument()
+            await waitFor(() => expect(screen.getByRole('button', { name: /ficha del comercio/i })).toHaveTextContent(/completa/i))
+            expect(onDatosComercio).not.toHaveBeenCalled()
         })
 
         it('sin la ficha no se cierra: el botón la pide, y guardada habilita el cierre', async () => {
@@ -1359,7 +1357,7 @@ describe('gate de "Datos del comercio"', () => {
             expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
             fireEvent.click(screen.getByRole('button', { name: /falta la ficha del comercio/i }))
             await completarFicha()
-            fireEvent.click(screen.getByRole('button', { name: /^continuar$/i }))
+            fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
             expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
             // Desde el cierre no se desvía al relevamiento: el vendedor venía a cerrar.
             expect(onDatosComercio).not.toHaveBeenCalled()
