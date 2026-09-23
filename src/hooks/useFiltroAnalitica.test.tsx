@@ -50,3 +50,24 @@ it('limpiarVendedores deja el filtro en todos', () => {
     act(() => result.current.limpiarVendedores())
     expect(result.current.filtro.vendedores).toEqual([])
 })
+
+// La tab "Datos del comercio" arranca SIN rango (todo lo acumulado) y lo distingue por la URL.
+// Tocar el filtro de vendedores no puede meter en la URL el default de la semana: sería
+// aplicar un rango que nadie eligió.
+it('toggleVendedor sin rango en la URL no escribe desde/hasta', () => {
+    const { result } = renderHook(() => useFiltroAnalitica(), { wrapper: wrapperCon('/analitica/fichas') })
+    expect(result.current.hayRango).toBe(false)
+    act(() => result.current.toggleVendedor('V4'))
+    expect(result.current.filtro.vendedores).toEqual(['V4'])
+    expect(result.current.hayRango).toBe(false)
+})
+
+it('limpiarRango vuelve a "todo el período"', () => {
+    const { result } = renderHook(() => useFiltroAnalitica(), {
+        wrapper: wrapperCon('/analitica/fichas?desde=2026-07-20&hasta=2026-07-24&vendedores=V1'),
+    })
+    expect(result.current.hayRango).toBe(true)
+    act(() => result.current.limpiarRango())
+    expect(result.current.hayRango).toBe(false)
+    expect(result.current.filtro.vendedores).toEqual(['V1'])
+})

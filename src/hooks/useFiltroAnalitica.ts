@@ -33,12 +33,21 @@ export function useFiltroAnalitica(porDefectoRecibido?: { desde: string; hasta: 
         }
     }, [params, porDefecto])
 
-    /** Toda escritura pasa por acá para que la URL siga siendo la única fuente de verdad. */
+    /** Si el rango lo ELIGIÓ el usuario (está en la URL) o es el default del hook. Las tabs
+     *  de actividad no distinguen —el default es un rango como cualquier otro—; "Datos del
+     *  comercio" sí: sin rango elegido muestra todo lo acumulado. */
+    const hayRango = params.has('desde')
+
+    /** Toda escritura pasa por acá para que la URL siga siendo la única fuente de verdad.
+     *  El rango se escribe sólo si viene en `cambios` o ya estaba en la URL: tocar los
+     *  vendedores no puede convertir el default en una elección. */
     const escribir = useCallback(
         (cambios: Partial<{ desde: string; hasta: string; vendedores: string[] }>) => {
             const siguiente = new URLSearchParams(params)
-            siguiente.set('desde', cambios.desde ?? filtro.desde)
-            siguiente.set('hasta', cambios.hasta ?? filtro.hasta)
+            if (cambios.desde || cambios.hasta || params.has('desde')) {
+                siguiente.set('desde', cambios.desde ?? filtro.desde)
+                siguiente.set('hasta', cambios.hasta ?? filtro.hasta)
+            }
             const vendedores = cambios.vendedores ?? filtro.vendedores ?? []
             if (vendedores.length > 0) siguiente.set('vendedores', vendedores.join(','))
             else siguiente.delete('vendedores')
@@ -65,5 +74,13 @@ export function useFiltroAnalitica(porDefectoRecibido?: { desde: string; hasta: 
 
     const limpiarVendedores = useCallback(() => escribir({ vendedores: [] }), [escribir])
 
-    return { filtro, setRango, toggleVendedor, limpiarVendedores }
+    /** Vuelve a "sin rango elegido": saca desde/hasta de la URL y deja los vendedores. */
+    const limpiarRango = useCallback(() => {
+        const siguiente = new URLSearchParams(params)
+        siguiente.delete('desde')
+        siguiente.delete('hasta')
+        setParams(siguiente, { replace: true })
+    }, [params, setParams])
+
+    return { filtro, hayRango, setRango, toggleVendedor, limpiarVendedores, limpiarRango }
 }

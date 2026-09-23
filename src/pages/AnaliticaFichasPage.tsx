@@ -1,4 +1,3 @@
-import { useSearchParams } from 'react-router-dom'
 import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
 import TablaFichas from '@/components/analitica/TablaFichas'
@@ -21,15 +20,14 @@ import { formatNumero } from '@/lib/analiticaFormat'
 export default function AnaliticaFichasPage() {
     const { user, logout } = useAuth()
     const accionesDeCuenta = useAccionesDeCuenta()
-    const { filtro, setRango, toggleVendedor, limpiarVendedores } = useFiltroAnalitica()
-    const [params] = useSearchParams()
+    const { filtro, hayRango, setRango, toggleVendedor, limpiarVendedores, limpiarRango } =
+        useFiltroAnalitica()
 
     // **El período arranca en "todo"**, al revés que las otras tabs. La ficha es un padrón
     // acumulado que se llena una vez por cliente y nunca más, así que con el default de
     // ellas (la semana en curso) esta pantalla abriría con cuatro filas. El rango se aplica
     // sólo si está EN LA URL, o sea si el usuario lo eligió; `useFiltroAnalitica` siempre
     // devuelve uno para poder dibujar el selector, pero ése es su default, no una elección.
-    const hayRango = params.has('desde')
     const args = {
         ...(hayRango ? { desde: filtro.desde, hasta: filtro.hasta } : {}),
         vendedores: filtro.vendedores,
@@ -59,6 +57,8 @@ export default function AnaliticaFichasPage() {
                 onRango={setRango}
                 onToggleVendedor={toggleVendedor}
                 onLimpiar={limpiarVendedores}
+                onTodoElPeriodo={limpiarRango}
+                sinRango={!hayRango}
             />
 
             <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
