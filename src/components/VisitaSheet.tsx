@@ -511,14 +511,49 @@ export default function VisitaSheet({
 
     // En el alta los datos del comercio no van en el header sino en una tarjeta arriba del
     // cuerpo: son la mitad del trabajo de esa visita y necesitan mostrar qué falta.
+    //
+    // "¿Con quién hablaste hoy?" vive al pie de la misma tarjeta y no en el pie fijo: ahí se
+    // mezclaba con observaciones (lo único que habilita el cierre) y le robaba alto a la
+    // lista. El cumpleaños aparece recién con un nombre, rotulado "Su cumpleaños": suelto no
+    // decía de quién era. Se sigue guardando al cerrar (`pl_resolucion.detalle`).
+    const muestraCumple = contacto.trim() !== '' || fechaNacimiento !== ''
     const tarjetaAlta =
-        esAlta && !visitaCerrada && onDatosComercio && onAbrirFicha ? (
+        esAlta && !visitaCerrada ? (
             <TarjetaDatosAlta
                 fichaPendiente={fichaPendiente}
                 progreso={progresoAlta}
-                onAbrirFicha={onAbrirFicha}
-                onAbrirRelevamiento={onDatosComercio}
-            />
+                onAbrirFicha={onDatosComercio ? onAbrirFicha : undefined}
+                onAbrirRelevamiento={onAbrirFicha ? onDatosComercio : undefined}
+            >
+                <div className="flex flex-col gap-2 px-3 py-2.5">
+                    <label htmlFor="visita-contacto" className="text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
+                        ¿Con quién hablaste hoy? (opcional)
+                    </label>
+                    <input
+                        id="visita-contacto"
+                        type="text"
+                        maxLength={80}
+                        value={contacto}
+                        onChange={e => setContacto(e.target.value)}
+                        placeholder="Nombre"
+                        className="w-full rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
+                    />
+                    {muestraCumple && (
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="visita-cumple" className="shrink-0 text-[11.5px] font-semibold text-dsmuted">
+                                Su cumpleaños (opcional)
+                            </label>
+                            <input
+                                id="visita-cumple"
+                                type="date"
+                                value={fechaNacimiento}
+                                onChange={e => setFechaNacimiento(e.target.value)}
+                                className="min-w-0 flex-1 rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none focus:border-dsnavy"
+                            />
+                        </div>
+                    )}
+                </div>
+            </TarjetaDatosAlta>
         ) : null
 
     const chipDatosComercio = onEditarDatosComercio ? (
@@ -697,7 +732,7 @@ export default function VisitaSheet({
                             htmlFor="visita-observaciones"
                             className="text-[9.5px] font-bold uppercase tracking-wide text-dsmuted"
                         >
-                            Observaciones (opcional)
+                            {esAlta ? 'Observaciones de la visita (opcional)' : 'Observaciones (opcional)'}
                         </label>
                         <span className="text-[10px] font-semibold tabular-nums text-dsmuted">
                             {observaciones.length}/{OBSERVACIONES_MAX}
@@ -714,46 +749,6 @@ export default function VisitaSheet({
                         placeholder="Algo para agregar de esta visita…"
                         className="w-full resize-none rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
                     />
-                    {/* Sólo alta: datos de contacto del prospecto, opcionales — no hay
-                     *  cliente en fct_clients del que sacarlos. Van pegados a
-                     *  observaciones porque se completan en el mismo momento, al
-                     *  cerrar. */}
-                    {esAlta && (
-                        <div className="mt-2 flex gap-2">
-                            <div className="flex-1">
-                                <label
-                                    htmlFor="visita-contacto"
-                                    className="mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-dsmuted"
-                                >
-                                    Con quién hablaste (opcional)
-                                </label>
-                                <input
-                                    id="visita-contacto"
-                                    type="text"
-                                    maxLength={80}
-                                    value={contacto}
-                                    onChange={e => setContacto(e.target.value)}
-                                    placeholder="Nombre"
-                                    className="w-full rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
-                                />
-                            </div>
-                            <div className="flex-1">
-                                <label
-                                    htmlFor="visita-cumple"
-                                    className="mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-dsmuted"
-                                >
-                                    Cumpleaños (opcional)
-                                </label>
-                                <input
-                                    id="visita-cumple"
-                                    type="date"
-                                    value={fechaNacimiento}
-                                    onChange={e => setFechaNacimiento(e.target.value)}
-                                    className="w-full rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none focus:border-dsnavy"
-                                />
-                            </div>
-                        </div>
-                    )}
                 </div>
             )}
             {/* Visita cerrada: solo lectura, y solo si hay algo que leer. `pl_resolucion`

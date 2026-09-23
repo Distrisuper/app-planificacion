@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import VisitaSheet from './VisitaSheet'
@@ -1193,6 +1193,18 @@ describe('cliente nuevo (esAlta)', () => {
         renderSheet({ enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn() })
         await screen.findByText('Amortiguadores')
         expect(screen.queryByRole('region', { name: /datos del comercio/i })).not.toBeInTheDocument()
+    })
+
+    it('el contacto de hoy vive en la tarjeta, no en el pie, y el cumpleaños aparece recién con un nombre', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({ esAlta: true, enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn() })
+        const tarjeta = await screen.findByRole('region', { name: /datos del comercio/i })
+        const nombre = within(tarjeta).getByLabelText(/con quién hablaste hoy/i)
+        expect(screen.queryByLabelText(/cumpleaños/i)).not.toBeInTheDocument()
+        fireEvent.change(nombre, { target: { value: 'Gustavo' } })
+        expect(within(tarjeta).getByLabelText(/su cumpleaños/i)).toBeInTheDocument()
+        // El pie queda con lo que sirve para cerrar.
+        expect(screen.getByLabelText(/observaciones de la visita/i)).toBeInTheDocument()
     })
 
     it('precarga "Con quién hablaste" con contactoSugerido, y NO pisa lo ya tipeado', async () => {
