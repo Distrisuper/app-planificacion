@@ -15,6 +15,13 @@ export function marcarInicioVisita(visitaId: number): void {
     localStorage.setItem(key(visitaId), String(Date.now()))
 }
 
+/** Ancla el inicio al instante que registró el servidor (`fechaInicio`, ISO UTC). Es la
+ *  fuente de verdad: `marcarInicioVisita` es solo el valor provisorio hasta que llega. */
+export function fijarInicioVisita(visitaId: number, fechaInicioISO: string): void {
+    const inicio = Date.parse(fechaInicioISO)
+    if (!Number.isNaN(inicio)) localStorage.setItem(key(visitaId), String(inicio))
+}
+
 export function limpiarInicioVisita(visitaId: number): void {
     localStorage.removeItem(key(visitaId))
 }

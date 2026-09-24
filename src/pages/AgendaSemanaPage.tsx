@@ -20,7 +20,12 @@ import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useEliminarFila } from '@/hooks/useEliminarFila'
 import { useMotivos } from '@/hooks/useMotivos'
-import { useNoVisita, useNoVisitaSobreVisitaAbierta, useReintentarSeguimiento } from '@/hooks/useVisitas'
+import {
+    useNoVisita,
+    useNoVisitaSobreVisitaAbierta,
+    useReintentarSeguimiento,
+    useVisitaActiva,
+} from '@/hooks/useVisitas'
 import { useNotificacion } from '@/hooks/useNotificacion'
 import { useAppExterna } from '@/hooks/useAppExterna'
 import { abrirAppExternaEnPestana } from '@/lib/appsExternas'
@@ -29,7 +34,12 @@ import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
-import { leerVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
+import {
+    conCoordClienteDelServidor,
+    guardarVisitaEnCurso,
+    leerVisitaEnCurso,
+    limpiarVisitaEnCurso,
+} from '@/lib/visitaEnCurso'
 import { limpiarInicioVisita } from '@/lib/visitaTimer'
 import { ALTAS_HABILITADAS } from '@/lib/flags'
 import type { Dia, IAgendaClient, SemanaAgenda } from '@/types/planificacion'
@@ -299,6 +309,19 @@ export default function AgendaSemanaPage() {
     // vetarlo es seguro — pero otro cliente que arranque una visita nueva sí tiene que poder
     // adoptarse igual si gana la misma carrera (ver el test de arriba).
     const rotacionesClienteSueltas = useRef<Set<number>>(new Set())
+    // La coordenada del cliente con la que se INICIÓ la visita la tiene el servidor
+    // (`coord_cliente`), no solo el puntero local: si el vendedor reposicionó el pin y
+    // después el puntero se perdió (cerrar sesión, 401, otro dispositivo), la re-adopción
+    // de abajo toma la card de la agenda, que trae la del warehouse, y "te alejaste" medía
+    // contra el pin viejo. Se corrige el estado (y el puntero, para recargar sin señal) en
+    // vez de solo lo que se muestra: el aviso, el mapa de cierre y la barra leen todos de acá.
+    const { data: visitaActiva } = useVisitaActiva(visitaEnCurso?.visitaId ?? null)
+    useEffect(() => {
+        const anclada = conCoordClienteDelServidor(visitaEnCurso, visitaActiva)
+        if (anclada === visitaEnCurso || anclada === null) return
+        setVisitaEnCurso(anclada)
+        guardarVisitaEnCurso(anclada)
+    }, [visitaEnCurso, visitaActiva])
     // El vendedor está lejos del cliente de `visitaEnCurso`, con la visita todavía abierta.
     // VisitaFlow es quien lo calcula (no se desmonta mientras haya visita en curso); acá
     // solo se sostiene para pintar VisitaEnCursoBar.
