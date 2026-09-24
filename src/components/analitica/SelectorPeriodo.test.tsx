@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import SelectorPeriodo from './SelectorPeriodo'
@@ -99,4 +99,24 @@ it('clickear el modo ya activo no dispara cambios', async () => {
     await userEvent.click(screen.getByRole('button', { name: 'Mes' }))
     expect(onCambiarModo).not.toHaveBeenCalled()
     expect(onCambiarFecha).not.toHaveBeenCalled()
+})
+
+it('sin conRango no muestra el botón de rango', () => {
+    render(<SelectorPeriodo modo="mes" fecha={new Date(2026, 7, 18)} onCambiarModo={vi.fn()} onCambiarFecha={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Rango de fechas' })).not.toBeInTheDocument()
+})
+
+it('en modo rango muestra dos fechas y notifica el cambio', async () => {
+    const onCambiarRango = vi.fn()
+    render(
+        <SelectorPeriodo
+            modo="rango" fecha={new Date(2026, 8, 18)} conRango
+            rango={{ desde: '2026-09-01', hasta: '2026-09-18' }}
+            onCambiarModo={vi.fn()} onCambiarFecha={vi.fn()} onCambiarRango={onCambiarRango}
+        />,
+    )
+    // fireEvent y no userEvent.type: en jsdom tipear un input[type=date] carácter por
+    // carácter es poco confiable; lo que importa es qué se notifica con un valor completo.
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-09-05' } })
+    expect(onCambiarRango).toHaveBeenLastCalledWith({ desde: '2026-09-05', hasta: '2026-09-18' })
 })

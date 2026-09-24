@@ -58,3 +58,14 @@ it('marca Ruta como activa cuando es la ruta actual', () => {
     )
     expect(screen.getByRole('link', { name: 'Ruta' })).toHaveClass('border-slate-900')
 })
+
+it('apunta la pestaña Métricas a /analitica/metricas y la marca activa', () => {
+    render(
+        <MemoryRouter initialEntries={['/analitica/metricas']}>
+            <AnaliticaTabs />
+        </MemoryRouter>,
+    )
+    const link = screen.getByRole('link', { name: 'Métricas' })
+    expect(link).toHaveAttribute('href', '/analitica/metricas')
+    expect(link).toHaveClass('border-slate-900')
+})

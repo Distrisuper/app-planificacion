@@ -40,6 +40,12 @@ export default function AnaliticaTabs({ enVivo }: AnaliticaTabsProps) {
             >
                 Datos del comercio
             </NavLink>
+            <NavLink
+                to="/analitica/metricas"
+                className={({ isActive }) => tabClase(isActive)}
+            >
+                Métricas
+            </NavLink>
         </nav>
     )
 }
