@@ -21,6 +21,9 @@ interface OfrecimientoTableProps {
     /** ofrecimientoIds cuyas mutaciones de "eliminar" están en vuelo: esos
      *  botones muestran spinner y quedan deshabilitados. */
     eliminandoIds?: Set<number>
+    /** Rótulo del bloque de arriba en la tabla de una visita. La visita de alta no tiene
+     *  propuesta: ahí arriba sólo van los rubros que el vendedor fue agregando. */
+    tituloArriba?: string
 }
 
 /** Sin acentos ni mayúsculas: nadie tipea la tilde de "BATERÍAS" parado en un mostrador
@@ -629,6 +632,7 @@ export default function OfrecimientoTable({
     onEliminar,
     agregandoCodes,
     eliminandoIds,
+    tituloArriba = 'Tu propuesta',
 }: OfrecimientoTableProps) {
     const [busqueda, setBusqueda] = useState('')
     // Una sola fila desplegada a la vez: abrir otra cierra la anterior.
@@ -704,9 +708,12 @@ export default function OfrecimientoTable({
         <div className="-mx-1.5">
         {/* El gesto se explica en el "?" del header del sheet (`BottomSheet.onHelp` +
             `ayudaContenido`), no acá: esta banda es solo el rótulo de sección. */}
-        {conChip && (
+        {/* Sin filas arriba no hay sección que rotular: el rótulo quedaba colgando sobre
+            el header de columnas, pegado a la banda de abajo (la visita de alta recién
+            iniciada, sin nada agregado todavía). */}
+        {conChip && bloqueArriba.length > 0 && (
             <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted leading-[1.35]">
-                Tu propuesta
+                {tituloArriba}
             </p>
         )}
         <div className="w-full">
@@ -757,10 +764,10 @@ export default function OfrecimientoTable({
                     <FilaOfrecimiento
                         key={`${fila.tipo}:${fila.codigo}`}
                         fila={fila}
-                        // La última no lleva borde propio cuando sigue la banda: la banda
-                        // ya trae el suyo arriba (border-y, que necesita para no dejar
-                        // pasar filas por abajo mientras está sticky).
-                        conBorde={i < bloqueArriba.length - 1}
+                        // La última lleva borde propio sólo si abajo viene la banda: la
+                        // banda ahora está separada por aire (ver `mt-4` abajo), así que
+                        // sin este borde el bloque quedaba abierto.
+                        conBorde={i < bloqueArriba.length - 1 || hayBloqueExtra}
                         conChip={conChip}
                         conColumnaQuitar={conColumnaQuitar}
                         abierta={abiertaCodigo === fila.codigo}
@@ -779,13 +786,20 @@ export default function OfrecimientoTable({
                     // es lo único que hace manejable una lista de decenas de rubros, y si
                     // scrollea con ella hay que volver hasta arriba para usarlo — que es
                     // justo lo que uno quiere evitar cuando ya scrolleó mucho.
-                    <div className="sticky top-8 z-10 border-y border-dsline bg-[#FAFBFD] px-2.5 py-2">
+                    // `mt-4` con filas arriba: pegada, la banda se leía como una fila más de
+                    // lo cargado y los dos bloques no se distinguían (probado en mobile).
+                    <div
+                        className={`sticky top-8 z-10 border-y border-dsline bg-[#FAFBFD] px-2.5 py-2 ${
+                            bloqueArriba.length > 0 ? 'mt-4' : ''
+                        }`}
+                    >
                         {/* "Otros rubros" y no "otros rubros del cliente": abajo está el
                             80/20 completo mezclado con su historial, así que ahí también
                             hay rubros que el cliente nunca compró (es lo que hace que un
                             cliente sin movimientos tenga algo que ofrecer). */}
                         <p className="mb-1.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
-                            Otros rubros
+                            {/* "Otros" sólo si hay un bloque arriba del que ser otros. */}
+                            {bloqueArriba.length > 0 ? 'Otros rubros' : 'Rubros'}
                             {bloqueExtraEsAgregable && ' · tocá uno para agregarlo'}
                         </p>
                         <div className="relative">

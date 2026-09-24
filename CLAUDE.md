@@ -192,7 +192,7 @@ Hay **tres capas separadas**, y una operación toca una sola:
   (`GET /planificacion/ciclo/actual`). Se descartó el cálculo mod-5 sobre un ancla local porque se
   desincroniza al reinstalar la app o cambiar de dispositivo, sin que nadie lo detecte.
 - **"No visité" también se puede registrar con la visita YA ABIERTA**, y es el mismo hecho
-  por dos puertas: el menú `⋯` de `VisitaSheet` y el "Reagendar → No visité" de la card
+  por dos puertas: el botón "No visité" de la línea de identidad del header de `VisitaSheet` (no hay menú `⋯`: se probó y se descartó, ver el comentario en ese archivo) y el "Reagendar → No visité" de la card
   (que se ve con el cliente `en_curso`). Las dos llaman a
   `POST /planificacion/visitas/:id/no-visita`, que **convierte** la resolución abierta en
   vez de crear una nueva — el `UNIQUE (rotacion_cliente_id)` ya está ocupado y
@@ -374,7 +374,20 @@ Hay **tres capas separadas**, y una operación toca una sola:
   solo `data`, un fallo la deja en `undefined` para siempre. **El gate es solo del front**;
   `PUT /visitas/:id/cerrar` acepta cerrar con cero resoluciones, así que un bundle viejo
   cacheado se lo saltea igual.
-- **"Cliente nuevo" (visita de alta) es una fila del plan con `tipo='alta'`, no una tabla ni un cliente genérico.** Código sintético `ALTA-<id>`, datos del comercio en `pl_rotacion_cliente.detalle`, contacto en `pl_resolucion.detalle`. Sin propuesta, sin mapa, sin gate de distancia; gate de cierre propio (un ofrecimiento o una observación, `puedeCerrarAlta`). Cromo va al genérico 09895 con etiqueta `ALTA`. Ver `docs/dominio/modelo.md`, "La visita de alta".
+- **"Cliente nuevo" (visita de alta) es una fila del plan con `tipo='alta'`, no una tabla ni un cliente genérico.** Código sintético `ALTA-<id>`, datos del comercio en `pl_rotacion_cliente.detalle`, contacto en `pl_resolucion.detalle`. Sin propuesta, sin mapa, sin gate de distancia; gate de cierre propio: la ficha, después los campos `obligatorio` del relevamiento (`pideDatosAlta`), y un ofrecimiento o una observación (`puedeCerrarAlta`). Cromo va al genérico 09895 con etiqueta `ALTA`. Ver `docs/dominio/modelo.md`, "La visita de alta".
+  **El relevamiento del comercio ("Datos del comercio", `RelevamientoSheet`) se dibuja desde
+  `GET /planificacion/altas/esquema`**: la lista de campos vive en `esquemaAlta.ts` de
+  api-vendedores y en ningún lugar del front — agregar un dato es una fila ahí (y, si es
+  catálogo, un `INSERT` en `pl_catalogo_alta`), sin desplegar la app. `IDetalleAlta` es
+  `{ nombre; [clave]: string | null }` a propósito. Los tipos de campo son un set cerrado
+  (`texto | textoLargo | cuit | email | catalogo`); un tipo nuevo se agrega en el validador de
+  la API y en `CampoInput` del sheet, nada más. **`obligatorio` ≠ `requerido`**: `requerido`
+  (sólo `nombre`) no se vacía nunca y traba el Guardar; `obligatorio` (todo salvo referencias y
+  dato de color) se guarda a medias pero traba el **cierre** de la visita — gate sólo del front,
+  y aceptado aunque trabe: es un boceto que administración completa al dar el alta. Se abre desde la card pendiente ("Datos") y
+  desde la visita abierta (botón "Datos" al lado de "No visité"); `contactoNombre` precarga
+  "Con quién hablaste" sin pisar lo tipeado. Gerencia lo ve y lo exporta en `/analitica/altas`.
+  Spec: `2026-09-21-relevamiento-alta-design.md` (leer su adenda).
 - **"Sacar de mi agenda" solo alcanza a lo que el vendedor agregó a mano** (`es_extra = 1`:
   extras del buscador y altas) y solo mientras esté pendiente. Es un soft-delete de la fila
   (`DELETE /planificacion/rotacion-cliente/:id`), **no un hecho**: no crea `pl_resolucion` ni

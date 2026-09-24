@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
 import BottomSheet from '@/components/ui/BottomSheet'
 import { Button } from '@/components/ui/button'
-import { useCrearAlta, useEditarAlta, useReintentarAlta } from '@/hooks/useAltas'
+import { useCrearAlta, useReintentarAlta } from '@/hooks/useAltas'
 import { diaLabel } from './buscador/etiquetas'
 import type { NotificacionTipo } from '@/components/ui/Notification'
-import type { IAgendaClient, IEditarAltaDTO } from '@/types/planificacion'
+import type { IAgendaClient } from '@/types/planificacion'
 
 export type ModoClienteNuevo =
     | { modo: 'crear'; semana: number; dia: number }
-    | { modo: 'editar'; cliente: IAgendaClient }
     | { modo: 'reintentar'; cliente: IAgendaClient; diaSugerido: number }
 
 interface ClienteNuevoSheetProps {
@@ -24,15 +23,13 @@ const INPUT = 'w-full rounded-[11px] border-[1.5px] border-[#E4E8F0] px-3 py-2.5
 const LABEL = 'mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-dsmuted'
 
 /**
- * "Cliente nuevo" (spec 2026-09-17): el comercio que todavía no es cliente. Tres modos
- * sobre el mismo formulario: crear la cita (nombre obligatorio, día elegible), editar los
- * datos del comercio mientras la fila está pendiente o la visita abierta, y volver a
- * agendar después de un "No visité" (solo el día: los datos viajan copiados del backend).
- * Vocabulario del vendedor: nunca "alta" ni "prospecto".
+ * "Cliente nuevo" (spec 2026-09-17): el comercio que todavía no es cliente. Dos modos sobre
+ * el mismo formulario: crear la cita (nombre obligatorio, día elegible) y volver a agendar
+ * después de un "No visité". Editar los datos del comercio vive en `RelevamientoSheet`
+ * (spec 2026-09-21). Vocabulario del vendedor: nunca "alta" ni "prospecto".
  */
 export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, onAviso }: ClienteNuevoSheetProps) {
     const crear = useCrearAlta()
-    const editar = useEditarAlta()
     const reintentar = useReintentarAlta()
     const [nombre, setNombre] = useState('')
     const [razonSocial, setRazonSocial] = useState('')
@@ -43,18 +40,13 @@ export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, on
         if (!open || !contexto) return
         if (contexto.modo === 'crear') {
             setNombre(''); setRazonSocial(''); setDireccion(''); setDia(contexto.dia)
-        } else if (contexto.modo === 'editar') {
-            const d = contexto.cliente.detalleAlta
-            setNombre(d?.nombre ?? contexto.cliente.nombreCliente)
-            setRazonSocial(d?.razonSocial ?? '')
-            setDireccion(d?.direccion ?? '')
         } else {
             setDia(contexto.diaSugerido)
         }
     }, [open, contexto])
 
     if (!contexto) return null
-    const trabajando = crear.isPending || editar.isPending || reintentar.isPending
+    const trabajando = crear.isPending || reintentar.isPending
     const nombreLimpio = nombre.trim()
 
     async function confirmar() {
@@ -69,16 +61,6 @@ export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, on
                     razonSocial: razonSocial.trim() || undefined,
                     direccion: direccion.trim() || undefined,
                 })
-            } else if (contexto.modo === 'editar') {
-                const d = contexto.cliente.detalleAlta
-                const cambios: IEditarAltaDTO = {}
-                // Mismo fallback que la precarga (`d?.nombre ?? contexto.cliente.nombreCliente`):
-                // si detalleAlta viene null/undefined y se usara `''` acá, un no-op (no tocar
-                // el campo) calculaba un diff falso y mandaba `{ nombre: ... }` en vez de `{}`.
-                if (nombreLimpio !== (d?.nombre ?? contexto.cliente.nombreCliente)) cambios.nombre = nombreLimpio
-                if ((razonSocial.trim() || null) !== (d?.razonSocial ?? null)) cambios.razonSocial = razonSocial.trim() || null
-                if ((direccion.trim() || null) !== (d?.direccion ?? null)) cambios.direccion = direccion.trim() || null
-                cliente = await editar.mutateAsync({ rotacionClienteId: contexto.cliente.rotacionClienteId, dto: cambios })
             } else {
                 cliente = await reintentar.mutateAsync({ rotacionClienteId: contexto.cliente.rotacionClienteId, dia })
             }
@@ -93,11 +75,8 @@ export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, on
     // `dia` (el state), no `contexto.dia`: tocar otro chip de día actualiza `dia` pero no
     // `contexto`, así que usar `contexto.dia` acá dejaba el eyebrow mostrando el día viejo
     // mientras el botón (que ya usaba `dia`) mostraba el nuevo.
-    const eyebrow = contexto.modo === 'crear' ? `Agregar al ${diaLabel(dia)}` : contexto.modo === 'editar' ? 'Cliente nuevo · editar datos' : 'Cliente nuevo · volver a agendar'
-    const labelBoton =
-        contexto.modo === 'crear' ? `Agregar al ${diaLabel(dia)}`
-        : contexto.modo === 'editar' ? 'Guardar'
-        : `Volver a agendar el ${diaLabel(dia)}`
+    const eyebrow = contexto.modo === 'crear' ? `Agregar al ${diaLabel(dia)}` : 'Cliente nuevo · volver a agendar'
+    const labelBoton = contexto.modo === 'crear' ? `Agregar al ${diaLabel(dia)}` : `Volver a agendar el ${diaLabel(dia)}`
     const deshabilitado = trabajando || (contexto.modo !== 'reintentar' && nombreLimpio === '')
 
     return (
@@ -125,19 +104,17 @@ export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, on
                         </div>
                     </>
                 )}
-                {contexto.modo !== 'editar' && (
-                    <div>
-                        <span className={LABEL}>Día</span>
-                        <div className="flex gap-1.5">
-                            {DIAS.map(d => (
-                                <button key={d} type="button" onClick={() => setDia(d)}
-                                    className={`h-9 flex-1 rounded-lg text-[12.5px] font-semibold ${d === dia ? 'bg-dsnavy text-white' : 'border-[1.5px] border-[#E1E6F0] text-[#182645]'}`}>
-                                    {diaLabel(d)}
-                                </button>
-                            ))}
-                        </div>
+                <div>
+                    <span className={LABEL}>Día</span>
+                    <div className="flex gap-1.5">
+                        {DIAS.map(d => (
+                            <button key={d} type="button" onClick={() => setDia(d)}
+                                className={`h-9 flex-1 rounded-lg text-[12.5px] font-semibold ${d === dia ? 'bg-dsnavy text-white' : 'border-[1.5px] border-[#E1E6F0] text-[#182645]'}`}>
+                                {diaLabel(d)}
+                            </button>
+                        ))}
                     </div>
-                )}
+                </div>
             </div>
         </BottomSheet>
     )

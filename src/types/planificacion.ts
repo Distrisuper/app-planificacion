@@ -6,12 +6,51 @@ export type Dia = 'LUN' | 'MAR' | 'MIE' | 'JUE' | 'VIE'
  *  que declarar el campo. */
 export type TipoFilaPlan = 'cliente' | 'alta'
 
-/** Datos propios de una fila `tipo: 'alta'`: no vienen de fct_clients, los tipeó el
- *  vendedor al crearla. */
+/** Datos del COMERCIO de una fila `tipo: 'alta'`, en `pl_rotacion_cliente.detalle`. Las
+ *  claves NO se enumeran acá: las define el backend (`esquemaAlta.ts`) y las sirve
+ *  `GET /altas/esquema`; el front las recorre. `nombre` es la única fija (obligatoria, título
+ *  de la card). Una clave ausente en un JSON viejo se lee como null. */
 export interface IDetalleAlta {
     nombre: string
-    razonSocial: string | null
-    direccion: string | null
+    [clave: string]: string | null
+}
+
+export type TipoCampoAlta = 'texto' | 'textoLargo' | 'cuit' | 'email' | 'catalogo'
+
+export interface ISeccionAlta {
+    clave: string
+    titulo: string
+}
+
+export interface ICampoAlta {
+    clave: string
+    etiqueta: string
+    seccion: string
+    tipo: TipoCampoAlta
+    max?: number
+    /** No se puede vaciar nunca (hoy sólo `nombre`): bloquea el Guardar del formulario. */
+    requerido?: boolean
+    /** Hay que cargarlo para CERRAR la visita de alta; el formulario igual se guarda a medias.
+     *  Ausente = opcional, así una API vieja no inventa un gate. */
+    obligatorio?: boolean
+    /** Solo tipo 'catalogo': la clave dentro de `IEsquemaAlta.catalogos`. */
+    catalogo?: string
+    placeholder?: string
+}
+
+export interface ICatalogoAltaItem {
+    codigo: string
+    descripcion: string
+    orden: number
+    activo: boolean
+}
+
+/** GET /planificacion/altas/esquema. `catalogos: null` = la tabla no se pudo leer: los selects
+ *  se deshabilitan y el resto del formulario sigue operativo. */
+export interface IEsquemaAlta {
+    secciones: ISeccionAlta[]
+    campos: ICampoAlta[]
+    catalogos: Record<string, ICatalogoAltaItem[]> | null
 }
 
 /** Lo que se completa al CERRAR una visita de alta (no al crearla): datos de contacto
@@ -470,12 +509,8 @@ export interface ICrearAltaDTO {
     direccion?: string
 }
 
-/** `null` = borrar el valor cargado; `undefined` = no tocarlo. */
-export interface IEditarAltaDTO {
-    nombre?: string
-    razonSocial?: string | null
-    direccion?: string | null
-}
+/** `null` = borrar el valor cargado; `undefined` = no tocarlo. `nombre` nunca va en null. */
+export type IEditarAltaDTO = Partial<IDetalleAlta>
 
 export interface ICerrarVisitaResult {
     visitaId: number

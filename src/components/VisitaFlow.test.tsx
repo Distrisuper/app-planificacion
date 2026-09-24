@@ -56,6 +56,7 @@ interface HarnessProps {
     onClose: () => void
     onVisitaIniciada: (cliente: IAgendaClient, visitaId: number) => void
     onVisitaCerrada: () => void
+    onDatosComercio?: (c: IAgendaClient) => void
 }
 
 /**
@@ -74,6 +75,7 @@ function Harness({
     onClose,
     onVisitaIniciada,
     onVisitaCerrada,
+    onDatosComercio,
 }: HarnessProps) {
     const [cliente, setCliente] = useState<IAgendaClient | null>(clienteInicial)
     const [visitaEnCurso, setVisitaEnCurso] = useState<IVisitaEnCurso | null>(
@@ -107,6 +109,7 @@ function Harness({
                     setVisitaEnCurso(null)
                     onVisitaCerrada()
                 }}
+                onDatosComercio={onDatosComercio}
                 onClose={() => {
                     setCliente(null)
                     onClose()
@@ -127,6 +130,15 @@ function Harness({
     )
 }
 
+const ESQUEMA_ALTA_COMPLETO = {
+    secciones: [{ clave: 'identidad', titulo: 'Identidad' }],
+    campos: [
+        { clave: 'nombre', etiqueta: 'Nombre del comercio', seccion: 'identidad', tipo: 'texto', max: 120, requerido: true, obligatorio: true },
+        { clave: 'referencias', etiqueta: 'Referencias comerciales', seccion: 'identidad', tipo: 'textoLargo', max: 300 },
+    ],
+    catalogos: {},
+}
+
 function renderFlow(
     over: {
         cliente?: IAgendaClient
@@ -134,6 +146,7 @@ function renderFlow(
         directoAMapa?: boolean
     } = {},
 ) {
+    const onDatosComercio = vi.fn()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     const onGeoBloqueada = vi.fn()
     const onClose = vi.fn()
@@ -151,10 +164,11 @@ function renderFlow(
                 onClose={onClose}
                 onVisitaIniciada={onVisitaIniciada}
                 onVisitaCerrada={onVisitaCerrada}
+                onDatosComercio={onDatosComercio}
             />
         </QueryClientProvider>,
     )
-    return { onGeoBloqueada, onClose, onAviso, onVisitaIniciada, onVisitaCerrada }
+    return { onGeoBloqueada, onClose, onAviso, onVisitaIniciada, onVisitaCerrada, onDatosComercio }
 }
 
 /** El catálogo de "Datos del comercio" tal cual lo manda la API. Acá va el mínimo con el
@@ -195,6 +209,9 @@ beforeEach(() => {
     // El sheet de la ficha dibuja desde el catálogo (GET /ficha/campos): sin esto no hay
     // controles y el gate no se puede completar en ningún test.
     ;(api.getCamposFicha as any).mockResolvedValue(CATALOGO_FICHA)
+    // Esquema de "Datos para el alta" con sólo el nombre obligatorio: cae al nombre de la
+    // card, así que los tests de alta que no son sobre ese gate no quedan trabados en él.
+    ;(api.getEsquemaAlta as any).mockResolvedValue(ESQUEMA_ALTA_COMPLETO)
     ;(geo.capturarUbicacion as any).mockResolvedValue({
         ok: true,
         coord: '-34.6,-58.4',
@@ -1299,6 +1316,120 @@ describe('gate de "Datos del comercio"', () => {
         await waitFor(() => expect(screen.queryByRole('button', { name: /^guardar$/i })).not.toBeInTheDocument())
         expect(api.iniciarVisita).not.toHaveBeenCalled()
         expect(api.cerrarVisita).not.toHaveBeenCalled()
+    })
+
+    describe('visita de alta: la ficha se pide ADENTRO de la visita, no antes', () => {
+        // Del prospecto no se sabe nada antes de entrar: pedir la ficha antes de iniciar lo
+        // frena en la puerta. Se carga con la visita abierta y es condición para cerrarla.
+        const altaPendiente: IAgendaClient = {
+            ...conPendientes,
+            tipo: 'alta',
+            codigoParticularCliente: 'ALTA-000009',
+            latitud: undefined,
+            longitud: undefined,
+        }
+        const altaEnCurso: IAgendaClient = { ...altaPendiente, estado: 'en_curso', visitaId: 77 }
+
+        it('iniciar la visita de alta con la ficha pendiente NO muestra el gate', async () => {
+            mockGeolocacionEnVivo({ latitude: -34.62, longitude: -58.42, accuracy: 8 })
+            ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: true, coord: '-34.6,-58.4', precisionM: 10 })
+            ;(api.iniciarVisita as any).mockResolvedValue({ visitaId: 77, ofrecimientos: 0 })
+            renderFlow({ cliente: altaPendiente, directoAMapa: true })
+            await screen.findByTestId('mapa-iniciar-visita')
+            fireEvent.click(screen.getByRole('button', { name: /iniciar visita/i }))
+            await waitFor(() => expect(api.iniciarVisita).toHaveBeenCalledTimes(1))
+            expect(api.actualizarFicha).not.toHaveBeenCalled()
+            expect(screen.queryByText(/se carga una sola vez/i)).not.toBeInTheDocument()
+        })
+
+        it('"Datos para el alta" abre el relevamiento aunque falte la ficha: cada renglón abre lo suyo', async () => {
+            const { onDatosComercio } = renderFlow({ cliente: altaEnCurso })
+            fireEvent.click(await screen.findByRole('button', { name: /datos para el alta/i }))
+            expect(onDatosComercio).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
+            expect(screen.queryByRole('button', { name: /^frenos$/i })).not.toBeInTheDocument()
+        })
+
+        it('el renglón de la ficha pendiente la guarda en ALTA-… y no abre el relevamiento', async () => {
+            const { onDatosComercio } = renderFlow({ cliente: altaEnCurso })
+            fireEvent.click(await screen.findByRole('button', { name: /ficha del comercio/i }))
+            await completarFicha()
+            fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
+            await waitFor(() => expect(api.actualizarFicha).toHaveBeenCalledWith('ALTA-000009', {
+                especialidad: ['frenos'], personas: ['4'], facturacion: ['3'],
+            }))
+            await waitFor(() => expect(screen.getByRole('button', { name: /ficha del comercio/i })).toHaveTextContent(/completa/i))
+            expect(onDatosComercio).not.toHaveBeenCalled()
+        })
+
+        it('reabrir la ficha recién guardada la muestra cargada, no vacía', async () => {
+            // El `cliente` de la visita abierta es una foto previa al PUT: sin tomar lo que
+            // devuelve, la edición se precargaba vacía y "Guardar" quedaba deshabilitado.
+            const valores = { especialidad: ['frenos'], personas: ['4'], facturacion: ['3'] }
+            ;(api.actualizarFicha as any).mockResolvedValue({ pendientes: [], valores })
+            renderFlow({ cliente: altaEnCurso })
+            fireEvent.click(await screen.findByRole('button', { name: /ficha del comercio/i }))
+            await completarFicha()
+            fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
+            await waitFor(() => expect(screen.getByRole('button', { name: /ficha del comercio/i })).toHaveTextContent(/completa/i))
+            fireEvent.click(screen.getByRole('button', { name: /ficha del comercio/i }))
+            expect(await screen.findByRole('button', { name: /^guardar$/i })).toBeEnabled()
+        })
+
+        it('sin la ficha no se cierra: el botón la pide, y guardada habilita el cierre', async () => {
+            const { onDatosComercio } = renderFlow({ cliente: altaEnCurso })
+            fireEvent.change(await screen.findByRole('textbox', { name: /observaciones/i }), {
+                target: { value: 'Local con buena rotación' },
+            })
+            expect(screen.queryByRole('button', { name: /^cerrar visita$/i })).not.toBeInTheDocument()
+            fireEvent.click(screen.getByRole('button', { name: /falta la ficha del comercio/i }))
+            await completarFicha()
+            fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
+            expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
+            // Desde el cierre no se desvía al relevamiento: el vendedor venía a cerrar.
+            expect(onDatosComercio).not.toHaveBeenCalled()
+            expect(api.cerrarVisita).not.toHaveBeenCalled()
+        })
+
+        it('con la ficha completa pero faltando obligatorios del alta, el pie abre el relevamiento en vez de cerrar', async () => {
+            ;(api.getEsquemaAlta as any).mockResolvedValue({
+                ...ESQUEMA_ALTA_COMPLETO,
+                campos: [
+                    ...ESQUEMA_ALTA_COMPLETO.campos,
+                    { clave: 'cuit', etiqueta: 'CUIT', seccion: 'identidad', tipo: 'cuit', max: 13, obligatorio: true },
+                ],
+            })
+            const { onDatosComercio } = renderFlow({
+                cliente: { ...altaEnCurso, ficha: { pendientes: [], valores: { especialidad: ['frenos'], personas: ['2'], facturacion: ['5'] } } },
+            })
+            fireEvent.change(await screen.findByRole('textbox', { name: /observaciones/i }), {
+                target: { value: 'Local con buena rotación' },
+            })
+            expect(await screen.findByRole('button', { name: /^datos para el alta/i })).toHaveTextContent(/falta 1 · obligatorios/i)
+            fireEvent.click(screen.getByRole('button', { name: /faltan datos para el alta/i }))
+            expect(onDatosComercio).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
+            expect(api.cerrarVisita).not.toHaveBeenCalled()
+        })
+
+        it('con la ficha completa, su renglón abre la edición y el header no suma el chip de master', async () => {
+            renderFlow({
+                cliente: { ...altaEnCurso, ficha: { pendientes: [], valores: { especialidad: ['frenos'], personas: ['2'], facturacion: ['5'] } } },
+            })
+            fireEvent.click(await screen.findByRole('button', { name: /ficha del comercio/i }))
+            expect(await screen.findByRole('button', { name: /^guardar$/i })).toBeEnabled()
+            expect(screen.getByRole('textbox', { name: /personas que trabajan/i })).toHaveValue('2')
+            expect(screen.queryByRole('button', { name: /^datos del comercio$/i })).not.toBeInTheDocument()
+        })
+
+        it('cerrar la ficha sin guardar deja la visita abierta', async () => {
+            const { onClose } = renderFlow({ cliente: altaEnCurso })
+            fireEvent.click(await screen.findByRole('button', { name: /ficha del comercio/i }))
+            await screen.findByRole('button', { name: /^frenos$/i })
+            const cerrar = screen.getAllByRole('button', { name: /cerrar/i })
+            fireEvent.click(cerrar[cerrar.length - 1])
+            await waitFor(() => expect(screen.queryByRole('button', { name: /^frenos$/i })).not.toBeInTheDocument())
+            expect(onClose).not.toHaveBeenCalled()
+            expect(screen.getByRole('button', { name: /falta la ficha del comercio/i })).toBeInTheDocument()
+        })
     })
 
     it('con pendientes, VisitaSheet NO ofrece el chip (la puerta es el gate)', async () => {

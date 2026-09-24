@@ -1,0 +1,87 @@
+import type { ReactNode } from 'react'
+import { AlertTriangle, Check, ChevronRight } from 'lucide-react'
+
+interface TarjetaDatosAltaProps {
+    /** La ficha (especialidad, personas, facturación) tiene obligatorios sin cargar. */
+    fichaPendiente: boolean
+    /** Campos del relevamiento con valor sobre el total, y obligatorios vacíos. null = en vuelo. */
+    progreso: { cargados: number; total: number; faltan: number } | null
+    /** Sin los dos handlers no se dibujan los renglones (queda sólo `children`). */
+    onAbrirFicha?: () => void
+    onAbrirRelevamiento?: () => void
+    /** Bloque al pie de la tarjeta: VisitaSheet pone ahí "¿Con quién hablaste hoy?". */
+    children?: ReactNode
+}
+
+/**
+ * "Datos del comercio" de la visita de alta, arriba de todo del cuerpo de VisitaSheet. En un
+ * alta cargar los datos es la mitad del trabajo, y un chip de 28px en el header al lado de la
+ * salida negativa no lo decía — ni mostraba qué faltaba. Dos renglones, cada uno su puerta,
+ * y al pie lo que el vendedor quiera sumar (el contacto de hoy):
+ *
+ * - **Ficha** (obligatoria para cerrar): ámbar mientras falte, verde cuando está.
+ * - **Datos para el alta** (obligatorios para cerrar, salvo referencias y notas): ámbar con
+ *   cuántos faltan, verde cuando no falta ninguno.
+ *
+ * Qué abre cada renglón lo decide VisitaFlow.
+ */
+export default function TarjetaDatosAlta({
+    fichaPendiente,
+    progreso,
+    onAbrirFicha,
+    onAbrirRelevamiento,
+    children,
+}: TarjetaDatosAltaProps) {
+    const conRenglones = !!onAbrirFicha && !!onAbrirRelevamiento
+    const faltanDatos = progreso === null || progreso.faltan > 0
+    const pendiente = fichaPendiente || (conRenglones && faltanDatos)
+    return (
+        <section
+            aria-label="Datos del comercio"
+            className={`mb-5 overflow-hidden rounded-xl border-[1.5px] ${
+                pendiente ? 'border-amber-300 bg-amber-50/60' : 'border-[#E4E8F0] bg-white'
+            }`}
+        >
+            <h3 className="px-3 pt-2.5 text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">Datos del comercio</h3>
+            {conRenglones && (
+                <>
+                    <button type="button" onClick={onAbrirFicha} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left">
+                        {fichaPendiente ? (
+                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" strokeWidth={2.4} />
+                        ) : (
+                            <Check className="h-4 w-4 shrink-0 text-dsgreen" strokeWidth={2.8} />
+                        )}
+                        <span className="min-w-0 flex-1 text-[13.5px] font-bold text-[#182645]">Ficha del comercio</span>
+                        <span className={`shrink-0 text-[11.5px] font-bold ${fichaPendiente ? 'text-amber-700' : 'text-dsgreen'}`}>
+                            {fichaPendiente ? 'Falta · obligatoria' : 'Completa'}
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-dsmuted" strokeWidth={2.4} />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onAbrirRelevamiento}
+                        className="flex w-full items-center gap-2.5 border-t border-[#EEF1F6] px-3 py-2.5 text-left"
+                    >
+                        {faltanDatos ? (
+                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" strokeWidth={2.4} />
+                        ) : (
+                            <Check className="h-4 w-4 shrink-0 text-dsgreen" strokeWidth={2.8} />
+                        )}
+                        <span className="min-w-0 flex-1 text-[13.5px] font-bold text-[#182645]">Datos para el alta</span>
+                        <span className={`shrink-0 text-[11.5px] font-bold ${faltanDatos ? 'text-amber-700' : 'text-dsgreen'}`}>
+                            {progreso === null
+                                ? 'Obligatorios'
+                                : progreso.faltan > 0
+                                  ? `${progreso.faltan === 1 ? 'Falta 1' : `Faltan ${progreso.faltan}`} · obligatorios`
+                                  : 'Completos'}
+                        </span>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-dsmuted" strokeWidth={2.4} />
+                    </button>
+                </>
+            )}
+            {children && (
+                <div className={`bg-[#FAFBFD] ${conRenglones ? 'border-t border-[#EEF1F6]' : ''}`}>{children}</div>
+            )}
+        </section>
+    )
+}

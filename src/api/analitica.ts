@@ -11,6 +11,7 @@ import {
 } from '@/mocks/analiticaMock'
 import { incluyeHoy } from '@/lib/fechas'
 import type {
+    IAltaRelevada,
     IAnaliticaFiltro,
     IAnaliticaResumen,
     IObjecionesResumen,
@@ -21,6 +22,7 @@ import type {
     IVisitaDetalle,
     IVisitasArgs,
     IVisitasPage,
+    IVincularAltaResult,
 } from '@/types/analitica'
 
 export type { IVisitasArgs }
@@ -149,6 +151,19 @@ export const getVendedores = async (): Promise<IVendedorOpcion[]> => {
         return MOCK_VENDEDORES
     }
     const res = await apiClient.get('/planificacion/analitica/vendedores')
+    return res.data.data
+}
+
+/** Relevamiento de los clientes nuevos del rango, más nuevos primero. */
+export const getAltas = async (filtro: IAnaliticaFiltro): Promise<IAltaRelevada[]> => {
+    const res = await apiClient.get('/planificacion/analitica/altas', { params: filtro })
+    return res.data.data
+}
+
+/** Vincula un alta visitada con el cliente que administración creó en Flexxus. Idempotente con
+ *  el mismo código. Ver spec api-vendedores 2026-09-23-vincular-alta. */
+export const vincularAlta = async (rotacionClienteId: number, codigoParticularCliente: string): Promise<IVincularAltaResult> => {
+    const res = await apiClient.put(`/planificacion/analitica/altas/${rotacionClienteId}/vinculo`, { codigoParticularCliente })
     return res.data.data
 }
 

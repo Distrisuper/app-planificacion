@@ -31,6 +31,9 @@ interface PerfilComercioSheetProps {
     campos?: readonly string[]
     /** 'gate' = botón "Iniciar visita" y texto de apoyo; 'edicion' = botón "Guardar", precarga. */
     modo: 'gate' | 'edicion'
+    /** Rótulo sobre el nombre. Default "Datos del comercio"; la visita de alta usa "Ficha del
+     *  comercio", el nombre de su renglón en la tarjeta. */
+    eyebrow?: string
     valoresIniciales?: Record<string, string[]>
     /** true mientras corre el PUT (y, en el gate, el POST que le sigue). */
     guardando?: boolean
@@ -60,6 +63,7 @@ export default function PerfilComercioSheet({
     identidad,
     campos,
     modo,
+    eyebrow = 'Datos del comercio',
     valoresIniciales,
     guardando = false,
     error,
@@ -319,7 +323,7 @@ export default function PerfilComercioSheet({
         <BottomSheet
             open={open}
             onClose={onClose}
-            eyebrow="Datos del comercio"
+            eyebrow={eyebrow}
             title={nombreCliente}
             subtitle={identidad}
             altura="hasta-completa"

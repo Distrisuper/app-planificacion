@@ -21,6 +21,8 @@ import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
 import { esAlta } from '@/lib/alta'
+import { contarCargados, estadoInicial, faltantesObligatorios } from '@/lib/camposAlta'
+import { useEsquemaAlta } from '@/hooks/useEsquemaAlta'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { formatDistancia } from '@/lib/analiticaFormat'
 import { useAuth } from '@/context/AuthContext'
@@ -28,6 +30,7 @@ import { estaProbando } from '@/lib/roles'
 import type {
     IAgendaClient,
     IDetalleContactoAlta,
+    IFichaCliente,
     IPropuestaRubroDTO,
     IVisitClientCard,
 } from '@/types/planificacion'
@@ -65,6 +68,9 @@ interface VisitaFlowProps {
      *  diferencia de VisitaSheet, que se minimiza); quien lo renderiza es el padre, en
      *  VisitaEnCursoBar. */
     onAlejadoChange?: (alejado: boolean) => void
+    /** Abre "Datos del comercio" del cliente de esta visita (sólo si es alta). Lo dueño es la
+     *  página: el RelevamientoSheet es uno solo, compartido con la card. */
+    onDatosComercio?: (cliente: IAgendaClient) => void
 }
 
 /**
@@ -84,6 +90,7 @@ export default function VisitaFlow({
     onAviso,
     onAbrirAppExterna,
     onAlejadoChange,
+    onDatosComercio,
 }: VisitaFlowProps) {
     const { capacidades } = useAuth()
     const iniciar = useIniciarVisita()
@@ -181,6 +188,16 @@ export default function VisitaFlow({
     const [errorFicha, setErrorFicha] = useState<string | null>(null)
     // Edición posterior, desde el chip "Datos del comercio" de VisitaSheet.
     const [editandoFicha, setEditandoFicha] = useState(false)
+    // Visita de ALTA: la ficha no corta el inicio (del prospecto no se sabe nada antes de
+    // entrar); se carga con la visita abierta y es condición para cerrarla. true = el sheet
+    // de los pendientes abierto (desde su renglón de la tarjeta o desde el pie). No se
+    // encadena con el relevamiento: cada renglón de la tarjeta abre lo suyo — encadenado,
+    // "Datos para el alta" parecía llevar a la pantalla equivocada.
+    const [fichaAlta, setFichaAlta] = useState(false)
+    // La ficha que devolvió el último PUT. Por la misma razón que `fichaLista`: el `cliente`
+    // de la visita abierta es una foto de cuando se abrió y el PUT no la actualiza, así que
+    // reabrir la ficha para corregirla la mostraba vacía justo después de guardarla.
+    const [fichaGuardada, setFichaGuardada] = useState<IFichaCliente | null>(null)
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
@@ -207,6 +224,8 @@ export default function VisitaFlow({
         setFichaLista(false)
         setErrorFicha(null)
         setEditandoFicha(false)
+        setFichaAlta(false)
+        setFichaGuardada(null)
     }, [cliente?.rotacionClienteId])
 
     // El mapa de cierre cuelga de `visitaEnCurso`, pero `cierrePendiente` y la confirmación
@@ -244,6 +263,25 @@ export default function VisitaFlow({
     // "Cliente nuevo": no hay historial (propuesta) ni coordenada (mapa/gate). Se
     // arranca directo con la ubicación del vendedor, que pasa a ser la del comercio.
     const clienteEsAlta = esAlta(cliente)
+    // El gate previo a la visita es sólo para clientes reales; el alta la pide adentro.
+    const fichaCortaElInicio = !clienteEsAlta && !fichaLista && !!cliente && relevamientoPendiente(cliente)
+    const fichaFaltaAlAlta = clienteEsAlta && !fichaLista && !!cliente && relevamientoPendiente(cliente)
+    // Progreso del relevamiento para la tarjeta del alta. Mismo esquema (y misma caché) que
+    // dibuja RelevamientoSheet, así que lo que cuenta es exactamente lo que ese form muestra.
+    // `faltan` (obligatorios vacíos) es el gate de cierre del alta; null = esquema en vuelo.
+    const esquemaAlta = useEsquemaAlta(clienteEsAlta)
+    const estadoAlta =
+        clienteEsAlta && cliente && esquemaAlta.data
+            ? estadoInicial(esquemaAlta.data.campos, cliente.detalleAlta, cliente.nombreCliente)
+            : null
+    const progresoAlta =
+        estadoAlta && esquemaAlta.data
+            ? {
+                  cargados: contarCargados(esquemaAlta.data.campos, estadoAlta),
+                  total: esquemaAlta.data.campos.length,
+                  faltan: faltantesObligatorios(esquemaAlta.data.campos, estadoAlta, esquemaAlta.data.catalogos).length,
+              }
+            : null
 
     // "Iniciar visita" tocado directo desde la card: se salta la propuesta y va derecho
     // al mapa. Solo aplica con coordenadas (si no las hay, no hay mapa que mostrar, así
@@ -295,7 +333,7 @@ export default function VisitaFlow({
         opts: { fichaConfirmada?: boolean } = {},
     ) {
         if (bloqueadoPorOtraVisita) return
-        if (!opts.fichaConfirmada && !fichaLista && relevamientoPendiente(cliente!)) {
+        if (!opts.fichaConfirmada && fichaCortaElInicio) {
             setErrorIniciar(null)
             setPerfilPendiente(propuesta)
             return
@@ -318,8 +356,9 @@ export default function VisitaFlow({
         // Red de seguridad del gate, no su puerta principal: el camino normal ya cortó en
         // `onConfirmarPropuesta`, antes del mapa. Esto queda para la visita de ALTA —que no
         // pasa por la propuesta y tiene su propio mapa en modo 'ubicar'— y para cualquier
-        // camino de inicio que se agregue mañana.
-        if (!opts.fichaConfirmada && !fichaLista && relevamientoPendiente(cliente!)) {
+        // camino de inicio que se agregue mañana. El alta NO: su ficha se pide con la visita
+        // abierta (ver `fichaAlta`).
+        if (!opts.fichaConfirmada && fichaCortaElInicio) {
             setErrorIniciar(null)
             setPerfilPendiente(propuesta)
             return
@@ -634,11 +673,25 @@ export default function VisitaFlow({
                     alejado={alejado && esClienteEnCurso}
                     onVerPosicion={() => setVerPosicion(true)}
                     onNoVisita={rubros => setNoVisitaRubros(rubros)}
+                    onDatosComercio={
+                        clienteEsAlta && onDatosComercio
+                            ? () => onDatosComercio(cliente)
+                            : undefined
+                    }
+                    fichaPendiente={fichaFaltaAlAlta}
+                    onCompletarFicha={() => setFichaAlta(true)}
+                    // Ficha pendiente: sólo los pendientes. Completa: la edición de siempre
+                    // (todos los campos).
+                    onAbrirFicha={() => (fichaFaltaAlAlta ? setFichaAlta(true) : setEditandoFicha(true))}
+                    progresoAlta={progresoAlta}
+                    contactoSugerido={clienteEsAlta ? cliente.detalleAlta?.contactoNombre ?? null : null}
                     // Sólo con la ficha completa: si falta algo, el gate ya la pide al
                     // iniciar, y dos puertas para lo mismo confunden. Sin `ficha` (backend
                     // viejo) tampoco.
+                    // En el alta la corrección vive en la tarjeta "Datos del comercio": el chip
+                    // sería una segunda puerta con el mismo nombre.
                     onEditarDatosComercio={
-                        cliente.ficha && cliente.ficha.pendientes.length === 0
+                        !clienteEsAlta && cliente.ficha && cliente.ficha.pendientes.length === 0
                             ? () => setEditandoFicha(true)
                             : undefined
                     }
@@ -842,11 +895,15 @@ export default function VisitaFlow({
                 propuesta) que quedó atrás, que es justo la pantalla a la que vuelve
                 si cierra sin cargar. */}
             <PerfilComercioSheet
-                open={perfilPendiente !== null || editandoFicha}
-                modo={editandoFicha ? 'edicion' : 'gate'}
-                // `undefined` = todos los del catálogo. En el gate, sólo los pendientes.
+                open={perfilPendiente !== null || editandoFicha || fichaAlta}
+                modo={editandoFicha || fichaAlta ? 'edicion' : 'gate'}
+                // En el alta, el mismo nombre que su renglón de la tarjeta: "Datos del
+                // comercio" es la tarjeta entera (ficha + datos para el alta).
+                eyebrow={clienteEsAlta ? 'Ficha del comercio' : undefined}
+                // `undefined` = todos los del catálogo. En el gate (y en el alta), sólo los
+                // pendientes.
                 campos={editandoFicha ? undefined : camposPendientes(cliente)}
-                valoresIniciales={cliente.ficha?.valores}
+                valoresIniciales={(fichaGuardada ?? cliente.ficha)?.valores}
                 nombreCliente={nombre}
                 identidad={clienteEsAlta ? undefined : identidad}
                 guardando={actualizarFicha.isPending || iniciandoFlujo}
@@ -856,10 +913,12 @@ export default function VisitaFlow({
                     try {
                         // PRIMERO la ficha, DESPUÉS la visita, y sólo si la ficha se guardó: al
                         // revés, el gate se destrabaría sin que el dato exista.
-                        await actualizarFicha.mutateAsync({
-                            codigoParticularCliente: cliente.codigoParticularCliente,
-                            valores,
-                        })
+                        setFichaGuardada(
+                            await actualizarFicha.mutateAsync({
+                                codigoParticularCliente: cliente.codigoParticularCliente,
+                                valores,
+                            }),
+                        )
                     } catch {
                         setErrorFicha('No pudimos guardar los datos. Revisá la conexión y volvé a intentar.')
                         return
@@ -867,6 +926,12 @@ export default function VisitaFlow({
                     if (editandoFicha) {
                         // Edición: guardar y cerrar. No arranca ni toca la visita.
                         setEditandoFicha(false)
+                        return
+                    }
+                    if (fichaAlta) {
+                        // Alta: la visita ya está abierta; vuelve al sheet de la visita.
+                        setFichaAlta(false)
+                        setFichaLista(true)
                         return
                     }
                     // Reanuda el camino que el gate cortó: mapa si el cliente tiene
@@ -878,6 +943,12 @@ export default function VisitaFlow({
                     onConfirmarPropuesta(propuesta, { fichaConfirmada: true })
                 }}
                 onClose={() => {
+                    if (fichaAlta) {
+                        // Alta: la visita sigue abierta; el pie la vuelve a pedir al cerrar.
+                        setFichaAlta(false)
+                        setErrorFicha(null)
+                        return
+                    }
                     if (editandoFicha) {
                         // Edición: cerrar es sólo cerrar el sheet, la visita sigue abierta.
                         setEditandoFicha(false)

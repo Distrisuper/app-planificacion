@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, WifiOff, X } from 'lucide-react'
+import TarjetaDatosAlta from '@/components/relevamiento/TarjetaDatosAlta'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import ResolucionWizard from './propuesta/ResolucionWizard'
@@ -107,10 +108,27 @@ interface VisitaSheetProps {
     onAbrirAppExterna?: (app: AppExterna, cliente: IVisitClientCard) => void
     /** Abre MapaVisita en modo consulta. Sólo tiene sentido junto con `alejado`. */
     onVerPosicion?: () => void
-    /** Si se pasa y la visita está abierta, el menú `⋯` del header ofrece "No visité".
-     *  Recibe cuántos rubros llevaba completos, para que el llamador pueda avisarle al
-     *  vendedor que esos no van a contar. */
+    /** Si se pasa y la visita está abierta, la línea de identidad del header ofrece "No
+     *  visité". Recibe cuántos rubros llevaba completos, para que el llamador pueda
+     *  avisarle al vendedor que esos no van a contar. */
     onNoVisita?: (rubrosCargados: number) => void
+    /** Sólo `esAlta` con la visita abierta: el renglón "Datos para el alta" de la tarjeta
+     *  "Datos del comercio" (TarjetaDatosAlta). Con la visita cerrada no se muestra: el
+     *  backend rebota FILA_RESUELTA y no hay nada que editar. */
+    onDatosComercio?: () => void
+    /** Sólo `esAlta`: el renglón "Ficha del comercio" de la misma tarjeta. */
+    onAbrirFicha?: () => void
+    /** Sólo `esAlta`: campos del relevamiento cargados / total, y `faltan` = obligatorios
+     *  vacíos (traba el cierre). null = esquema en vuelo. */
+    progresoAlta?: { cargados: number; total: number; faltan: number } | null
+    /** Sólo `esAlta`: `detalleAlta.contactoNombre`. Precarga "Con quién hablaste" si está
+     *  vacío; editable, y nunca pisa lo que el vendedor ya tipeó. Dos conceptos distintos
+     *  que conviven: el contacto del COMERCIO (plan) y con quién habló ESTA vez (hecho). */
+    contactoSugerido?: string | null
+    /** Sólo `esAlta`: la ficha del comercio tiene obligatorios sin cargar. Traba el cierre y
+     *  el botón del pie pasa a pedirla (`onCompletarFicha`) en vez de cerrar. */
+    fichaPendiente?: boolean
+    onCompletarFicha?: () => void
     /** Si se pasa, el header muestra el chip "Datos del comercio" que abre la edición de la
      *  ficha. Se muestra con la visita abierta Y cerrada (es corrección, no carga de rubros).
      *  El llamador decide cuándo pasarlo (VisitaFlow: sólo si no hay pendientes, para no
@@ -136,6 +154,12 @@ export default function VisitaSheet({
     onAbrirAppExterna,
     onVerPosicion,
     onNoVisita,
+    onDatosComercio,
+    contactoSugerido = null,
+    fichaPendiente = false,
+    onCompletarFicha,
+    onAbrirFicha,
+    progresoAlta = null,
     onEditarDatosComercio,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
@@ -176,6 +200,12 @@ export default function VisitaSheet({
     // son opcionales y el flujo de alta es corto.
     const [contacto, setContacto] = useState('')
     const [fechaNacimiento, setFechaNacimiento] = useState('')
+    // Al abrir (y si el sugerido cambia), sólo si el campo está vacío. `contacto` no está en
+    // las deps a propósito: si estuviera, borrar el campo lo volvería a llenar.
+    useEffect(() => {
+        if (!open || !esAlta || !contactoSugerido) return
+        setContacto(prev => (prev.trim() === '' ? contactoSugerido : prev))
+    }, [open, esAlta, contactoSugerido])
     const [borradorListo, setBorradorListo] = useState(false)
     const [descuentosAbierto, setDescuentosAbierto] = useState(false)
     const [guardandoBorrador, setGuardandoBorrador] = useState(false)
@@ -441,6 +471,15 @@ export default function VisitaSheet({
     // acá. `puedeCerrarAlta` pide que haya quedado ALGO — un ofrecimiento completo o una
     // observación — en su lugar. Ver src/lib/alta.ts.
     const cierreHabilitado = esAlta ? puedeCerrarAlta(completos, observaciones) : faltanParaMinimo === 0
+    // Alta con la ficha incompleta: el pie no cierra, la pide. Va ANTES que el faltante de
+    // ofrecimientos porque es lo único que no se puede completar después de cerrar.
+    const pideFicha = esAlta && fichaPendiente && !!onCompletarFicha
+    // Después de la ficha, los datos para el alta: administración no puede dar de alta al
+    // cliente sin ellos, y cerrada la visita ya no se editan (FILA_RESUELTA). Con el esquema
+    // en vuelo (`progresoAlta` null) también pide: si no, no faltaría nada y el gate se
+    // auto-satisface — la misma trampa que `ofrecimientosCargados`.
+    const pideDatosAlta =
+        esAlta && !pideFicha && !!onDatosComercio && (progresoAlta === null || progresoAlta.faltan > 0)
 
     // En la línea de identidad del header (junto a `#10034 · FERNANDEZ MARIA ISABEL`) y
     // NO detrás de un menú: un control de un solo ítem escondido atrás de un "⋯" le suma
@@ -477,6 +516,53 @@ export default function VisitaSheet({
             </button>
         ) : null
 
+    // En el alta los datos del comercio no van en el header sino en una tarjeta arriba del
+    // cuerpo: son la mitad del trabajo de esa visita y necesitan mostrar qué falta.
+    //
+    // "¿Con quién hablaste hoy?" vive al pie de la misma tarjeta y no en el pie fijo: ahí se
+    // mezclaba con observaciones (lo único que habilita el cierre) y le robaba alto a la
+    // lista. El cumpleaños aparece recién con un nombre, rotulado "Su cumpleaños": suelto no
+    // decía de quién era. Se sigue guardando al cerrar (`pl_resolucion.detalle`).
+    const muestraCumple = contacto.trim() !== '' || fechaNacimiento !== ''
+    const tarjetaAlta =
+        esAlta && !visitaCerrada ? (
+            <TarjetaDatosAlta
+                fichaPendiente={fichaPendiente}
+                progreso={progresoAlta}
+                onAbrirFicha={onDatosComercio ? onAbrirFicha : undefined}
+                onAbrirRelevamiento={onAbrirFicha ? onDatosComercio : undefined}
+            >
+                <div className="flex flex-col gap-2 px-3 py-2.5">
+                    <label htmlFor="visita-contacto" className="text-[9.5px] font-bold uppercase tracking-wide text-dsmuted">
+                        ¿Con quién hablaste hoy? (opcional)
+                    </label>
+                    <input
+                        id="visita-contacto"
+                        type="text"
+                        maxLength={80}
+                        value={contacto}
+                        onChange={e => setContacto(e.target.value)}
+                        placeholder="Nombre"
+                        className="w-full rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
+                    />
+                    {muestraCumple && (
+                        <div className="flex items-center gap-2">
+                            <label htmlFor="visita-cumple" className="shrink-0 text-[11.5px] font-semibold text-dsmuted">
+                                Su cumpleaños (opcional)
+                            </label>
+                            <input
+                                id="visita-cumple"
+                                type="date"
+                                value={fechaNacimiento}
+                                onChange={e => setFechaNacimiento(e.target.value)}
+                                className="min-w-0 flex-1 rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none focus:border-dsnavy"
+                            />
+                        </div>
+                    )}
+                </div>
+            </TarjetaDatosAlta>
+        ) : null
+
     const chipDatosComercio = onEditarDatosComercio ? (
         <button
             type="button"
@@ -487,8 +573,8 @@ export default function VisitaSheet({
         </button>
     ) : null
 
-    // Descuentos primero (consulta), después la ficha (corrección), y la salida negativa al
-    // borde, como hoy.
+    // Descuentos primero (consulta), después la corrección de la ficha, y la salida negativa
+    // al borde.
     const acciones =
         chipDescuentos || chipDatosComercio || botonNoVisita ? (
             <div className="flex items-center gap-1.5">
@@ -653,7 +739,7 @@ export default function VisitaSheet({
                             htmlFor="visita-observaciones"
                             className="text-[9.5px] font-bold uppercase tracking-wide text-dsmuted"
                         >
-                            Observaciones (opcional)
+                            {esAlta ? 'Observaciones de la visita (opcional)' : 'Observaciones (opcional)'}
                         </label>
                         <span className="text-[10px] font-semibold tabular-nums text-dsmuted">
                             {observaciones.length}/{OBSERVACIONES_MAX}
@@ -670,46 +756,6 @@ export default function VisitaSheet({
                         placeholder="Algo para agregar de esta visita…"
                         className="w-full resize-none rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
                     />
-                    {/* Sólo alta: datos de contacto del prospecto, opcionales — no hay
-                     *  cliente en fct_clients del que sacarlos. Van pegados a
-                     *  observaciones porque se completan en el mismo momento, al
-                     *  cerrar. */}
-                    {esAlta && (
-                        <div className="mt-2 flex gap-2">
-                            <div className="flex-1">
-                                <label
-                                    htmlFor="visita-contacto"
-                                    className="mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-dsmuted"
-                                >
-                                    Con quién hablaste (opcional)
-                                </label>
-                                <input
-                                    id="visita-contacto"
-                                    type="text"
-                                    maxLength={80}
-                                    value={contacto}
-                                    onChange={e => setContacto(e.target.value)}
-                                    placeholder="Nombre"
-                                    className="w-full rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy"
-                                />
-                            </div>
-                            <div className="flex-1">
-                                <label
-                                    htmlFor="visita-cumple"
-                                    className="mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-dsmuted"
-                                >
-                                    Cumpleaños (opcional)
-                                </label>
-                                <input
-                                    id="visita-cumple"
-                                    type="date"
-                                    value={fechaNacimiento}
-                                    onChange={e => setFechaNacimiento(e.target.value)}
-                                    className="w-full rounded-md border border-[#E4E8F0] bg-white px-2.5 py-1.5 text-[12.5px] font-semibold leading-snug text-[#182645] outline-none focus:border-dsnavy"
-                                />
-                            </div>
-                        </div>
-                    )}
                 </div>
             )}
             {/* Visita cerrada: solo lectura, y solo si hay algo que leer. `pl_resolucion`
@@ -745,8 +791,8 @@ export default function VisitaSheet({
              *  mientras tanto el spinner o el error con "Volver a intentar". */}
             {!visitaCerrada && ofrecimientosCargados && (
                 <Button
-                    onClick={cerrarConBorrador}
-                    disabled={!cierreHabilitado}
+                    onClick={pideFicha ? onCompletarFicha : pideDatosAlta ? onDatosComercio : cerrarConBorrador}
+                    disabled={!pideFicha && !pideDatosAlta && !cierreHabilitado}
                     loading={cerrando || guardandoBorrador}
                     // El naranja queda reservado para "ya podés cerrar". Mientras falten
                     // rubros va gris con texto navy, y NO el naranja al 40% de opacidad
@@ -760,8 +806,8 @@ export default function VisitaSheet({
                     // lavaría el gris y dejaría el texto del faltante ilegible, que es
                     // justo el único texto que el vendedor necesita leer en ese momento.
                     className={
-                        !cierreHabilitado
-                            ? 'h-12 w-full border border-[#D8DEEA] bg-[#F1F4F9] text-[15px] text-dsnavy disabled:opacity-100'
+                        pideFicha || pideDatosAlta || !cierreHabilitado
+                            ? 'h-auto min-h-12 w-full whitespace-normal border border-[#D8DEEA] bg-[#F1F4F9] py-2 text-[15px] leading-tight text-dsnavy disabled:opacity-100'
                             : 'h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90'
                     }
                 >
@@ -774,9 +820,13 @@ export default function VisitaSheet({
                         ? 'Guardando…'
                         : cerrando
                           ? 'Cerrando…'
-                          : !cierreHabilitado
+                          : pideFicha
+                            ? 'Falta la ficha del comercio'
+                            : pideDatosAlta
+                            ? 'Faltan datos para el alta'
+                            : !cierreHabilitado
                             ? esAlta
-                                ? 'Cargá lo que ofreciste o dejá una observación'
+                                ? 'Falta un rubro u observación'
                                 : `Cargá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
                             : 'Cerrar visita'}
                 </Button>
@@ -813,6 +863,7 @@ export default function VisitaSheet({
                 altura="completa"
                 footer={footer}
             >
+                {!wizard && tarjetaAlta}
                 {wizard ? (
                     <ResolucionWizard
                         visitaId={visitaId}
@@ -882,6 +933,7 @@ export default function VisitaSheet({
                                 onEliminar={eliminarDesdeTabla}
                                 agregandoCodes={agregandoCodes}
                                 eliminandoIds={eliminandoIds}
+                                tituloArriba={esAlta ? 'Lo que ofreciste' : undefined}
                             />
                         )}
                     </div>

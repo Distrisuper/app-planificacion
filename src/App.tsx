@@ -6,6 +6,7 @@ import ProtectedRoute from '@/router/ProtectedRoute'
 import { puedeOperarComoVendedor, supervisa } from '@/lib/roles'
 import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
 import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
+import AnaliticaAltasPage from '@/pages/AnaliticaAltasPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
 import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
@@ -40,6 +41,7 @@ export default function App() {
                                 element={<AnaliticaVendedorPage />}
                             />
                             <Route path="/analitica/ruta" element={<RutaPage />} />
+                            <Route path="/analitica/altas" element={<AnaliticaAltasPage />} />
                             <Route path="/analitica/fichas" element={<AnaliticaFichasPage />} />
                         </Route>
                         <Route path="/login" element={<LoginPage />} />

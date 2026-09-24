@@ -58,3 +58,10 @@ it('marca Ruta como activa cuando es la ruta actual', () => {
     )
     expect(screen.getByRole('link', { name: 'Ruta' })).toHaveClass('border-slate-900')
 })
+
+it('apunta la pestaña Altas a /analitica/altas, después de Ruta', () => {
+    render(<MemoryRouter initialEntries={['/analitica']}><AnaliticaTabs /></MemoryRouter>)
+    expect(screen.getByRole('link', { name: 'Altas' })).toHaveAttribute('href', '/analitica/altas')
+    const nombres = screen.getAllByRole('link').map(l => l.textContent)
+    expect(nombres.indexOf('Altas')).toBe(nombres.indexOf('Ruta') + 1)
+})

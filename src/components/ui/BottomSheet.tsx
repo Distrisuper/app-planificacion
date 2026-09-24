@@ -151,6 +151,11 @@ export default function BottomSheet({
                                 tapados mientras el popover estaba abierto, y el primer toque
                                 solo cerraba la ayuda en vez de cerrar/minimizar el sheet. */}
                             <div className="relative z-30 flex shrink-0 items-center gap-1.5">
+                                {/* Sin subtitle, `acciones` sube a este renglón en vez de gastar
+                                    uno propio sólo para ellas (la visita de alta no tiene
+                                    línea de identidad): en un teléfono ese renglón vacío
+                                    empujaba toda la lista para abajo. */}
+                                {!subtitle && acciones && <div className="mr-1 shrink-0">{acciones}</div>}
                                 {/* `relative` acá (no en todo el header): el popover ancla
                                     justo debajo de ESTE botón, sin importar cuánto mida el
                                     resto del header (eyebrow/subtitle varían de sheet a
@@ -207,13 +212,11 @@ export default function BottomSheet({
                         {/* Renglón propio, ancho completo: `acciones` se empuja con
                             `ml-auto` hasta el borde derecho (a la altura de cerrar/minimizar),
                             no hasta donde termina el subtitle. */}
-                        {(subtitle || acciones) && (
+                        {subtitle && (
                             <div className="flex items-center gap-2">
-                                {subtitle && (
-                                    <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold leading-tight text-dsmuted">
-                                        {subtitle}
-                                    </span>
-                                )}
+                                <span className="min-w-0 flex-1 truncate text-[11.5px] font-semibold leading-tight text-dsmuted">
+                                    {subtitle}
+                                </span>
                                 {acciones && <div className="ml-auto shrink-0">{acciones}</div>}
                             </div>
                         )}

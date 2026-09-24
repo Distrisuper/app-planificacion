@@ -11,6 +11,7 @@ import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import AppExternaSheet from '@/components/AppExternaSheet'
 import ClienteNuevoSheet, { type ModoClienteNuevo } from '@/components/ClienteNuevoSheet'
+import RelevamientoSheet from '@/components/RelevamientoSheet'
 import { BuscadorDiaSheet } from '@/components/buscador/BuscadorDiaSheet'
 import { BuscadorGeneralPanel } from '@/components/buscador/BuscadorGeneralPanel'
 import BannerPrueba, { ALTO_BANNER_PRUEBA } from '@/components/prueba/BannerPrueba'
@@ -281,9 +282,12 @@ export default function AgendaSemanaPage() {
     // instante mientras el swipe se asienta.
     const [diaAAgregar, setDiaAAgregar] = useState<Dia | null>(null)
     // "Cliente nuevo": null = sheet cerrado. Comparte el mismo sheet para crear (desde el
-    // "+" del día), editar (desde la card de una fila `es_alta`) y reintentar (después de
-    // "No visité" sobre una fila `es_alta`) — el modo lo decide quien lo abre.
+    // "+" del día) y reintentar (después de "No visité" sobre una fila `es_alta`) — el modo
+    // lo decide quien lo abre. Editar los datos del comercio vive en RelevamientoSheet.
     const [clienteNuevo, setClienteNuevo] = useState<ModoClienteNuevo | null>(null)
+    // "Datos del comercio" de una fila de alta: null = cerrado. Se abre desde la card
+    // (pendiente) y desde la visita abierta (VisitaFlow.onDatosComercio).
+    const [relevamiento, setRelevamiento] = useState<IAgendaClient | null>(null)
     // Búsqueda general: null = no se está buscando. El texto vive acá y no adentro del
     // header porque el panel de resultados es hermano del header, no hijo.
     const [textoBusqueda, setTextoBusqueda] = useState<string | null>(null)
@@ -646,7 +650,7 @@ export default function AgendaSemanaPage() {
                         onIniciarVisita={iniciarDirecto}
                         onAbrirAppExterna={abrirAppExternaEnPestana}
                         onReintentarSeguimiento={onReintentarSincronizacion}
-                        onEditarAlta={cliente => setClienteNuevo({ modo: 'editar', cliente })}
+                        onEditarAlta={setRelevamiento}
                         onReintentarAlta={cliente =>
                             setClienteNuevo({ modo: 'reintentar', cliente, diaSugerido: cliente.dia })
                         }
@@ -678,6 +682,7 @@ export default function AgendaSemanaPage() {
                 onAviso={mostrar}
                 onAbrirAppExterna={abrirAppExternaEnPestana}
                 onAlejadoChange={setAlejado}
+                onDatosComercio={setRelevamiento}
             />
             {visitaEnCurso && !viendoVisitaEnCurso && (
                 <VisitaEnCursoBar
@@ -794,12 +799,20 @@ export default function AgendaSemanaPage() {
                 contexto={clienteNuevo}
                 onClose={() => setClienteNuevo(null)}
                 onAviso={mostrar}
-                onListo={(cliente, ctx) => {
+                onListo={cliente => {
                     setDiaActivo(DIAS[cliente.dia - 1])
-                    mostrar(
-                        'exito',
-                        ctx.modo === 'editar' ? 'Datos guardados' : `Cliente nuevo agendado el ${NOMBRE_DIA[DIAS[cliente.dia - 1]]}`,
-                    )
+                    mostrar('exito', `Cliente nuevo agendado el ${NOMBRE_DIA[DIAS[cliente.dia - 1]]}`)
+                }}
+            />
+            <RelevamientoSheet
+                open={relevamiento !== null}
+                cliente={relevamiento}
+                onClose={() => setRelevamiento(null)}
+                onGuardado={actualizado => {
+                    // `visitaCliente` es una foto tomada al abrir la visita: sin esto, la
+                    // tarjeta "Datos del comercio" del alta seguía mostrando el progreso viejo.
+                    setVisitaCliente(v => (v && v.rotacionClienteId === actualizado.rotacionClienteId ? { ...v, detalleAlta: actualizado.detalleAlta } : v))
+                    mostrar('exito', 'Datos guardados')
                 }}
             />
             <Notification notificacion={notificacion} onDismiss={ocultar} />

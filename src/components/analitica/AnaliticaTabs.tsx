@@ -34,6 +34,9 @@ export default function AnaliticaTabs({ enVivo }: AnaliticaTabsProps) {
             >
                 Ruta
             </NavLink>
+            <NavLink to="/analitica/altas" className={({ isActive }) => tabClase(isActive)}>
+                Altas
+            </NavLink>
             <NavLink
                 to="/analitica/fichas"
                 className={({ isActive }) => tabClase(isActive)}

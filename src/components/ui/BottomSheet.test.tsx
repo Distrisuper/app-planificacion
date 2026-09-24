@@ -118,6 +118,18 @@ it('`acciones` funciona también sin `subtitle`', () => {
     expect(screen.getByText('No visité')).toBeInTheDocument()
 })
 
+it('sin `subtitle`, `acciones` va en el renglón del título, junto a Cerrar (no en uno propio)', () => {
+    render(
+        <BottomSheet open onClose={() => {}} title="X" acciones={<button>No visité</button>}>
+            <div>contenido</div>
+        </BottomSheet>,
+    )
+    // Mismo contenedor que el botón Cerrar: comparten renglón.
+    expect(screen.getByRole('button', { name: 'Cerrar' }).parentElement).toContainElement(
+        screen.getByRole('button', { name: 'No visité' }),
+    )
+})
+
 describe('botón de ayuda ("?")', () => {
     it('sin onHelp, no aparece', () => {
         render(<BottomSheet open onClose={() => {}} title="X"><div>contenido</div></BottomSheet>)

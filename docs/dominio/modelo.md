@@ -220,6 +220,27 @@ nadie lo encuentra, y no hay vista agregada. `pl_reacomodacion` ya tiene los dat
 
 El comercio que todavía no es cliente **se representa con una fila del plan** (`tipo='alta'`), no con una tabla propia: la fila ya es una cita —vive en la agenda de un día, se mueve auditada con `reacomodar`, se resuelve una vez—, y eso era exactamente lo que hacía falta. El hecho es una `pl_resolucion` común. Sin ficha en el warehouse no hay coordenada (no hay gate de distancia: la `coord_inicio` **es** la ubicación del comercio) ni propuesta (el vendedor carga desde el catálogo). Cromo recibe el evento sobre el genérico **09895** con etiqueta `ALTA`, que es donde los vendedores escribían esto a mano. Un segundo intento tras un `no_visita` es **otra fila** con el detalle copiado (`FILA_RESUELTA` impide mover la primera). Costo aceptado: el alta queda atada a la rotación; si la vuelta cierra con un alta pendiente, no se arrastra. Spec: `2026-09-17-visita-de-alta-cliente-nuevo-design.md`.
 
+**El relevamiento** (spec `2026-09-21-relevamiento-alta-design.md`): `detalle` ya no son tres
+claves sino las que define el **esquema** (`esquemaAlta.ts` en api-vendedores, servido por
+`GET /altas/esquema`): identidad, ubicación, contacto, comercial, cuenta corriente y notas — lo
+que administración necesita para el alta en el ERP. Son datos del **comercio** (viven en el plan y sobreviven al reintento), a
+diferencia del contacto del cierre, que es del **hecho** (`pl_resolucion.detalle`). IVA y
+condición de pago son catálogos cerrados en `pl_catalogo_alta`. El front no enumera campos:
+recorre el esquema, así que el relevamiento se puede cambiar por empresa sin tocar la app.
+
+**Casi todo es obligatorio para cerrar** (adenda del 24/09 del mismo spec): cada campo del esquema
+trae `obligatorio`, y hoy lo son todos salvo `referencias` y `datoDeColor`. No confundirlo con
+`requerido`, que sigue siendo sólo `nombre` y significa "no se vacía nunca": el alta se crea con el
+nombre, el formulario **se guarda a medias**, y lo `obligatorio` recién traba el **cierre** de la
+visita. El gate es del front, como el de la ficha y el de los ofrecimientos
+(`faltantesObligatorios` en `camposAlta.ts`, `pideDatosAlta` en `VisitaSheet`): va después de la
+ficha y antes del ofrecimiento/observación, y con el esquema en vuelo también pide —si no, no
+faltaría nada y se auto-satisface—. `PUT /visitas/:id/cerrar` no lo valida. Que trabe al vendedor
+sin CUIT o sin email es un costo aceptado: lo que carga es un **boceto** que administración revisa
+y completa al dar el alta en el ERP. `obligatorio` ausente = opcional, así que front y API se
+despliegan en cualquier orden. La segmentación se sacó del esquema (ya llega por la ficha del
+comercio); un detalle viejo que la traiga no rompe: las claves fuera del esquema se ignoran.
+
 ### Sacar de la agenda lo que se agregó a mano
 
 El vendedor puede **sacar de su agenda** una fila que él mismo creó —un "Agregado" del buscador

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import VisitaSheet from './VisitaSheet'
@@ -49,6 +49,16 @@ function renderSheet(over: Record<string, unknown> = {}) {
         </QueryClientProvider>,
     )
     return { onCerrarVisita }
+}
+
+function renderSheetConRerender(over: Record<string, unknown> = {}) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const base = { open: true, visitaId: 42, nombreCliente: 'Almacén Don José', visitaCerrada: false, onCerrarVisita: vi.fn(), onClose: () => {} }
+    const ui = (p: Record<string, unknown>) => (
+        <QueryClientProvider client={qc}><VisitaSheet {...(base as any)} {...p} /></QueryClientProvider>
+    )
+    const r = render(ui(over))
+    return { rerender: (p: Record<string, unknown>) => r.rerender(ui(p)) }
 }
 
 /** "Saqué pedido" es `ganado`, así que vive detrás del segmento Cierre del formulario
@@ -1103,12 +1113,12 @@ describe('cliente nuevo (esAlta)', () => {
         const { onCerrarVisita } = renderSheet({ esAlta: true, enCurso: true })
 
         const boton = await screen.findByRole('button', {
-            name: /cargá lo que ofreciste o dejá una observación/i,
+            name: /falta un rubro u observación/i,
         })
         expect(boton).toBeDisabled()
         expect(api.getRubroStatus).not.toHaveBeenCalled()
-        // la tabla muestra el catálogo 80/20 para agregar
-        expect(screen.getByText(/otros rubros/i)).toBeInTheDocument()
+        // la tabla muestra el catálogo 80/20 para agregar; sin nada arriba, "Rubros" y no "Otros"
+        expect(screen.getByText(/^rubros · tocá uno para agregarlo/i)).toBeInTheDocument()
 
         fireEvent.change(screen.getByLabelText(/observaciones/i), { target: { value: 'lo piensa' } })
         fireEvent.change(screen.getByLabelText(/con quién hablaste/i), { target: { value: 'Gustavo' } })
@@ -1144,6 +1154,97 @@ describe('cliente nuevo (esAlta)', () => {
 
         expect(await screen.findByText(/cliente nuevo/i)).toBeInTheDocument()
         expect(screen.queryByText(/propuesta comercial/i)).not.toBeInTheDocument()
+    })
+
+    it('el alta con la visita abierta muestra la tarjeta "Datos del comercio" con sus dos puertas', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        const onDatosComercio = vi.fn()
+        const onAbrirFicha = vi.fn()
+        renderSheet({
+            esAlta: true, enCurso: true, onDatosComercio, onAbrirFicha,
+            fichaPendiente: true, progresoAlta: { cargados: 3, total: 14, faltan: 9 },
+        })
+        const ficha = await screen.findByRole('button', { name: /ficha del comercio/i })
+        expect(ficha).toHaveTextContent(/falta · obligatoria/i)
+        const relevamiento = screen.getByRole('button', { name: /datos para el alta/i })
+        expect(relevamiento).toHaveTextContent(/faltan 9 · obligatorios/i)
+        fireEvent.click(ficha)
+        expect(onAbrirFicha).toHaveBeenCalledTimes(1)
+        fireEvent.click(relevamiento)
+        expect(onDatosComercio).toHaveBeenCalledTimes(1)
+        // Ya no hay botón "Datos" en el header.
+        expect(screen.queryByRole('button', { name: /^datos$/i })).not.toBeInTheDocument()
+    })
+
+    it('con la ficha completa, el pie pide los datos para el alta mientras falten obligatorios', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        const onDatosComercio = vi.fn()
+        const { onCerrarVisita } = renderSheet({
+            esAlta: true, enCurso: true, onDatosComercio, onAbrirFicha: vi.fn(),
+            progresoAlta: { cargados: 5, total: 14, faltan: 7 },
+        })
+        const pie = await screen.findByRole('button', { name: /faltan datos para el alta/i })
+        expect(pie).toBeEnabled()
+        fireEvent.click(pie)
+        expect(onDatosComercio).toHaveBeenCalledTimes(1)
+        expect(onCerrarVisita).not.toHaveBeenCalled()
+    })
+
+    it('con el esquema en vuelo el pie tampoco cierra (el gate no se auto-satisface)', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({ esAlta: true, enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn(), progresoAlta: null })
+        expect(await screen.findByRole('button', { name: /faltan datos para el alta/i })).toBeInTheDocument()
+    })
+
+    it('sin obligatorios pendientes la tarjeta marca Completos y el pie vuelve al gate de siempre', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({
+            esAlta: true, enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn(),
+            progresoAlta: { cargados: 12, total: 14, faltan: 0 },
+        })
+        expect(await screen.findByRole('button', { name: /datos para el alta/i })).toHaveTextContent(/completos/i)
+        expect(await screen.findByRole('button', { name: /falta un rubro u observación/i })).toBeDisabled()
+    })
+
+    it('con la ficha completa la tarjeta la marca Completa', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({ esAlta: true, enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn() })
+        expect(await screen.findByRole('button', { name: /ficha del comercio/i })).toHaveTextContent(/completa/i)
+    })
+
+    it('con la visita cerrada no hay tarjeta aunque haya handlers', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({ esAlta: true, visitaCerrada: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn() })
+        await screen.findByText(/cliente nuevo/i)
+        expect(screen.queryByRole('region', { name: /datos del comercio/i })).not.toBeInTheDocument()
+    })
+
+    it('un cliente real no muestra la tarjeta aunque se pasen los handlers', async () => {
+        renderSheet({ enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn() })
+        await screen.findByText('Amortiguadores')
+        expect(screen.queryByRole('region', { name: /datos del comercio/i })).not.toBeInTheDocument()
+    })
+
+    it('el contacto de hoy vive en la tarjeta, no en el pie, y el cumpleaños aparece recién con un nombre', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({ esAlta: true, enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn() })
+        const tarjeta = await screen.findByRole('region', { name: /datos del comercio/i })
+        const nombre = within(tarjeta).getByLabelText(/con quién hablaste hoy/i)
+        expect(screen.queryByLabelText(/cumpleaños/i)).not.toBeInTheDocument()
+        fireEvent.change(nombre, { target: { value: 'Gustavo' } })
+        expect(within(tarjeta).getByLabelText(/su cumpleaños/i)).toBeInTheDocument()
+        // El pie queda con lo que sirve para cerrar.
+        expect(screen.getByLabelText(/observaciones de la visita/i)).toBeInTheDocument()
+    })
+
+    it('precarga "Con quién hablaste" con contactoSugerido, y NO pisa lo ya tipeado', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        const { rerender } = renderSheetConRerender({ esAlta: true, enCurso: true, contactoSugerido: 'Gustavo' })
+        const input = await screen.findByLabelText(/con quién hablaste/i)
+        expect(input).toHaveValue('Gustavo')
+        fireEvent.change(input, { target: { value: 'Marta' } })
+        rerender({ esAlta: true, enCurso: true, contactoSugerido: 'Gustavo Pérez' })
+        expect(screen.getByLabelText(/con quién hablaste/i)).toHaveValue('Marta')
     })
 })
 

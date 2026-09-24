@@ -545,6 +545,28 @@ it('con acción y marca a la vez, cada una aparece en su propia sección', () =>
     expect(screen.getByText('Marcas')).toBeInTheDocument()
 })
 
+it('sin filas arriba no rotula una sección vacía, y la banda de abajo dice Rubros (no Otros)', () => {
+    render(
+        <OfrecimientoTable
+            filas={[fila({ codigo: 'R2', nombre: 'Filtros', destacada: false, agregable: true })]}
+            onAgregar={vi.fn()}
+        />,
+    )
+    expect(screen.queryByText('Tu propuesta')).not.toBeInTheDocument()
+    expect(screen.getByText(/^rubros · tocá uno para agregarlo/i)).toBeInTheDocument()
+})
+
+it('tituloArriba reemplaza "Tu propuesta" (la visita de alta no tiene propuesta)', () => {
+    render(
+        <OfrecimientoTable
+            tituloArriba="Lo que ofreciste"
+            filas={[fila({ resolucion: { ofrecimientoId: 7, motivosCargados: 0, completo: false, esPropuesto: false } })]}
+        />,
+    )
+    expect(screen.getByText('Lo que ofreciste')).toBeInTheDocument()
+    expect(screen.queryByText('Tu propuesta')).not.toBeInTheDocument()
+})
+
 // La banda de ancho completo (arriba de la tabla) es solo el rótulo de sección: el
 // gesto se explica en el "?" del header del sheet (ver BottomSheet.onHelp), NO en la
 // columna Rubro — ahí mide ~60-100px en mobile y el texto salía truncado.

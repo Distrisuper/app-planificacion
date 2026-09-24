@@ -1,4 +1,6 @@
-import type { IAlcance, ResultadoMotivo, TipoOfrecimiento, TipoResolucion } from './planificacion'
+import type {
+    IAlcance, ResultadoMotivo, TipoOfrecimiento, TipoResolucion, EstadoCicloCliente, IDetalleAlta, IDetalleContactoAlta,
+} from './planificacion'
 
 export interface ICoord {
     lat: number
@@ -175,6 +177,34 @@ export interface IObjecionesResumen {
 export interface IVendedorOpcion {
     codigoParticularVendedor: string
     nombreVendedor: string
+}
+
+/** GET /planificacion/analitica/altas. Una por fila del plan tipo='alta' (un reintento
+ *  aparece aparte, a propósito). Espejo del backend. */
+export interface IAltaRelevada {
+    rotacionClienteId: number
+    vendedor: { codigo: string; nombre: string }
+    estado: EstadoCicloCliente
+    fechaVisita: string | null
+    detalle: IDetalleAlta | null
+    contacto: IDetalleContactoAlta | null
+    camposCargados: number
+    camposTotal: number
+    /** El cliente real de Flexxus con el que administración la vinculó. Opcional: un backend
+     *  previo al vínculo no lo manda. */
+    vinculo?: IAltaVinculo | null
+}
+
+/** Espejo de pl_alta_vinculo (spec api-vendedores 2026-09-23-vincular-alta). */
+export interface IAltaVinculo {
+    codigoParticularCliente: string
+    vinculadoPor: string
+    /** ISO UTC. */
+    vinculadoEn: string
+}
+
+export interface IVincularAltaResult extends IAltaVinculo {
+    fichaMovida: number
 }
 
 /** Un renglón del listado de "Datos del comercio": UN cliente con lo que tiene cargado hoy.
