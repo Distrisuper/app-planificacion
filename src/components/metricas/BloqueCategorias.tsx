@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Cargando from './Cargando'
 import ClientesDeTramo from './ClientesDeTramo'
-import { useCategoriasMetricas, useClientesDeTramo } from '@/hooks/useMetricas'
+import { claveDelFiltro, useCategoriasMetricas, useClientesDeTramo } from '@/hooks/useMetricas'
 import { nombreMes, rangoMes } from '@/lib/fechas'
 import type { IClienteTramo, IFiltroMetricas, Tramo } from '@/types/metricas'
 
@@ -18,6 +18,17 @@ export default function BloqueCategorias({ filtro }: BloqueCategoriasProps) {
     const [pagina, setPagina] = useState(1)
     const [orden, setOrden] = useState<keyof IClienteTramo>('actual')
     const [dir, setDir] = useState<'asc' | 'desc'>('desc')
+
+    // Un recorte nuevo invalida lo abierto: la categoría abierta puede no existir en él, y la página N
+    // de la lista anterior puede no existir en la nueva ("Página 4 de 2", tabla vacía). Se
+    // ajusta durante el render (patrón de React para estado derivado de props), no en un
+    // efecto, para no dibujar un cuadro con el estado viejo.
+    const [filtroVisto, setFiltroVisto] = useState(() => claveDelFiltro(filtro))
+    if (filtroVisto !== claveDelFiltro(filtro)) {
+        setFiltroVisto(claveDelFiltro(filtro))
+        setTramo(null)
+        setPagina(1)
+    }
 
     const { data, isLoading, isError, refetch } = useCategoriasMetricas(filtro)
     const clientes = useClientesDeTramo(filtro, tramo, { pagina, orden, dir })

@@ -32,17 +32,20 @@ export const factorProyeccion = (diasHabiles: number, transcurridos: number): nu
     transcurridos > 0 ? diasHabiles / transcurridos : 1
 
 const ACUMULADOS: (keyof IMetricasFila)[] = [
-    'visitasValidas', 'minutosTotales', 'facturacion', 'unidades', 'superRubro', 'planificadosConCompra',
+    'visitasValidas', 'minutosTotales', 'facturacion', 'unidades', 'superRubro',
 ]
 const CONTEOS_CLIENTES: (keyof IMetricasFila)[] = ['clientesVisitados', 'clientesConCompra', 'visitadosConCompra']
 
 /** "Ver proyectado": escala lo acumulado al ritmo de los días hábiles transcurridos. Los
- *  conteos de clientes no pueden superar la cartera; los ratios, objetivos y el año
- *  anterior no se tocan. */
+ *  conteos de clientes no pueden superar la cartera, ni las filas del plan con compra a las
+ *  filas del plan; los ratios, objetivos y el año anterior no se tocan. */
 export function proyectar(fila: IMetricasFila, factor: number): IMetricasFila {
     const p = { ...fila }
     for (const k of ACUMULADOS) (p[k] as number) = (fila[k] as number) * factor
     for (const k of CONTEOS_CLIENTES) (p[k] as number) = Math.min(Math.round((fila[k] as number) * factor), fila.cartera)
+    // Mismo tope contra su propio denominador: sin él, a principio de mes Ventas vs Planner
+    // proyectado daba 293%.
+    p.planificadosConCompra = Math.min(Math.round(fila.planificadosConCompra * factor), fila.planificados)
     return p
 }
 

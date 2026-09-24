@@ -35,3 +35,18 @@ it('un vendedor sin visitas muestra s/d en tasa de cierre, no 0%', () => {
     const martinez = screen.getByText('MARTINEZ GUSTAVO').closest('tr')!
     expect(martinez).toHaveTextContent('s/d')
 })
+
+it('dos vendedores sin dato empatan (comparador consistente) y quedan al final en su orden', async () => {
+    const sinDato = (codigo: string, nombre: string) => ({
+        ...MOCK_RESUMEN_METRICAS.vendedores[2], codigoVendedor: codigo, nombreVendedor: nombre,
+    })
+    const resumen = {
+        ...MOCK_RESUMEN_METRICAS,
+        vendedores: [sinDato('V 8', 'AAA SIN DATO'), MOCK_RESUMEN_METRICAS.vendedores[0], sinDato('V 9', 'BBB SIN DATO')],
+    }
+    render(<RankingVendedores resumen={resumen} proyectado={false} onElegir={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /Tasa de cierre/ }))
+    expect(filas().map(r => within(r).getAllByRole('cell')[0].textContent)).toEqual([
+        'FERNANDEZ MARCELO', 'AAA SIN DATO', 'BBB SIN DATO',
+    ])
+})

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import Cargando from './Cargando'
 import DetalleObjecion from './DetalleObjecion'
 import { apiClient } from '@/api/apiClient'
-import { useObjecionDetalle, useObjecionesMetricas } from '@/hooks/useMetricas'
+import { claveDelFiltro, useObjecionDetalle, useObjecionesMetricas } from '@/hooks/useMetricas'
 import { formatPct } from '@/lib/analiticaFormat'
 import { razon } from '@/lib/metricas'
 import type { IClienteObjecion, IFiltroMetricas } from '@/types/metricas'
@@ -18,6 +18,17 @@ export default function BloqueObjeciones({ filtro }: BloqueObjecionesProps) {
     const [pagina, setPagina] = useState(1)
     const [orden, setOrden] = useState<keyof IClienteObjecion>('nombre')
     const [dir, setDir] = useState<'asc' | 'desc'>('asc')
+
+    // Un recorte nuevo invalida lo abierto: la objeción abierta puede no existir en él, y la página N
+    // de la lista anterior puede no existir en la nueva ("Página 4 de 2", tabla vacía). Se
+    // ajusta durante el render (patrón de React para estado derivado de props), no en un
+    // efecto, para no dibujar un cuadro con el estado viejo.
+    const [filtroVisto, setFiltroVisto] = useState(() => claveDelFiltro(filtro))
+    if (filtroVisto !== claveDelFiltro(filtro)) {
+        setFiltroVisto(claveDelFiltro(filtro))
+        setAbierto(null)
+        setPagina(1)
+    }
 
     const { data, isLoading, isError, refetch } = useObjecionesMetricas(filtro, rubro)
     const detalle = useObjecionDetalle(filtro, abierto, { rubro, pagina, orden, dir })
@@ -44,7 +55,7 @@ export default function BloqueObjeciones({ filtro }: BloqueObjecionesProps) {
                 <select
                     aria-label="Rubro"
                     value={rubro ?? ''}
-                    onChange={e => { setRubro(e.target.value || undefined); setAbierto(null) }}
+                    onChange={e => { setRubro(e.target.value || undefined); setAbierto(null); setPagina(1) }}
                     className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900"
                 >
                     <option value="">Todos los rubros</option>

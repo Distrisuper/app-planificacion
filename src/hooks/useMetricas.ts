@@ -8,6 +8,10 @@ import type { IFiltroMetricas, Tramo } from '@/types/metricas'
 const clave = (f: IFiltroMetricas) =>
     [f.desde, f.hasta, f.vendedor ?? '', f.sucursal ?? '', f.zona ?? '', f.localidad ?? ''] as const
 
+/** Identidad del recorte (período + filtros). Los bloques la usan para soltar lo que
+ *  tenían abierto cuando el recorte cambia. */
+export const claveDelFiltro = (f: IFiltroMetricas): string => clave(f).join('|')
+
 export const metricasKeys = {
     resumen: (f: IFiltroMetricas) => ['metricas', 'resumen', ...clave(f)] as const,
     objeciones: (f: IFiltroMetricas, rubro?: string) => ['metricas', 'objeciones', ...clave(f), rubro ?? ''] as const,

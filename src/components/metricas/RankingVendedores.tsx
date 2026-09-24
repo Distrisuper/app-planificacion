@@ -58,6 +58,7 @@ export default function RankingVendedores({ resumen, proyectado, vendedorElegido
         filas.sort((a, b) => {
             const va = valor(a, clave)
             const vb = valor(b, clave)
+            if (va === null && vb === null) return 0
             if (va === null) return 1
             if (vb === null) return -1
             return typeof va === 'string' ? va.localeCompare(String(vb), 'es') * s : ((va as number) - (vb as number)) * s

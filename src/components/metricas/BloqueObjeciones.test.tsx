@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
@@ -75,4 +75,16 @@ it('al cambiar de página la tabla queda atenuada con un spinner hasta que llega
     await userEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
     expect(await screen.findByRole('status')).toHaveTextContent('Actualizando')
     expect(within(screen.getByTestId('detalle-objecion')).getByText('Nonno Suspension')).toBeInTheDocument()
+})
+
+it('cambiar el filtro cierra el detalle abierto: la objeción puede no existir en el recorte nuevo', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { rerender } = render(<QueryClientProvider client={qc}><BloqueObjeciones filtro={F} /></QueryClientProvider>)
+    await userEvent.click(await screen.findByRole('button', { name: /Precio/ }))
+    await screen.findByTestId('detalle-objecion')
+    rerender(<QueryClientProvider client={qc}><BloqueObjeciones filtro={{ ...F, vendedor: 'V 5' }} /></QueryClientProvider>)
+    await waitFor(() => expect(api.getObjecionesMetricas).toHaveBeenLastCalledWith({ ...F, vendedor: 'V 5' }, undefined))
+    await screen.findByRole('button', { name: /Precio/ })
+    expect(screen.queryByTestId('detalle-objecion')).not.toBeInTheDocument()
+    expect(api.getObjecionDetalle).toHaveBeenCalledTimes(1)
 })

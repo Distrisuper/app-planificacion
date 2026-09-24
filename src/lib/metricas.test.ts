@@ -55,3 +55,8 @@ it('claseCumplimiento: rojo < 50%, ámbar < 100%, verde ≥ 100%, gris sin dato'
     expect(claseCumplimiento(1)).toContain('emerald')
     expect(claseCumplimiento(null)).toContain('slate')
 })
+
+it('proyectar topea las filas del plan con compra en las filas del plan', () => {
+    const p = proyectar(fila({ planificados: 60, planificadosConCompra: 40 }), 4.4)
+    expect(p.planificadosConCompra).toBe(60) // 176 topeado: Ventas vs Planner no pasa del 100%
+})
