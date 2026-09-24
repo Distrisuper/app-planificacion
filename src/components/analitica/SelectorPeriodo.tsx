@@ -49,7 +49,7 @@ export default function SelectorPeriodo({
     const etiqueta = modo === 'mes' ? 'mes' : 'semana'
 
     return (
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
             <div className="flex rounded-md border border-slate-200 text-xs">
                 <button
                     type="button"

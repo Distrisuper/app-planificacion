@@ -39,7 +39,7 @@ export default function AnaliticaMetricasPage() {
             <EncabezadoAnalitica>
                 <div className="flex flex-wrap items-end justify-between gap-4 px-6 py-3">
                     <FiltrosMetricas valor={geo} onCambiar={setGeo} vendedores={vendedores} opciones={opciones} />
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <SelectorPeriodo
                             modo={modo} fecha={fecha} conRango rango={rango}
                             onCambiarModo={m => { setModo(m); setProyectado(false) }}
