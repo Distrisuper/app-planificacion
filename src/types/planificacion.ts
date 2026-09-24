@@ -669,6 +669,8 @@ export interface ICapacidades {
     operaComoVendedor: boolean
     operaComoVendedorDePrueba: boolean
     superviseVendedores: boolean
+    /** Puede ver el tab "Mi cartera" (sus propias métricas). Spec 2026-09-21 métricas. */
+    veSusMetricas: boolean
 }
 
 export interface IVendedorDePrueba {

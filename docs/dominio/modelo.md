@@ -339,3 +339,12 @@ para buscar y agregar es **toda la base**. Quién puede probar y quién supervis
 lo lee de `GET /planificacion/me`: **el front no tiene tabla de roles**.
 
 Spec: `docs/superpowers/specs/2026-09-17-modo-prueba-gerencia-design.md`.
+
+## Métricas del vendedor
+
+El vendedor ve sus métricas por **mes calendario**, no por rotación: el período no tiene relación
+con las semanas de la zona ni con el ciclo abierto.
+
+"Clientes con compra" no existe como dato: no hay vínculo entre `pl_resolucion` y `fct_sales`. Lo
+que se muestra es **efectividad comercial declarada en la visita** (lo que el vendedor cargó al
+resolver rubros), no una venta confirmada del warehouse.

@@ -12,7 +12,7 @@ import type { IAgendaClient } from '@/types/planificacion'
 vi.mock('@/api/planificacion')
 vi.mock('@/lib/geolocation')
 const authMock = vi.fn(() => ({
-    capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false },
+    capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false, veSusMetricas: true },
 }))
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => authMock() }))
 vi.mock('leaflet', () => {
@@ -948,7 +948,7 @@ it('si el backend avisa que ya se agotó el cupo de corrección permanente, mues
 })
 
 it('en modo prueba el aviso de corrección dice que no se guarda de forma permanente', async () => {
-    authMock.mockReturnValue({ capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true } })
+    authMock.mockReturnValue({ capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true, veSusMetricas: true } })
     ;(api.iniciarVisita as any).mockResolvedValue({
         visitaId: 99,
         ofrecimientos: 0,

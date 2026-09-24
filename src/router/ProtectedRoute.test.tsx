@@ -8,7 +8,7 @@ const auth = vi.fn()
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth() }))
 
 const cap = (v: boolean, p: boolean, s: boolean) => ({
-    operaComoVendedor: v, operaComoVendedorDePrueba: p, superviseVendedores: s,
+    operaComoVendedor: v, operaComoVendedorDePrueba: p, superviseVendedores: s, veSusMetricas: false,
 })
 
 function montar(ruta: string, capacidades: ReturnType<typeof cap>) {

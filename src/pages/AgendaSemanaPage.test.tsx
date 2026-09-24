@@ -99,7 +99,7 @@ beforeEach(() => {
     authMock.mockReturnValue({
         user: { name: 'Martín Rossi' },
         logout: vi.fn(),
-        capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false },
+        capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false, veSusMetricas: true },
         vendedorDePrueba: null,
     })
     ;(api.getMotivos as any).mockResolvedValue([])
@@ -1014,12 +1014,35 @@ it('cliente nuevo: crear desde el "+" del día e iniciar la visita llega a los r
 it('con capacidades de prueba muestra el banner arriba de la agenda', async () => {
     authMock.mockReturnValue({
         user: { name: 'Ana' }, logout: vi.fn(),
-        capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+        capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true, veSusMetricas: false },
         vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: 'Cartera de V 2', origenesDisponibles: ['V 2'] },
     })
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     renderPage()
     expect(await screen.findByText(/Modo prueba · Cartera de V 2/)).toBeInTheDocument()
+})
+
+it('pinta la barra de tabs debajo de la agenda', async () => {
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    renderPage('/')
+    await waitFor(() => expect(screen.getByRole('navigation', { name: 'Secciones' })).toBeInTheDocument())
+    expect(screen.getByRole('link', { name: /Agenda/ })).toHaveAttribute('aria-current', 'page')
+})
+
+it('?visita=abrir abre el sheet de la visita en curso y limpia el param', async () => {
+    fijarLunes()
+    guardarVisitaEnCurso({ cliente: { ...clienteLunes, estado: 'en_curso', visitaId: 7, esExtra: false }, visitaId: 7 })
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteLunes, estado: 'en_curso', visitaId: 7 }],
+    })
+    const { urlActual } = renderPage('/?visita=abrir')
+    // El BottomSheet de VisitaSheet no expone role="dialog" (no lo declara en su markup) —
+    // se confirma que abrió por el botón "Minimizar", exclusivo del sheet de la visita en
+    // curso (no aparece en la propuesta de un cliente pendiente).
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Minimizar' })).toBeInTheDocument())
+    expect(urlActual()).not.toContain('visita=abrir')
 })
 
 describe('sacar de la agenda', () => {

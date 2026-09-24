@@ -5,7 +5,9 @@ import { AuthProvider, useAuth } from '@/context/AuthContext'
 import ProtectedRoute from '@/router/ProtectedRoute'
 import { puedeOperarComoVendedor, supervisa } from '@/lib/roles'
 import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
+import CarteraPage from '@/pages/CarteraPage'
 import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
+import AnaliticaMetricasPage from '@/pages/AnaliticaMetricasPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
 import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
@@ -28,6 +30,7 @@ export default function App() {
                     <Routes>
                         <Route element={<ProtectedRoute permitir={puedeOperarComoVendedor} />}>
                             <Route path="/" element={<AgendaSemanaPage />} />
+                            <Route path="/cartera" element={<CarteraPage />} />
                         </Route>
                         <Route element={<ProtectedRoute permitir={supervisa} />}>
                             <Route path="/analitica" element={<AnaliticaPage />} />
@@ -39,6 +42,7 @@ export default function App() {
                                 path="/analitica/vendedor/:codigo"
                                 element={<AnaliticaVendedorPage />}
                             />
+                            <Route path="/analitica/metricas" element={<AnaliticaMetricasPage />} />
                             <Route path="/analitica/ruta" element={<RutaPage />} />
                             <Route path="/analitica/fichas" element={<AnaliticaFichasPage />} />
                         </Route>

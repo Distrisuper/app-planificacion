@@ -489,7 +489,7 @@ describe('vendedor de prueba', () => {
     it('getMePlanificacion pega a GET /planificacion/me y devuelve data', async () => {
         const me = {
             rol: 'admin',
-            capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+            capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true, veSusMetricas: true },
             vendedoresVisibles: null,
             vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: null, origenesDisponibles: ['V 2'] },
         }

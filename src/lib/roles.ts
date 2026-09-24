@@ -21,6 +21,9 @@ export const supervisa = (c: Cap): boolean => !!c && c.superviseVendedores
 export const estaProbando = (c: Cap): boolean =>
     !!c && !c.operaComoVendedor && c.operaComoVendedorDePrueba
 
+/** Ve el tab "Mi cartera" (sus métricas). Capacidad del backend, no rol. */
+export const veMetricas = (c: Cap): boolean => !!c && c.veSusMetricas
+
 /** La pantalla donde arranca. null = sin acceso a la app. */
 export const rutaInicialPara = (c: Cap): string | null => {
     if (supervisa(c)) return '/analitica'

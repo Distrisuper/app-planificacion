@@ -15,19 +15,19 @@ import { getMePlanificacion } from '@/api/planificacion'
 
 const ME_GERENCIA = {
     rol: 'admin',
-    capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+    capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true, veSusMetricas: true },
     vendedoresVisibles: null,
     vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: null, origenesDisponibles: ['V 2'] },
 }
 const ME_VENDEDOR = {
     rol: 'vendedor',
-    capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false },
+    capacidades: { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false, veSusMetricas: true },
     vendedoresVisibles: ['V 2'],
     vendedorDePrueba: null,
 }
 const ME_NADA = {
     rol: 'marketing',
-    capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: false, superviseVendedores: false },
+    capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: false, superviseVendedores: false, veSusMetricas: false },
     vendedoresVisibles: null,
     vendedorDePrueba: null,
 }

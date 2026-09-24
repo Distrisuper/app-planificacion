@@ -1,11 +1,12 @@
 import { readFileSync } from 'fs'
 import { resolve } from 'path'
-import { estaProbando, puedeOperarComoVendedor, rutaInicialPara, supervisa } from './roles'
+import { estaProbando, puedeOperarComoVendedor, rutaInicialPara, supervisa, veMetricas } from './roles'
 
-const cap = (o: Partial<{ v: boolean; p: boolean; s: boolean }>) => ({
+const cap = (o: Partial<{ v: boolean; p: boolean; s: boolean; m: boolean }>) => ({
     operaComoVendedor: o.v ?? false,
     operaComoVendedorDePrueba: o.p ?? false,
     superviseVendedores: o.s ?? false,
+    veSusMetricas: o.m ?? false,
 })
 
 describe('roles.ts — predicados sobre capacidades', () => {
@@ -43,6 +44,13 @@ describe('roles.ts — predicados sobre capacidades', () => {
         expect(rutaInicialPara(cap({}))).toBeNull()
         expect(rutaInicialPara(null)).toBeNull()
         expect(rutaInicialPara(undefined)).toBeNull()
+    })
+
+    it('veMetricas sigue la capacidad, no el rol', () => {
+        const base = { operaComoVendedor: true, operaComoVendedorDePrueba: false, superviseVendedores: false }
+        expect(veMetricas({ ...base, veSusMetricas: true })).toBe(true)
+        expect(veMetricas({ ...base, veSusMetricas: false })).toBe(false)
+        expect(veMetricas(null)).toBe(false)
     })
 
     it('el módulo no contiene ningún rol como literal (la tabla de roles vive en el backend)', () => {

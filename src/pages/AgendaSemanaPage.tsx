@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
+import BarraTabs from '@/components/BarraTabs'
 import DiaTabs from '@/components/DiaTabs'
 import AgendaBoard from '@/components/AgendaBoard'
 import VisitaFlow, { type IVisitaEnCurso } from '@/components/VisitaFlow'
@@ -15,7 +16,7 @@ import { BuscadorDiaSheet } from '@/components/buscador/BuscadorDiaSheet'
 import { BuscadorGeneralPanel } from '@/components/buscador/BuscadorGeneralPanel'
 import BannerPrueba, { ALTO_BANNER_PRUEBA } from '@/components/prueba/BannerPrueba'
 import CarteraDialog from '@/components/prueba/CarteraDialog'
-import { estaProbando } from '@/lib/roles'
+import { estaProbando, veMetricas } from '@/lib/roles'
 import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useEliminarFila } from '@/hooks/useEliminarFila'
@@ -327,6 +328,18 @@ export default function AgendaSemanaPage() {
     // solo se sostiene para pintar VisitaEnCursoBar.
     const [alejado, setAlejado] = useState(false)
 
+    // Vuelta desde "Mi cartera" tocando la barra de visita en curso: abre el sheet y
+    // limpia el param para que un refresh no lo reabra.
+    useEffect(() => {
+        if (searchParams.get('visita') !== 'abrir') return
+        if (visitaEnCurso) abrirPropuesta(visitaEnCurso.cliente)
+        setSearchParams(p => {
+            p.delete('visita')
+            return p
+        }, { replace: true })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [searchParams])
+
     // La instancia embebida es del cliente que se estaba mirando. Al cambiar de día — o de
     // semana, que es el mismo tipo de cambio de contexto: el cliente deja de estar en
     // pantalla — ese contexto ya no aplica: se suelta la memoria en vez de quedar una app
@@ -537,15 +550,18 @@ export default function AgendaSemanaPage() {
 
     if (mensajeCuenta) {
         return (
-            <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
-                <p className="text-[14px] font-semibold leading-snug text-[#182645]">{mensajeCuenta}</p>
-                <button
-                    type="button"
-                    onClick={logout}
-                    className="text-[13px] font-semibold text-dsmuted underline"
-                >
-                    Cerrar sesión
-                </button>
+            <div className="flex h-dvh flex-col overflow-hidden bg-[#EEF1F6]">
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
+                    <p className="text-[14px] font-semibold leading-snug text-[#182645]">{mensajeCuenta}</p>
+                    <button
+                        type="button"
+                        onClick={logout}
+                        className="text-[13px] font-semibold text-dsmuted underline"
+                    >
+                        Cerrar sesión
+                    </button>
+                </div>
+                <BarraTabs />
             </div>
         )
     }
@@ -559,37 +575,46 @@ export default function AgendaSemanaPage() {
     if (cicloResuelto && semanaEfectiva === null) {
         if (probando) {
             return (
-                <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center" style={{ paddingTop: ALTO_BANNER_PRUEBA }}>
+                <div
+                    className="flex h-dvh flex-col overflow-hidden bg-[#EEF1F6]"
+                    style={{ paddingTop: ALTO_BANNER_PRUEBA }}
+                >
                     <BannerPrueba />
-                    <p className="text-[14px] font-semibold leading-snug text-[#182645]">
-                        Tu vendedor de prueba todavía no tiene agenda.
-                    </p>
-                    <button
-                        type="button"
-                        onClick={() => setEligiendoCartera(true)}
-                        className="rounded-xl bg-dsnavy px-4 py-2.5 text-[13px] font-bold text-white"
-                    >
-                        Elegir cartera
-                    </button>
-                    <CarteraDialog open={eligiendoCartera} onOpenChange={setEligiendoCartera} onReiniciado={() => setEligiendoCartera(false)} />
+                    <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
+                        <p className="text-[14px] font-semibold leading-snug text-[#182645]">
+                            Tu vendedor de prueba todavía no tiene agenda.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setEligiendoCartera(true)}
+                            className="rounded-xl bg-dsnavy px-4 py-2.5 text-[13px] font-bold text-white"
+                        >
+                            Elegir cartera
+                        </button>
+                        <CarteraDialog open={eligiendoCartera} onOpenChange={setEligiendoCartera} onReiniciado={() => setEligiendoCartera(false)} />
+                    </div>
+                    <BarraTabs />
                 </div>
             )
         }
         return (
-            <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
-                <p className="text-[14px] font-semibold leading-snug text-[#182645]">
-                    Todavía no tenés una ruta asignada.
-                </p>
-                <p className="text-[13px] leading-snug text-dsmuted">
-                    Cuando gerencia cargue tu rotación, tu agenda aparece acá.
-                </p>
-                <button
-                    type="button"
-                    onClick={logout}
-                    className="text-[13px] font-semibold text-dsmuted underline"
-                >
-                    Cerrar sesión
-                </button>
+            <div className="flex h-dvh flex-col overflow-hidden bg-[#EEF1F6]">
+                <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center">
+                    <p className="text-[14px] font-semibold leading-snug text-[#182645]">
+                        Todavía no tenés una ruta asignada.
+                    </p>
+                    <p className="text-[13px] leading-snug text-dsmuted">
+                        Cuando gerencia cargue tu rotación, tu agenda aparece acá.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={logout}
+                        className="text-[13px] font-semibold text-dsmuted underline"
+                    >
+                        Cerrar sesión
+                    </button>
+                </div>
+                <BarraTabs />
             </div>
         )
     }
@@ -654,6 +679,8 @@ export default function AgendaSemanaPage() {
                 </>
             )}
 
+            <BarraTabs />
+
             <VisitaFlow
                 cliente={visitaCliente}
                 visitaEnCurso={visitaEnCurso}
@@ -686,6 +713,7 @@ export default function AgendaSemanaPage() {
                         visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente
                     }
                     alejado={alejado}
+                    sobreBarraTabs={veMetricas(capacidades)}
                     onExpandir={() => abrirPropuesta(visitaEnCurso.cliente)}
                 />
             )}

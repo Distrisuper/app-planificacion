@@ -2,6 +2,7 @@ import { ChevronUp } from 'lucide-react'
 import { formatearDuracion } from '@/lib/visitaTimer'
 import { estadoVisitaVivo, PALETA_VISITA_VIVO } from '@/lib/estadoDuracion'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
+import { ALTO_BARRA_TABS } from '@/components/BarraTabs'
 
 interface VisitaEnCursoBarProps {
     visitaId: number
@@ -11,6 +12,9 @@ interface VisitaEnCursoBarProps {
      *  Naranja/rojo es a propósito la misma paleta que usa `dsred` para el error de
      *  "estás lejos del cliente" al iniciar: mismo significado, mismo color. */
     alejado?: boolean
+    /** true = esta página tiene BarraTabs debajo (no es `fixed`, así que no se puede leer
+     *  del DOM): la barra flotante se corre para no taparla. */
+    sobreBarraTabs?: boolean
     onExpandir: () => void
 }
 
@@ -21,6 +25,7 @@ export default function VisitaEnCursoBar({
     visitaId,
     nombreCliente,
     alejado,
+    sobreBarraTabs,
     onExpandir,
 }: VisitaEnCursoBarProps) {
     const segundos = useVisitaTimer(visitaId)
@@ -30,7 +35,17 @@ export default function VisitaEnCursoBar({
         <button
             onClick={onExpandir}
             data-testid="visita-en-curso-bar"
-            className={`fixed inset-x-3 bottom-3 z-40 flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-white shadow-[0_6px_20px_rgba(180,83,9,.35)] ${PALETA_VISITA_VIVO[estado].barra}`}
+            /* `sobreBarraTabs` corre la barra por encima de BarraTabs, que mide
+             *  `ALTO_BARRA_TABS` (56px) de banda de contenido MÁS
+             *  `env(safe-area-inset-bottom)` de padding aditivo (ver el comentario en
+             *  BarraTabs.tsx) — hay que sumar el mismo safe-area acá o esta barra queda
+             *  tapada por ese padding extra en dispositivos con home indicator grande. */
+            style={{
+                bottom: sobreBarraTabs
+                    ? `calc(${12 + ALTO_BARRA_TABS}px + env(safe-area-inset-bottom))`
+                    : 12,
+            }}
+            className={`fixed inset-x-3 z-40 flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-white shadow-[0_6px_20px_rgba(180,83,9,.35)] ${PALETA_VISITA_VIVO[estado].barra}`}
         >
             <span className="flex min-w-0 items-center gap-2 text-left">
                 <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-white" />
