@@ -44,9 +44,14 @@ export default function AnaliticaTabs({ enVivo }: AnaliticaTabsProps) {
             </NavLink>
             <NavLink
                 to="/analitica/metricas"
-                className={({ isActive }) => tabClase(isActive)}
+                className={({ isActive }) => `flex items-center gap-2 ${tabClase(isActive)}`}
             >
                 Métricas
+                {/* Los objetivos de venta son provisorios (constantes del front hasta que
+                    gerencia defina metas): el tag avisa que los números todavía se están ajustando. */}
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
+                    Beta
+                </span>
             </NavLink>
         </nav>
     )

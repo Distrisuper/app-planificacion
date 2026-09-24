@@ -65,7 +65,8 @@ it('apunta la pestaña Métricas a /analitica/metricas y la marca activa', () =>
             <AnaliticaTabs />
         </MemoryRouter>,
     )
-    const link = screen.getByRole('link', { name: 'Métricas' })
+    const link = screen.getByRole('link', { name: /Métricas/ })
     expect(link).toHaveAttribute('href', '/analitica/metricas')
     expect(link).toHaveClass('border-slate-900')
+    expect(link).toHaveTextContent('Beta')
 })
