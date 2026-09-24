@@ -5,6 +5,7 @@ import BloqueCategorias from '@/components/metricas/BloqueCategorias'
 import BloqueObjeciones from '@/components/metricas/BloqueObjeciones'
 import BloqueVentas from '@/components/metricas/BloqueVentas'
 import FiltrosMetricas, { type IValorFiltros } from '@/components/metricas/FiltrosMetricas'
+import RankingVendedores from '@/components/metricas/RankingVendedores'
 import { useOpcionesMetricas, useResumenMetricas } from '@/hooks/useMetricas'
 import { incluyeHoy, isoLocal, rangoMes, rangoSemana } from '@/lib/fechas'
 import type { IFiltroMetricas } from '@/types/metricas'
@@ -64,6 +65,14 @@ export default function AnaliticaMetricasPage() {
                 <BloqueVentas query={resumen} vendedor={geo.vendedor} proyectado={proyectado && puedeProyectar} />
                 <BloqueObjeciones filtro={filtro} />
                 <BloqueCategorias filtro={filtro} />
+                {resumen.data && resumen.data.vendedores.length > 0 && (
+                    <RankingVendedores
+                        resumen={resumen.data}
+                        proyectado={proyectado && puedeProyectar}
+                        vendedorElegido={geo.vendedor}
+                        onElegir={codigo => setGeo(g => ({ ...g, vendedor: codigo }))}
+                    />
+                )}
             </main>
         </div>
     )
