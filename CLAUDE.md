@@ -438,6 +438,11 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `larga` fuera rojo, rojo significaría dos cosas. (3) `VisitaSheet` recibe
   `alejado={esClienteEnCurso && alejado}`, no `enCurso && alejado`: el vendedor puede estar
   mirando la propuesta de otro cliente mientras la visita corre en otro lado.
+  (4) **El inicio del cronómetro lo manda el servidor** (`GET /visitas/activa`, `fechaInicio`,
+  en `useVisitaTimer`); `visita-inicio-<id>` en localStorage es solo su caché para recargar
+  sin señal. Antes era la única fuente, y como cerrar sesión / un 401 borran todo `visita-*`
+  (y otro dispositivo nunca lo tuvo), la visita seguía abierta en el backend con el
+  cronómetro en 00:00.
 - **En la tabla de la visita, el gesto se explica en una banda de ancho completo, NO en la
   columna `Rubro`.** `Tu propuesta · tocá uno para cargar el resultado`, gemela de la que
   ya existía abajo (`Otros rubros del cliente · tocá uno para agregarlo`): dos bandas,

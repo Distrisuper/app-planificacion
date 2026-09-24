@@ -1,8 +1,18 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render as rtlRender, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import VisitaEnCursoBar from './VisitaEnCursoBar'
 import { marcarInicioVisita } from '@/lib/visitaTimer'
+
+// Sin respuesta del servidor (automock → null): estos tests ejercitan el ancla local.
+// El ancla del servidor está cubierta en hooks/useVisitaTimer.test.tsx.
+vi.mock('@/api/planificacion')
+
+function render(ui: React.ReactElement) {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return rtlRender(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
+}
 
 beforeEach(() => {
     localStorage.clear()
