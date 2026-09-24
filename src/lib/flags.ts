@@ -5,14 +5,13 @@
  */
 
 /**
- * "Cliente nuevo" (visita de alta, spec 2026-09-17). El backend ya está en
- * producción y el flujo completo existe; se apaga sólo el punto de entrada
- * —el botón del buscador del día— para poder seguir con otras features sin
- * que nadie empiece a cargar altas todavía.
+ * "Cliente nuevo" (visita de alta, spec 2026-09-17). Habilitado desde el PR
+ * del relevamiento del alta. El interruptor controla sólo el punto de entrada
+ * —el botón del buscador del día—.
  *
- * Poner en `true` para habilitarlo: no hay nada más que tocar. Las filas con
+ * Poner en `false` para volver a apagarlo: no hay nada más que tocar. Las filas con
  * `tipo='alta'` que ya existieran se siguen viendo y operando normalmente
  * (editar datos, volver a agendar, visitar) — apagar la creación no puede
  * esconder un plan ya materializado.
  */
-export const ALTAS_HABILITADAS = false
+export const ALTAS_HABILITADAS = true

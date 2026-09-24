@@ -49,7 +49,7 @@ export default function RelevamientoSheet({ open, cliente, onClose, onGuardado, 
     if (!cliente) return null
 
     const campos = esquema.data?.campos ?? []
-    const faltan = faltantesObligatorios(campos, valores).length
+    const faltan = faltantesObligatorios(campos, valores, esquema.data?.catalogos ?? null).length
     const nombreCampo = campos.find(c => c.requerido)
     const nombreVacio = nombreCampo ? normalizarValor(valores[nombreCampo.clave]) === null : false
     const trabajando = editar.isPending

@@ -25,8 +25,19 @@ describe('faltantesObligatorios', () => {
             { clave: 'cuit', etiqueta: 'CUIT', seccion: 'identidad', tipo: 'cuit', max: 13, obligatorio: true },
             { clave: 'referencias', etiqueta: 'Referencias', seccion: 'cuenta', tipo: 'textoLargo', max: 300 },
         ]
-        expect(faltantesObligatorios(campos, { nombre: 'Piche', cuit: '  ', referencias: '' }).map(c => c.clave)).toEqual(['cuit'])
-        expect(faltantesObligatorios(campos, { nombre: 'Piche', cuit: '30-1', referencias: '' })).toEqual([])
+        expect(faltantesObligatorios(campos, { nombre: 'Piche', cuit: '  ', referencias: '' }, CATALOGOS).map(c => c.clave)).toEqual(['cuit'])
+        expect(faltantesObligatorios(campos, { nombre: 'Piche', cuit: '30-1', referencias: '' }, CATALOGOS)).toEqual([])
+    })
+    it('un catálogo sin opciones elegibles no traba el cierre: el vendedor no tiene cómo cargarlo', () => {
+        const iva: ICampoAlta = { clave: 'condicionIva', etiqueta: 'IVA', seccion: 'comercial', tipo: 'catalogo', catalogo: 'iva', obligatorio: true }
+        const pago: ICampoAlta = { clave: 'condicionPago', etiqueta: 'Pago', seccion: 'comercial', tipo: 'catalogo', catalogo: 'pago', obligatorio: true }
+        // Con lista disponible, vacío sí falta.
+        expect(faltantesObligatorios([iva], { condicionIva: '' }, CATALOGOS).map(c => c.clave)).toEqual(['condicionIva'])
+        // La API no pudo leer los catálogos.
+        expect(faltantesObligatorios([iva], { condicionIva: '' }, null)).toEqual([])
+        // La clave no vino, o vino sin ningún ítem activo.
+        expect(faltantesObligatorios([pago], { condicionPago: '' }, CATALOGOS)).toEqual([])
+        expect(faltantesObligatorios([iva], { condicionIva: '' }, { iva: [CATALOGOS.iva[1]] })).toEqual([])
     })
 })
 

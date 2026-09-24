@@ -55,9 +55,16 @@ export function diffDetalle(
     return cambios as IEditarAltaDTO
 }
 
-/** Los campos `obligatorio` sin valor: lo que falta para poder cerrar la visita de alta. */
-export function faltantesObligatorios(campos: ICampoAlta[], estado: Record<string, string>): ICampoAlta[] {
-    return campos.filter(c => c.obligatorio && normalizarValor(estado[c.clave]) === null)
+/** Los campos `obligatorio` sin valor: lo que falta para poder cerrar la visita de alta.
+ *  Un catálogo sin ninguna opción elegible (la API mandó `catalogos: null`, o la lista vino
+ *  vacía o toda inactiva) NO cuenta: el select no se puede completar, y trabar el cierre por
+ *  una falla del sistema deja al vendedor con "No visité" como única salida — un hecho falso. */
+export function faltantesObligatorios(campos: ICampoAlta[], estado: Record<string, string>, catalogos: Catalogos): ICampoAlta[] {
+    return campos.filter(c =>
+        c.obligatorio &&
+        normalizarValor(estado[c.clave]) === null &&
+        !(c.tipo === 'catalogo' && opcionesDeCatalogo(catalogos, c.catalogo, null).length === 0),
+    )
 }
 
 export function contarCargados(campos: ICampoAlta[], estado: Record<string, string>): number {

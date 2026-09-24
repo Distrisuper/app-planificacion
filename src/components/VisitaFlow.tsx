@@ -273,7 +273,7 @@ export default function VisitaFlow({
             ? {
                   cargados: contarCargados(esquemaAlta.data.campos, estadoAlta),
                   total: esquemaAlta.data.campos.length,
-                  faltan: faltantesObligatorios(esquemaAlta.data.campos, estadoAlta).length,
+                  faltan: faltantesObligatorios(esquemaAlta.data.campos, estadoAlta, esquemaAlta.data.catalogos).length,
               }
             : null
 
