@@ -55,9 +55,11 @@ export function claseCumplimiento(pct: number | null): string {
     return 'text-emerald-600'
 }
 
-export function claseBarra(pct: number | null): string {
-    if (pct === null) return 'bg-slate-200'
-    if (pct < 0.5) return 'bg-red-500'
-    if (pct < 1) return 'bg-amber-500'
-    return 'bg-emerald-500'
+/** Trazo del anillo de cumplimiento. Clases literales (no `bg-→stroke-` armado en runtime):
+ *  Tailwind solo genera las clases que encuentra escritas en el código. */
+export function claseAnillo(pct: number | null): string {
+    if (pct === null) return 'stroke-slate-200'
+    if (pct < 0.5) return 'stroke-red-500'
+    if (pct < 1) return 'stroke-amber-500'
+    return 'stroke-emerald-500'
 }

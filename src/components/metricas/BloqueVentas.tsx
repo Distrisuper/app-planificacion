@@ -2,7 +2,7 @@ import type { UseQueryResult } from '@tanstack/react-query'
 import KpiTile from '@/components/analitica/KpiTile'
 import { formatHoras, formatNumero, formatPct } from '@/lib/analiticaFormat'
 import {
-    OBJETIVO_TASA_CIERRE, claseBarra, claseCumplimiento, cumplimiento, factorProyeccion,
+    OBJETIVO_TASA_CIERRE, claseAnillo, claseCumplimiento, cumplimiento, factorProyeccion,
     formatMillones, objetivosVenta, proyectar, razon, variacion,
 } from '@/lib/metricas'
 import type { IMetricasResumen } from '@/types/metricas'
@@ -25,25 +25,42 @@ interface TileMetaProps {
 
 const signo = (v: number) => (v >= 0 ? '+' : '')
 
+const RADIO = 54
+const CIRCUNFERENCIA = 2 * Math.PI * RADIO
+
+/** Anillo de cumplimiento (como el mockup). Se llena hasta el 100% y el número de adentro
+ *  sigue mostrando el real: 190% es un anillo completo que dice 190%. */
+function Anillo({ pct }: { pct: number | null }) {
+    const lleno = Math.min(Math.max(pct ?? 0, 0), 1)
+    return (
+        <div className="relative mx-auto mt-3 h-[120px] w-[120px]">
+            <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
+                <circle cx="60" cy="60" r={RADIO} fill="none" strokeWidth="12" className="stroke-slate-100" />
+                <circle
+                    cx="60" cy="60" r={RADIO} fill="none" strokeWidth="12"
+                    className={claseAnillo(pct)}
+                    strokeDasharray={CIRCUNFERENCIA}
+                    strokeDashoffset={CIRCUNFERENCIA * (1 - lleno)}
+                />
+            </svg>
+            <span className={`absolute inset-0 flex items-center justify-center text-2xl font-semibold ${claseCumplimiento(pct)}`}>
+                {formatPct(pct)}
+            </span>
+        </div>
+    )
+}
+
 function TileMeta({ testId, titulo, real, objetivo, unidad, pct, varAA }: TileMetaProps) {
     return (
-        <div data-testid={testId} className="rounded-lg border border-slate-200 bg-white px-4 py-3">
+        <div data-testid={testId} className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-center">
             <p className="text-xs uppercase tracking-wide text-slate-500">{titulo}</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">
-                {real} <span className="text-base font-normal text-slate-400">/ {objetivo} {unidad}</span>
+            <Anillo pct={pct} />
+            <p className="mt-3 text-lg font-semibold text-slate-900">
+                {real} <span className="text-sm font-normal text-slate-400">/ {objetivo} {unidad}</span>
             </p>
-            <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100">
-                <div
-                    className={`h-1.5 rounded-full ${claseBarra(pct)}`}
-                    style={{ width: `${Math.min((pct ?? 0) * 100, 100)}%` }}
-                />
-            </div>
-            <div className="mt-1 flex justify-between text-xs">
-                <span className={`font-medium ${claseCumplimiento(pct)}`}>{formatPct(pct)}</span>
-                <span className={varAA === null ? 'text-slate-400' : varAA >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-                    {varAA === null ? 's/d' : `${signo(varAA)}${Math.round(varAA * 100)}%`} vs año anterior
-                </span>
-            </div>
+            <p className={`mt-1 text-xs ${varAA === null ? 'text-slate-400' : varAA >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                {varAA === null ? 's/d' : `${signo(varAA)}${Math.round(varAA * 100)}%`} vs año anterior
+            </p>
         </div>
     )
 }
