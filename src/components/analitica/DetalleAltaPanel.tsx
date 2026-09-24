@@ -98,7 +98,10 @@ export default function DetalleAltaPanel({ alta, esquema, onCerrar, onVincular }
             <div className="space-y-5 px-5 py-4">
                 {/* Arriba de todo: es lo único accionable del panel, y lo último que se hace
                     con un alta (después de cargarla en Flexxus con los datos de abajo). */}
-                <VinculoFlexxus alta={alta} onVincular={onVincular} />
+                {/* key: cambiar de alta tiene que vaciar el código tipeado. Sin esto, el de la
+                    fila anterior quedaba en el input y "Vincular" lo pegaba a otro cliente, sin
+                    forma de deshacerlo. */}
+                <VinculoFlexxus key={alta.rotacionClienteId} alta={alta} onVincular={onVincular} />
                 {camposPorSeccion(esquema).map(({ seccion, campos }) => (
                     <section key={seccion.clave}>
                         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{seccion.titulo}</h3>

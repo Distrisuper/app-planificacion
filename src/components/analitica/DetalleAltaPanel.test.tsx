@@ -73,3 +73,10 @@ it('un campo vacío no es tocable: no hay nada que copiar', () => {
     render(<DetalleAltaPanel alta={alta} esquema={ESQUEMA} onCerrar={() => {}} />)
     expect(screen.queryByRole('button', { name: /copiar cuit/i })).not.toBeInTheDocument()
 })
+
+it('cambiar de alta vacía el código de Flexxus tipeado: no se vincula a la fila equivocada', () => {
+    const { rerender } = render(<DetalleAltaPanel alta={alta} esquema={ESQUEMA} onCerrar={() => {}} onVincular={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/código de cliente en flexxus/i), { target: { value: 'C123' } })
+    rerender(<DetalleAltaPanel alta={{ ...alta, rotacionClienteId: 10 }} esquema={ESQUEMA} onCerrar={() => {}} onVincular={vi.fn()} />)
+    expect(screen.getByLabelText(/código de cliente en flexxus/i)).toHaveValue('')
+})

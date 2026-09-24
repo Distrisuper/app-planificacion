@@ -12,6 +12,13 @@ describe('escaparCeldaCsv', () => {
         expect(escaparCeldaCsv('dijo "hola"')).toBe('"dijo ""hola"""')
         expect(escaparCeldaCsv('línea 1\nlínea 2')).toBe('"línea 1\nlínea 2"')
     })
+    it('lo que Excel tomaría como fórmula va con apóstrofo adelante', () => {
+        expect(escaparCeldaCsv('+54 11 4444-5555')).toBe("'+54 11 4444-5555")
+        expect(escaparCeldaCsv('=HYPERLINK("x")')).toBe(`"'=HYPERLINK(""x"")"`)
+        expect(escaparCeldaCsv('-3')).toBe("'-3")
+        expect(escaparCeldaCsv('@SUMA')).toBe("'@SUMA")
+        expect(escaparCeldaCsv('11 4444-5555')).toBe('11 4444-5555')
+    })
 })
 
 describe('aCsv', () => {

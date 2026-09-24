@@ -6,8 +6,14 @@
 export const SEPARADOR_CSV = ';'
 const BOM = '﻿'
 
+// Excel toma como fórmula toda celda que arranque con estos caracteres: un teléfono
+// `+54 11…` sale como error, y un `=HYPERLINK(...)` tipeado en las notas se ejecuta
+// (inyección de CSV). El apóstrofo adelante lo fuerza a texto y Excel no lo muestra.
+const INICIO_FORMULA = /^[=+\-@\t\r]/
+
 export function escaparCeldaCsv(v: string | null | undefined): string {
     if (v === null || v === undefined) return ''
+    if (INICIO_FORMULA.test(v)) v = `'${v}`
     const necesita = v.includes(SEPARADOR_CSV) || v.includes('"') || v.includes('\n') || v.includes('\r')
     return necesita ? `"${v.replace(/"/g, '""')}"` : v
 }

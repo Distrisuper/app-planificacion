@@ -30,6 +30,7 @@ import { estaProbando } from '@/lib/roles'
 import type {
     IAgendaClient,
     IDetalleContactoAlta,
+    IFichaCliente,
     IPropuestaRubroDTO,
     IVisitClientCard,
 } from '@/types/planificacion'
@@ -193,6 +194,10 @@ export default function VisitaFlow({
     // encadena con el relevamiento: cada renglón de la tarjeta abre lo suyo — encadenado,
     // "Datos para el alta" parecía llevar a la pantalla equivocada.
     const [fichaAlta, setFichaAlta] = useState(false)
+    // La ficha que devolvió el último PUT. Por la misma razón que `fichaLista`: el `cliente`
+    // de la visita abierta es una foto de cuando se abrió y el PUT no la actualiza, así que
+    // reabrir la ficha para corregirla la mostraba vacía justo después de guardarla.
+    const [fichaGuardada, setFichaGuardada] = useState<IFichaCliente | null>(null)
 
     // Sin esto, pasar de un cliente a otro sin cerrar el flujo (p.ej. tocar directo la card
     // de otro cliente) arrastraría el mapa pendiente o el error del cliente anterior.
@@ -220,6 +225,7 @@ export default function VisitaFlow({
         setErrorFicha(null)
         setEditandoFicha(false)
         setFichaAlta(false)
+        setFichaGuardada(null)
     }, [cliente?.rotacionClienteId])
 
     // El mapa de cierre cuelga de `visitaEnCurso`, pero `cierrePendiente` y la confirmación
@@ -897,7 +903,7 @@ export default function VisitaFlow({
                 // `undefined` = todos los del catálogo. En el gate (y en el alta), sólo los
                 // pendientes.
                 campos={editandoFicha ? undefined : camposPendientes(cliente)}
-                valoresIniciales={cliente.ficha?.valores}
+                valoresIniciales={(fichaGuardada ?? cliente.ficha)?.valores}
                 nombreCliente={nombre}
                 identidad={clienteEsAlta ? undefined : identidad}
                 guardando={actualizarFicha.isPending || iniciandoFlujo}
@@ -907,10 +913,12 @@ export default function VisitaFlow({
                     try {
                         // PRIMERO la ficha, DESPUÉS la visita, y sólo si la ficha se guardó: al
                         // revés, el gate se destrabaría sin que el dato exista.
-                        await actualizarFicha.mutateAsync({
-                            codigoParticularCliente: cliente.codigoParticularCliente,
-                            valores,
-                        })
+                        setFichaGuardada(
+                            await actualizarFicha.mutateAsync({
+                                codigoParticularCliente: cliente.codigoParticularCliente,
+                                valores,
+                            }),
+                        )
                     } catch {
                         setErrorFicha('No pudimos guardar los datos. Revisá la conexión y volvé a intentar.')
                         return

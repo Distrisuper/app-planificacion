@@ -1361,6 +1361,20 @@ describe('gate de "Datos del comercio"', () => {
             expect(onDatosComercio).not.toHaveBeenCalled()
         })
 
+        it('reabrir la ficha recién guardada la muestra cargada, no vacía', async () => {
+            // El `cliente` de la visita abierta es una foto previa al PUT: sin tomar lo que
+            // devuelve, la edición se precargaba vacía y "Guardar" quedaba deshabilitado.
+            const valores = { especialidad: ['frenos'], personas: ['4'], facturacion: ['3'] }
+            ;(api.actualizarFicha as any).mockResolvedValue({ pendientes: [], valores })
+            renderFlow({ cliente: altaEnCurso })
+            fireEvent.click(await screen.findByRole('button', { name: /ficha del comercio/i }))
+            await completarFicha()
+            fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
+            await waitFor(() => expect(screen.getByRole('button', { name: /ficha del comercio/i })).toHaveTextContent(/completa/i))
+            fireEvent.click(screen.getByRole('button', { name: /ficha del comercio/i }))
+            expect(await screen.findByRole('button', { name: /^guardar$/i })).toBeEnabled()
+        })
+
         it('sin la ficha no se cierra: el botón la pide, y guardada habilita el cierre', async () => {
             const { onDatosComercio } = renderFlow({ cliente: altaEnCurso })
             fireEvent.change(await screen.findByRole('textbox', { name: /observaciones/i }), {
