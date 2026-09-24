@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
 import SelectorPeriodo, { type ModoPeriodo } from '@/components/analitica/SelectorPeriodo'
+import BloqueVentas from '@/components/metricas/BloqueVentas'
 import FiltrosMetricas, { type IValorFiltros } from '@/components/metricas/FiltrosMetricas'
 import { useOpcionesMetricas, useResumenMetricas } from '@/hooks/useMetricas'
 import { incluyeHoy, isoLocal, rangoMes, rangoSemana } from '@/lib/fechas'
@@ -58,7 +59,7 @@ export default function AnaliticaMetricasPage() {
             </EncabezadoAnalitica>
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
-                {/* B4-B7 agregan acá: BloqueVentas, BloqueObjeciones, BloqueCategorias, RankingVendedores */}
+                <BloqueVentas query={resumen} vendedor={geo.vendedor} proyectado={proyectado && puedeProyectar} />
             </main>
         </div>
     )
