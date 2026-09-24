@@ -4,7 +4,7 @@ import { useCategoriasMetricas, useClientesDeTramo } from '@/hooks/useMetricas'
 import { nombreMes, rangoMes } from '@/lib/fechas'
 import type { IClienteTramo, IFiltroMetricas, Tramo } from '@/types/metricas'
 
-export const ETIQUETA_TRAMO: Record<Tramo, string> = {
+const ETIQUETA_TRAMO: Record<Tramo, string> = {
     sinCompras: 'Sin compras', menos1M: '< $1M', entre1y3M: '$1-3M', entre3y5M: '$3-5M', mas5M: '> $5M',
 }
 
