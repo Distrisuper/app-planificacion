@@ -57,3 +57,22 @@ it('sin objeciones muestra un vacío', async () => {
     montar()
     expect(await screen.findByText('Sin objeciones en este período.')).toBeInTheDocument()
 })
+
+it('mientras cargan las objeciones y los clientes muestra un spinner', async () => {
+    ;(api.getObjecionDetalle as any).mockReturnValue(new Promise(() => {}))
+    montar()
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando')
+    await userEvent.click(await screen.findByRole('button', { name: /Precio/ }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Cargando clientes')
+})
+
+it('al cambiar de página la tabla queda atenuada con un spinner hasta que llega la nueva', async () => {
+    const DOS_PAGINAS = { ...MOCK_OBJECION_DETALLE, clientes: { ...MOCK_OBJECION_DETALLE.clientes, total: 16 } }
+    ;(api.getObjecionDetalle as any).mockResolvedValueOnce(DOS_PAGINAS).mockReturnValue(new Promise(() => {}))
+    montar()
+    await userEvent.click(await screen.findByRole('button', { name: /Precio/ }))
+    await screen.findByTestId('detalle-objecion')
+    await userEvent.click(screen.getByRole('button', { name: /Siguiente/ }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Actualizando')
+    expect(within(screen.getByTestId('detalle-objecion')).getByText('Nonno Suspension')).toBeInTheDocument()
+})

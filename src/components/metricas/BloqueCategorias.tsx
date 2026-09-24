@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Cargando from './Cargando'
 import ClientesDeTramo from './ClientesDeTramo'
 import { useCategoriasMetricas, useClientesDeTramo } from '@/hooks/useMetricas'
 import { nombreMes, rangoMes } from '@/lib/fechas'
@@ -41,7 +42,7 @@ export default function BloqueCategorias({ filtro }: BloqueCategoriasProps) {
                 </p>
             </div>
 
-            {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
+            {isLoading && <Cargando />}
             {isError && (
                 <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     No se pudieron cargar las categorías.
@@ -76,9 +77,12 @@ export default function BloqueCategorias({ filtro }: BloqueCategoriasProps) {
                 </>
             )}
 
-            {tramo !== null && clientes.isLoading && <p className="text-sm text-slate-500">Cargando clientes…</p>}
+            {tramo !== null && clientes.isLoading && <Cargando texto="Cargando clientes…" />}
             {tramo !== null && clientes.data && (
-                <ClientesDeTramo datos={clientes.data} orden={orden} dir={dir} onOrdenar={ordenar} onPagina={setPagina} />
+                <ClientesDeTramo
+                    datos={clientes.data} orden={orden} dir={dir} onOrdenar={ordenar} onPagina={setPagina}
+                    actualizando={clientes.isPlaceholderData}
+                />
             )}
         </section>
     )

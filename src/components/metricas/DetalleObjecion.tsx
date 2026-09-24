@@ -1,3 +1,4 @@
+import { Actualizando } from './Cargando'
 import Paginador from './Paginador'
 import { formatPct } from '@/lib/analiticaFormat'
 import type { IClienteObjecion, IConteo, IObjecionDetalle } from '@/types/metricas'
@@ -36,9 +37,11 @@ interface DetalleObjecionProps {
     dir: 'asc' | 'desc'
     onOrdenar: (clave: keyof IClienteObjecion) => void
     onPagina: (p: number) => void
+    /** Llega otra página u otro orden y lo que se ve todavía es lo anterior. */
+    actualizando?: boolean
 }
 
-export default function DetalleObjecion({ detalle, orden, dir, onOrdenar, onPagina }: DetalleObjecionProps) {
+export default function DetalleObjecion({ detalle, orden, dir, onOrdenar, onPagina, actualizando }: DetalleObjecionProps) {
     return (
         <div data-testid="detalle-objecion" className="space-y-3 border-t border-slate-200 pt-4">
             <p className="text-sm font-semibold text-slate-900">
@@ -48,7 +51,7 @@ export default function DetalleObjecion({ detalle, orden, dir, onOrdenar, onPagi
                 <Mix titulo="Marcas que más se repiten" items={detalle.marcas} />
                 <Mix titulo="Rubros que más se repiten" items={detalle.rubros} />
             </div>
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <div className="relative overflow-x-auto rounded-lg border border-slate-200">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
@@ -73,6 +76,7 @@ export default function DetalleObjecion({ detalle, orden, dir, onOrdenar, onPagi
                         ))}
                     </tbody>
                 </table>
+                {actualizando && <Actualizando />}
             </div>
             <Paginador pagina={detalle.clientes.pagina} total={detalle.clientes.total} cant={detalle.clientes.cant} onCambiar={onPagina} />
         </div>

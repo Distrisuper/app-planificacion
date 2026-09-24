@@ -1,3 +1,4 @@
+import { Actualizando } from './Cargando'
 import Paginador from './Paginador'
 import { formatMillones } from '@/lib/metricas'
 import type { IClienteTramo, IClientesDeTramo } from '@/types/metricas'
@@ -15,12 +16,14 @@ interface ClientesDeTramoProps {
     dir: 'asc' | 'desc'
     onOrdenar: (clave: keyof IClienteTramo) => void
     onPagina: (p: number) => void
+    /** Llega otra página u otro orden y lo que se ve todavía es lo anterior. */
+    actualizando?: boolean
 }
 
-export default function ClientesDeTramo({ datos, orden, dir, onOrdenar, onPagina }: ClientesDeTramoProps) {
+export default function ClientesDeTramo({ datos, orden, dir, onOrdenar, onPagina, actualizando }: ClientesDeTramoProps) {
     return (
         <div data-testid="clientes-tramo" className="space-y-2 border-t border-slate-200 pt-4">
-            <div className="overflow-x-auto rounded-lg border border-slate-200">
+            <div className="relative overflow-x-auto rounded-lg border border-slate-200">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                         <tr>
@@ -48,6 +51,7 @@ export default function ClientesDeTramo({ datos, orden, dir, onOrdenar, onPagina
                         ))}
                     </tbody>
                 </table>
+                {actualizando && <Actualizando />}
             </div>
             <p className="text-xs text-slate-500">{datos.total} clientes en esta categoría</p>
             <Paginador pagina={datos.pagina} total={datos.total} cant={datos.cant} onCambiar={onPagina} />

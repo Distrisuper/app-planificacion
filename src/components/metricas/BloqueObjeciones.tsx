@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import Cargando from './Cargando'
 import DetalleObjecion from './DetalleObjecion'
 import { apiClient } from '@/api/apiClient'
 import { useObjecionDetalle, useObjecionesMetricas } from '@/hooks/useMetricas'
@@ -51,7 +52,7 @@ export default function BloqueObjeciones({ filtro }: BloqueObjecionesProps) {
                 </select>
             </div>
 
-            {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
+            {isLoading && <Cargando />}
             {isError && (
                 <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                     No se pudieron cargar las objeciones.
@@ -88,9 +89,12 @@ export default function BloqueObjeciones({ filtro }: BloqueObjecionesProps) {
                 </>
             )}
 
-            {abierto !== null && detalle.isLoading && <p className="text-sm text-slate-500">Cargando clientes…</p>}
+            {abierto !== null && detalle.isLoading && <Cargando texto="Cargando clientes…" />}
             {abierto !== null && detalle.data && (
-                <DetalleObjecion detalle={detalle.data} orden={orden} dir={dir} onOrdenar={ordenar} onPagina={setPagina} />
+                <DetalleObjecion
+                    detalle={detalle.data} orden={orden} dir={dir} onOrdenar={ordenar} onPagina={setPagina}
+                    actualizando={detalle.isPlaceholderData}
+                />
             )}
         </section>
     )

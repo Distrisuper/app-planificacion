@@ -37,3 +37,23 @@ it('las claves incluyen todos los filtros geo', () => {
     const b = metricasKeys.resumen({ ...F, zona: '02' })
     expect(a).not.toEqual(b)
 })
+
+it('otra página de la MISMA objeción muestra la anterior mientras carga; otra objeción no', async () => {
+    let resolver: (v: unknown) => void = () => {}
+    ;(api.getObjecionDetalle as any)
+        .mockResolvedValueOnce({ motivoId: 1, pagina: 1 })
+        .mockImplementation(() => new Promise(r => { resolver = r }))
+    const { result, rerender } = renderHook(
+        ({ motivo, pagina }) => useObjecionDetalle(F, motivo, { ...ARGS, pagina }),
+        { wrapper, initialProps: { motivo: 1 as number | null, pagina: 1 } },
+    )
+    await waitFor(() => expect(result.current.data).toEqual({ motivoId: 1, pagina: 1 }))
+
+    rerender({ motivo: 1, pagina: 2 })
+    expect(result.current.isPlaceholderData).toBe(true)
+    expect(result.current.data).toEqual({ motivoId: 1, pagina: 1 })
+
+    rerender({ motivo: 2, pagina: 1 })
+    expect(result.current.data).toBeUndefined()
+    resolver({ motivoId: 2, pagina: 1 })
+})

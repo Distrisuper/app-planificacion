@@ -49,3 +49,8 @@ it('cartera vacía: mensaje explícito', () => {
     render(<BloqueVentas query={q({ data })} proyectado={false} />)
     expect(screen.getByText('Sin clientes para estos filtros.')).toBeInTheDocument()
 })
+
+it('cargando muestra un spinner', () => {
+    render(<BloqueVentas query={q({ data: undefined, isLoading: true })} proyectado={false} />)
+    expect(screen.getByRole('status')).toHaveTextContent('Cargando')
+})

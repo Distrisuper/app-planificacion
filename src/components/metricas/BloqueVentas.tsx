@@ -1,4 +1,5 @@
 import type { UseQueryResult } from '@tanstack/react-query'
+import Cargando from './Cargando'
 import KpiTile from '@/components/analitica/KpiTile'
 import { formatHoras, formatNumero, formatPct } from '@/lib/analiticaFormat'
 import {
@@ -72,7 +73,7 @@ export default function BloqueVentas({ query, vendedor, proyectado }: BloqueVent
         <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
             <h2 className="text-sm font-semibold text-slate-900">Métricas de ventas</h2>
 
-            {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
+            {isLoading && <Cargando />}
 
             {isError && (
                 <div className="flex items-center justify-between rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">

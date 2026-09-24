@@ -40,3 +40,10 @@ it('tocar un tramo lista sus clientes con variación', async () => {
     expect(within(tabla).getByText('-36%')).toBeInTheDocument()
     expect(api.getClientesDeTramo).toHaveBeenCalledWith(expect.any(Object), 'mas5M', { pagina: 1, orden: 'actual', dir: 'desc' })
 })
+
+it('mientras cargan los clientes del tramo muestra un spinner', async () => {
+    ;(api.getClientesDeTramo as any).mockReturnValue(new Promise(() => {}))
+    montar()
+    await userEvent.click(await screen.findByRole('button', { name: /> \$5M/ }))
+    expect(await screen.findByRole('status')).toHaveTextContent('Cargando clientes')
+})
