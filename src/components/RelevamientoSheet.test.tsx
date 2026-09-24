@@ -44,7 +44,7 @@ beforeEach(() => {
 })
 
 it('dibuja las secciones y campos del esquema, precargados desde detalleAlta, y cuenta los obligatorios que faltan', async () => {
-    wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} onAviso={() => {}} />)
+    wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} />)
     expect(await screen.findByText('Identidad')).toBeInTheDocument()
     expect(screen.getByText('Comercial')).toBeInTheDocument()
     expect(screen.getByText('Notas')).toBeInTheDocument()
@@ -60,7 +60,7 @@ it('dibuja las secciones y campos del esquema, precargados desde detalleAlta, y 
 
 it('guarda SOLO el diff y avisa', async () => {
     const onGuardado = vi.fn(); const onClose = vi.fn()
-    wrap(<RelevamientoSheet open cliente={cliente()} onClose={onClose} onGuardado={onGuardado} onAviso={() => {}} />)
+    wrap(<RelevamientoSheet open cliente={cliente()} onClose={onClose} onGuardado={onGuardado} />)
     fireEvent.change(await screen.findByLabelText(/condición de iva/i), { target: { value: 'RI' } })
     expect(screen.getByText(/datos completos/i)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/dato de color/i), { target: { value: ' le gusta el fútbol ' } })
@@ -71,20 +71,20 @@ it('guarda SOLO el diff y avisa', async () => {
 })
 
 it('sin cambios manda {} (no-op), nunca el nombre', async () => {
-    wrap(<RelevamientoSheet open cliente={cliente({ detalleAlta: null })} onClose={() => {}} onGuardado={() => {}} onAviso={() => {}} />)
+    wrap(<RelevamientoSheet open cliente={cliente({ detalleAlta: null })} onClose={() => {}} onGuardado={() => {}} />)
     fireEvent.click(await screen.findByRole('button', { name: /^guardar$/i }))
     await waitFor(() => expect(api.editarAlta).toHaveBeenCalledWith(9, {}))
 })
 
 it('nombre vacío deshabilita Guardar', async () => {
-    wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} onAviso={() => {}} />)
+    wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} />)
     fireEvent.change(await screen.findByLabelText(/nombre del comercio/i), { target: { value: '  ' } })
     expect(screen.getByRole('button', { name: /^guardar$/i })).toBeDisabled()
 })
 
 it('catálogos null: el select queda deshabilitado y el resto sigue operativo', async () => {
     vi.mocked(api.getEsquemaAlta).mockResolvedValue({ ...ESQUEMA, catalogos: null })
-    wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} onAviso={() => {}} />)
+    wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} />)
     const select = await screen.findByLabelText(/condición de iva/i)
     expect(select).toBeDisabled()
     expect(screen.getByText(/lista no disponible/i)).toBeInTheDocument()
@@ -94,7 +94,7 @@ it('catálogos null: el select queda deshabilitado y el resto sigue operativo', 
 })
 
 it('un valor guardado que no está activo se sigue mostrando en el select', async () => {
-    wrap(<RelevamientoSheet open cliente={cliente({ detalleAlta: { nombre: 'Piche', condicionIva: 'NR' } })} onClose={() => {}} onGuardado={() => {}} onAviso={() => {}} />)
+    wrap(<RelevamientoSheet open cliente={cliente({ detalleAlta: { nombre: 'Piche', condicionIva: 'NR' } })} onClose={() => {}} onGuardado={() => {}} />)
     const select = await screen.findByLabelText(/condición de iva/i)
     expect(select).toHaveValue('NR')
     expect(screen.getByRole('option', { name: 'NR' })).toBeInTheDocument()
@@ -102,18 +102,30 @@ it('un valor guardado que no está activo se sigue mostrando en el select', asyn
 
 it('esquema fallado: muestra el error con "Volver a intentar" y sin botón Guardar', async () => {
     vi.mocked(api.getEsquemaAlta).mockRejectedValue(new Error('500'))
-    wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} onAviso={() => {}} />)
+    wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} />)
     expect(await screen.findByRole('button', { name: /volver a intentar/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^guardar$/i })).not.toBeInTheDocument()
 })
 
-it('error al guardar → onAviso error y el sheet sigue abierto con lo tipeado', async () => {
-    vi.mocked(api.editarAlta).mockRejectedValue(new Error('500'))
-    const onAviso = vi.fn(); const onClose = vi.fn()
-    wrap(<RelevamientoSheet open cliente={cliente()} onClose={onClose} onGuardado={() => {}} onAviso={onAviso} />)
+it('error de red al guardar → aviso adentro del sheet, que sigue abierto con lo tipeado', async () => {
+    vi.mocked(api.editarAlta).mockRejectedValue(new Error('Network Error'))
+    const onClose = vi.fn()
+    wrap(<RelevamientoSheet open cliente={cliente()} onClose={onClose} onGuardado={() => {}} />)
     fireEvent.change(await screen.findByLabelText(/cuit/i), { target: { value: '30-9' } })
     fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
-    await waitFor(() => expect(onAviso).toHaveBeenCalledWith('error', 'No se pudieron guardar los datos. Volvé a intentar.'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/revisá la conexión/i)
     expect(onClose).not.toHaveBeenCalled()
     expect(screen.getByLabelText(/cuit/i)).toHaveValue('30-9')
+})
+
+it('dato rechazado por la API → muestra SU mensaje, y editar un campo lo limpia', async () => {
+    vi.mocked(api.editarAlta).mockRejectedValue({
+        response: { status: 400, data: { ok: 0, error: 'El email no tiene un formato válido.', code: 'ALTA_EMAIL_INVALIDO' } },
+    })
+    wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} />)
+    fireEvent.change(await screen.findByLabelText(/cuit/i), { target: { value: '30-9' } })
+    fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('El email no tiene un formato válido.')
+    fireEvent.change(screen.getByLabelText(/cuit/i), { target: { value: '30-8' } })
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
 })

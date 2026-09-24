@@ -785,7 +785,6 @@ export default function AgendaSemanaPage() {
                 open={relevamiento !== null}
                 cliente={relevamiento}
                 onClose={() => setRelevamiento(null)}
-                onAviso={mostrar}
                 onGuardado={actualizado => {
                     // `visitaCliente` es una foto tomada al abrir la visita: sin esto, la
                     // tarjeta "Datos del comercio" del alta seguía mostrando el progreso viejo.

@@ -7,7 +7,7 @@ import { useEditarAlta } from '@/hooks/useAltas'
 import {
     camposPorSeccion, diffDetalle, estadoInicial, faltantesObligatorios, normalizarValor, opcionesDeCatalogo,
 } from '@/lib/camposAlta'
-import type { NotificacionTipo } from '@/components/ui/Notification'
+import { errorData } from '@/lib/apiError'
 import type { IAgendaClient, ICampoAlta, IEsquemaAlta } from '@/types/planificacion'
 
 interface RelevamientoSheetProps {
@@ -15,7 +15,6 @@ interface RelevamientoSheetProps {
     cliente: IAgendaClient | null
     onClose: () => void
     onGuardado: (cliente: IAgendaClient) => void
-    onAviso: (tipo: NotificacionTipo, mensaje: string) => void
 }
 
 const INPUT = 'w-full rounded-[11px] border-[1.5px] border-[#E4E8F0] bg-white px-3 py-2.5 text-sm font-semibold text-[#182645] outline-none placeholder:font-medium placeholder:text-[#8A93A6] focus:border-dsnavy disabled:bg-[#F1F4F9] disabled:text-[#8A93A6]'
@@ -35,15 +34,21 @@ const SECCION = 'text-[9.5px] font-bold uppercase tracking-wide text-dsmuted'
  *
  * Vocabulario del vendedor: "Datos del comercio", nunca "relevamiento" ni "alta".
  */
-export default function RelevamientoSheet({ open, cliente, onClose, onGuardado, onAviso }: RelevamientoSheetProps) {
+export default function RelevamientoSheet({ open, cliente, onClose, onGuardado }: RelevamientoSheetProps) {
     const esquema = useEsquemaAlta(open)
     const editar = useEditarAlta()
     const [valores, setValores] = useState<Record<string, string>>({})
+    // Error del último Guardar, dentro del sheet y pegado al botón: un toast queda tapado por
+    // el sheet, y el vendedor veía que "Guardar" no hacía nada. Si la API rechazó un dato
+    // (400 con `error`, p.ej. ALTA_EMAIL_INVALIDO) se muestra SU mensaje, que dice qué
+    // corregir; "volvé a intentar" solo cuando reintentar puede servir.
+    const [error, setError] = useState<string | null>(null)
 
     // Se precarga al abrir y cuando llega el esquema; no en cada render — lo tipeado no se pisa.
     useEffect(() => {
         if (!open || !cliente || !esquema.data) return
         setValores(estadoInicial(esquema.data.campos, cliente.detalleAlta, cliente.nombreCliente))
+        setError(null)
     }, [open, cliente, esquema.data])
 
     if (!cliente) return null
@@ -57,12 +62,18 @@ export default function RelevamientoSheet({ open, cliente, onClose, onGuardado, 
     async function guardar() {
         if (!cliente || !esquema.data) return
         const dto = diffDetalle(esquema.data.campos, cliente.detalleAlta, valores, cliente.nombreCliente)
+        setError(null)
         try {
             const actualizado = await editar.mutateAsync({ rotacionClienteId: cliente.rotacionClienteId, dto })
             onGuardado(actualizado)
             onClose()
-        } catch {
-            onAviso('error', 'No se pudieron guardar los datos. Volvé a intentar.')
+        } catch (err) {
+            const data = errorData<{ error?: unknown }>(err)
+            setError(
+                data?.code && typeof data.error === 'string'
+                    ? data.error
+                    : 'No se pudieron guardar los datos. Revisá la conexión y volvé a intentar.',
+            )
         }
     }
 
@@ -82,10 +93,17 @@ export default function RelevamientoSheet({ open, cliente, onClose, onGuardado, 
             altura="completa"
             footer={
                 esquema.data ? (
-                    <Button onClick={guardar} disabled={trabajando || nombreVacio} loading={trabajando}
-                        className="h-12 w-full bg-dsgreen text-[14.5px] hover:bg-dsgreen/90">
-                        Guardar
-                    </Button>
+                    <div className="flex flex-col gap-2.5">
+                        {error && (
+                            <p role="alert" className="rounded-[11px] bg-dsred/8 px-3 py-2.5 text-[12.5px] font-semibold leading-snug text-dsred">
+                                {error}
+                            </p>
+                        )}
+                        <Button onClick={guardar} disabled={trabajando || nombreVacio} loading={trabajando}
+                            className="h-12 w-full bg-dsgreen text-[14.5px] hover:bg-dsgreen/90">
+                            Guardar
+                        </Button>
+                    </div>
                 ) : undefined
             }
         >
@@ -112,7 +130,10 @@ export default function RelevamientoSheet({ open, cliente, onClose, onGuardado, 
                                     campo={campo}
                                     catalogos={esquema.data!.catalogos}
                                     valor={valores[campo.clave] ?? ''}
-                                    onChange={v => setValores(prev => ({ ...prev, [campo.clave]: v }))}
+                                    onChange={v => {
+                                        setValores(prev => ({ ...prev, [campo.clave]: v }))
+                                        setError(null)
+                                    }}
                                 />
                             ))}
                         </section>
