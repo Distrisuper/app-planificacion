@@ -544,6 +544,16 @@ Hay **tres capas separadas**, y una operación toca una sola:
   una pantalla nueva necesita "quién puede", es una capacidad nueva en el backend, no un
   `if (rol === ...)`. El warehouse **no se modifica ni se extiende bajo ninguna forma**. Ver
   `docs/dominio/modelo.md`, "El vendedor de prueba".
+- **La pestaña "Métricas" (`/analitica/metricas`) mide sobre un CONJUNTO DE CLIENTES, no sobre
+  vendedores.** `ConjuntoClientesResolver` (api-vendedores) arma la cartera del scope
+  (`fct_clients`, principales) con la **sucursal de cada cliente = la que más le facturó en 12
+  meses** — la sucursal es de la factura (`fct_sales.branch`), no existe en el cliente — y los
+  filtros de sucursal/zona/localidad recortan clientes. Las ventas se atribuyen al vendedor
+  ACTUAL del cliente. Los **objetivos de venta son constantes del front** (`src/lib/metricas.ts`:
+  150 $M, 500 u., 12 SR, 60% cierre) a propósito, hasta que gerencia defina metas; el 12 de SR es
+  chico para el SR real y hay que ajustarlo. "Super Rubro" es el SR de la empresa (pares
+  cliente×rubro×mes que llegan al mínimo), no rubros distintos. Tasa de cierre = visitados que
+  ADEMÁS compraron / visitados. Spec `docs/superpowers/specs/2026-09-24-pestana-metricas-gerencia-design.md`.
 
 ## Fuera de alcance (no implementar salvo pedido explícito)
 

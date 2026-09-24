@@ -25,6 +25,7 @@ function montar(ruta: string, capacidades: ReturnType<typeof cap>) {
                 </Route>
                 <Route element={<ProtectedRoute permitir={supervisa} />}>
                     <Route path="/analitica" element={<div>ANALITICA</div>} />
+                    <Route path="/analitica/metricas" element={<div>METRICAS</div>} />
                 </Route>
             </Routes>
         </MemoryRouter>,
@@ -51,5 +52,13 @@ describe('ProtectedRoute por capacidades', () => {
     it('un TV futuro entra a /analitica y / lo manda a /analitica', () => {
         montar('/', cap(false, false, true))
         expect(screen.getByText('ANALITICA')).toBeInTheDocument()
+    })
+    it('gerencia entra a /analitica/metricas', () => {
+        montar('/analitica/metricas', cap(false, true, true))
+        expect(screen.getByText('METRICAS')).toBeInTheDocument()
+    })
+    it('vendedor en /analitica/metricas vuelve a la agenda', () => {
+        montar('/analitica/metricas', cap(true, false, false))
+        expect(screen.getByText('AGENDA')).toBeInTheDocument()
     })
 })
