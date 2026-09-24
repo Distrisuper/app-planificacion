@@ -130,6 +130,15 @@ function Harness({
     )
 }
 
+const ESQUEMA_ALTA_COMPLETO = {
+    secciones: [{ clave: 'identidad', titulo: 'Identidad' }],
+    campos: [
+        { clave: 'nombre', etiqueta: 'Nombre del comercio', seccion: 'identidad', tipo: 'texto', max: 120, requerido: true, obligatorio: true },
+        { clave: 'referencias', etiqueta: 'Referencias comerciales', seccion: 'identidad', tipo: 'textoLargo', max: 300 },
+    ],
+    catalogos: {},
+}
+
 function renderFlow(
     over: {
         cliente?: IAgendaClient
@@ -200,6 +209,9 @@ beforeEach(() => {
     // El sheet de la ficha dibuja desde el catálogo (GET /ficha/campos): sin esto no hay
     // controles y el gate no se puede completar en ningún test.
     ;(api.getCamposFicha as any).mockResolvedValue(CATALOGO_FICHA)
+    // Esquema de "Datos para el alta" con sólo el nombre obligatorio: cae al nombre de la
+    // card, así que los tests de alta que no son sobre ese gate no quedan trabados en él.
+    ;(api.getEsquemaAlta as any).mockResolvedValue(ESQUEMA_ALTA_COMPLETO)
     ;(geo.capturarUbicacion as any).mockResolvedValue({
         ok: true,
         coord: '-34.6,-58.4',
@@ -1361,6 +1373,26 @@ describe('gate de "Datos del comercio"', () => {
             expect(await screen.findByRole('button', { name: /^cerrar visita$/i })).toBeEnabled()
             // Desde el cierre no se desvía al relevamiento: el vendedor venía a cerrar.
             expect(onDatosComercio).not.toHaveBeenCalled()
+            expect(api.cerrarVisita).not.toHaveBeenCalled()
+        })
+
+        it('con la ficha completa pero faltando obligatorios del alta, el pie abre el relevamiento en vez de cerrar', async () => {
+            ;(api.getEsquemaAlta as any).mockResolvedValue({
+                ...ESQUEMA_ALTA_COMPLETO,
+                campos: [
+                    ...ESQUEMA_ALTA_COMPLETO.campos,
+                    { clave: 'cuit', etiqueta: 'CUIT', seccion: 'identidad', tipo: 'cuit', max: 13, obligatorio: true },
+                ],
+            })
+            const { onDatosComercio } = renderFlow({
+                cliente: { ...altaEnCurso, ficha: { pendientes: [], valores: { especialidad: ['frenos'], personas: ['2'], facturacion: ['5'] } } },
+            })
+            fireEvent.change(await screen.findByRole('textbox', { name: /observaciones/i }), {
+                target: { value: 'Local con buena rotación' },
+            })
+            expect(await screen.findByRole('button', { name: /^datos para el alta/i })).toHaveTextContent(/falta 1 · obligatorios/i)
+            fireEvent.click(screen.getByRole('button', { name: /faltan datos para el alta/i }))
+            expect(onDatosComercio).toHaveBeenCalledWith(expect.objectContaining({ rotacionClienteId: 42 }))
             expect(api.cerrarVisita).not.toHaveBeenCalled()
         })
 

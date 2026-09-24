@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useEsquemaAlta } from '@/hooks/useEsquemaAlta'
 import { useEditarAlta } from '@/hooks/useAltas'
 import {
-    camposPorSeccion, contarCargados, diffDetalle, estadoInicial, normalizarValor, opcionesDeCatalogo,
+    camposPorSeccion, diffDetalle, estadoInicial, faltantesObligatorios, normalizarValor, opcionesDeCatalogo,
 } from '@/lib/camposAlta'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { IAgendaClient, ICampoAlta, IEsquemaAlta } from '@/types/planificacion'
@@ -24,8 +24,9 @@ const SECCION = 'text-[9.5px] font-bold uppercase tracking-wide text-dsmuted'
 
 /**
  * "Datos del comercio" (spec 2026-09-21): lo que administración necesita para dar de alta al
- * cliente nuevo en el ERP, cargado por el vendedor parado en el local. Todo opcional salvo el
- * nombre. Se guarda en `pl_rotacion_cliente.detalle` con un PUT explícito, solo el diff.
+ * cliente nuevo en el ERP, cargado por el vendedor parado en el local. Se puede guardar a medias
+ * (sólo el nombre no se vacía nunca), pero lo `obligatorio` traba el cierre de la visita. Se
+ * guarda en `pl_rotacion_cliente.detalle` con un PUT explícito, solo el diff.
  *
  * El formulario es GENÉRICO: dibuja lo que trae GET /altas/esquema (secciones, campos,
  * catálogos). Acá no hay ninguna clave escrita por su nombre — agregar un dato al relevamiento
@@ -48,7 +49,7 @@ export default function RelevamientoSheet({ open, cliente, onClose, onGuardado, 
     if (!cliente) return null
 
     const campos = esquema.data?.campos ?? []
-    const cargados = contarCargados(campos, valores)
+    const faltan = faltantesObligatorios(campos, valores).length
     const nombreCampo = campos.find(c => c.requerido)
     const nombreVacio = nombreCampo ? normalizarValor(valores[nombreCampo.clave]) === null : false
     const trabajando = editar.isPending
@@ -69,7 +70,13 @@ export default function RelevamientoSheet({ open, cliente, onClose, onGuardado, 
         <BottomSheet
             open={open}
             onClose={onClose}
-            eyebrow={esquema.data ? `Cliente nuevo · ${cargados} de ${campos.length} datos` : 'Cliente nuevo'}
+            eyebrow={
+                !esquema.data
+                    ? 'Cliente nuevo'
+                    : faltan > 0
+                      ? `Cliente nuevo · ${faltan === 1 ? 'falta 1 obligatorio' : `faltan ${faltan} obligatorios`}`
+                      : 'Cliente nuevo · datos completos'
+            }
             title="Datos del comercio"
             subtitle={cliente.nombreCliente}
             altura="completa"
@@ -127,7 +134,9 @@ interface CampoInputProps {
  *  nuevo en el esquema se agrega acá y en el validador de la API, en ningún otro lado. */
 function CampoInput({ campo, catalogos, valor, onChange }: CampoInputProps) {
     const id = `rel-${campo.clave}`
-    const etiqueta = campo.requerido ? campo.etiqueta : `${campo.etiqueta} (opcional)`
+    // "(opcional)" sólo en lo que de verdad lo es: lo `obligatorio` hay que cargarlo para
+    // cerrar la visita, aunque el formulario se pueda guardar a medias.
+    const etiqueta = campo.requerido || campo.obligatorio ? campo.etiqueta : `${campo.etiqueta} (opcional)`
 
     if (campo.tipo === 'catalogo') {
         const sinLista = catalogos === null

@@ -353,3 +353,18 @@ Tres desvíos respecto del texto de arriba, detectados leyendo el código:
 3. **El panel de detalle de gerencia es el mismo `aside` que `DetalleVisitaPanel`** (ancho completo
    en mobile, `max-w-md` en desktop). No se hace la variante `BottomSheet`: `/analitica` es
    desktop-first y el `aside` ya se adapta.
+
+## Adenda 2026-09-24 · obligatorios para cerrar
+
+Revierte el "todo opcional salvo el nombre" de la sección 1. Cada campo del esquema suma
+`obligatorio`; lo son todos salvo `referencias` y `datoDeColor`, y `segmentacion` sale del
+esquema (llega por la ficha del comercio).
+
+- `requerido` no cambia (sólo `nombre`, no se vacía nunca). `obligatorio` no traba el Guardar:
+  traba el **cierre** de la visita de alta, después de la ficha y antes del
+  ofrecimiento/observación.
+- Gate sólo del front (`faltantesObligatorios`, `pideDatosAlta`); el cierre en la API no lo valida,
+  igual que los otros gates. Con el esquema en vuelo el gate pide, no se auto-satisface.
+- Que trabe al vendedor que no consigue un dato se acepta: lo cargado es un boceto que
+  administración revisa y completa al dar el alta en el ERP.
+- `obligatorio` ausente = opcional: front y API se despliegan en cualquier orden.

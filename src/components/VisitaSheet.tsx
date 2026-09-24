@@ -118,8 +118,9 @@ interface VisitaSheetProps {
     onDatosComercio?: () => void
     /** Sólo `esAlta`: el renglón "Ficha del comercio" de la misma tarjeta. */
     onAbrirFicha?: () => void
-    /** Sólo `esAlta`: campos del relevamiento cargados / total. null = esquema en vuelo. */
-    progresoAlta?: { cargados: number; total: number } | null
+    /** Sólo `esAlta`: campos del relevamiento cargados / total, y `faltan` = obligatorios
+     *  vacíos (traba el cierre). null = esquema en vuelo. */
+    progresoAlta?: { cargados: number; total: number; faltan: number } | null
     /** Sólo `esAlta`: `detalleAlta.contactoNombre`. Precarga "Con quién hablaste" si está
      *  vacío; editable, y nunca pisa lo que el vendedor ya tipeó. Dos conceptos distintos
      *  que conviven: el contacto del COMERCIO (plan) y con quién habló ESTA vez (hecho). */
@@ -473,6 +474,12 @@ export default function VisitaSheet({
     // Alta con la ficha incompleta: el pie no cierra, la pide. Va ANTES que el faltante de
     // ofrecimientos porque es lo único que no se puede completar después de cerrar.
     const pideFicha = esAlta && fichaPendiente && !!onCompletarFicha
+    // Después de la ficha, los datos para el alta: administración no puede dar de alta al
+    // cliente sin ellos, y cerrada la visita ya no se editan (FILA_RESUELTA). Con el esquema
+    // en vuelo (`progresoAlta` null) también pide: si no, no faltaría nada y el gate se
+    // auto-satisface — la misma trampa que `ofrecimientosCargados`.
+    const pideDatosAlta =
+        esAlta && !pideFicha && !!onDatosComercio && (progresoAlta === null || progresoAlta.faltan > 0)
 
     // En la línea de identidad del header (junto a `#10034 · FERNANDEZ MARIA ISABEL`) y
     // NO detrás de un menú: un control de un solo ítem escondido atrás de un "⋯" le suma
@@ -784,8 +791,8 @@ export default function VisitaSheet({
              *  mientras tanto el spinner o el error con "Volver a intentar". */}
             {!visitaCerrada && ofrecimientosCargados && (
                 <Button
-                    onClick={pideFicha ? onCompletarFicha : cerrarConBorrador}
-                    disabled={!pideFicha && !cierreHabilitado}
+                    onClick={pideFicha ? onCompletarFicha : pideDatosAlta ? onDatosComercio : cerrarConBorrador}
+                    disabled={!pideFicha && !pideDatosAlta && !cierreHabilitado}
                     loading={cerrando || guardandoBorrador}
                     // El naranja queda reservado para "ya podés cerrar". Mientras falten
                     // rubros va gris con texto navy, y NO el naranja al 40% de opacidad
@@ -799,7 +806,7 @@ export default function VisitaSheet({
                     // lavaría el gris y dejaría el texto del faltante ilegible, que es
                     // justo el único texto que el vendedor necesita leer en ese momento.
                     className={
-                        pideFicha || !cierreHabilitado
+                        pideFicha || pideDatosAlta || !cierreHabilitado
                             ? 'h-auto min-h-12 w-full whitespace-normal border border-[#D8DEEA] bg-[#F1F4F9] py-2 text-[15px] leading-tight text-dsnavy disabled:opacity-100'
                             : 'h-12 w-full bg-dsorange text-[15px] hover:bg-dsorange/90'
                     }
@@ -815,6 +822,8 @@ export default function VisitaSheet({
                           ? 'Cerrando…'
                           : pideFicha
                             ? 'Falta la ficha del comercio'
+                            : pideDatosAlta
+                            ? 'Faltan datos para el alta'
                             : !cierreHabilitado
                             ? esAlta
                                 ? 'Falta un rubro u observación'

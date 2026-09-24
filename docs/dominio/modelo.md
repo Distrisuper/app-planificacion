@@ -223,11 +223,23 @@ El comercio que todavía no es cliente **se representa con una fila del plan** (
 **El relevamiento** (spec `2026-09-21-relevamiento-alta-design.md`): `detalle` ya no son tres
 claves sino las que define el **esquema** (`esquemaAlta.ts` en api-vendedores, servido por
 `GET /altas/esquema`): identidad, ubicación, contacto, comercial, cuenta corriente y notas — lo
-que administración necesita para el alta en el ERP. Todo opcional salvo el nombre; el gate de
-cierre no cambia. Son datos del **comercio** (viven en el plan y sobreviven al reintento), a
+que administración necesita para el alta en el ERP. Son datos del **comercio** (viven en el plan y sobreviven al reintento), a
 diferencia del contacto del cierre, que es del **hecho** (`pl_resolucion.detalle`). IVA y
 condición de pago son catálogos cerrados en `pl_catalogo_alta`. El front no enumera campos:
 recorre el esquema, así que el relevamiento se puede cambiar por empresa sin tocar la app.
+
+**Casi todo es obligatorio para cerrar** (adenda del 24/09 del mismo spec): cada campo del esquema
+trae `obligatorio`, y hoy lo son todos salvo `referencias` y `datoDeColor`. No confundirlo con
+`requerido`, que sigue siendo sólo `nombre` y significa "no se vacía nunca": el alta se crea con el
+nombre, el formulario **se guarda a medias**, y lo `obligatorio` recién traba el **cierre** de la
+visita. El gate es del front, como el de la ficha y el de los ofrecimientos
+(`faltantesObligatorios` en `camposAlta.ts`, `pideDatosAlta` en `VisitaSheet`): va después de la
+ficha y antes del ofrecimiento/observación, y con el esquema en vuelo también pide —si no, no
+faltaría nada y se auto-satisface—. `PUT /visitas/:id/cerrar` no lo valida. Que trabe al vendedor
+sin CUIT o sin email es un costo aceptado: lo que carga es un **boceto** que administración revisa
+y completa al dar el alta en el ERP. `obligatorio` ausente = opcional, así que front y API se
+despliegan en cualquier orden. La segmentación se sacó del esquema (ya llega por la ficha del
+comercio); un detalle viejo que la traiga no rompe: las claves fuera del esquema se ignoran.
 
 ### Sacar de la agenda lo que se agregó a mano
 

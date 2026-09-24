@@ -28,7 +28,11 @@ export interface ICampoAlta {
     seccion: string
     tipo: TipoCampoAlta
     max?: number
+    /** No se puede vaciar nunca (hoy sólo `nombre`): bloquea el Guardar del formulario. */
     requerido?: boolean
+    /** Hay que cargarlo para CERRAR la visita de alta; el formulario igual se guarda a medias.
+     *  Ausente = opcional, así una API vieja no inventa un gate. */
+    obligatorio?: boolean
     /** Solo tipo 'catalogo': la clave dentro de `IEsquemaAlta.catalogos`. */
     catalogo?: string
     placeholder?: string

@@ -374,14 +374,17 @@ Hay **tres capas separadas**, y una operación toca una sola:
   solo `data`, un fallo la deja en `undefined` para siempre. **El gate es solo del front**;
   `PUT /visitas/:id/cerrar` acepta cerrar con cero resoluciones, así que un bundle viejo
   cacheado se lo saltea igual.
-- **"Cliente nuevo" (visita de alta) es una fila del plan con `tipo='alta'`, no una tabla ni un cliente genérico.** Código sintético `ALTA-<id>`, datos del comercio en `pl_rotacion_cliente.detalle`, contacto en `pl_resolucion.detalle`. Sin propuesta, sin mapa, sin gate de distancia; gate de cierre propio (un ofrecimiento o una observación, `puedeCerrarAlta`). Cromo va al genérico 09895 con etiqueta `ALTA`. Ver `docs/dominio/modelo.md`, "La visita de alta".
+- **"Cliente nuevo" (visita de alta) es una fila del plan con `tipo='alta'`, no una tabla ni un cliente genérico.** Código sintético `ALTA-<id>`, datos del comercio en `pl_rotacion_cliente.detalle`, contacto en `pl_resolucion.detalle`. Sin propuesta, sin mapa, sin gate de distancia; gate de cierre propio: la ficha, después los campos `obligatorio` del relevamiento (`pideDatosAlta`), y un ofrecimiento o una observación (`puedeCerrarAlta`). Cromo va al genérico 09895 con etiqueta `ALTA`. Ver `docs/dominio/modelo.md`, "La visita de alta".
   **El relevamiento del comercio ("Datos del comercio", `RelevamientoSheet`) se dibuja desde
   `GET /planificacion/altas/esquema`**: la lista de campos vive en `esquemaAlta.ts` de
   api-vendedores y en ningún lugar del front — agregar un dato es una fila ahí (y, si es
   catálogo, un `INSERT` en `pl_catalogo_alta`), sin desplegar la app. `IDetalleAlta` es
   `{ nombre; [clave]: string | null }` a propósito. Los tipos de campo son un set cerrado
   (`texto | textoLargo | cuit | email | catalogo`); un tipo nuevo se agrega en el validador de
-  la API y en `CampoInput` del sheet, nada más. Se abre desde la card pendiente ("Datos") y
+  la API y en `CampoInput` del sheet, nada más. **`obligatorio` ≠ `requerido`**: `requerido`
+  (sólo `nombre`) no se vacía nunca y traba el Guardar; `obligatorio` (todo salvo referencias y
+  dato de color) se guarda a medias pero traba el **cierre** de la visita — gate sólo del front,
+  y aceptado aunque trabe: es un boceto que administración completa al dar el alta. Se abre desde la card pendiente ("Datos") y
   desde la visita abierta (botón "Datos" al lado de "No visité"); `contactoNombre` precarga
   "Con quién hablaste" sin pisar lo tipeado. Gerencia lo ve y lo exporta en `/analitica/altas`.
   Spec: `2026-09-21-relevamiento-alta-design.md` (leer su adenda).

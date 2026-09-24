@@ -55,6 +55,11 @@ export function diffDetalle(
     return cambios as IEditarAltaDTO
 }
 
+/** Los campos `obligatorio` sin valor: lo que falta para poder cerrar la visita de alta. */
+export function faltantesObligatorios(campos: ICampoAlta[], estado: Record<string, string>): ICampoAlta[] {
+    return campos.filter(c => c.obligatorio && normalizarValor(estado[c.clave]) === null)
+}
+
 export function contarCargados(campos: ICampoAlta[], estado: Record<string, string>): number {
     return campos.filter(c => normalizarValor(estado[c.clave]) !== null).length
 }

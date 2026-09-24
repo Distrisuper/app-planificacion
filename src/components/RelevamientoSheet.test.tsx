@@ -15,9 +15,9 @@ const ESQUEMA: IEsquemaAlta = {
         { clave: 'notas', titulo: 'Notas' },
     ],
     campos: [
-        { clave: 'nombre', etiqueta: 'Nombre del comercio', seccion: 'identidad', tipo: 'texto', max: 120, requerido: true },
-        { clave: 'cuit', etiqueta: 'CUIT', seccion: 'identidad', tipo: 'cuit', max: 13 },
-        { clave: 'condicionIva', etiqueta: 'Condición de IVA', seccion: 'comercial', tipo: 'catalogo', catalogo: 'iva' },
+        { clave: 'nombre', etiqueta: 'Nombre del comercio', seccion: 'identidad', tipo: 'texto', max: 120, requerido: true, obligatorio: true },
+        { clave: 'cuit', etiqueta: 'CUIT', seccion: 'identidad', tipo: 'cuit', max: 13, obligatorio: true },
+        { clave: 'condicionIva', etiqueta: 'Condición de IVA', seccion: 'comercial', tipo: 'catalogo', catalogo: 'iva', obligatorio: true },
         { clave: 'datoDeColor', etiqueta: 'Dato de color', seccion: 'notas', tipo: 'textoLargo', max: 300 },
     ],
     catalogos: { iva: [{ codigo: 'RI', descripcion: 'Responsable Inscripto', orden: 10, activo: true }] },
@@ -43,7 +43,7 @@ beforeEach(() => {
     vi.mocked(api.editarAlta).mockResolvedValue(cliente())
 })
 
-it('dibuja las secciones y campos del esquema, precargados desde detalleAlta, y cuenta los cargados', async () => {
+it('dibuja las secciones y campos del esquema, precargados desde detalleAlta, y cuenta los obligatorios que faltan', async () => {
     wrap(<RelevamientoSheet open cliente={cliente()} onClose={() => {}} onGuardado={() => {}} onAviso={() => {}} />)
     expect(await screen.findByText('Identidad')).toBeInTheDocument()
     expect(screen.getByText('Comercial')).toBeInTheDocument()
@@ -51,7 +51,10 @@ it('dibuja las secciones y campos del esquema, precargados desde detalleAlta, y 
     expect(screen.getByLabelText(/nombre del comercio/i)).toHaveValue('Autopartes Piche')
     expect(screen.getByLabelText(/cuit/i)).toHaveValue('30-1')
     expect(screen.getByLabelText(/condición de iva/i)).toHaveValue('')
-    expect(screen.getByText(/2 de 4 datos/)).toBeInTheDocument()
+    expect(screen.getByText(/falta 1 obligatorio/i)).toBeInTheDocument()
+    // "(opcional)" sólo en lo que no es obligatorio.
+    expect(screen.getByText('CUIT')).toBeInTheDocument()
+    expect(screen.getByText('Dato de color (opcional)')).toBeInTheDocument()
     expect(screen.getByText('Datos del comercio')).toBeInTheDocument()
 })
 
@@ -59,8 +62,8 @@ it('guarda SOLO el diff y avisa', async () => {
     const onGuardado = vi.fn(); const onClose = vi.fn()
     wrap(<RelevamientoSheet open cliente={cliente()} onClose={onClose} onGuardado={onGuardado} onAviso={() => {}} />)
     fireEvent.change(await screen.findByLabelText(/condición de iva/i), { target: { value: 'RI' } })
+    expect(screen.getByText(/datos completos/i)).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText(/dato de color/i), { target: { value: ' le gusta el fútbol ' } })
-    expect(screen.getByText(/4 de 4 datos/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /^guardar$/i }))
     await waitFor(() => expect(api.editarAlta).toHaveBeenCalledWith(9, { condicionIva: 'RI', datoDeColor: 'le gusta el fútbol' }))
     await waitFor(() => expect(onGuardado).toHaveBeenCalled())

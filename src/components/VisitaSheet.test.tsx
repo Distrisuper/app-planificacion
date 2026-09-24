@@ -1162,18 +1162,48 @@ describe('cliente nuevo (esAlta)', () => {
         const onAbrirFicha = vi.fn()
         renderSheet({
             esAlta: true, enCurso: true, onDatosComercio, onAbrirFicha,
-            fichaPendiente: true, progresoAlta: { cargados: 3, total: 16 },
+            fichaPendiente: true, progresoAlta: { cargados: 3, total: 14, faltan: 9 },
         })
         const ficha = await screen.findByRole('button', { name: /ficha del comercio/i })
         expect(ficha).toHaveTextContent(/falta · obligatoria/i)
         const relevamiento = screen.getByRole('button', { name: /datos para el alta/i })
-        expect(relevamiento).toHaveTextContent('3 de 16')
+        expect(relevamiento).toHaveTextContent(/faltan 9 · obligatorios/i)
         fireEvent.click(ficha)
         expect(onAbrirFicha).toHaveBeenCalledTimes(1)
         fireEvent.click(relevamiento)
         expect(onDatosComercio).toHaveBeenCalledTimes(1)
         // Ya no hay botón "Datos" en el header.
         expect(screen.queryByRole('button', { name: /^datos$/i })).not.toBeInTheDocument()
+    })
+
+    it('con la ficha completa, el pie pide los datos para el alta mientras falten obligatorios', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        const onDatosComercio = vi.fn()
+        const { onCerrarVisita } = renderSheet({
+            esAlta: true, enCurso: true, onDatosComercio, onAbrirFicha: vi.fn(),
+            progresoAlta: { cargados: 5, total: 14, faltan: 7 },
+        })
+        const pie = await screen.findByRole('button', { name: /faltan datos para el alta/i })
+        expect(pie).toBeEnabled()
+        fireEvent.click(pie)
+        expect(onDatosComercio).toHaveBeenCalledTimes(1)
+        expect(onCerrarVisita).not.toHaveBeenCalled()
+    })
+
+    it('con el esquema en vuelo el pie tampoco cierra (el gate no se auto-satisface)', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({ esAlta: true, enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn(), progresoAlta: null })
+        expect(await screen.findByRole('button', { name: /faltan datos para el alta/i })).toBeInTheDocument()
+    })
+
+    it('sin obligatorios pendientes la tarjeta marca Completos y el pie vuelve al gate de siempre', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([])
+        renderSheet({
+            esAlta: true, enCurso: true, onDatosComercio: vi.fn(), onAbrirFicha: vi.fn(),
+            progresoAlta: { cargados: 12, total: 14, faltan: 0 },
+        })
+        expect(await screen.findByRole('button', { name: /datos para el alta/i })).toHaveTextContent(/completos/i)
+        expect(await screen.findByRole('button', { name: /falta un rubro u observación/i })).toBeDisabled()
     })
 
     it('con la ficha completa la tarjeta la marca Completa', async () => {

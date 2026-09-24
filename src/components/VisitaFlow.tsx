@@ -21,7 +21,7 @@ import { useAlejadoDelCliente } from '@/hooks/useAlejadoDelCliente'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { AppExterna } from '@/lib/appsExternas'
 import { esAlta } from '@/lib/alta'
-import { contarCargados, estadoInicial } from '@/lib/camposAlta'
+import { contarCargados, estadoInicial, faltantesObligatorios } from '@/lib/camposAlta'
 import { useEsquemaAlta } from '@/hooks/useEsquemaAlta'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { formatDistancia } from '@/lib/analiticaFormat'
@@ -261,16 +261,19 @@ export default function VisitaFlow({
     const fichaCortaElInicio = !clienteEsAlta && !fichaLista && !!cliente && relevamientoPendiente(cliente)
     const fichaFaltaAlAlta = clienteEsAlta && !fichaLista && !!cliente && relevamientoPendiente(cliente)
     // Progreso del relevamiento para la tarjeta del alta. Mismo esquema (y misma caché) que
-    // dibuja RelevamientoSheet, así que "3 de 16" cuenta exactamente lo que ese form muestra.
+    // dibuja RelevamientoSheet, así que lo que cuenta es exactamente lo que ese form muestra.
+    // `faltan` (obligatorios vacíos) es el gate de cierre del alta; null = esquema en vuelo.
     const esquemaAlta = useEsquemaAlta(clienteEsAlta)
-    const progresoAlta =
+    const estadoAlta =
         clienteEsAlta && cliente && esquemaAlta.data
+            ? estadoInicial(esquemaAlta.data.campos, cliente.detalleAlta, cliente.nombreCliente)
+            : null
+    const progresoAlta =
+        estadoAlta && esquemaAlta.data
             ? {
-                  cargados: contarCargados(
-                      esquemaAlta.data.campos,
-                      estadoInicial(esquemaAlta.data.campos, cliente.detalleAlta, cliente.nombreCliente),
-                  ),
+                  cargados: contarCargados(esquemaAlta.data.campos, estadoAlta),
                   total: esquemaAlta.data.campos.length,
+                  faltan: faltantesObligatorios(esquemaAlta.data.campos, estadoAlta).length,
               }
             : null
 

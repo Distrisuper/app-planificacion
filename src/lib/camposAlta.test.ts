@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-    camposPorSeccion, contarCargados, descripcionCatalogo, diffDetalle, estadoInicial, opcionesDeCatalogo, valorDe,
+    camposPorSeccion, contarCargados, descripcionCatalogo, diffDetalle, estadoInicial, faltantesObligatorios, opcionesDeCatalogo, valorDe,
 } from './camposAlta'
 import type { ICampoAlta, IEsquemaAlta } from '@/types/planificacion'
 
@@ -17,6 +17,18 @@ const CATALOGOS = {
         { codigo: 'NR', descripcion: 'No Responsable', orden: 50, activo: false },
     ],
 }
+
+describe('faltantesObligatorios', () => {
+    it('sólo los obligatorios vacíos (espacios cuentan como vacío)', () => {
+        const campos: ICampoAlta[] = [
+            { clave: 'nombre', etiqueta: 'Nombre', seccion: 'identidad', tipo: 'texto', max: 120, requerido: true, obligatorio: true },
+            { clave: 'cuit', etiqueta: 'CUIT', seccion: 'identidad', tipo: 'cuit', max: 13, obligatorio: true },
+            { clave: 'referencias', etiqueta: 'Referencias', seccion: 'cuenta', tipo: 'textoLargo', max: 300 },
+        ]
+        expect(faltantesObligatorios(campos, { nombre: 'Piche', cuit: '  ', referencias: '' }).map(c => c.clave)).toEqual(['cuit'])
+        expect(faltantesObligatorios(campos, { nombre: 'Piche', cuit: '30-1', referencias: '' })).toEqual([])
+    })
+})
 
 describe('valorDe', () => {
     it('detalle null o clave ausente → null', () => {
