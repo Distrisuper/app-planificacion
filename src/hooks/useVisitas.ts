@@ -1,6 +1,7 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     cerrarVisita,
+    getVisitaActiva,
     iniciarVisita,
     noVisitaSobreVisitaAbierta,
     registrarNoVisita,
@@ -9,6 +10,21 @@ import {
 import { agendaKeys } from './useAgenda'
 import { cicloKeys } from './useCiclo'
 import type { ICerrarVisitaDTO, IIniciarVisitaDTO, INoVisitaDTO } from '@/types/planificacion'
+
+/**
+ * La visita abierta según el servidor. La key lleva el `visitaId`: una visita nueva no
+ * puede leer la activa cacheada de la anterior, y lo que se usa de ella (`fechaInicio`,
+ * `coordCliente`) no cambia mientras está abierta, así que no hace falta volver a pedirla.
+ * La comparten el cronómetro y la página (misma key → un solo request).
+ */
+export function useVisitaActiva(visitaId: number | null) {
+    return useQuery({
+        queryKey: ['visitas', 'activa', visitaId],
+        queryFn: async () => (await getVisitaActiva()) ?? null,
+        staleTime: Infinity,
+        enabled: visitaId !== null,
+    })
+}
 
 function useMutacionDeVisita<TVars, TData>(fn: (vars: TVars) => Promise<TData>) {
     const qc = useQueryClient()

@@ -675,6 +675,41 @@ it('la carrera con el refetch de la agenda no pisa la posición reposicionada', 
     vi.unstubAllGlobals()
 })
 
+it('sin puntero local (cerró sesión, 401, otro dispositivo), ancla la visita a la coordenada con la que el servidor la inició', async () => {
+    // Regresión: la reposición del pin al iniciar vivía SOLO en el puntero local. Al
+    // perderlo, la re-adopción tomaba la card de la agenda —coordenada del warehouse, acá
+    // en Mar del Plata— y "te alejaste" medía contra el pin viejo: "estás a 371 km" parado
+    // donde se reposicionó. El servidor persistió la buena en coord_cliente.
+    fijarLunes()
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteLunes, latitud: -38.0, longitud: -57.55, estado: 'en_curso', visitaId: 7 }],
+    })
+    ;(api.getVisitaActiva as any).mockResolvedValue({
+        id: 7,
+        fechaInicio: new Date().toISOString(),
+        coordCliente: '-34.603,-58.4',
+    })
+    const watchPosition = vi.fn((ok: any) => {
+        ok({ coords: { latitude: -34.603, longitude: -58.4, accuracy: 10 } })
+        return 1
+    })
+    vi.stubGlobal('navigator', {
+        geolocation: { watchPosition, getCurrentPosition: vi.fn(), clearWatch: vi.fn() },
+    })
+
+    renderPage()
+
+    await screen.findByTestId('visita-en-curso-bar')
+    await waitFor(() => expect(leerVisitaEnCurso()?.cliente.latitud).toBe(-34.603))
+    await waitFor(() => expect(watchPosition).toHaveBeenCalled())
+    const barra = screen.getByTestId('visita-en-curso-bar')
+    expect(barra).not.toHaveClass('bg-dsred')
+    expect(barra).toHaveTextContent('Visitando a ALMACEN DON JOSE')
+    vi.unstubAllGlobals()
+})
+
 it('un refetch tardío no revive una visita ya cerrada (no reaparece "te alejaste")', async () => {
     // Regresión simétrica a la anterior, del lado del cierre: cerrarVisita TAMBIÉN invalida
     // la agenda en su onSuccess (useVisitas.ts). Si un refetch que ya estaba en vuelo antes

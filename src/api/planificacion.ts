@@ -102,9 +102,14 @@ export const getMotivos = async (nivel?: NivelMotivo): Promise<IMotivo[]> => {
 // ── Visitas ────────────────────────────────────────────────────────────────────
 
 /** La visita abierta del vendedor según el servidor, o null. El backend manda la
- *  resolución entera; acá solo se tipea lo que se usa: el ancla del cronómetro
- *  (`useVisitaTimer`), que no puede vivir solo en localStorage. */
-export const getVisitaActiva = async (): Promise<{ id: number; fechaInicio: string } | null> => {
+ *  resolución entera; acá solo se tipea lo que se usa, que es lo que no puede vivir solo
+ *  en localStorage: el inicio del cronómetro (`useVisitaTimer`) y la coordenada del
+ *  cliente con la que se inició, reposicionada o no (`conCoordClienteDelServidor`). */
+export const getVisitaActiva = async (): Promise<{
+    id: number
+    fechaInicio: string
+    coordCliente: string | null
+} | null> => {
     const res = await apiClient.get('/planificacion/visitas/activa')
     return res.data.data
 }

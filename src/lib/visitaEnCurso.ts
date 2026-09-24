@@ -39,3 +39,28 @@ export function leerVisitaEnCurso(): IVisitaEnCursoGuardada | null {
 export function limpiarVisitaEnCurso(): void {
     localStorage.removeItem(KEY)
 }
+
+/**
+ * El cliente de la visita en curso con la coordenada que el SERVIDOR persistió al iniciar
+ * (`pl_resolucion.coord_cliente`: la reposicionada si el vendedor movió el pin, la del
+ * warehouse si no, la marcada en el mapa si es un alta).
+ *
+ * La reposición vivía solo en este puntero local, y el puntero no sobrevive a cerrar
+ * sesión, a un 401 ni a otro dispositivo: al perderlo, la visita se re-adoptaba desde la
+ * card de la agenda, que trae la coordenada del warehouse (la corrección permanente a
+ * client-service tarda un día en volver), y el aviso de "te alejaste" medía contra el
+ * pin viejo — "estás a 371 km" parado donde se reposicionó.
+ *
+ * Devuelve la MISMA referencia si no hay nada que corregir: el resultado alimenta
+ * efectos y un objeto nuevo en cada render los dispararía en loop.
+ */
+export function conCoordClienteDelServidor<T extends IVisitaEnCursoGuardada>(
+    visita: T | null,
+    activa: { id: number; coordCliente: string | null } | null | undefined,
+): T | null {
+    if (!visita || !activa || activa.id !== visita.visitaId || !activa.coordCliente) return visita
+    const [lat, lng] = activa.coordCliente.split(',').map(Number)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return visita
+    if (visita.cliente.latitud === lat && visita.cliente.longitud === lng) return visita
+    return { ...visita, cliente: { ...visita.cliente, latitud: lat, longitud: lng } }
+}

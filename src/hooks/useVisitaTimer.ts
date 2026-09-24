@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { getVisitaActiva } from '@/api/planificacion'
+import { useVisitaActiva } from '@/hooks/useVisitas'
 import { fijarInicioVisita, segundosTranscurridos } from '@/lib/visitaTimer'
 
 /**
@@ -12,16 +11,9 @@ import { fijarInicioVisita, segundosTranscurridos } from '@/lib/visitaTimer'
  * ni a abrir la visita en otro dispositivo: la visita seguía abierta en el backend y el
  * cronómetro mostraba 00:00, arrancando de nuevo. El localStorage queda como caché del
  * ancla del servidor, para que una recarga sin señal siga contando bien.
- *
- * La key lleva el `visitaId`: una visita nueva no puede leer la activa cacheada de la
- * anterior, y `fechaInicio` es inmutable, así que no hace falta volver a pedirla.
  */
 export function useVisitaTimer(visitaId: number): number {
-    const { data: activa } = useQuery({
-        queryKey: ['visitas', 'activa', visitaId],
-        queryFn: async () => (await getVisitaActiva()) ?? null,
-        staleTime: Infinity,
-    })
+    const { data: activa } = useVisitaActiva(visitaId)
 
     const [segundos, setSegundos] = useState(() => segundosTranscurridos(visitaId) ?? 0)
 
