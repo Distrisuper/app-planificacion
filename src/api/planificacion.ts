@@ -243,8 +243,9 @@ export const getRubroStatus = async (
 
 // ── Catálogos (endpoints reusados, fuera del dominio de planificación) ─────────
 
-/** Marcas con ventas en los últimos 12 meses. Ordenadas por descripción del lado
- *  del server. */
+/** Marcas web de `dim_brand_lines`, vendan o no (una marca nueva sin ventas tiene que
+ *  poder declararse como ofrecida). Una por marca, con su línea por rubro. Ordenadas por
+ *  descripción del lado del server. */
 export const getBrandCatalog = async (): Promise<ICatalogoItem[]> => {
     const res = await apiClient.get('/sale/brand/catalog')
     return res.data.data

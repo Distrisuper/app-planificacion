@@ -210,6 +210,33 @@ it('aplicar copia las marcas a los rubros restantes SIN marcas, sin tocar los qu
     expect(onCambiarMarcasOfrecidas).toHaveBeenCalledWith(8, [{ codigo: 'B1', descripcion: 'FREMAX' }])
 })
 
+// Se copia la MARCA, no el código: SKF de ROD BOLA es una línea (097) y la de FILT es
+// otra. Copiar el código dejaba el rubro de destino con la línea de otro rubro.
+it('aplicar guarda en cada rubro la línea de la marca en ESE rubro', async () => {
+    ;(api.getBrandCatalog as any).mockResolvedValue([
+        { code: '096', description: 'SKF', lineaPorRubro: { AMORT: '097', FILT: '104' } },
+    ])
+    const { onCambiarMarcasOfrecidas } = setup({
+        marcasOfrecidas: { 7: [{ codigo: '097', descripcion: 'SKF' }], 8: [] },
+    })
+    await waitFor(() => expect(api.getBrandCatalog).toHaveBeenCalled())
+    await screen.findByLabelText(/aplicar a restantes/i)
+    // Espera a que el catálogo esté en el componente (no solo pedido) antes de aplicar.
+    await new Promise(r => setTimeout(r, 0))
+    fireEvent.click(screen.getByLabelText(/aplicar a restantes/i))
+    expect(onCambiarMarcasOfrecidas).toHaveBeenCalledWith(8, [{ codigo: '104', descripcion: 'SKF' }])
+})
+
+it('aplicar prefiere la línea que el cliente compra en el rubro de destino', () => {
+    const skf = { code: '132', nombre: 'SKF', actual: 0, mesAnterior: 0, promedio6m: 0, dejo: false }
+    const { onCambiarMarcasOfrecidas } = setup({
+        marcasPorRubro: { FILT: [skf] },
+        marcasOfrecidas: { 7: [{ codigo: '097', descripcion: 'SKF' }], 8: [] },
+    })
+    fireEvent.click(screen.getByLabelText(/aplicar a restantes/i))
+    expect(onCambiarMarcasOfrecidas).toHaveBeenCalledWith(8, [{ codigo: '132', descripcion: 'SKF' }])
+})
+
 it('Limpiar vacía también las marcas', () => {
     const { onCambiarMarcasOfrecidas } = setup({ marcasOfrecidas: { 7: [{ codigo: 'B1', descripcion: 'FREMAX' }] } })
     fireEvent.click(screen.getByLabelText(/limpiar lo cargado/i))

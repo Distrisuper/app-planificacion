@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Check, Loader2, Search } from 'lucide-react'
 import type { ICatalogoItem } from '@/types/planificacion'
 
-/** Los catálogos traen cientos de filas (el de marcas sale de 12 meses de ventas).
+/** Los catálogos traen cientos de filas (el de marcas, cada marca web del warehouse).
  *  Pintarlas todas en un sheet en un teléfono de gama baja se siente lento, y nadie
  *  scrollea 400 opciones: se busca. */
 const TOPE = 50
@@ -68,7 +68,7 @@ export default function CatalogoPicker({
     const ocultos = filtrados.length - visibles.length
 
     // Un valor guardado que ya no está en el catálogo (marca vieja en texto libre, o
-    // marca que dejó de vender y cayó de los 12 meses) se muestra igual, inerte:
+    // marca que dejó de ser web y cayó del catálogo) se muestra igual, inerte:
     // perderlo en silencio sería peor que la inconsistencia que esto viene a arreglar.
     const huerfano = value && !items.some(i => i.description === value) ? value : null
 

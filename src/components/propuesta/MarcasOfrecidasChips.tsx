@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, Plus } from 'lucide-react'
 import CatalogoPicker from './CatalogoPicker'
+import { lineaDeMarca } from '@/lib/marcaOfrecida'
 import type { ICatalogoItem, IMarcaEstado, IMarcaOfrecida } from '@/types/planificacion'
 
 interface MarcasOfrecidasChipsProps {
@@ -9,6 +10,9 @@ interface MarcasOfrecidasChipsProps {
     /** Catálogo completo, para "+ Otra". */
     catalogo: ICatalogoItem[]
     catalogoLoading?: boolean
+    /** Rubro que se está resolviendo: define qué línea de la marca se guarda al elegirla
+     *  en "+ Otra". `null` si el ofrecimiento no es de un rubro. */
+    rubroCode: string | null
     value: IMarcaOfrecida[]
     onChange: (marcas: IMarcaOfrecida[]) => void
     /** Cuántos rubros quedan además de este. 0 = no se ofrece "Aplicar a restantes". */
@@ -20,11 +24,18 @@ interface MarcasOfrecidasChipsProps {
 /** "¿Qué marca ofreciste?" — chips multi-selección precargados con el desglose del rubro
  *  (spec 2026-09-16 §5.2). Reemplaza al select de una sola marca que escribía
  *  `detalle.marca`: lo que se elige acá va al alcance del ofrecimiento (tipo='marca').
- *  Opcional: nunca bloquea nada. */
+ *  Opcional: nunca bloquea nada.
+ *
+ *  La identidad de una marca es su NOMBRE, no su código: el código es una línea de la
+ *  marca (SKF vende bajo ~14), y el mismo SKF puede llegar con una línea en el chip y con
+ *  otra desde el catálogo. Comparando por código, SKF tildada como chip seguía en "+ Otra"
+ *  y elegirla ahí sumaba un segundo chip "SKF". El código que se guarda lo decide
+ *  `lineaDeMarca`: la línea de la marca en ESTE rubro. */
 export default function MarcasOfrecidasChips({
     marcasDelRubro,
     catalogo,
     catalogoLoading,
+    rubroCode,
     value,
     onChange,
     rubrosRestantes = 0,
@@ -33,13 +44,16 @@ export default function MarcasOfrecidasChips({
     const [buscadorAbierto, setBuscadorAbierto] = useState(false)
     const [aplicado, setAplicado] = useState(false)
 
-    const elegidas = new Map(value.map(m => [m.codigo, m]))
+    const elegidas = new Set(value.map(m => m.descripcion))
+    // Un chip por marca: si el cliente compra dos líneas de SKF en el rubro, el desglose
+    // trae dos filas "SKF", y para esta pregunta son la misma marca.
+    const chips = marcasDelRubro.filter((m, i) => marcasDelRubro.findIndex(d => d.nombre === m.nombre) === i)
     // Chips = desglose del rubro + las elegidas que no están en el desglose (vinieron de
     // "+ Otra" o de un alcance guardado), para que lo elegido siempre se vea.
-    const extras = value.filter(m => !marcasDelRubro.some(d => d.code === m.codigo))
+    const extras = value.filter(m => !chips.some(d => d.nombre === m.descripcion))
 
     function toggle(codigo: string, descripcion: string) {
-        if (elegidas.has(codigo)) onChange(value.filter(m => m.codigo !== codigo))
+        if (elegidas.has(descripcion)) onChange(value.filter(m => m.descripcion !== descripcion))
         else onChange([...value, { codigo, descripcion }])
     }
 
@@ -67,8 +81,8 @@ export default function MarcasOfrecidasChips({
             </div>
 
             <div className="flex flex-wrap gap-1.5">
-                {marcasDelRubro.map(m => {
-                    const on = elegidas.has(m.code)
+                {chips.map(m => {
+                    const on = elegidas.has(m.nombre)
                     return (
                         <button
                             key={m.code}
@@ -112,9 +126,19 @@ export default function MarcasOfrecidasChips({
                     <CatalogoPicker
                         items={catalogo}
                         loading={catalogoLoading}
-                        excluir={value.map(m => m.codigo)}
+                        excluir={catalogo.filter(i => elegidas.has(i.description)).map(i => i.code)}
                         onSelect={item => {
-                            if (!elegidas.has(item.code)) onChange([...value, { codigo: item.code, descripcion: item.description }])
+                            if (!elegidas.has(item.description)) {
+                                onChange([
+                                    ...value,
+                                    lineaDeMarca(
+                                        { codigo: item.code, descripcion: item.description },
+                                        rubroCode,
+                                        chips,
+                                        catalogo,
+                                    ),
+                                ])
+                            }
                             setBuscadorAbierto(false)
                         }}
                         placeholder="Buscar marca…"

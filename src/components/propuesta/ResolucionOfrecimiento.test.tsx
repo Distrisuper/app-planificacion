@@ -39,6 +39,7 @@ function setup(value: IOfrecimientoMotivo[] = [], over: Record<string, unknown> 
             motivos={motivos}
             marcas={marcas}
             marcasDelRubro={[]}
+            rubroCode={null}
             marcasOfrecidas={[]}
             onChangeMarcasOfrecidas={onChangeMarcasOfrecidas}
             accion={null}
