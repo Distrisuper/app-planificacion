@@ -23,6 +23,9 @@ interface ResolucionOfrecimientoProps {
     /** El desglose del cliente en este rubro (mismo dato que la tabla), para precargar
      *  los chips de "¿Qué marca ofreciste?". */
     marcasDelRubro: IMarcaEstado[]
+    /** Rubro del ofrecimiento (`null` si no es de un rubro): decide qué línea de la marca
+     *  se guarda al elegirla en "+ Otra". */
+    rubroCode: string | null
     /** Las marcas ya declaradas para este ofrecimiento. */
     marcasOfrecidas: IMarcaOfrecida[]
     onChangeMarcasOfrecidas: (marcas: IMarcaOfrecida[]) => void
@@ -96,6 +99,7 @@ export default function ResolucionOfrecimiento({
     marcas,
     marcasLoading,
     marcasDelRubro,
+    rubroCode,
     marcasOfrecidas,
     onChangeMarcasOfrecidas,
     accion: _accion,
@@ -230,6 +234,7 @@ export default function ResolucionOfrecimiento({
         <div>
             <MarcasOfrecidasChips
                 marcasDelRubro={marcasDelRubro}
+                rubroCode={rubroCode}
                 catalogo={marcas}
                 catalogoLoading={marcasLoading}
                 value={marcasOfrecidas}

@@ -76,6 +76,9 @@ export type EstadoCicloCliente = 'pendiente' | 'en_curso' | 'visitada' | 'no_vis
 export interface ICatalogoItem {
     code: string
     description: string
+    /** Solo en el catálogo de marcas: rubro_code → brand_code de la LÍNEA de esta marca en
+     *  ese rubro (SKF vende bajo ~14 códigos, uno por línea). Ver `lineaDeMarca`. */
+    lineaPorRubro?: Record<string, string>
 }
 
 /** Qué clase de input pide un campo. Es un enum de CÓDIGO, no de datos: sumar un `tipo`

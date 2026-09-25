@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import ResolucionOfrecimiento from './ResolucionOfrecimiento'
 import { useBrandCatalog } from '@/hooks/useCatalogos'
 import { useEliminarOfrecimiento } from '@/hooks/useOfrecimientos'
+import { lineaDeMarca } from '@/lib/marcaOfrecida'
 import type {
     IAccionComercial,
     IMarcaEstado,
@@ -35,6 +36,12 @@ interface ResolucionWizardProps {
     onVolver: () => void
 }
 
+/** El rubro del ofrecimiento, o `null` si es de otro tipo (marca, acción…): su `codigo` no
+ *  es un rubro_code y no sirve para buscar la línea de una marca. */
+function rubroDe(o: IOfrecimiento): string | null {
+    return o.tipo === 'rubro' ? o.codigo : null
+}
+
 /** Header (contexto/salida) + checklist del ofrecimiento actual. Va en el área scrolleable
  *  del sheet — la navegación y el guardado en lote viven en ResolucionWizardAcciones, que
  *  se renderiza aparte, en el pie fijo, para que no se oculten al expandirse el detalle. */
@@ -55,6 +62,7 @@ export default function ResolucionWizard({
     const ofrecimiento = ofrecimientos[index]
     const accion = detalles[ofrecimiento.id] ?? null
     const marcasDelRubro = marcasPorRubro[ofrecimiento.codigo] ?? []
+    const rubroCode = rubroDe(ofrecimiento)
     const marcasActuales = marcasOfrecidas[ofrecimiento.id] ?? []
 
     // Sentido del último movimiento, para que la entrada acompañe a la navegación. Se lee
@@ -84,10 +92,15 @@ export default function ResolucionWizard({
 
     // Copia las marcas tildadas SOLO a los restantes que todavía no tienen ninguna: es una
     // copia de una sola vez, no un vínculo, y no pisa lo que el vendedor ya eligió en otro
-    // rubro.
+    // rubro. Se copia la MARCA, no el código: cada rubro guarda la línea que le corresponde
+    // (SKF de ROD BOLA es 097; en KIT DISTRIBUCION, 104).
     function aplicarMarcas() {
         for (const r of restantes) {
-            if ((marcasOfrecidas[r.id] ?? []).length === 0) onCambiarMarcasOfrecidas(r.id, marcasActuales)
+            if ((marcasOfrecidas[r.id] ?? []).length > 0) continue
+            onCambiarMarcasOfrecidas(
+                r.id,
+                marcasActuales.map(m => lineaDeMarca(m, rubroDe(r), marcasPorRubro[r.codigo] ?? [], marcas)),
+            )
         }
     }
 
@@ -190,6 +203,7 @@ export default function ResolucionWizard({
                     marcas={marcas}
                     marcasLoading={marcasLoading}
                     marcasDelRubro={marcasDelRubro}
+                    rubroCode={rubroCode}
                     marcasOfrecidas={marcasActuales}
                     onChangeMarcasOfrecidas={m => onCambiarMarcasOfrecidas(ofrecimiento.id, m)}
                     accion={accion}
