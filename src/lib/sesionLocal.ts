@@ -26,11 +26,9 @@ const TOKEN = 'access_token'
 /** Prefijo común de todo lo que guardan visitaEnCurso, resolucionDraft y visitaTimer. */
 const PREFIJO_VISITA = 'visita-'
 
-/** Borra del storage el token y todo lo de visitas. No toca la memoria: para el 401 de
- *  apiClient (que recarga la página, así que la memoria se vacía sola) y para antes de
- *  montar React (main.tsx), cuando todavía no hay nada en memoria. */
-export function limpiarStorageSesion(): void {
-    localStorage.removeItem(TOKEN)
+/** Borra del storage todo lo de visitas, sin tocar el token: para cuando el backend borró
+ *  las visitas pero la sesión sigue (reiniciar el modo prueba). */
+export function limpiarVisitasLocales(): void {
     // Se recolectan primero: borrar mientras se itera por índice saltea claves.
     const deVisitas: string[] = []
     for (let i = 0; i < localStorage.length; i++) {
@@ -38,6 +36,14 @@ export function limpiarStorageSesion(): void {
         if (k !== null && k.startsWith(PREFIJO_VISITA)) deVisitas.push(k)
     }
     deVisitas.forEach(k => localStorage.removeItem(k))
+}
+
+/** Borra del storage el token y todo lo de visitas. No toca la memoria: para el 401 de
+ *  apiClient (que recarga la página, así que la memoria se vacía sola) y para antes de
+ *  montar React (main.tsx), cuando todavía no hay nada en memoria. */
+export function limpiarStorageSesion(): void {
+    localStorage.removeItem(TOKEN)
+    limpiarVisitasLocales()
 }
 
 /** Cerrar sesión desde la app: storage + caché en memoria. */

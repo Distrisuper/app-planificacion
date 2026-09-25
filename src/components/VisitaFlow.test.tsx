@@ -469,6 +469,24 @@ it('si cerrar falla porque la visita ya estaba cerrada, lo trata como éxito y c
     await waitFor(() => expect(onClose).toHaveBeenCalled())
 })
 
+it.each(['VISITA_NOT_FOUND', 'VISITA_AJENA'])(
+    'si cerrar falla con %s (la visita ya no existe para este vendedor), suelta la visita en curso',
+    async code => {
+        // Pasa tras "Reiniciar" en modo prueba: el backend borra las resoluciones, pero el
+        // puntero local seguía apuntando a una visita que ya no existe — y la barra
+        // "Visitando a…" quedaba trabada, sin forma de cerrarla.
+        ;(api.cerrarVisita as any).mockRejectedValue({ response: { data: { code } } })
+        const clienteEnCurso = { ...cliente, estado: 'en_curso' as const, visitaId: 55 }
+        const { onClose, onAviso, onVisitaCerrada } = renderFlow({ cliente: clienteEnCurso })
+        localStorage.setItem('visita-en-curso', JSON.stringify({ cliente: clienteEnCurso, visitaId: 55 }))
+        fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+        await waitFor(() => expect(onClose).toHaveBeenCalled())
+        expect(onVisitaCerrada).toHaveBeenCalled()
+        expect(leerVisitaEnCurso()).toBeNull()
+        expect(onAviso).toHaveBeenCalledWith('info', expect.stringMatching(/ya no existe/i))
+    },
+)
+
 it('el botón se deshabilita apenas se toca, antes de que resuelva la geolocalización, y un segundo tap no dispara una segunda llamada', async () => {
     // La captura de GPS puede tardar hasta ~23s (ver capturarUbicacion). Si el botón no se
     // deshabilita hasta que ESA promesa resuelve, el vendedor lo vuelve a tocar creyendo que
@@ -1112,6 +1130,32 @@ describe('No visité con la visita ya abierta', () => {
         fireEvent.click(screen.getByText('No visité'))
 
         expect(await screen.findByText(/Cargaste 1 rubro/)).toBeInTheDocument()
+    })
+
+    it('una visita que ya no existe (VISITA_NOT_FOUND) suelta la visita en curso', async () => {
+        ;(api.noVisitaSobreVisitaAbierta as any).mockRejectedValue({
+            response: { data: { code: 'VISITA_NOT_FOUND' } },
+        })
+        ;(api.getMotivos as any).mockImplementation((nivel: string) =>
+            Promise.resolve(
+                nivel === 'visita'
+                    ? [{ motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] }]
+                    : [],
+            ),
+        )
+        const clienteEnCurso = { ...cliente, estado: 'en_curso' as const, visitaId: 7 }
+        const { onAviso, onVisitaCerrada } = renderFlow({ cliente: clienteEnCurso })
+        localStorage.setItem('visita-en-curso', JSON.stringify({ cliente: clienteEnCurso, visitaId: 7 }))
+
+        fireEvent.click(await screen.findByText('No visité'))
+        fireEvent.click(await screen.findByText('Cerrado'))
+        fireEvent.click(screen.getAllByText('Cerrar visita').at(-1)!)
+
+        await waitFor(() =>
+            expect(onAviso).toHaveBeenCalledWith('info', expect.stringMatching(/ya no existe/i)),
+        )
+        expect(onVisitaCerrada).toHaveBeenCalled()
+        expect(leerVisitaEnCurso()).toBeNull()
     })
 
     it('un cliente ya resuelto en el servidor cierra el flujo con aviso informativo', async () => {

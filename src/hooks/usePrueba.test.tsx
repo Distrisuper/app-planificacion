@@ -29,3 +29,22 @@ it('reinicia, invalida TODAS las queries y refresca /me', async () => {
     expect(spy).toHaveBeenCalledWith()
     expect(refrescarMe).toHaveBeenCalledTimes(1)
 })
+
+it('suelta la visita en curso y los borradores locales: el backend acaba de borrarlos', async () => {
+    // Sin esto, la barra "Visitando a…" sobrevivía al reinicio apuntando a una visita que ya
+    // no existe, y cerrarla daba error.
+    ;(reiniciarPrueba as any).mockResolvedValue({ codigo: 'PRUEBA-42', descripcion: 'Sin cartera', origenesDisponibles: [] })
+    localStorage.setItem('access_token', 'tok')
+    localStorage.setItem('visita-en-curso', '{"visitaId":7}')
+    localStorage.setItem('visita-borrador-7', '{}')
+    localStorage.setItem('visita-inicio-7', '123')
+    const { wrapper } = crearWrapper()
+    const { result } = renderHook(() => useReiniciarPrueba(), { wrapper })
+    result.current.mutate(null)
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(localStorage.getItem('visita-en-curso')).toBeNull()
+    expect(localStorage.getItem('visita-borrador-7')).toBeNull()
+    expect(localStorage.getItem('visita-inicio-7')).toBeNull()
+    // La sesión sigue: el token no se toca.
+    expect(localStorage.getItem('access_token')).toBe('tok')
+})
