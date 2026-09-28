@@ -132,7 +132,7 @@ export default function AnaliticaVendedorPage() {
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 {vendedor && promedios && (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
                         {[
                             // Visitas lleva su desglose adentro: total = válidas + no
                             // validadas + sin coordenadas (esas últimas no son culpa del
@@ -142,7 +142,7 @@ export default function AnaliticaVendedorPage() {
                                 titulo: 'Visitas',
                                 valor: formatNumero(vendedor.visitasTotales),
                                 desglose: (
-                                    <div className="-mx-1.5 space-y-0.5 border-t border-slate-100 pt-1.5">
+                                    <div className="-mx-1.5 space-y-0.5">
                                         <BotonValidez
                                             validez="valida"
                                             etiqueta="Válidas"
@@ -191,16 +191,25 @@ export default function AnaliticaVendedorPage() {
                         ].map(k => (
                             <div
                                 key={k.titulo}
-                                className="rounded-lg border border-slate-200 bg-white px-4 py-3"
+                                // Visitas ocupa dos columnas y pone el desglose AL LADO del
+                                // número: debajo la hacía más alta, y la grilla estiraba las
+                                // otras cinco tarjetas a esa altura, con un hueco vacío abajo.
+                                className={`rounded-lg border border-slate-200 bg-white px-4 py-3 ${
+                                    'desglose' in k ? 'col-span-2 flex items-center gap-4' : ''
+                                }`}
                             >
-                                <p className="text-xs uppercase tracking-wide text-slate-500">
-                                    {k.titulo}
-                                </p>
-                                <p className="mt-1 text-xl font-semibold text-slate-900">{k.valor}</p>
-                                <p className="text-xs text-slate-400">equipo: {k.prom}</p>
-                                {/* Debajo de "equipo" y no entre el valor y "equipo": así las
-                                    dos primeras líneas quedan alineadas con las otras tarjetas. */}
-                                {'desglose' in k && <div className="mt-2">{k.desglose}</div>}
+                                <div className="shrink-0">
+                                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                                        {k.titulo}
+                                    </p>
+                                    <p className="mt-1 text-xl font-semibold text-slate-900">{k.valor}</p>
+                                    <p className="text-xs text-slate-400">equipo: {k.prom}</p>
+                                </div>
+                                {'desglose' in k && (
+                                    <div className="min-w-0 flex-1 border-l border-slate-100 pl-4">
+                                        {k.desglose}
+                                    </div>
+                                )}
                             </div>
                         ))}
                     </div>
