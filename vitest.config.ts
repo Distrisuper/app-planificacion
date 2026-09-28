@@ -29,7 +29,9 @@ export default defineConfig({
         // skill de git worktrees) con su propio node_modules: si vitest las recorre, carga
         // una segunda copia de React y los hooks explotan con "Cannot read properties
         // of null" en cualquier componente de la copia principal.
-        exclude: ['**/node_modules/**', '**/.worktrees/**', '**/.claude/worktrees/**', '**/e2e/**'],
+        // .claude/hooks/ y .githooks/ son el guard de agentes: sus specs usan node:test y
+        // se corren con `npm run check:hooks`, no con vitest.
+        exclude: ['**/node_modules/**', '**/.worktrees/**', '**/.claude/worktrees/**', '**/e2e/**', '.claude/hooks/**', '.githooks/**'],
         // El bug que este helper arregla solo se manifiesta en timezones al oeste de
         // Greenwich. Fijarla acá hace que el test falle en CI si alguien vuelve a
         // introducir toISOString() para fechas locales.
