@@ -6,7 +6,7 @@ import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import TablaVisitas from '@/components/analitica/TablaVisitas'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
 import { useResumen, useVisitasPaginadas } from '@/hooks/useAnalitica'
-import { formatDuracion, formatNumero, formatPct } from '@/lib/analiticaFormat'
+import { formatDuracion, formatHoras, formatNumero, formatPct } from '@/lib/analiticaFormat'
 
 export default function AnaliticaVendedorPage() {
     const { codigo = '' } = useParams()
@@ -59,9 +59,9 @@ export default function AnaliticaVendedorPage() {
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 {vendedor && promedios && (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                         {[
-                            // Los tres conteos van primero y juntos: total = válidas + no
+                            // Primera fila: conteos + horas. Los tres conteos van juntos: total = válidas + no
                             // validadas + sin coordenadas (esas últimas no son culpa del
                             // vendedor y las explica el aviso de abajo). Son visitas, no
                             // filas de la tabla: la tabla también lista los "no visité".
@@ -79,6 +79,13 @@ export default function AnaliticaVendedorPage() {
                                 titulo: 'No validadas',
                                 valor: formatNumero(vendedor.visitasNoValidadas),
                                 prom: formatNumero(promedios.visitasNoValidadas),
+                            },
+                            {
+                                // Mismo dato y formato que "Horas (mensual)" de la tabla de
+                                // efectividad operativa: si no, los dos números no cierran.
+                                titulo: 'Horas',
+                                valor: formatHoras(vendedor.minutosTotales),
+                                prom: formatHoras(promedios.minutosTotales),
                             },
                             {
                                 titulo: 'Cobertura',

@@ -5,6 +5,7 @@ import { vi } from 'vitest'
 import AnaliticaVendedorPage from './AnaliticaVendedorPage'
 import { MOCK_RESUMEN, MOCK_VISITAS } from '@/mocks/analiticaMock'
 import * as api from '@/api/analitica'
+import { formatHoras } from '@/lib/analiticaFormat'
 
 vi.mock('@/api/analitica')
 vi.mock('@/context/AuthContext', () => ({
@@ -110,4 +111,5 @@ it('muestra la cantidad de visitas, válidas y no validadas del rango', async ()
     expect(await tile('Visitas')).toHaveTextContent(String(v1.visitasTotales))
     expect(await tile('Válidas')).toHaveTextContent(String(v1.visitasValidas))
     expect(await tile('No validadas')).toHaveTextContent(String(v1.visitasNoValidadas))
+    expect(await tile('Horas')).toHaveTextContent(formatHoras(v1.minutosTotales))
 })
