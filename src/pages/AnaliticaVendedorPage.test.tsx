@@ -100,3 +100,14 @@ it('cambiar la fecha "Desde" vuelve a pedir las visitas con el rango nuevo', asy
     )
     expect(screen.getByText('2026-07-01 a 2026-07-24')).toBeInTheDocument()
 })
+
+it('muestra la cantidad de visitas, válidas y no validadas del rango', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    const v1 = MOCK_RESUMEN.vendedores.find(v => v.codigoParticularVendedor === 'V1')!
+    montar()
+    const tile = async (titulo: string) =>
+        (await screen.findByText(titulo, { selector: 'p' })).parentElement!
+    expect(await tile('Visitas')).toHaveTextContent(String(v1.visitasTotales))
+    expect(await tile('Válidas')).toHaveTextContent(String(v1.visitasValidas))
+    expect(await tile('No validadas')).toHaveTextContent(String(v1.visitasNoValidadas))
+})

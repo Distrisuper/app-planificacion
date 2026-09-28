@@ -59,8 +59,27 @@ export default function AnaliticaVendedorPage() {
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 {vendedor && promedios && (
-                    <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
                         {[
+                            // Los tres conteos van primero y juntos: total = válidas + no
+                            // validadas + sin coordenadas (esas últimas no son culpa del
+                            // vendedor y las explica el aviso de abajo). Son visitas, no
+                            // filas de la tabla: la tabla también lista los "no visité".
+                            {
+                                titulo: 'Visitas',
+                                valor: formatNumero(vendedor.visitasTotales),
+                                prom: formatNumero(promedios.visitasTotales),
+                            },
+                            {
+                                titulo: 'Válidas',
+                                valor: formatNumero(vendedor.visitasValidas),
+                                prom: formatNumero(promedios.visitasValidas),
+                            },
+                            {
+                                titulo: 'No validadas',
+                                valor: formatNumero(vendedor.visitasNoValidadas),
+                                prom: formatNumero(promedios.visitasNoValidadas),
+                            },
                             {
                                 titulo: 'Cobertura',
                                 valor: formatPct(vendedor.cobertura),
@@ -80,11 +99,6 @@ export default function AnaliticaVendedorPage() {
                                 titulo: 'Duración prom.',
                                 valor: formatDuracion(vendedor.duracionPromedioMin),
                                 prom: formatDuracion(promedios.duracionPromedioMin),
-                            },
-                            {
-                                titulo: 'No validadas',
-                                valor: formatNumero(vendedor.visitasNoValidadas),
-                                prom: formatNumero(promedios.visitasNoValidadas),
                             },
                         ].map(k => (
                             <div
