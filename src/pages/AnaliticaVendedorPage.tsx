@@ -10,11 +10,11 @@ import {
     AYUDA_DURACION_PROMEDIO,
     AYUDA_EFECTIVIDAD_COMERCIAL,
     AYUDA_HORAS,
-    AYUDA_VISITAS,
+    ayudaVisitas,
     AYUDA_VISITAS_POR_DIA,
 } from '@/components/analitica/ayudaDetalleVendedor'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
-import { useResumen, useVisitasPaginadas } from '@/hooks/useAnalitica'
+import { useCriterioVisita, useResumen, useVisitasPaginadas } from '@/hooks/useAnalitica'
 import { formatDuracion, formatHoras, formatNumero, formatPct } from '@/lib/analiticaFormat'
 import type { ValidezVisita } from '@/types/analitica'
 
@@ -123,6 +123,7 @@ export default function AnaliticaVendedorPage() {
     const [visitaElegida, setVisitaElegida] = useState<number | null>(null)
 
     const { data: resumen } = useResumen({ desde, hasta })
+    const criterio = useCriterioVisita()
     const {
         data,
         isLoading,
@@ -175,7 +176,7 @@ export default function AnaliticaVendedorPage() {
                             {
                                 titulo: 'Visitas',
                                 valor: formatNumero(vendedor.visitasTotales),
-                                ayuda: AYUDA_VISITAS,
+                                ayuda: ayudaVisitas(criterio),
                                 desglose: (
                                     <div className="-mx-1.5 space-y-0.5">
                                         <BotonValidez
@@ -307,7 +308,11 @@ export default function AnaliticaVendedorPage() {
 
                 {data && visitas.length > 0 && (
                     <div className="space-y-3">
-                        <TablaVisitas visitas={visitas} onElegirVisita={setVisitaElegida} />
+                        <TablaVisitas
+                            visitas={visitas}
+                            onElegirVisita={setVisitaElegida}
+                            toleranciaMetros={criterio?.toleranciaMetros}
+                        />
                         <div className="flex items-center justify-between text-xs text-slate-500">
                             <span>
                                 Mostrando {visitas.length} de {total}

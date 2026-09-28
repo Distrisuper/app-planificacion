@@ -1,19 +1,29 @@
+import type { ICriterioVisita } from '@/types/analitica'
 import type { TipoOfrecimiento } from '@/types/planificacion'
 
-/** Radio máximo entre la coord capturada (inicio o fin) y la del cliente para que esa
- *  pata de la visita cuente como verificada. Inclusive. */
+/** RESPALDO del radio de validez, solo para pintar distancias mientras carga
+ *  `GET /analitica/criterio` (o con un backend anterior a ese endpoint). El número real
+ *  es `ICriterioVisita.toleranciaMetros`, que sale de `pl_criterio_visita`. 100 m es el
+ *  valor en el que coinciden todas las fuentes (seed, respaldo del backend, doc). */
 export const TOLERANCIA_METROS = 100
 
-/** Piso de duración de una visita válida. Inclusive. SIN TECHO por ahora — se sacó el
- *  máximo (antes 90 min) del criterio de validez.
- *
- *  Esta constante NO alimenta ningún cálculo real: `visitasValidas`/`visitasCortas`/
- *  `duracionPromedioMin` llegan ya calculados del backend, sobre el criterio real en
- *  `pl_criterio_visita` (api-vendedores). Es documentación — hay que mantenerla
- *  sincronizada a mano con la base cada vez que cambie el criterio, igual que el texto
- *  de `ayudaEfectividadOperativa.tsx`. Es un concepto DISTINTO del gate de cierre de
- *  `VisitaSheet.tsx` (15 min, ahí sí en vivo) — ver CLAUDE.md. */
-export const DURACION_MIN_VALIDA = 15
+/** Desde cuántos minutos un techo de duración se lee como "sin techo": la columna es
+ *  NOT NULL, así que sacarle el máximo al criterio es ponerle un número enorme. Una
+ *  visita de un día entero no es un techo real. */
+const SIN_TECHO_DESDE_MIN = 24 * 60
+
+export const tieneTecho = (c: ICriterioVisita): boolean => c.duracionMaxMin < SIN_TECHO_DESDE_MIN
+
+/** "a 100 m o menos del cliente al empezar y al terminar, y duró al menos 15 min" —
+ *  con los números del criterio real. Sin criterio NO inventa números: una ayuda con
+ *  un umbral viejo es peor que una genérica. */
+export const describirCriterio = (c: ICriterioVisita | undefined): string => {
+    if (!c) return 'dentro de la distancia y la duración que fija el criterio de validez'
+    const duracion = tieneTecho(c)
+        ? `duró entre ${c.duracionMinMin} y ${c.duracionMaxMin} min`
+        : `duró al menos ${c.duracionMinMin} min`
+    return `a ${c.toleranciaMetros} m o menos del cliente al empezar y al terminar, y ${duracion}`
+}
 
 /** Etiqueta del chip de tipo en la analítica. Un solo lugar: DetalleVisitaPanel y
  *  TablaVisitas lo comparten para no divergir. 'rubro' no se usa como chip — es el
@@ -59,16 +69,12 @@ export type ClaseDistancia = 'ok' | 'alerta' | 'neutro'
 export const claseDistancia = (
     inicioMetros: number | null,
     finMetros: number | null,
+    toleranciaMetros: number = TOLERANCIA_METROS,
 ): ClaseDistancia => {
     const valores = [inicioMetros, finMetros].filter((m): m is number => m !== null)
     if (valores.length === 0) return 'neutro'
-    return valores.some(m => m > TOLERANCIA_METROS) ? 'alerta' : 'ok'
+    return valores.some(m => m > toleranciaMetros) ? 'alerta' : 'ok'
 }
-
-/** Una visita es válida cuando ambas patas están dentro de la tolerancia de distancia
- *  y la duración es >= DURACION_MIN_VALIDA. Sin techo por ahora. */
-export const esDuracionValida = (minutos: number | null): boolean =>
-    minutos !== null && minutos >= DURACION_MIN_VALIDA
 
 /** La pata que más se aleja del cliente, para mostrar un solo número en tablas que no
  *  tienen lugar para las dos. null solo si ninguna de las dos tiene dato. */

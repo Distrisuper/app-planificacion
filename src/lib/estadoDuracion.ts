@@ -13,8 +13,8 @@
  * parado en el local, no un criterio de negocio.
  *
  * NO son el criterio de validez de la visita. Ese vive en `pl_criterio_visita`
- * (api-vendedores), no se expone por API, y hoy es "mínimo 15 minutos, sin techo"
- * — ver `DURACION_MIN_VALIDA` en `analiticaFormat.ts`. O sea que
+ * (api-vendedores) y la analítica lo lee de `GET /analitica/criterio`
+ * (`useCriterioVisita`), no de acá. O sea que
  * `DURACION_LARGA_MIN` no invalida nada: una visita de 2 horas sigue siendo válida
  * para la analítica, y este ámbar solo le sugiere al vendedor que la cierre (lo
  * más probable es que se haya ido del local y se la haya olvidado abierta).

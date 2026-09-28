@@ -6,6 +6,9 @@ import type { ResultadoMotivo } from '@/types/planificacion'
 interface TablaVisitasProps {
     visitas: IVisitaFila[]
     onElegirVisita: (visitaId: number) => void
+    /** De `useCriterioVisita`, que la página ya tiene. Sin él se pinta con el respaldo
+     *  (TOLERANCIA_METROS) mientras carga. */
+    toleranciaMetros?: number
 }
 
 const ETIQUETA_RESULTADO: Record<string, string> = {
@@ -31,7 +34,7 @@ const CLASE_DISTANCIA: Record<string, string> = {
 
 const etiquetaResultado = (r: ResultadoMotivo | null) => (r ? ETIQUETA_RESULTADO[r] : '—')
 
-export default function TablaVisitas({ visitas, onElegirVisita }: TablaVisitasProps) {
+export default function TablaVisitas({ visitas, onElegirVisita, toleranciaMetros }: TablaVisitasProps) {
     return (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
@@ -65,7 +68,7 @@ export default function TablaVisitas({ visitas, onElegirVisita }: TablaVisitasPr
                                 <span
                                     className={
                                         CLASE_DISTANCIA[
-                                            claseDistancia(v.distanciaInicioMetros, v.distanciaFinMetros)
+                                            claseDistancia(v.distanciaInicioMetros, v.distanciaFinMetros, toleranciaMetros)
                                         ]
                                     }
                                 >

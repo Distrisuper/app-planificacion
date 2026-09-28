@@ -1,5 +1,5 @@
-import { formatPctEscalado } from '@/lib/analiticaFormat'
-import type { IVendedorMetricas } from '@/types/analitica'
+import { describirCriterio, formatPctEscalado } from '@/lib/analiticaFormat'
+import type { ICriterioVisita, IVendedorMetricas } from '@/types/analitica'
 
 /** Contenido de ayuda de los 3 KPIs/columnas de Efectividad, compartido entre
  *  KpisMensuales y TablaEfectividadOperativa para no duplicar el texto.
@@ -51,12 +51,12 @@ export const ayudaEfectividad = (m: IVendedorMetricas): React.ReactNode => (
     </div>
 )
 
-export const AYUDA_VISITAS_MENSUAL = (
+export const ayudaVisitasMensual = (criterio: ICriterioVisita | undefined) => (
     <div>
         <p className="text-sm font-semibold text-slate-900">Visitas (mensual)</p>
         <p className="mt-1">
-            Visitas con GPS confirmado (≤100 m del cliente, al inicio y al fin) y duración de al
-            menos 15 min. El resto no cuenta.
+            Visitas válidas: con GPS confirmado y duración dentro del criterio —{' '}
+            {describirCriterio(criterio)}. El resto no cuenta.
         </p>
         <Nota>Meta aparte por clientes distintos: {META_CLIENTES_DISTINTOS}/mes.</Nota>
     </div>

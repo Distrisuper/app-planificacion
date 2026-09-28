@@ -1,17 +1,19 @@
 import {
     AYUDA_EFECTIVIDAD_FORMULA,
     AYUDA_HORAS_MENSUAL,
-    AYUDA_VISITAS_MENSUAL,
+    ayudaVisitasMensual,
     ayudaEfectividad,
 } from './ayudaEfectividadOperativa'
 import HelpPopover from './HelpPopover'
 import { formatHoras, formatNumero, formatPctEscalado } from '@/lib/analiticaFormat'
-import type { IVendedorMetricas } from '@/types/analitica'
+import type { ICriterioVisita, IVendedorMetricas } from '@/types/analitica'
 
 interface TablaEfectividadOperativaProps {
     vendedores: IVendedorMetricas[]
     promedios: IVendedorMetricas
     onElegirVendedor: (codigo: string) => void
+    /** Para que la ayuda cite los umbrales reales; sin él la ayuda no da números. */
+    criterio?: ICriterioVisita
 }
 
 /** Título de columna + botón de ayuda. La meta mensual ya se muestra arriba, en
@@ -32,6 +34,7 @@ export default function TablaEfectividadOperativa({
     vendedores,
     promedios,
     onElegirVendedor,
+    criterio,
 }: TablaEfectividadOperativaProps) {
     const renderFila = (v: IVendedorMetricas, esPromedio: boolean) => (
         <tr
@@ -72,7 +75,7 @@ export default function TablaEfectividadOperativa({
                             <Encabezado titulo="Efectividad" ayuda={AYUDA_EFECTIVIDAD_FORMULA} />
                         </th>
                         <th className="px-3 py-2 text-right">
-                            <Encabezado titulo="Visitas (mensual)" ayuda={AYUDA_VISITAS_MENSUAL} />
+                            <Encabezado titulo="Visitas (mensual)" ayuda={ayudaVisitasMensual(criterio)} />
                         </th>
                         <th className="px-3 py-2 text-right">
                             <Encabezado titulo="Horas (mensual)" ayuda={AYUDA_HORAS_MENSUAL} />

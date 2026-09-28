@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     getAltas,
+    getCriterioVisita,
     getObjeciones,
     getResumen,
     getVendedores,
@@ -34,6 +35,7 @@ export const analiticaKeys = {
     objeciones: (a: IObjecionesArgs) =>
         ['analitica', 'objeciones', a.desde, a.hasta, a.zona ?? '', a.rubro ?? ''] as const,
     vendedores: () => ['analitica', 'vendedores'] as const,
+    criterio: () => ['analitica', 'criterio'] as const,
     altas: (f: IAnaliticaFiltro) =>
         ['analitica', 'altas', f.desde, f.hasta, (f.vendedores ?? []).join(',')] as const,
 }
@@ -126,4 +128,18 @@ export function useVincularAlta() {
             qc.invalidateQueries({ queryKey: ['analitica', 'fichas'] })
         },
     })
+}
+
+/**
+ * El criterio con el que el backend valida cada visita. `undefined` mientras carga o si
+ * el backend es anterior al endpoint: quien lo use tiene que tolerarlo (ver
+ * `TOLERANCIA_METROS` y `describirCriterio` en analiticaFormat). Cambia con un UPDATE
+ * a mano en la base, así que una hora de caché alcanza y sobra.
+ */
+export function useCriterioVisita() {
+    return useQuery({
+        queryKey: analiticaKeys.criterio(),
+        queryFn: getCriterioVisita,
+        staleTime: 60 * 60 * 1000,
+    }).data
 }

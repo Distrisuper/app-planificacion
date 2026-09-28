@@ -1,6 +1,6 @@
 import { X } from 'lucide-react'
 import MapaVisita from './MapaVisita'
-import { useVisitaDetalle } from '@/hooks/useAnalitica'
+import { useCriterioVisita, useVisitaDetalle } from '@/hooks/useAnalitica'
 import { claseDistancia, formatDistancia, formatDuracion, TIPO_LABEL } from '@/lib/analiticaFormat'
 import { resumenAlcance } from '@/lib/alcance'
 import { horaNegocio } from '@/lib/fechas'
@@ -42,6 +42,7 @@ function resumenValores(valores: Record<string, string | number | null>): string
 
 export default function DetalleVisitaPanel({ visitaId, onCerrar }: DetalleVisitaPanelProps) {
     const { data, isLoading, isError } = useVisitaDetalle(visitaId)
+    const criterio = useCriterioVisita()
 
     return (
         <aside className="fixed inset-y-0 right-0 z-30 w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white shadow-xl">
@@ -91,14 +92,14 @@ export default function DetalleVisitaPanel({ visitaId, onCerrar }: DetalleVisita
                             Ubicación — Inicio{' '}
                             <span
                                 className={
-                                    CLASE_DISTANCIA[claseDistancia(data.distanciaInicioMetros, null)]
+                                    CLASE_DISTANCIA[claseDistancia(data.distanciaInicioMetros, null, criterio?.toleranciaMetros)]
                                 }
                             >
                                 {formatDistancia(data.distanciaInicioMetros)}
                             </span>
                             {' · '}Fin{' '}
                             <span
-                                className={CLASE_DISTANCIA[claseDistancia(null, data.distanciaFinMetros)]}
+                                className={CLASE_DISTANCIA[claseDistancia(null, data.distanciaFinMetros, criterio?.toleranciaMetros)]}
                             >
                                 {formatDistancia(data.distanciaFinMetros)}
                             </span>
@@ -108,6 +109,7 @@ export default function DetalleVisitaPanel({ visitaId, onCerrar }: DetalleVisita
                                 coordInicio={data.coordInicio}
                                 coordFinal={data.coordFinal}
                                 coordCliente={data.coordCliente}
+                                radioMetros={criterio?.toleranciaMetros}
                             />
                         ) : (
                             <p className="rounded-md bg-slate-50 px-3 py-4 text-xs text-slate-500">

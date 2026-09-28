@@ -178,3 +178,19 @@ it('cada tarjeta explica qué mide al pasar el mouse por el "?"', async () => {
     await userEvent.hover(await screen.findByRole('button', { name: 'Qué significa Horas' }))
     expect(screen.getByRole('dialog')).toHaveTextContent('todas las visitas cerradas del rango')
 })
+
+it('la ayuda de Visitas cita el criterio real que manda el backend', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    ;(api.getCriterioVisita as any).mockResolvedValue({
+        toleranciaMetros: 80,
+        duracionMinMin: 10,
+        duracionMaxMin: 90,
+    })
+    montar()
+    await waitFor(() => expect(api.getCriterioVisita).toHaveBeenCalled())
+    await userEvent.hover(await screen.findByRole('button', { name: 'Qué significa Visitas' }))
+    await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveTextContent('a 80 m o menos del cliente'),
+    )
+    expect(screen.getByRole('dialog')).toHaveTextContent('duró entre 10 y 90 min')
+})

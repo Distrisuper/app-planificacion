@@ -116,6 +116,16 @@ export interface IVisitaFila {
 /** 'sin_coord' = cliente sin coordenadas: no verificable, no cuenta como inválida. */
 export type ValidezVisita = 'valida' | 'no_validada' | 'sin_coord'
 
+/** La fila de `pl_criterio_visita` (GET /analitica/criterio): con esto el backend
+ *  clasifica cada visita. El front lo usa para pintar distancias y explicar la validez;
+ *  nunca para recalcularla. */
+export interface ICriterioVisita {
+    toleranciaMetros: number
+    duracionMinMin: number
+    /** Un número enorme = sin techo (la columna es NOT NULL): ver `tieneTecho`. */
+    duracionMaxMin: number
+}
+
 export interface IVisitasPage {
     total: number
     pagina: number

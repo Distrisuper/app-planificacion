@@ -1,4 +1,5 @@
-import { DURACION_MIN_VALIDA, TOLERANCIA_METROS } from '@/lib/analiticaFormat'
+import { describirCriterio } from '@/lib/analiticaFormat'
+import type { ICriterioVisita } from '@/types/analitica'
 import { Nota } from './ayudaEfectividadOperativa'
 
 /**
@@ -7,15 +8,15 @@ import { Nota } from './ayudaEfectividadOperativa'
  * no coincide con las filas de la tabla, las horas no se dividen por las visitas para
  * dar la duración promedio, y "Visitas/día" no usa el total de visitas.
  *
- * El criterio de validez vive en `pl_criterio_visita` y no se expone por API: si cambia,
- * estos textos (vía TOLERANCIA_METROS / DURACION_MIN_VALIDA) se actualizan a mano.
+ * Los umbrales de validez salen de `pl_criterio_visita` vía GET /analitica/criterio
+ * (`useCriterioVisita`): cambiar el criterio en la base cambia estos textos solos.
  */
 
 function Titulo({ children }: { children: React.ReactNode }) {
     return <p className="text-sm font-semibold text-slate-900">{children}</p>
 }
 
-export const AYUDA_VISITAS = (
+export const ayudaVisitas = (criterio: ICriterioVisita | undefined) => (
     <div>
         <Titulo>Visitas</Titulo>
         <p className="mt-1">
@@ -23,8 +24,8 @@ export const AYUDA_VISITAS = (
             tabla: por eso la tabla puede tener más filas.
         </p>
         <p className="mt-1">
-            <span className="font-medium text-emerald-700">Válidas</span>: empezó y terminó a{' '}
-            {TOLERANCIA_METROS} m o menos del cliente y duró al menos {DURACION_MIN_VALIDA} min.{' '}
+            <span className="font-medium text-emerald-700">Válidas</span>: empezó y terminó{' '}
+            {describirCriterio(criterio)}.{' '}
             <span className="font-medium text-red-700">No validadas</span>: falló la distancia o
             la duración.
         </p>

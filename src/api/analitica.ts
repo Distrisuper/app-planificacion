@@ -14,6 +14,7 @@ import type {
     IAltaRelevada,
     IAnaliticaFiltro,
     IAnaliticaResumen,
+    ICriterioVisita,
     IObjecionesResumen,
     IVendedorMetricas,
     IFichasArgs,
@@ -143,6 +144,15 @@ export const getObjeciones = async (args: IObjecionesArgs): Promise<IObjecionesR
         }
     }
     const res = await apiClient.get('/planificacion/analitica/objeciones', { params: args })
+    return res.data.data
+}
+
+export const getCriterioVisita = async (): Promise<ICriterioVisita> => {
+    if (USA_MOCK) {
+        await esperar()
+        return { toleranciaMetros: 100, duracionMinMin: 15, duracionMaxMin: 99_999 }
+    }
+    const res = await apiClient.get('/planificacion/analitica/criterio')
     return res.data.data
 }
 
