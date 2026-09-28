@@ -11,7 +11,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "check:hooks": "node --test .claude/hooks/guard.spec.cjs .githooks/pre-push.spec.cjs",
+    "prepare": "node -e \"try{require('child_process').execFileSync('git',['config','core.hooksPath','.githooks'],{stdio:'ignore'})}catch{}\""
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
