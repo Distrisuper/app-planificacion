@@ -28,6 +28,7 @@ export const analiticaKeys = {
             a.hasta,
             a.cliente ?? '',
             (a.tipo ?? []).join(','),
+            a.validez ?? '',
         ] as const,
     detalle: (id: number) => ['analitica', 'visita', id] as const,
     objeciones: (a: IObjecionesArgs) =>

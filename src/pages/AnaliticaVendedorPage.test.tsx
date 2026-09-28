@@ -116,3 +116,33 @@ it('muestra las visitas del rango con su desglose válidas / no validadas, y las
     expect(screen.queryByText('No validadas', { selector: 'p' })).not.toBeInTheDocument()
     expect(await tile('Horas')).toHaveTextContent(formatHoras(v1.minutosTotales))
 })
+
+it('tocar "válidas" filtra la tabla por validez, y tocarlo de nuevo lo quita', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    const validas = await screen.findByRole('button', { name: /válidas$/ })
+    fireEvent.click(validas)
+    await waitFor(() =>
+        expect(api.getVisitas).toHaveBeenLastCalledWith(expect.objectContaining({ validez: 'valida' })),
+    )
+    expect(validas).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText('Sin visitas válidas en este rango.')).toBeInTheDocument()
+
+    fireEvent.click(validas)
+    await waitFor(() =>
+        expect(api.getVisitas).toHaveBeenLastCalledWith(expect.objectContaining({ validez: undefined })),
+    )
+    expect(validas).toHaveAttribute('aria-pressed', 'false')
+})
+
+it('cambiar el rango conserva el filtro de validez', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    fireEvent.click(await screen.findByRole('button', { name: /no validadas$/ }))
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-07-01' } })
+    await waitFor(() =>
+        expect(api.getVisitas).toHaveBeenLastCalledWith(
+            expect.objectContaining({ desde: '2026-07-01', validez: 'no_validada' }),
+        ),
+    )
+})

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
@@ -7,6 +7,33 @@ import TablaVisitas from '@/components/analitica/TablaVisitas'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
 import { useResumen, useVisitasPaginadas } from '@/hooks/useAnalitica'
 import { formatDuracion, formatHoras, formatNumero, formatPct } from '@/lib/analiticaFormat'
+import type { ValidezVisita } from '@/types/analitica'
+
+/** 'sin_coord' no se ofrece: no es un juicio sobre el vendedor, y ya tiene su aviso. */
+type FiltroValidez = Exclude<ValidezVisita, 'sin_coord'>
+
+function BotonValidez({
+    activo,
+    onClick,
+    children,
+}: {
+    activo: boolean
+    onClick: () => void
+    children: ReactNode
+}) {
+    return (
+        <button
+            type="button"
+            aria-pressed={activo}
+            onClick={onClick}
+            className={`rounded px-1 -mx-1 underline-offset-2 hover:underline ${
+                activo ? 'bg-slate-900 text-white hover:no-underline' : ''
+            }`}
+        >
+            {children}
+        </button>
+    )
+}
 
 export default function AnaliticaVendedorPage() {
     const { codigo = '' } = useParams()
@@ -15,8 +42,20 @@ export default function AnaliticaVendedorPage() {
     const hasta = params.get('hasta') ?? ''
     // El rango vive en la URL: así "Volver a la analítica" lo arrastra y el link se
     // puede compartir. `replace` para no llenar el historial con cada fecha tocada.
+    const validezParam = params.get('validez')
+    const validez: FiltroValidez | undefined =
+        validezParam === 'valida' || validezParam === 'no_validada' ? validezParam : undefined
     const setRango = (d: string, h: string) =>
-        setParams({ desde: d, hasta: h }, { replace: true })
+        setParams(
+            { desde: d, hasta: h, ...(validez ? { validez } : {}) },
+            { replace: true },
+        )
+    // Tocar el filtro activo lo apaga: es un toggle, no hay botón de "todas" aparte.
+    const toggleValidez = (v: FiltroValidez) =>
+        setParams(
+            { desde, hasta, ...(validez === v ? {} : { validez: v }) },
+            { replace: true },
+        )
     const [visitaElegida, setVisitaElegida] = useState<number | null>(null)
 
     const { data: resumen } = useResumen({ desde, hasta })
@@ -26,7 +65,7 @@ export default function AnaliticaVendedorPage() {
         hasNextPage,
         fetchNextPage,
         isFetchingNextPage,
-    } = useVisitasPaginadas({ desde, hasta, vendedor: codigo, cant: 100 })
+    } = useVisitasPaginadas({ desde, hasta, vendedor: codigo, validez, cant: 100 })
     const visitas = data?.pages.flatMap(p => p.visitas) ?? []
     const total = data?.pages[0]?.total ?? 0
 
@@ -68,7 +107,23 @@ export default function AnaliticaVendedorPage() {
                             {
                                 titulo: 'Visitas',
                                 valor: formatNumero(vendedor.visitasTotales),
-                                desglose: `${formatNumero(vendedor.visitasValidas)} válidas · ${formatNumero(vendedor.visitasNoValidadas)} no validadas`,
+                                desglose: (
+                                    <span>
+                                        <BotonValidez
+                                            activo={validez === 'valida'}
+                                            onClick={() => toggleValidez('valida')}
+                                        >
+                                            {formatNumero(vendedor.visitasValidas)} válidas
+                                        </BotonValidez>
+                                        {' · '}
+                                        <BotonValidez
+                                            activo={validez === 'no_validada'}
+                                            onClick={() => toggleValidez('no_validada')}
+                                        >
+                                            {formatNumero(vendedor.visitasNoValidadas)} no validadas
+                                        </BotonValidez>
+                                    </span>
+                                ),
                                 prom: formatNumero(promedios.visitasTotales),
                             },
                             {
@@ -108,7 +163,7 @@ export default function AnaliticaVendedorPage() {
                                 </p>
                                 <p className="mt-1 text-xl font-semibold text-slate-900">{k.valor}</p>
                                 {'desglose' in k && (
-                                    <p className="text-xs text-slate-600">{k.desglose}</p>
+                                    <div className="text-xs text-slate-600">{k.desglose}</div>
                                 )}
                                 <p className="text-xs text-slate-400">equipo: {k.prom}</p>
                             </div>
@@ -123,11 +178,26 @@ export default function AnaliticaVendedorPage() {
                     </p>
                 )}
 
+                {validez && (
+                    <p className="flex items-center gap-2 text-xs text-slate-600">
+                        Solo visitas {validez === 'valida' ? 'válidas' : 'no validadas'}
+                        <button
+                            type="button"
+                            onClick={() => toggleValidez(validez)}
+                            className="font-medium text-slate-900 underline"
+                        >
+                            Quitar filtro
+                        </button>
+                    </p>
+                )}
+
                 {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
                 {data && visitas.length === 0 && (
                     <div className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600">
-                        Sin visitas en este rango.
+                        {validez
+                            ? `Sin visitas ${validez === 'valida' ? 'válidas' : 'no validadas'} en este rango.`
+                            : 'Sin visitas en este rango.'}
                     </div>
                 )}
 

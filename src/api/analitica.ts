@@ -105,6 +105,7 @@ export const getVisitas = async (args: IVisitasArgs): Promise<IVisitasPage> => {
             .filter(v => !args.vendedor || v.codigoParticularVendedor === args.vendedor)
             .filter(v => !args.vendedores?.length || args.vendedores.includes(v.codigoParticularVendedor))
             .filter(v => !args.tipo?.length || args.tipo.includes(v.tipo))
+            .filter(v => !args.validez || v.validez === args.validez)
             .filter(v => !busqueda || v.nombreCliente.toLowerCase().includes(busqueda))
             // Feed de actividad: lo último arriba. Ordena por el instante, no por el
             // string: el ISO ya es comparable, pero el intento es el mismo que el del

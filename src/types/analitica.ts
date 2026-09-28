@@ -104,7 +104,14 @@ export interface IVisitaFila {
     motivos: string[]
     /** Resultado dominante de los ofrecimientos de la visita. null si no hay ninguno resuelto. */
     resultado: ResultadoMotivo | null
+    /** La misma clasificación que cuenta `visitasValidas`/`visitasNoValidadas` del resumen
+     *  (la decide el backend con `pl_criterio_visita`). null en los "no visité". Opcional:
+     *  un backend anterior al filtro por validez no la manda. */
+    validez?: ValidezVisita | null
 }
+
+/** 'sin_coord' = cliente sin coordenadas: no verificable, no cuenta como inválida. */
+export type ValidezVisita = 'valida' | 'no_validada' | 'sin_coord'
 
 export interface IVisitasPage {
     total: number
@@ -119,6 +126,8 @@ export interface IVisitasArgs extends IAnaliticaFiltro {
     cliente?: string
     /** Ausente = las tres resoluciones. */
     tipo?: TipoResolucion[]
+    /** Implica sólo visitas: un "no visité" no se valida. */
+    validez?: ValidezVisita
     pagina?: number
     cant?: number
 }
