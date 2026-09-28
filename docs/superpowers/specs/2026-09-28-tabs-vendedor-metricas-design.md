@@ -1,6 +1,6 @@
 # Pestañas del vendedor: Planificación | Métricas
 
-Fecha: 2026-09-28 · Estado: front implementado con datos mock; endpoint pendiente en api-vendedores.
+Fecha: 2026-09-28 · Estado: front implementado contra `GET /planificacion/mis-metricas` (api-vendedores #139).
 
 ## Qué
 
@@ -68,12 +68,12 @@ Decisiones:
 - **Vendedor de prueba (`PRUEBA-*`)**: no existe en el warehouse, así que no tiene cartera. Se devuelve todo en cero con `sinVentas: true`, sin tocar el warehouse, y el front explica por qué no hay métricas. Se descartó
   reconstruir la parte de `pl_*`: sin cartera no hay denominador para ningún tile.
 
-## Flag y mock
+## Flag
 
-`METRICAS_VENDEDOR_HABILITADAS` (`lib/flags.ts`) y la fuente mock dependen de la misma
-variable, `VITE_MIS_METRICAS_MOCK=1`. Sin ella no hay tab bar y `/metricas` redirige a
-`/`, así que producción no cambia. Cuando exista el endpoint: el flag pasa a `true`, se
-borran la variable y el mock.
+`METRICAS_VENDEDOR_HABILITADAS` (`lib/flags.ts`) está en `true`. Si se pone en `false`,
+no hay tab bar y `/metricas` redirige a `/`. Mientras se desarrolló el front hubo un
+mock (`VITE_MIS_METRICAS_MOCK`); se borró al conectar el endpoint. **Este front no se
+deploya antes que api-vendedores #139**: sin el endpoint, la pestaña muestra el error.
 
 ## Espacio vertical de Plani
 
