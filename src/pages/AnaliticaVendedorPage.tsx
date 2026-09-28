@@ -59,26 +59,17 @@ export default function AnaliticaVendedorPage() {
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 {vendedor && promedios && (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                         {[
-                            // Primera fila: conteos + horas. Los tres conteos van juntos: total = válidas + no
+                            // Visitas lleva su desglose adentro: total = válidas + no
                             // validadas + sin coordenadas (esas últimas no son culpa del
                             // vendedor y las explica el aviso de abajo). Son visitas, no
                             // filas de la tabla: la tabla también lista los "no visité".
                             {
                                 titulo: 'Visitas',
                                 valor: formatNumero(vendedor.visitasTotales),
+                                desglose: `${formatNumero(vendedor.visitasValidas)} válidas · ${formatNumero(vendedor.visitasNoValidadas)} no validadas`,
                                 prom: formatNumero(promedios.visitasTotales),
-                            },
-                            {
-                                titulo: 'Válidas',
-                                valor: formatNumero(vendedor.visitasValidas),
-                                prom: formatNumero(promedios.visitasValidas),
-                            },
-                            {
-                                titulo: 'No validadas',
-                                valor: formatNumero(vendedor.visitasNoValidadas),
-                                prom: formatNumero(promedios.visitasNoValidadas),
                             },
                             {
                                 // Mismo dato y formato que "Horas (mensual)" de la tabla de
@@ -116,6 +107,9 @@ export default function AnaliticaVendedorPage() {
                                     {k.titulo}
                                 </p>
                                 <p className="mt-1 text-xl font-semibold text-slate-900">{k.valor}</p>
+                                {'desglose' in k && (
+                                    <p className="text-xs text-slate-600">{k.desglose}</p>
+                                )}
                                 <p className="text-xs text-slate-400">equipo: {k.prom}</p>
                             </div>
                         ))}
