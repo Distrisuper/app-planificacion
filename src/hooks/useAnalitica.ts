@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     getAltas,
     getObjeciones,
@@ -59,6 +59,25 @@ export function useVisitas(args: IVisitasArgs, opciones: OpcionesVisitas = {}) {
         // El staleTime global es de 5 min: sin bajarlo acá, el intervalo refrescaría
         // contra caché y la pantalla se quedaría quieta igual.
         staleTime: refrescarCada > 0 ? 0 : undefined,
+    })
+}
+
+/**
+ * El endpoint pagina (50 por defecto, 200 como máximo): pedir solo la primera página
+ * cortaba el listado de un mes en silencio — se veía del 28 al 18 y parecía que el
+ * filtro de fechas no andaba. Acá se acumulan páginas a demanda (`fetchNextPage`).
+ */
+export function useVisitasPaginadas(args: Omit<IVisitasArgs, 'pagina'>) {
+    return useInfiniteQuery({
+        queryKey: [...analiticaKeys.visitas(args), 'paginadas', args.cant ?? 0] as const,
+        queryFn: ({ pageParam }) => getVisitas({ ...args, pagina: pageParam }),
+        initialPageParam: 1,
+        getNextPageParam: (ultima, paginas) => {
+            const cargadas = paginas.reduce((a, p) => a + p.visitas.length, 0)
+            return cargadas < ultima.total && ultima.visitas.length > 0
+                ? ultima.pagina + 1
+                : undefined
+        },
     })
 }
 

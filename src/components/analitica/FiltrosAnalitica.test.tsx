@@ -118,3 +118,9 @@ it('sin rango elegido las fechas se ven vacías, no con el default', () => {
     expect(screen.getByLabelText('Desde')).toHaveValue('')
     expect(screen.getByLabelText('Hasta')).toHaveValue('')
 })
+
+it('sin vendedoresDisponibles no dibuja el multi-select (detalle de un vendedor)', () => {
+    render(<FiltrosAnalitica filtro={FILTRO} onRango={vi.fn()} />)
+    expect(screen.getByLabelText('Desde')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /vendedores/i })).not.toBeInTheDocument()
+})

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
@@ -69,4 +69,34 @@ it('ofrece volver al nivel 1 conservando el rango', async () => {
         'href',
         '/analitica?desde=2026-07-20&hasta=2026-07-24',
     )
+})
+
+it('no corta el rango en la primera página: "Mostrar más" trae la siguiente', async () => {
+    const [a, b] = MOCK_VISITAS['V1']
+    ;(api.getVisitas as any).mockImplementation(async (args: api.IVisitasArgs) =>
+        args.pagina === 2
+            ? { total: 2, pagina: 2, cant: 1, visitas: [b] }
+            : { total: 2, pagina: 1, cant: 1, visitas: [a] },
+    )
+    montar()
+    await waitFor(() => expect(screen.getByText('Mostrando 1 de 2')).toBeInTheDocument())
+    screen.getByRole('button', { name: 'Mostrar más' }).click()
+    await waitFor(() => expect(screen.getByText('Mostrando 2 de 2')).toBeInTheDocument())
+    expect(screen.getByText(b.nombreCliente)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mostrar más' })).not.toBeInTheDocument()
+    expect(api.getVisitas).toHaveBeenCalledWith(expect.objectContaining({ pagina: 2 }))
+})
+
+it('cambiar la fecha "Desde" vuelve a pedir las visitas con el rango nuevo', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    const desde = await screen.findByLabelText('Desde')
+    expect(desde).toHaveValue('2026-07-20')
+    fireEvent.change(desde, { target: { value: '2026-07-01' } })
+    await waitFor(() =>
+        expect(api.getVisitas).toHaveBeenCalledWith(
+            expect.objectContaining({ desde: '2026-07-01', hasta: '2026-07-24' }),
+        ),
+    )
+    expect(screen.getByText('2026-07-01 a 2026-07-24')).toBeInTheDocument()
 })

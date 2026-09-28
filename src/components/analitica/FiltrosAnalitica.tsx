@@ -11,10 +11,13 @@ export interface VendedorOpcion {
 
 interface FiltrosAnaliticaProps {
     filtro: IAnaliticaFiltro
-    vendedoresDisponibles: VendedorOpcion[]
     onRango: (desde: string, hasta: string) => void
-    onToggleVendedor: (codigo: string) => void
-    onLimpiar: () => void
+    /** Los tres de vendedores van juntos: sin `vendedoresDisponibles` no se dibuja el
+     *  multi-select. En el detalle de un vendedor el vendedor ya viene fijo por la URL y
+     *  sólo se filtra por fecha. */
+    vendedoresDisponibles?: VendedorOpcion[]
+    onToggleVendedor?: (codigo: string) => void
+    onLimpiar?: () => void
     /** El atajo "Todo el período". Sólo lo pasa la pantalla que admite no filtrar por fecha
      *  ("Datos del comercio"); sin él, el botón no se dibuja. */
     onTodoElPeriodo?: () => void
@@ -110,37 +113,39 @@ export default function FiltrosAnalitica({
                 )}
             </div>
 
-            <div className="relative">
-                <Button variant="outline" size="sm" onClick={() => setAbierto(a => !a)}>
-                    Vendedores: {etiqueta}
-                    <ChevronDown className="ml-1 h-4 w-4" />
-                </Button>
-                {abierto && (
-                    <div className="absolute z-20 mt-1 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-2 shadow-lg">
-                        <button
-                            type="button"
-                            onClick={onLimpiar}
-                            className="mb-1 w-full rounded px-2 py-1 text-left text-xs text-slate-500 hover:bg-slate-50"
-                        >
-                            Ver todos
-                        </button>
-                        {vendedoresDisponibles.map(v => (
-                            <label
-                                key={v.codigo}
-                                className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50"
+            {vendedoresDisponibles && (
+                <div className="relative">
+                    <Button variant="outline" size="sm" onClick={() => setAbierto(a => !a)}>
+                        Vendedores: {etiqueta}
+                        <ChevronDown className="ml-1 h-4 w-4" />
+                    </Button>
+                    {abierto && (
+                        <div className="absolute z-20 mt-1 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+                            <button
+                                type="button"
+                                onClick={onLimpiar}
+                                className="mb-1 w-full rounded px-2 py-1 text-left text-xs text-slate-500 hover:bg-slate-50"
                             >
-                                <input
-                                    type="checkbox"
-                                    aria-label={v.nombre}
-                                    checked={elegidos.includes(v.codigo)}
-                                    onChange={() => onToggleVendedor(v.codigo)}
-                                />
-                                {v.nombre}
-                            </label>
-                        ))}
-                    </div>
-                )}
-            </div>
+                                Ver todos
+                            </button>
+                            {vendedoresDisponibles.map(v => (
+                                <label
+                                    key={v.codigo}
+                                    className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50"
+                                >
+                                    <input
+                                        type="checkbox"
+                                        aria-label={v.nombre}
+                                        checked={elegidos.includes(v.codigo)}
+                                        onChange={() => onToggleVendedor?.(v.codigo)}
+                                    />
+                                    {v.nombre}
+                                </label>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
         </div>
     )
 }

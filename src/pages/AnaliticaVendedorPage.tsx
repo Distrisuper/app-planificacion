@@ -2,20 +2,33 @@ import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
+import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import TablaVisitas from '@/components/analitica/TablaVisitas'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
-import { useResumen, useVisitas } from '@/hooks/useAnalitica'
+import { useResumen, useVisitasPaginadas } from '@/hooks/useAnalitica'
 import { formatDuracion, formatNumero, formatPct } from '@/lib/analiticaFormat'
 
 export default function AnaliticaVendedorPage() {
     const { codigo = '' } = useParams()
-    const [params] = useSearchParams()
+    const [params, setParams] = useSearchParams()
     const desde = params.get('desde') ?? ''
     const hasta = params.get('hasta') ?? ''
+    // El rango vive en la URL: así "Volver a la analítica" lo arrastra y el link se
+    // puede compartir. `replace` para no llenar el historial con cada fecha tocada.
+    const setRango = (d: string, h: string) =>
+        setParams({ desde: d, hasta: h }, { replace: true })
     const [visitaElegida, setVisitaElegida] = useState<number | null>(null)
 
     const { data: resumen } = useResumen({ desde, hasta })
-    const { data: pagina, isLoading } = useVisitas({ desde, hasta, vendedor: codigo })
+    const {
+        data,
+        isLoading,
+        hasNextPage,
+        fetchNextPage,
+        isFetchingNextPage,
+    } = useVisitasPaginadas({ desde, hasta, vendedor: codigo, cant: 100 })
+    const visitas = data?.pages.flatMap(p => p.visitas) ?? []
+    const total = data?.pages[0]?.total ?? 0
 
     const vendedor = resumen?.vendedores.find(v => v.codigoParticularVendedor === codigo)
     const promedios = resumen?.promedios
@@ -40,7 +53,9 @@ export default function AnaliticaVendedorPage() {
                         </p>
                     </>
                 }
-            />
+            >
+                <FiltrosAnalitica filtro={{ desde, hasta }} onRango={setRango} />
+            </EncabezadoAnalitica>
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 {vendedor && promedios && (
@@ -95,14 +110,31 @@ export default function AnaliticaVendedorPage() {
 
                 {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
-                {pagina && pagina.visitas.length === 0 && (
+                {data && visitas.length === 0 && (
                     <div className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600">
                         Sin visitas en este rango.
                     </div>
                 )}
 
-                {pagina && pagina.visitas.length > 0 && (
-                    <TablaVisitas visitas={pagina.visitas} onElegirVisita={setVisitaElegida} />
+                {data && visitas.length > 0 && (
+                    <div className="space-y-3">
+                        <TablaVisitas visitas={visitas} onElegirVisita={setVisitaElegida} />
+                        <div className="flex items-center justify-between text-xs text-slate-500">
+                            <span>
+                                Mostrando {visitas.length} de {total}
+                            </span>
+                            {hasNextPage && (
+                                <button
+                                    type="button"
+                                    onClick={() => fetchNextPage()}
+                                    disabled={isFetchingNextPage}
+                                    className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
+                                >
+                                    {isFetchingNextPage ? 'Cargando…' : 'Mostrar más'}
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 )}
 
                 {visitaElegida !== null && (
