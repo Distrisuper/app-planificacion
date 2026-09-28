@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
@@ -12,25 +12,59 @@ import type { ValidezVisita } from '@/types/analitica'
 /** 'sin_coord' no se ofrece: no es un juicio sobre el vendedor, y ya tiene su aviso. */
 type FiltroValidez = Exclude<ValidezVisita, 'sin_coord'>
 
+/** Mismos verdes/rojos que la columna Dist. de la tabla: válida = ok, no validada = alerta. */
+const TONO_VALIDEZ: Record<FiltroValidez, { punto: string; activo: string }> = {
+    valida: {
+        punto: 'bg-emerald-500',
+        activo: 'bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-300',
+    },
+    no_validada: {
+        punto: 'bg-red-500',
+        activo: 'bg-red-50 text-red-800 ring-1 ring-inset ring-red-300',
+    },
+}
+
+/**
+ * Una fila del desglose de la tarjeta Visitas: etiqueta a la izquierda, número a la
+ * derecha, a todo el ancho. Se probó como pastillas lado a lado y no entran en una
+ * tarjeta de 1/6 de la grilla: se partían en dos renglones desparejos. Prendida se tiñe
+ * y muestra la ✕ de quitar; nunca más pesada que el total.
+ */
 function BotonValidez({
+    validez,
+    etiqueta,
+    cantidad,
     activo,
     onClick,
-    children,
 }: {
+    validez: FiltroValidez
+    etiqueta: string
+    cantidad: string
     activo: boolean
     onClick: () => void
-    children: ReactNode
 }) {
+    const tono = TONO_VALIDEZ[validez]
     return (
         <button
             type="button"
             aria-pressed={activo}
+            aria-label={`${etiqueta} ${cantidad}`}
+            title={activo ? 'Quitar filtro' : `Ver solo las ${etiqueta.toLowerCase()}`}
             onClick={onClick}
-            className={`rounded px-1 -mx-1 underline-offset-2 hover:underline ${
-                activo ? 'bg-slate-900 text-white hover:no-underline' : ''
+            className={`flex w-full items-center gap-1.5 rounded px-1.5 py-0.5 text-xs transition-colors ${
+                activo ? tono.activo : 'text-slate-600 hover:bg-slate-100'
             }`}
         >
-            {children}
+            <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${tono.punto}`} />
+            <span>{etiqueta}</span>
+            <span className="ml-auto flex items-center gap-1 font-medium tabular-nums">
+                {cantidad}
+                {activo && (
+                    <span aria-hidden className="text-[10px] opacity-70">
+                        ✕
+                    </span>
+                )}
+            </span>
         </button>
     )
 }
@@ -108,21 +142,22 @@ export default function AnaliticaVendedorPage() {
                                 titulo: 'Visitas',
                                 valor: formatNumero(vendedor.visitasTotales),
                                 desglose: (
-                                    <span>
+                                    <div className="-mx-1.5 space-y-0.5 border-t border-slate-100 pt-1.5">
                                         <BotonValidez
+                                            validez="valida"
+                                            etiqueta="Válidas"
+                                            cantidad={formatNumero(vendedor.visitasValidas)}
                                             activo={validez === 'valida'}
                                             onClick={() => toggleValidez('valida')}
-                                        >
-                                            {formatNumero(vendedor.visitasValidas)} válidas
-                                        </BotonValidez>
-                                        {' · '}
+                                        />
                                         <BotonValidez
+                                            validez="no_validada"
+                                            etiqueta="No validadas"
+                                            cantidad={formatNumero(vendedor.visitasNoValidadas)}
                                             activo={validez === 'no_validada'}
                                             onClick={() => toggleValidez('no_validada')}
-                                        >
-                                            {formatNumero(vendedor.visitasNoValidadas)} no validadas
-                                        </BotonValidez>
-                                    </span>
+                                        />
+                                    </div>
                                 ),
                                 prom: formatNumero(promedios.visitasTotales),
                             },
@@ -162,10 +197,10 @@ export default function AnaliticaVendedorPage() {
                                     {k.titulo}
                                 </p>
                                 <p className="mt-1 text-xl font-semibold text-slate-900">{k.valor}</p>
-                                {'desglose' in k && (
-                                    <div className="text-xs text-slate-600">{k.desglose}</div>
-                                )}
                                 <p className="text-xs text-slate-400">equipo: {k.prom}</p>
+                                {/* Debajo de "equipo" y no entre el valor y "equipo": así las
+                                    dos primeras líneas quedan alineadas con las otras tarjetas. */}
+                                {'desglose' in k && <div className="mt-2">{k.desglose}</div>}
                             </div>
                         ))}
                     </div>

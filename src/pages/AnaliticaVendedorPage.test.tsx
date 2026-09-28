@@ -110,9 +110,10 @@ it('muestra las visitas del rango con su desglose válidas / no validadas, y las
         (await screen.findByText(titulo, { selector: 'p' })).parentElement!
     const visitas = await tile('Visitas')
     expect(visitas).toHaveTextContent(String(v1.visitasTotales))
-    expect(visitas).toHaveTextContent(
-        `${v1.visitasValidas} válidas · ${v1.visitasNoValidadas} no validadas`,
-    )
+    expect(screen.getByRole('button', { name: `Válidas ${v1.visitasValidas}` })).toBeInTheDocument()
+    expect(
+        screen.getByRole('button', { name: `No validadas ${v1.visitasNoValidadas}` }),
+    ).toBeInTheDocument()
     expect(screen.queryByText('No validadas', { selector: 'p' })).not.toBeInTheDocument()
     expect(await tile('Horas')).toHaveTextContent(formatHoras(v1.minutosTotales))
 })
@@ -120,7 +121,7 @@ it('muestra las visitas del rango con su desglose válidas / no validadas, y las
 it('tocar "válidas" filtra la tabla por validez, y tocarlo de nuevo lo quita', async () => {
     ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
     montar()
-    const validas = await screen.findByRole('button', { name: /válidas$/ })
+    const validas = await screen.findByRole('button', { name: /^Válidas/ })
     fireEvent.click(validas)
     await waitFor(() =>
         expect(api.getVisitas).toHaveBeenLastCalledWith(expect.objectContaining({ validez: 'valida' })),
@@ -138,7 +139,7 @@ it('tocar "válidas" filtra la tabla por validez, y tocarlo de nuevo lo quita', 
 it('cambiar el rango conserva el filtro de validez', async () => {
     ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
     montar()
-    fireEvent.click(await screen.findByRole('button', { name: /no validadas$/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /^No validadas/ }))
     fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-07-01' } })
     await waitFor(() =>
         expect(api.getVisitas).toHaveBeenLastCalledWith(
