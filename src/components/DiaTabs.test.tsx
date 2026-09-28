@@ -3,16 +3,17 @@ import userEvent from '@testing-library/user-event'
 import { vi } from 'vitest'
 import DiaTabs from './DiaTabs'
 
-it('renders each day with its count and fires onSelect', async () => {
+it('renders each day and fires onSelect', async () => {
     const onSelect = vi.fn()
     render(
         <DiaTabs
             activo="LUN"
-            counts={{ LUN: { done: 3, total: 8 }, MAR: { done: 0, total: 8 }, MIE: { done: 0, total: 8 }, JUE: { done: 0, total: 8 }, VIE: { done: 0, total: 8 } }}
             onSelect={onSelect}
         />,
     )
-    expect(screen.getByText('LUN')).toBeInTheDocument()
-    await userEvent.click(screen.getByText('MAR'))
+    expect(screen.getByRole('button', { name: /^LUN \d+/ })).toBeInTheDocument()
+    // Sin conteo: el X/Y del día lo dice la banda del tablero.
+    expect(screen.queryByText(/\d+\/\d+/)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^MAR/ }))
     expect(onSelect).toHaveBeenCalledWith('MAR')
 })

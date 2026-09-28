@@ -150,16 +150,18 @@ export default function AgendaBoard({
                     >
                         <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-dsline bg-white shadow-sm">
                             <div
-                                className={`flex shrink-0 items-center justify-between px-3.5 py-3 ${
+                                className={`flex shrink-0 items-center justify-between px-3.5 py-1.5 ${
                                     isToday ? 'bg-dsnavy' : 'border-b border-[#EEF1F7] bg-white'
                                 }`}
                             >
-                                <div className="flex flex-col leading-tight">
+                                {/* Una sola línea ("Lunes · 28 sep"): en dos, la banda repetía en grande lo que ya
+                                    dicen las pestañas de días y le costaba alto a la lista. */}
+                                <div className="flex min-w-0 items-baseline gap-1.5 leading-tight">
                                     <span className={`text-[13.5px] font-extrabold ${isToday ? 'text-white' : 'text-[#182645]'}`}>
                                         {DIA_NOMBRE[d]}
                                     </span>
                                     <span className={`text-[11px] font-semibold ${isToday ? 'text-white/70' : 'text-dsmuted'}`}>
-                                        {formatDayDate(weekDates[d])}
+                                        · {formatDayDate(weekDates[d])}
                                     </span>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1.5">

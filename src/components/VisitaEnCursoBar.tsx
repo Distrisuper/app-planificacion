@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { ChevronUp } from 'lucide-react'
 import { formatearDuracion } from '@/lib/visitaTimer'
 import { estadoVisitaVivo, PALETA_VISITA_VIVO } from '@/lib/estadoDuracion'
@@ -26,11 +27,16 @@ export default function VisitaEnCursoBar({
     const segundos = useVisitaTimer(visitaId)
     const estado = estadoVisitaVivo(segundos, alejado)
 
-    return (
+    // Portal a <body>: la agenda que la monta queda OCULTA (display:none) mientras el
+    // vendedor mira Métricas, y la visita sigue corriendo — la barra tiene que verse en
+    // las dos pestañas para poder volver. Flota 12px por encima de la tab bar
+    // (`--alto-tabbar`, que publica VendedorShell; 0 si no hay tab bar).
+    return createPortal(
         <button
             onClick={onExpandir}
             data-testid="visita-en-curso-bar"
-            className={`fixed inset-x-3 bottom-3 z-40 flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-white shadow-[0_6px_20px_rgba(180,83,9,.35)] ${PALETA_VISITA_VIVO[estado].barra}`}
+            style={{ bottom: 'calc(var(--alto-tabbar, 0px) + 12px)' }}
+            className={`fixed inset-x-3 z-40 flex items-center justify-between gap-3 rounded-2xl px-4 py-3 text-white shadow-[0_6px_20px_rgba(180,83,9,.35)] ${PALETA_VISITA_VIVO[estado].barra}`}
         >
             <span className="flex min-w-0 items-center gap-2 text-left">
                 <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-white" />
@@ -52,6 +58,7 @@ export default function VisitaEnCursoBar({
                 </span>
             </span>
             <ChevronUp className="h-[18px] w-[18px] shrink-0" strokeWidth={2.4} />
-        </button>
+        </button>,
+        document.body,
     )
 }
