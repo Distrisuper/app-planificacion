@@ -14,6 +14,7 @@ import type {
     IAltaRelevada,
     IAnaliticaFiltro,
     IAnaliticaResumen,
+    ICriterioVisita,
     IObjecionesResumen,
     IVendedorMetricas,
     IFichasArgs,
@@ -105,6 +106,7 @@ export const getVisitas = async (args: IVisitasArgs): Promise<IVisitasPage> => {
             .filter(v => !args.vendedor || v.codigoParticularVendedor === args.vendedor)
             .filter(v => !args.vendedores?.length || args.vendedores.includes(v.codigoParticularVendedor))
             .filter(v => !args.tipo?.length || args.tipo.includes(v.tipo))
+            .filter(v => !args.validez || v.validez === args.validez)
             .filter(v => !busqueda || v.nombreCliente.toLowerCase().includes(busqueda))
             // Feed de actividad: lo último arriba. Ordena por el instante, no por el
             // string: el ISO ya es comparable, pero el intento es el mismo que el del
@@ -142,6 +144,15 @@ export const getObjeciones = async (args: IObjecionesArgs): Promise<IObjecionesR
         }
     }
     const res = await apiClient.get('/planificacion/analitica/objeciones', { params: args })
+    return res.data.data
+}
+
+export const getCriterioVisita = async (): Promise<ICriterioVisita> => {
+    if (USA_MOCK) {
+        await esperar()
+        return { toleranciaMetros: 100, duracionMinMin: 15, duracionMaxMin: 99_999 }
+    }
+    const res = await apiClient.get('/planificacion/analitica/criterio')
     return res.data.data
 }
 

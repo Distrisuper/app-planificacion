@@ -6,6 +6,9 @@ import type { ResultadoMotivo } from '@/types/planificacion'
 interface TablaActividadProps {
     filas: IVisitaFila[]
     onElegirVisita: (visitaId: number) => void
+    /** De `useCriterioVisita`, que la página ya tiene. Sin él se pinta con el respaldo
+     *  (TOLERANCIA_METROS) mientras carga. */
+    toleranciaMetros?: number
 }
 
 const ETIQUETA_RESULTADO: Record<string, string> = {
@@ -43,7 +46,7 @@ function estadoDe(fila: IVisitaFila): Estado {
 
 const etiquetaResultado = (r: ResultadoMotivo | null) => (r ? ETIQUETA_RESULTADO[r] : '—')
 
-export default function TablaActividad({ filas, onElegirVisita }: TablaActividadProps) {
+export default function TablaActividad({ filas, onElegirVisita, toleranciaMetros }: TablaActividadProps) {
     return (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
@@ -91,7 +94,7 @@ export default function TablaActividad({ filas, onElegirVisita }: TablaActividad
                                 </td>
                                 <td
                                     data-testid={`distancia-${f.visitaId}`}
-                                    className={`px-3 py-2 text-right ${CLASE_DISTANCIA[claseDistancia(f.distanciaInicioMetros, f.distanciaFinMetros)]}`}
+                                    className={`px-3 py-2 text-right ${CLASE_DISTANCIA[claseDistancia(f.distanciaInicioMetros, f.distanciaFinMetros, toleranciaMetros)]}`}
                                 >
                                     {formatDistancia(peorDistancia(f.distanciaInicioMetros, f.distanciaFinMetros))}
                                 </td>

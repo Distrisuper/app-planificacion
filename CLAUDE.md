@@ -345,13 +345,16 @@ Hay **tres capas separadas**, y una operación toca una sola:
   cierre con el vendedor ya sabiendo que la visita iba a contar como corta para analítica,
   sin ninguna ganancia — esa clasificación es post-hoc y no necesita un candado en vivo. No
   reintroducirlo. El umbral de duración válida para analítica (mínimo 15 min, **sin techo
-  por ahora** — antes 15-90, vive en `pl_criterio_visita` en api-vendedores;
-  `DURACION_MIN_VALIDA` en `analiticaFormat.ts` es solo documentación, no alimenta ningún
-  cálculo) sigue existiendo como concepto DISTINTO: clasifica la visita en `visitasCortas`
-  para el reporte de gerencia, pero ya no bloquea nada del lado del vendedor. El día que ese
-  umbral vuelva a cambiar, hay que actualizar a mano el texto de
-  `ayudaEfectividadOperativa.tsx` — el criterio no se expone por API, así que no se
-  sincroniza solo.
+  por ahora** — antes 15-90, vive en `pl_criterio_visita` en api-vendedores) sigue
+  existiendo como concepto DISTINTO: clasifica la visita en `visitasCortas` para el reporte
+  de gerencia, pero ya no bloquea nada del lado del vendedor. **La analítica lo lee de la
+  base**, por `GET /planificacion/analitica/criterio` (`useCriterioVisita`): las ayudas
+  (`describirCriterio`), el color de la columna Dist. y el círculo del mapa usan esos
+  números, así que cambiar el criterio es un `UPDATE` y el front se entera solo. Ya no hay
+  constante de duración en el front (se borró `DURACION_MIN_VALIDA`); `TOLERANCIA_METROS`
+  queda solo como respaldo para pintar mientras carga el criterio. Ojo: el repo no registra
+  el `UPDATE` que sacó el techo (el seed de `planificacion-criterio-visita-table.sql` dice
+  10–90) — el valor real es el de la base, no el de este párrafo.
 - **Cerrar visita exige un mínimo de `min(2, total ofrecidos)` rubros completos, no todos.**
   Vive en `VisitaSheet.tsx` (`minimoRequerido`/`faltanParaMinimo`). Con 5 rubros propuestos,
   resolver 2 habilita el cierre. Revierte a propósito la decisión del spec
@@ -444,7 +447,7 @@ Hay **tres capas separadas**, y una operación toca una sola:
   `VisitaSheet`) desde ese único módulo: son la misma visita, y minimizar el sheet no puede
   cambiarle el color. Tres cosas que no hay que confundir: (1) `DURACION_LARGA_MIN = 90`
   **no repone el techo** que se sacó del criterio real — ese vive en `pl_criterio_visita`
-  y hoy es "mínimo 15, sin techo" (`DURACION_MIN_VALIDA`), así que una visita de 2 horas
+  y hoy es "mínimo 15, sin techo" (lo que diga `GET /analitica/criterio`), así que una visita de 2 horas
   sigue siendo válida y el ámbar solo sugiere cerrarla; estos umbrales son de UI y **no se
   sincronizan** con la base. (2) `larga` es ámbar y **no rojo a propósito**: `dsred` está
   reservado para `alejado`, que es el único de los cuatro que indica un problema real — si

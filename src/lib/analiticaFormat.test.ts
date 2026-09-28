@@ -1,10 +1,9 @@
 import {
-    DURACION_MIN_VALIDA,
     TOLERANCIA_METROS,
     alertasAbsolutas,
     claseDistancia,
     esBajoPromedio,
-    esDuracionValida,
+    describirCriterio,
     formatDistancia,
     formatDuracion,
     formatHoras,
@@ -64,11 +63,25 @@ it('peorDistancia devuelve la mayor de las dos, o null si no hay ninguna', () =>
 
 // Sin techo, por ahora: el criterio real (pl_criterio_visita, api-vendedores) dejó de
 // exigir un máximo. Una visita larga no deja de ser válida por serlo.
-it('esDuracionValida exige >= DURACION_MIN_VALIDA, sin techo', () => {
-    expect(esDuracionValida(DURACION_MIN_VALIDA)).toBe(true)
-    expect(esDuracionValida(DURACION_MIN_VALIDA - 1)).toBe(false)
-    expect(esDuracionValida(10_000)).toBe(true)
-    expect(esDuracionValida(null)).toBe(false)
+it('describirCriterio usa los números del criterio real', () => {
+    expect(describirCriterio({ toleranciaMetros: 80, duracionMinMin: 10, duracionMaxMin: 90 })).toBe(
+        'a 80 m o menos del cliente al empezar y al terminar, y duró entre 10 y 90 min',
+    )
+})
+
+it('describirCriterio: un techo enorme se lee como "sin techo"', () => {
+    expect(describirCriterio({ toleranciaMetros: 100, duracionMinMin: 15, duracionMaxMin: 99_999 })).toBe(
+        'a 100 m o menos del cliente al empezar y al terminar, y duró al menos 15 min',
+    )
+})
+
+it('describirCriterio sin criterio no inventa números', () => {
+    expect(describirCriterio(undefined)).not.toMatch(/\d/)
+})
+
+it('claseDistancia usa la tolerancia que se le pasa, no la de respaldo', () => {
+    expect(claseDistancia(120, null, 150)).toBe('ok')
+    expect(claseDistancia(120, null)).toBe('alerta')
 })
 
 it('esBajoPromedio marca por debajo del 70% del promedio del equipo', () => {

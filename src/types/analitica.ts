@@ -48,6 +48,9 @@ export interface IVendedorMetricas {
     /** Promedio solo sobre visitas válidas. null si no hay ninguna. */
     duracionPromedioMin: number | null
     minutosTotales: number
+    /** Solo las visitas válidas (minutosTotales suma todas las cerradas). Opcional: un
+     *  backend anterior a api-vendedores#137 no lo manda. */
+    minutosValidos?: number
     visitasPorDia: number
     clientesDistintos: number
 
@@ -104,6 +107,23 @@ export interface IVisitaFila {
     motivos: string[]
     /** Resultado dominante de los ofrecimientos de la visita. null si no hay ninguno resuelto. */
     resultado: ResultadoMotivo | null
+    /** La misma clasificación que cuenta `visitasValidas`/`visitasNoValidadas` del resumen
+     *  (la decide el backend con `pl_criterio_visita`). null en los "no visité". Opcional:
+     *  un backend anterior al filtro por validez no la manda. */
+    validez?: ValidezVisita | null
+}
+
+/** 'sin_coord' = cliente sin coordenadas: no verificable, no cuenta como inválida. */
+export type ValidezVisita = 'valida' | 'no_validada' | 'sin_coord'
+
+/** La fila de `pl_criterio_visita` (GET /analitica/criterio): con esto el backend
+ *  clasifica cada visita. El front lo usa para pintar distancias y explicar la validez;
+ *  nunca para recalcularla. */
+export interface ICriterioVisita {
+    toleranciaMetros: number
+    duracionMinMin: number
+    /** Un número enorme = sin techo (la columna es NOT NULL): ver `tieneTecho`. */
+    duracionMaxMin: number
 }
 
 export interface IVisitasPage {
@@ -119,6 +139,8 @@ export interface IVisitasArgs extends IAnaliticaFiltro {
     cliente?: string
     /** Ausente = las tres resoluciones. */
     tipo?: TipoResolucion[]
+    /** Implica sólo visitas: un "no visité" no se valida. */
+    validez?: ValidezVisita
     pagina?: number
     cant?: number
 }

@@ -4,7 +4,7 @@ import KpisMensuales from './KpisMensuales'
 import ObjecionesMercado from './ObjecionesMercado'
 import SelectorPeriodo, { type ModoPeriodo } from './SelectorPeriodo'
 import TablaEfectividadOperativa from './TablaEfectividadOperativa'
-import { useResumen } from '@/hooks/useAnalitica'
+import { useCriterioVisita, useResumen } from '@/hooks/useAnalitica'
 import { rangoMes, rangoSemana } from '@/lib/fechas'
 
 /** Único bloque de /analitica: KPIs + tabla + objeciones, todos sobre el mismo rango
@@ -16,6 +16,7 @@ export default function EfectividadOperativaSection() {
     const [fecha, setFecha] = useState(() => new Date())
     const filtro = modo === 'mes' ? rangoMes(fecha) : rangoSemana(fecha)
     const { data, isLoading, isError } = useResumen(filtro)
+    const criterio = useCriterioVisita()
 
     const irAVendedor = (codigo: string) => {
         const params = new URLSearchParams({ desde: filtro.desde, hasta: filtro.hasta })
@@ -45,11 +46,12 @@ export default function EfectividadOperativaSection() {
 
             {data && data.vendedores.length > 0 && (
                 <>
-                    <KpisMensuales promedios={data.promedios} />
+                    <KpisMensuales promedios={data.promedios} criterio={criterio} />
                     <TablaEfectividadOperativa
                         vendedores={data.vendedores}
                         promedios={data.promedios}
                         onElegirVendedor={irAVendedor}
+                        criterio={criterio}
                     />
                     <ObjecionesMercado desde={filtro.desde} hasta={filtro.hasta} />
                 </>

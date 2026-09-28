@@ -1,5 +1,5 @@
-import { formatPctEscalado } from '@/lib/analiticaFormat'
-import type { IVendedorMetricas } from '@/types/analitica'
+import { describirCriterio, formatPctEscalado } from '@/lib/analiticaFormat'
+import type { ICriterioVisita, IVendedorMetricas } from '@/types/analitica'
 
 /** Contenido de ayuda de los 3 KPIs/columnas de Efectividad, compartido entre
  *  KpisMensuales y TablaEfectividadOperativa para no duplicar el texto.
@@ -14,7 +14,7 @@ export const META_HORAS = META_MINUTOS_TOTALES / 60
 export const META_VISITAS_TEXTO = `Meta: ${META_VISITAS_TOTALES} visitas/mes`
 export const META_HORAS_TEXTO = `Meta: ${META_HORAS} hs/mes`
 
-function Nota({ children }: { children: React.ReactNode }) {
+export function Nota({ children }: { children: React.ReactNode }) {
     return <p className="mt-2 border-t border-slate-100 pt-2 text-slate-400 italic">{children}</p>
 }
 
@@ -51,12 +51,12 @@ export const ayudaEfectividad = (m: IVendedorMetricas): React.ReactNode => (
     </div>
 )
 
-export const AYUDA_VISITAS_MENSUAL = (
+export const ayudaVisitasMensual = (criterio: ICriterioVisita | undefined) => (
     <div>
         <p className="text-sm font-semibold text-slate-900">Visitas (mensual)</p>
         <p className="mt-1">
-            Visitas con GPS confirmado (≤100 m del cliente, al inicio y al fin) y duración de al
-            menos 15 min. El resto no cuenta.
+            Visitas válidas: con GPS confirmado y duración dentro del criterio —{' '}
+            {describirCriterio(criterio)}. El resto no cuenta.
         </p>
         <Nota>Meta aparte por clientes distintos: {META_CLIENTES_DISTINTOS}/mes.</Nota>
     </div>
@@ -65,6 +65,12 @@ export const AYUDA_VISITAS_MENSUAL = (
 export const AYUDA_HORAS_MENSUAL = (
     <div>
         <p className="text-sm font-semibold text-slate-900">Horas (mensual)</p>
-        <p className="mt-1">Horas de esas mismas visitas válidas.</p>
+        {/* Decía "Horas de esas mismas visitas válidas", y no es así: el backend mide
+            minutosTotales, que suma TODAS las visitas cerradas (ver el comentario de
+            IVendedorMetricas.minutosTotales en api-vendedores). */}
+        <p className="mt-1">
+            Horas de todas las visitas cerradas del mes, válidas o no. A diferencia de las
+            visitas, acá las no validadas también suman.
+        </p>
     </div>
 )

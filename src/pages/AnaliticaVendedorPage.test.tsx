@@ -1,10 +1,12 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
 import AnaliticaVendedorPage from './AnaliticaVendedorPage'
 import { MOCK_RESUMEN, MOCK_VISITAS } from '@/mocks/analiticaMock'
 import * as api from '@/api/analitica'
+import { formatHoras } from '@/lib/analiticaFormat'
 
 vi.mock('@/api/analitica')
 vi.mock('@/context/AuthContext', () => ({
@@ -69,4 +71,126 @@ it('ofrece volver al nivel 1 conservando el rango', async () => {
         'href',
         '/analitica?desde=2026-07-20&hasta=2026-07-24',
     )
+})
+
+it('no corta el rango en la primera página: "Mostrar más" trae la siguiente', async () => {
+    const [a, b] = MOCK_VISITAS['V1']
+    ;(api.getVisitas as any).mockImplementation(async (args: api.IVisitasArgs) =>
+        args.pagina === 2
+            ? { total: 2, pagina: 2, cant: 1, visitas: [b] }
+            : { total: 2, pagina: 1, cant: 1, visitas: [a] },
+    )
+    montar()
+    await waitFor(() => expect(screen.getByText('Mostrando 1 de 2')).toBeInTheDocument())
+    screen.getByRole('button', { name: 'Mostrar más' }).click()
+    await waitFor(() => expect(screen.getByText('Mostrando 2 de 2')).toBeInTheDocument())
+    expect(screen.getByText(b.nombreCliente)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mostrar más' })).not.toBeInTheDocument()
+    expect(api.getVisitas).toHaveBeenCalledWith(expect.objectContaining({ pagina: 2 }))
+})
+
+it('cambiar la fecha "Desde" vuelve a pedir las visitas con el rango nuevo', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    const desde = await screen.findByLabelText('Desde')
+    expect(desde).toHaveValue('2026-07-20')
+    fireEvent.change(desde, { target: { value: '2026-07-01' } })
+    await waitFor(() =>
+        expect(api.getVisitas).toHaveBeenCalledWith(
+            expect.objectContaining({ desde: '2026-07-01', hasta: '2026-07-24' }),
+        ),
+    )
+    expect(screen.getByText('2026-07-01 a 2026-07-24')).toBeInTheDocument()
+})
+
+it('muestra las visitas del rango con su desglose válidas / no validadas, y las horas', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    const v1 = MOCK_RESUMEN.vendedores.find(v => v.codigoParticularVendedor === 'V1')!
+    montar()
+    const tile = async (titulo: string) =>
+        (await screen.findByText(titulo, { selector: 'p' })).parentElement!
+    const visitas = await tile('Visitas')
+    expect(visitas).toHaveTextContent(String(v1.visitasTotales))
+    expect(screen.getByRole('button', { name: `Válidas ${v1.visitasValidas}` })).toBeInTheDocument()
+    expect(
+        screen.getByRole('button', { name: `No validadas ${v1.visitasNoValidadas}` }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('No validadas', { selector: 'p' })).not.toBeInTheDocument()
+    expect(await tile('Horas')).toHaveTextContent(formatHoras(v1.minutosTotales))
+})
+
+it('tocar "válidas" filtra la tabla por validez, y tocarlo de nuevo lo quita', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    const validas = await screen.findByRole('button', { name: /^Válidas/ })
+    fireEvent.click(validas)
+    await waitFor(() =>
+        expect(api.getVisitas).toHaveBeenLastCalledWith(expect.objectContaining({ validez: 'valida' })),
+    )
+    expect(validas).toHaveAttribute('aria-pressed', 'true')
+    expect(await screen.findByText('Sin visitas válidas en este rango.')).toBeInTheDocument()
+
+    fireEvent.click(validas)
+    await waitFor(() =>
+        expect(api.getVisitas).toHaveBeenLastCalledWith(expect.objectContaining({ validez: undefined })),
+    )
+    expect(validas).toHaveAttribute('aria-pressed', 'false')
+})
+
+it('cambiar el rango conserva el filtro de validez', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    fireEvent.click(await screen.findByRole('button', { name: /^No validadas/ }))
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-07-01' } })
+    await waitFor(() =>
+        expect(api.getVisitas).toHaveBeenLastCalledWith(
+            expect.objectContaining({ desde: '2026-07-01', validez: 'no_validada' }),
+        ),
+    )
+})
+
+it('Horas se desglosa en válidas y resto cuando el backend manda minutosValidos', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    const v1 = MOCK_RESUMEN.vendedores.find(v => v.codigoParticularVendedor === 'V1')!
+    ;(api.getResumen as any).mockResolvedValue({
+        ...MOCK_RESUMEN,
+        vendedores: MOCK_RESUMEN.vendedores.map(v =>
+            v === v1 ? { ...v, minutosTotales: 600, minutosValidos: 480 } : v,
+        ),
+    })
+    montar()
+    const horas = (await screen.findByText('Horas', { selector: 'p' })).closest('.rounded-lg')!
+    expect(horas).toHaveTextContent('Válidas')
+    expect(horas).toHaveTextContent(formatHoras(480))
+    expect(horas).toHaveTextContent(formatHoras(120))
+})
+
+it('sin minutosValidos (backend viejo) Horas no inventa un desglose', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    await screen.findByText('Horas', { selector: 'p' })
+    expect(screen.queryByText('Resto')).not.toBeInTheDocument()
+})
+
+it('cada tarjeta explica qué mide al pasar el mouse por el "?"', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    await userEvent.hover(await screen.findByRole('button', { name: 'Qué significa Horas' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('todas las visitas cerradas del rango')
+})
+
+it('la ayuda de Visitas cita el criterio real que manda el backend', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    ;(api.getCriterioVisita as any).mockResolvedValue({
+        toleranciaMetros: 80,
+        duracionMinMin: 10,
+        duracionMaxMin: 90,
+    })
+    montar()
+    await waitFor(() => expect(api.getCriterioVisita).toHaveBeenCalled())
+    await userEvent.hover(await screen.findByRole('button', { name: 'Qué significa Visitas' }))
+    await waitFor(() =>
+        expect(screen.getByRole('dialog')).toHaveTextContent('a 80 m o menos del cliente'),
+    )
+    expect(screen.getByRole('dialog')).toHaveTextContent('duró entre 10 y 90 min')
 })

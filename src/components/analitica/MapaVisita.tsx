@@ -8,6 +8,8 @@ interface MapaVisitaProps {
     coordInicio: ICoord | null
     coordFinal: ICoord | null
     coordCliente: ICoord
+    /** El radio de validez real (`useCriterioVisita`). Sin él, el respaldo. */
+    radioMetros?: number
 }
 
 const punto = (color: string, tamano: number) =>
@@ -22,7 +24,12 @@ const ICONO_CLIENTE = punto('#F97316', 22)
 const ICONO_INICIO = punto('#213D82', 16)
 const ICONO_FIN = punto('#10B981', 16)
 
-export default function MapaVisita({ coordInicio, coordFinal, coordCliente }: MapaVisitaProps) {
+export default function MapaVisita({
+    coordInicio,
+    coordFinal,
+    coordCliente,
+    radioMetros = TOLERANCIA_METROS,
+}: MapaVisitaProps) {
     const contenedor = useRef<HTMLDivElement>(null)
     const mapa = useRef<L.Map | null>(null)
 
@@ -40,7 +47,7 @@ export default function MapaVisita({ coordInicio, coordFinal, coordCliente }: Ma
         L.marker([coordCliente.lat, coordCliente.lng], { icon: ICONO_CLIENTE }).addTo(mapa.current)
         // El círculo hace visible por qué una visita quedó validada o no.
         L.circle([coordCliente.lat, coordCliente.lng], {
-            radius: TOLERANCIA_METROS,
+            radius: radioMetros,
             color: '#F97316',
             weight: 1,
             fillOpacity: 0.08,

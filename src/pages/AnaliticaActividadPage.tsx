@@ -4,7 +4,7 @@ import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
 import TablaActividad from '@/components/analitica/TablaActividad'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
-import { useResumen, useVendedores, useVisitas } from '@/hooks/useAnalitica'
+import { useCriterioVisita, useResumen, useVendedores, useVisitas } from '@/hooks/useAnalitica'
 import { incluyeHoy, rangoHoy } from '@/lib/fechas'
 import { formatNumero, formatPct } from '@/lib/analiticaFormat'
 
@@ -18,6 +18,7 @@ export default function AnaliticaActividadPage() {
 
     const enVivo = incluyeHoy(filtro.desde, filtro.hasta)
     const { data: roster } = useVendedores()
+    const criterio = useCriterioVisita()
     const { data: resumen } = useResumen(filtro)
     const { data: pagina, isLoading, isError } = useVisitas(
         { desde: filtro.desde, hasta: filtro.hasta, vendedores: filtro.vendedores },
@@ -81,7 +82,11 @@ export default function AnaliticaActividadPage() {
                 )}
 
                 {filas.length > 0 && (
-                    <TablaActividad filas={filas} onElegirVisita={setVisitaElegida} />
+                    <TablaActividad
+                        filas={filas}
+                        onElegirVisita={setVisitaElegida}
+                        toleranciaMetros={criterio?.toleranciaMetros}
+                    />
                 )}
 
                 {visitaElegida !== null && (
