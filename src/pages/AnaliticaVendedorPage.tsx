@@ -1,9 +1,18 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
 import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
+import HelpPopover from '@/components/analitica/HelpPopover'
 import TablaVisitas from '@/components/analitica/TablaVisitas'
+import {
+    AYUDA_COBERTURA,
+    AYUDA_DURACION_PROMEDIO,
+    AYUDA_EFECTIVIDAD_COMERCIAL,
+    AYUDA_HORAS,
+    AYUDA_VISITAS,
+    AYUDA_VISITAS_POR_DIA,
+} from '@/components/analitica/ayudaDetalleVendedor'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
 import { useResumen, useVisitasPaginadas } from '@/hooks/useAnalitica'
 import { formatDuracion, formatHoras, formatNumero, formatPct } from '@/lib/analiticaFormat'
@@ -69,6 +78,27 @@ function BotonValidez({
     )
 }
 
+/** Fila del desglose que NO filtra (las horas no tienen filtro propio): misma forma que
+ *  BotonValidez para que las dos tarjetas se lean igual, sin hover ni puntero. */
+function FilaDesglose({ punto, etiqueta, valor }: { punto: string; etiqueta: string; valor: string }) {
+    return (
+        <div className="flex w-full items-center gap-1.5 px-1.5 py-0.5 text-xs text-slate-600">
+            <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${punto}`} />
+            <span>{etiqueta}</span>
+            <span className="ml-auto font-medium tabular-nums">{valor}</span>
+        </div>
+    )
+}
+
+interface Tarjeta {
+    titulo: string
+    valor: string
+    prom: string
+    ayuda: ReactNode
+    /** Se muestra al lado del número, con la tarjeta más ancha. */
+    desglose?: ReactNode
+}
+
 export default function AnaliticaVendedorPage() {
     const { codigo = '' } = useParams()
     const [params, setParams] = useSearchParams()
@@ -132,8 +162,12 @@ export default function AnaliticaVendedorPage() {
 
             <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
                 {vendedor && promedios && (
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
-                        {[
+                    // Fila de tarjetas a su ancho natural, no una grilla: con columnas fijas
+                    // cada tarjeta se estiraba al ancho de la pantalla (números perdidos en
+                    // cajas enormes) y, si Horas llegaba sin desglose, quedaba un hueco.
+                    // `flex-wrap` las baja de renglón en pantallas chicas.
+                    <div className="flex flex-wrap gap-3">
+                        {([
                             // Visitas lleva su desglose adentro: total = válidas + no
                             // validadas + sin coordenadas (esas últimas no son culpa del
                             // vendedor y las explica el aviso de abajo). Son visitas, no
@@ -141,6 +175,7 @@ export default function AnaliticaVendedorPage() {
                             {
                                 titulo: 'Visitas',
                                 valor: formatNumero(vendedor.visitasTotales),
+                                ayuda: AYUDA_VISITAS,
                                 desglose: (
                                     <div className="-mx-1.5 space-y-0.5">
                                         <BotonValidez
@@ -167,46 +202,71 @@ export default function AnaliticaVendedorPage() {
                                 titulo: 'Horas',
                                 valor: formatHoras(vendedor.minutosTotales),
                                 prom: formatHoras(promedios.minutosTotales),
+                                ayuda: AYUDA_HORAS,
+                                // Sin minutosValidos (backend anterior a #137) la tarjeta queda
+                                // simple: mejor sin desglose que con un "0 hs válidas" falso.
+                                desglose: vendedor.minutosValidos !== undefined && (
+                                    <div className="-mx-1.5 space-y-0.5">
+                                        <FilaDesglose
+                                            punto="bg-emerald-500"
+                                            etiqueta="Válidas"
+                                            valor={formatHoras(vendedor.minutosValidos)}
+                                        />
+                                        <FilaDesglose
+                                            punto="bg-slate-300"
+                                            etiqueta="Resto"
+                                            valor={formatHoras(
+                                                vendedor.minutosTotales - vendedor.minutosValidos,
+                                            )}
+                                        />
+                                    </div>
+                                ),
                             },
                             {
                                 titulo: 'Cobertura',
+                                ayuda: AYUDA_COBERTURA,
                                 valor: formatPct(vendedor.cobertura),
                                 prom: formatPct(promedios.cobertura),
                             },
                             {
                                 titulo: 'Efect. comercial',
+                                ayuda: AYUDA_EFECTIVIDAD_COMERCIAL,
                                 valor: formatPct(vendedor.efectividadComercial),
                                 prom: formatPct(promedios.efectividadComercial),
                             },
                             {
                                 titulo: 'Visitas/día',
+                                ayuda: AYUDA_VISITAS_POR_DIA,
                                 valor: formatNumero(vendedor.visitasPorDia),
                                 prom: formatNumero(promedios.visitasPorDia),
                             },
                             {
                                 titulo: 'Duración prom.',
+                                ayuda: AYUDA_DURACION_PROMEDIO,
                                 valor: formatDuracion(vendedor.duracionPromedioMin),
                                 prom: formatDuracion(promedios.duracionPromedioMin),
                             },
-                        ].map(k => (
+                        ] satisfies Tarjeta[]).map((k: Tarjeta) => (
                             <div
                                 key={k.titulo}
-                                // Visitas ocupa dos columnas y pone el desglose AL LADO del
-                                // número: debajo la hacía más alta, y la grilla estiraba las
-                                // otras cinco tarjetas a esa altura, con un hueco vacío abajo.
-                                className={`rounded-lg border border-slate-200 bg-white px-4 py-3 ${
-                                    'desglose' in k ? 'col-span-2 flex items-center gap-4' : ''
+                                // El desglose va AL LADO del número: debajo hacía la tarjeta
+                                // más alta, y la fila estiraba las demás a esa altura.
+                                className={`min-w-[9.5rem] rounded-lg border border-slate-200 bg-white px-4 py-3 ${
+                                    k.desglose ? 'flex items-center gap-4' : ''
                                 }`}
                             >
                                 <div className="shrink-0">
-                                    <p className="text-xs uppercase tracking-wide text-slate-500">
+                                    <p className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-slate-500">
                                         {k.titulo}
+                                        <HelpPopover label={`Qué significa ${k.titulo}`} align="left">
+                                            {k.ayuda}
+                                        </HelpPopover>
                                     </p>
                                     <p className="mt-1 text-xl font-semibold text-slate-900">{k.valor}</p>
                                     <p className="text-xs text-slate-400">equipo: {k.prom}</p>
                                 </div>
-                                {'desglose' in k && (
-                                    <div className="min-w-0 flex-1 border-l border-slate-100 pl-4">
+                                {k.desglose && (
+                                    <div className="w-36 border-l border-slate-100 pl-4">
                                         {k.desglose}
                                     </div>
                                 )}

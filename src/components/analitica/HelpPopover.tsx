@@ -10,9 +10,14 @@ interface HelpPopoverProps {
 }
 
 const ANCHO_PANEL = 288 // w-72
+const CIERRE_HOVER_MS = 150
 
 /** Botón "?" que abre un panel de ayuda con estilo propio (no depende del tooltip
  *  nativo del navegador).
+ *
+ *  Pasar el mouse lo abre y sacarlo lo cierra (con un respiro para poder llegar al
+ *  panel); un click lo deja FIJO hasta clickear afuera o Escape. En touch no hay hover,
+ *  así que ahí sigue siendo tocar para abrir.
  *
  *  El panel se renderiza en un portal a `document.body`, posicionado en
  *  coordenadas de viewport (fixed) a partir del botón — no como hijo posicionado
@@ -23,17 +28,41 @@ const ANCHO_PANEL = 288 // w-72
  *  el panel y no necesita scrollear. */
 export default function HelpPopover({ label, children, align = 'right' }: HelpPopoverProps) {
     const [abierto, setAbierto] = useState(false)
+    const [fijado, setFijado] = useState(false)
     const [posicion, setPosicion] = useState<{ top: number; left: number } | null>(null)
     const botonRef = useRef<HTMLButtonElement>(null)
     const panelRef = useRef<HTMLDivElement>(null)
+    const cierreRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    const abrir = () => {
+    const cancelarCierre = () => {
+        if (cierreRef.current) clearTimeout(cierreRef.current)
+        cierreRef.current = null
+    }
+
+    const abrir = (fijar: boolean) => {
+        cancelarCierre()
         const rect = botonRef.current?.getBoundingClientRect()
         if (!rect) return
         const left = align === 'right' ? rect.right - ANCHO_PANEL : rect.left
         setPosicion({ top: rect.bottom + 6, left: Math.max(8, left) })
         setAbierto(true)
+        if (fijar) setFijado(true)
     }
+
+    const cerrar = () => {
+        cancelarCierre()
+        setAbierto(false)
+        setFijado(false)
+    }
+
+    // El respiro deja cruzar el hueco de 6px entre el botón y el panel sin que se cierre.
+    const cerrarSiNoEstaFijado = () => {
+        if (fijado) return
+        cancelarCierre()
+        cierreRef.current = setTimeout(() => setAbierto(false), CIERRE_HOVER_MS)
+    }
+
+    useEffect(() => cancelarCierre, [])
 
     useEffect(() => {
         if (!abierto) return
@@ -41,11 +70,10 @@ export default function HelpPopover({ label, children, align = 'right' }: HelpPo
         const cerrarSiEsAfuera = (e: MouseEvent) => {
             const objetivo = e.target as Node
             if (botonRef.current?.contains(objetivo) || panelRef.current?.contains(objetivo)) return
-            setAbierto(false)
+            cerrar()
         }
-        const cerrar = () => setAbierto(false)
         const cerrarConEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setAbierto(false)
+            if (e.key === 'Escape') cerrar()
         }
 
         document.addEventListener('mousedown', cerrarSiEsAfuera)
@@ -70,7 +98,11 @@ export default function HelpPopover({ label, children, align = 'right' }: HelpPo
                 type="button"
                 aria-label={label}
                 aria-expanded={abierto}
-                onClick={() => (abierto ? setAbierto(false) : abrir())}
+                // Abierto por hover, el click lo fija en vez de cerrarlo: si no, el mismo
+                // gesto que lo abrió (llegar con el mouse y clickear) lo cerraría.
+                onClick={() => (abierto && fijado ? cerrar() : abrir(true))}
+                onMouseEnter={() => abrir(false)}
+                onMouseLeave={cerrarSiNoEstaFijado}
                 className="flex shrink-0 items-center justify-center text-slate-400 hover:text-slate-600"
             >
                 <HelpCircle className="h-3.5 w-3.5" aria-hidden="true" />
@@ -81,6 +113,8 @@ export default function HelpPopover({ label, children, align = 'right' }: HelpPo
                     <div
                         ref={panelRef}
                         role="dialog"
+                        onMouseEnter={cancelarCierre}
+                        onMouseLeave={cerrarSiNoEstaFijado}
                         style={{ top: posicion.top, left: posicion.left, width: ANCHO_PANEL }}
                         className="fixed z-50 rounded-lg border border-slate-200 bg-white p-4 text-left text-xs font-normal normal-case tracking-normal text-slate-600 shadow-lg"
                     >

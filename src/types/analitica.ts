@@ -48,6 +48,9 @@ export interface IVendedorMetricas {
     /** Promedio solo sobre visitas válidas. null si no hay ninguna. */
     duracionPromedioMin: number | null
     minutosTotales: number
+    /** Solo las visitas válidas (minutosTotales suma todas las cerradas). Opcional: un
+     *  backend anterior a api-vendedores#137 no lo manda. */
+    minutosValidos?: number
     visitasPorDia: number
     clientesDistintos: number
 

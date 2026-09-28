@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
 import AnaliticaVendedorPage from './AnaliticaVendedorPage'
@@ -146,4 +147,34 @@ it('cambiar el rango conserva el filtro de validez', async () => {
             expect.objectContaining({ desde: '2026-07-01', validez: 'no_validada' }),
         ),
     )
+})
+
+it('Horas se desglosa en válidas y resto cuando el backend manda minutosValidos', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    const v1 = MOCK_RESUMEN.vendedores.find(v => v.codigoParticularVendedor === 'V1')!
+    ;(api.getResumen as any).mockResolvedValue({
+        ...MOCK_RESUMEN,
+        vendedores: MOCK_RESUMEN.vendedores.map(v =>
+            v === v1 ? { ...v, minutosTotales: 600, minutosValidos: 480 } : v,
+        ),
+    })
+    montar()
+    const horas = (await screen.findByText('Horas', { selector: 'p' })).closest('.rounded-lg')!
+    expect(horas).toHaveTextContent('Válidas')
+    expect(horas).toHaveTextContent(formatHoras(480))
+    expect(horas).toHaveTextContent(formatHoras(120))
+})
+
+it('sin minutosValidos (backend viejo) Horas no inventa un desglose', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    await screen.findByText('Horas', { selector: 'p' })
+    expect(screen.queryByText('Resto')).not.toBeInTheDocument()
+})
+
+it('cada tarjeta explica qué mide al pasar el mouse por el "?"', async () => {
+    ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
+    montar()
+    await userEvent.hover(await screen.findByRole('button', { name: 'Qué significa Horas' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('todas las visitas cerradas del rango')
 })

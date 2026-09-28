@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import HelpPopover from './HelpPopover'
 
@@ -44,6 +44,38 @@ it('clickear el botón de nuevo lo vuelve a cerrar', async () => {
     montar()
     const boton = screen.getByRole('button', { name: 'Qué significa Foo' })
     await userEvent.click(boton)
+    expect(screen.getByText('Contenido de ayuda de Foo')).toBeInTheDocument()
+
+    await userEvent.click(boton)
+    expect(screen.queryByText('Contenido de ayuda de Foo')).not.toBeInTheDocument()
+})
+
+it('pasar el mouse abre el panel y sacarlo lo cierra', async () => {
+    montar()
+    const boton = screen.getByRole('button', { name: 'Qué significa Foo' })
+    await userEvent.hover(boton)
+    expect(screen.getByText('Contenido de ayuda de Foo')).toBeInTheDocument()
+
+    await userEvent.unhover(boton)
+    await waitFor(() => expect(screen.queryByText('Contenido de ayuda de Foo')).not.toBeInTheDocument())
+})
+
+it('se puede llevar el mouse del botón al panel sin que se cierre', async () => {
+    montar()
+    const boton = screen.getByRole('button', { name: 'Qué significa Foo' })
+    await userEvent.hover(boton)
+    await userEvent.unhover(boton)
+    await userEvent.hover(screen.getByRole('dialog'))
+    await new Promise(r => setTimeout(r, 250))
+    expect(screen.getByText('Contenido de ayuda de Foo')).toBeInTheDocument()
+})
+
+it('abierto por hover, el click lo fija: sacar el mouse ya no lo cierra', async () => {
+    montar()
+    const boton = screen.getByRole('button', { name: 'Qué significa Foo' })
+    await userEvent.click(boton)
+    await userEvent.unhover(boton)
+    await new Promise(r => setTimeout(r, 250))
     expect(screen.getByText('Contenido de ayuda de Foo')).toBeInTheDocument()
 
     await userEvent.click(boton)

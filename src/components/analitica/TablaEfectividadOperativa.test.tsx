@@ -31,7 +31,7 @@ it('cada columna tiene un botón de ayuda con la explicación completa (la meta 
     expect(screen.queryByText(/Meta:/)).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Qué significa Horas (mensual)' }))
-    expect(screen.getByText(/Horas de esas mismas visitas válidas/)).toBeInTheDocument()
+    expect(screen.getByText(/Horas de todas las visitas cerradas del mes, válidas o no/)).toBeInTheDocument()
 })
 
 it('muestra s/d, nunca 0%, cuando el vendedor no tiene objetivo vigente', () => {
