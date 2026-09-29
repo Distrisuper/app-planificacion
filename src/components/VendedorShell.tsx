@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import TabBarVendedor, { ALTO_TABBAR_PX } from '@/components/TabBarVendedor'
 import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
 import MetricasPage from '@/pages/MetricasPage'
-import { METRICAS_VENDEDOR_HABILITADAS } from '@/lib/flags'
 
 /**
  * Las dos secciones del vendedor (Planificación | Métricas) bajo UN solo elemento de ruta.
@@ -31,22 +30,12 @@ export default function VendedorShell() {
     // `VisitaEnCursoBar` es `fixed` y flota encima de la barra: lee este alto. Va en el
     // root porque la barra de visita se dibuja en un portal a <body>, fuera de este árbol.
     useEffect(() => {
-        if (!METRICAS_VENDEDOR_HABILITADAS) return
         const raiz = document.documentElement
         raiz.style.setProperty('--alto-tabbar', `calc(${ALTO_TABBAR_PX}px + env(safe-area-inset-bottom))`)
         return () => {
             raiz.style.removeProperty('--alto-tabbar')
         }
     }, [])
-
-    if (!METRICAS_VENDEDOR_HABILITADAS) {
-        if (enMetricas) return <Navigate to="/" replace />
-        return (
-            <div className="h-dvh">
-                <AgendaSemanaPage />
-            </div>
-        )
-    }
 
     return (
         <div className="flex h-dvh flex-col overflow-hidden">

@@ -15,10 +15,3 @@
  * esconder un plan ya materializado.
  */
 export const ALTAS_HABILITADAS = true
-
-/**
- * Pestañas del vendedor (Planificación | Métricas, spec 2026-09-28), contra
- * `GET /planificacion/mis-metricas` de api-vendedores. Poner en `false` para volver a
- * apagarlas: sin tab bar, `/metricas` redirige a la agenda.
- */
-export const METRICAS_VENDEDOR_HABILITADAS = true

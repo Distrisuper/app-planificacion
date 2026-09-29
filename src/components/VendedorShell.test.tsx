@@ -4,9 +4,6 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { vi } from 'vitest'
 import VendedorShell from './VendedorShell'
 
-const flags = vi.hoisted(() => ({ METRICAS_VENDEDOR_HABILITADAS: true, ALTAS_HABILITADAS: true }))
-vi.mock('@/lib/flags', () => flags)
-
 const contador = vi.hoisted(() => ({ montajesAgenda: 0 }))
 vi.mock('@/pages/AgendaSemanaPage', async () => {
     const { useEffect } = await import('react')
@@ -36,7 +33,6 @@ function renderShell(ruta = '/') {
 
 beforeEach(() => {
     contador.montajesAgenda = 0
-    flags.METRICAS_VENDEDOR_HABILITADAS = true
 })
 
 it('cambiar a Métricas OCULTA la agenda sin desmontarla (la visita en curso vive ahí)', async () => {
@@ -70,12 +66,4 @@ it('volver a Plani desde Métricas conserva la zona y el día que se estaban mir
 it('publica el alto de la tab bar para que la barra de visita flote encima', () => {
     renderShell()
     expect(document.documentElement.style.getPropertyValue('--alto-tabbar')).toContain('56px')
-})
-
-it('con el flag apagado no hay pestañas y /metricas vuelve a la agenda', () => {
-    flags.METRICAS_VENDEDOR_HABILITADAS = false
-    renderShell('/metricas')
-    expect(screen.queryByRole('navigation', { name: 'Secciones' })).not.toBeInTheDocument()
-    expect(screen.getByText('AGENDA')).toBeInTheDocument()
-    expect(screen.queryByText('METRICAS')).not.toBeInTheDocument()
 })
