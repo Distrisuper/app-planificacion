@@ -4,7 +4,7 @@ import { queryClient } from '@/lib/queryClient'
 import { AuthProvider, useAuth } from '@/context/AuthContext'
 import ProtectedRoute from '@/router/ProtectedRoute'
 import { puedeOperarComoVendedor, supervisa } from '@/lib/roles'
-import AgendaSemanaPage from '@/pages/AgendaSemanaPage'
+import VendedorShell from '@/components/VendedorShell'
 import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
 import AnaliticaAltasPage from '@/pages/AnaliticaAltasPage'
 import AnaliticaPage from '@/pages/AnaliticaPage'
@@ -28,7 +28,12 @@ export default function App() {
                 <AuthProvider>
                     <Routes>
                         <Route element={<ProtectedRoute permitir={puedeOperarComoVendedor} />}>
-                            <Route path="/" element={<AgendaSemanaPage />} />
+                            {/* Planificación y Métricas comparten UN elemento: la agenda no se
+                                desmonta al cambiar de pestaña (ver VendedorShell). */}
+                            <Route element={<VendedorShell />}>
+                                <Route path="/" element={null} />
+                                <Route path="/metricas" element={null} />
+                            </Route>
                         </Route>
                         <Route element={<ProtectedRoute permitir={supervisa} />}>
                             <Route path="/analitica" element={<AnaliticaPage />} />

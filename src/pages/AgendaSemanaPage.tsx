@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import AppHeader from '@/components/AppHeader'
 import DiaTabs from '@/components/DiaTabs'
@@ -31,7 +31,6 @@ import { useNotificacion } from '@/hooks/useNotificacion'
 import { useAppExterna } from '@/hooks/useAppExterna'
 import { abrirAppExternaEnPestana } from '@/lib/appsExternas'
 import { Notification } from '@/components/ui/Notification'
-import { estaResuelto } from '@/lib/estadoCiclo'
 import { errorCode } from '@/lib/apiError'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
@@ -123,11 +122,17 @@ export default function AgendaSemanaPage() {
     // la autoridad sobre cuál es la vuelta abierta (ver "Decisiones no obvias" en
     // CLAUDE.md: no hay ancla local que pueda desincronizarse en silencio).
     const [searchParams, setSearchParams] = useSearchParams()
+    const { pathname } = useLocation()
+    const navigate = useNavigate()
 
     // `replace` y no `push`: AgendaBoard emite onActivoChange en CADA evento de scroll al
     // swipear entre columnas, así que apilar historial llenaría el back stack con decenas
     // de entradas tras unos pocos swipes.
     function actualizarPosicion(cambios: { dia?: Dia; semana?: number | null }) {
+        // Oculta detrás de Métricas la agenda sigue montada (VendedorShell): sin esta guarda
+        // escribiría ?dia&semana en la URL de /metricas. La posición la conserva el shell,
+        // que vuelve a `/` con la última búsqueda de Plani.
+        if (pathname !== '/') return
         setSearchParams(
             prev => {
                 const next = new URLSearchParams(prev)
@@ -401,18 +406,6 @@ export default function AgendaSemanaPage() {
     const semana: SemanaAgenda | undefined =
         operable && ciclo != null ? agenda : preview?.dias
 
-    const counts = useMemo(() => {
-        const c = {} as Record<Dia, { done: number; total: number }>
-        for (const d of DIAS) {
-            const clientes = semana?.[d] ?? []
-            c[d] = { done: clientes.filter(x => estaResuelto(x.estado)).length, total: clientes.length }
-        }
-        return c
-    }, [semana])
-
-    const totalClientes = DIAS.reduce((n, d) => n + (semana?.[d]?.length ?? 0), 0)
-    const totalDone = DIAS.reduce((n, d) => n + counts[d].done, 0)
-
     function moverSemana(delta: number) {
         if (!semanas || semanas.length === 0) return
         const base = semanaEfectiva ?? semanas[0].semana
@@ -541,7 +534,7 @@ export default function AgendaSemanaPage() {
 
     if (mensajeCuenta) {
         return (
-            <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
                 <p className="text-[14px] font-semibold leading-snug text-[#182645]">{mensajeCuenta}</p>
                 <button
                     type="button"
@@ -563,7 +556,7 @@ export default function AgendaSemanaPage() {
     if (cicloResuelto && semanaEfectiva === null) {
         if (probando) {
             return (
-                <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center" style={{ paddingTop: ALTO_BANNER_PRUEBA }}>
+                <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center" style={{ paddingTop: ALTO_BANNER_PRUEBA }}>
                     <BannerPrueba />
                     <p className="text-[14px] font-semibold leading-snug text-[#182645]">
                         Tu vendedor de prueba todavía no tiene agenda.
@@ -580,7 +573,7 @@ export default function AgendaSemanaPage() {
             )
         }
         return (
-            <div className="flex h-dvh flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-[#EEF1F6] px-8 text-center">
                 <p className="text-[14px] font-semibold leading-snug text-[#182645]">
                     Todavía no tenés una ruta asignada.
                 </p>
@@ -600,19 +593,14 @@ export default function AgendaSemanaPage() {
 
     return (
         <div
-            className="flex h-dvh flex-col overflow-hidden bg-[#EEF1F6]"
+            className="flex h-full flex-col overflow-hidden bg-[#EEF1F6]"
             style={probando ? { paddingTop: ALTO_BANNER_PRUEBA } : undefined}
         >
             <BannerPrueba />
             <AppHeader
                 vendedorNombre={user?.name ?? ''}
-                completadas={totalDone}
-                total={totalClientes}
-                tituloSemana={
-                    semanaEfectiva
-                        ? `${nombreZona ?? `Semana ${semanaEfectiva}`}${operable && ciclo != null ? ` · ${getWeekRangeLabel()}` : ''}`
-                        : 'Cargando…'
-                }
+                tituloSemana={semanaEfectiva ? (nombreZona ?? `Semana ${semanaEfectiva}`) : 'Cargando…'}
+                subtitulo={semanaEfectiva && operable && ciclo != null ? getWeekRangeLabel() : undefined}
                 modo={operable && ciclo != null ? 'operable' : 'preview'}
                 onLogout={logout}
                 onPrevWeek={() => moverSemana(-1)}
@@ -636,7 +624,7 @@ export default function AgendaSemanaPage() {
                 />
             ) : (
                 <>
-                    <DiaTabs activo={diaActivo} counts={counts} onSelect={setDiaActivo} />
+                    <DiaTabs activo={diaActivo} onSelect={setDiaActivo} />
                     <AgendaBoard
                         semana={semana}
                         activo={diaActivo}
@@ -691,7 +679,12 @@ export default function AgendaSemanaPage() {
                         visitaEnCurso.cliente.nombreFantasia || visitaEnCurso.cliente.nombreCliente
                     }
                     alejado={alejado}
-                    onExpandir={() => abrirPropuesta(visitaEnCurso.cliente)}
+                    onExpandir={() => {
+                        // Desde Métricas la barra también se ve (VendedorShell): tocarla
+                        // vuelve a Planificación, que es donde vive la visita.
+                        if (pathname !== '/') navigate('/')
+                        abrirPropuesta(visitaEnCurso.cliente)
+                    }}
                 />
             )}
             <ResolucionSheet
