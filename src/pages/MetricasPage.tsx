@@ -189,7 +189,7 @@ function Contenido({ m }: { m: IMisMetricas }) {
                     <TileObjetivo
                         testId="objetivo-clientes"
                         titulo="Clientes"
-                        real={m.clientesVisitados}
+                        real={m.clientesDistintos}
                         objetivo={m.objetivoClientes}
                         formato={formatEntero}
                     />

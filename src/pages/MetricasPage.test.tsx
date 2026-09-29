@@ -26,6 +26,7 @@ const base = (over: Partial<IMisMetricas> = {}): IMisMetricas => ({
     objetivoClientes: 134,
     cartera: 145,
     clientesVisitados: 119,
+    clientesDistintos: 124,
     clientesConCompra: 72,
     visitadosConCompra: 61,
     planificados: 92,
@@ -70,6 +71,17 @@ it('muestra productividad sobre la cartera y ventas contra el MMAA', async () =>
     const fact = screen.getByTestId('anillo-facturacion')
     expect(fact).toHaveTextContent('90%')
     expect(fact).toHaveTextContent('-10% vs MMAA')
+})
+
+// Contra el objetivo van los clientes con visita válida (el número de gerencia), no los de la
+// cartera: una visita a un alta o a un cliente de otro vendedor también es un cliente visitado.
+it('el objetivo de clientes compara clientesDistintos, no los visitados de la cartera', async () => {
+    getMisMetricas.mockResolvedValue(base())
+    renderPage()
+    const clientes = await screen.findByTestId('objetivo-clientes')
+    expect(clientes).toHaveTextContent('124 / 134')
+    expect(clientes).toHaveTextContent('faltan 10')
+    expect(screen.getByTestId('tile-visitados')).toHaveTextContent('119 / 145')
 })
 
 it('superado el objetivo dice cumplido, no "faltan -2"', async () => {

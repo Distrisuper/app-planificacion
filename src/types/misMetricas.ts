@@ -16,7 +16,12 @@ export interface IMisMetricas {
     sinVentas: boolean
 
     cartera: number
+    /** Clientes DE LA CARTERA con alguna visita cerrada: numerador de % de cartera visitada
+     *  y de la tasa de cierre. No es el número contra el objetivo. */
     clientesVisitados: number
+    /** Clientes distintos con al menos una visita VÁLIDA, sin recorte por cartera: el mismo
+     *  número que ve gerencia en Analítica, y el que se compara contra `objetivoClientes`. */
+    clientesDistintos: number
     clientesConCompra: number
     /** Clientes visitados que además compraron: numerador de la tasa de cierre. */
     visitadosConCompra: number
