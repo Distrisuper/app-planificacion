@@ -31,6 +31,10 @@ const BADGE: Record<Tono, string> = {
     neutro: 'bg-[#E7E9F0] text-dsmuted',
 }
 
+/** El mes seleccionado, un año atrás, como "09/2025". */
+const etiquetaMesAnterior = (mes: Date) =>
+    `${String(mes.getMonth() + 1).padStart(2, '0')}/${mes.getFullYear() - 1}`
+
 const claseVariacion = (v: number | null) =>
     v === null ? 'text-dsmuted' : v < 0 ? 'text-dsred' : 'text-dsgreen'
 
@@ -119,13 +123,13 @@ export default function MetricasPage() {
                         </button>
                     </div>
                 )}
-                {data && <Contenido m={data} />}
+                {data && <Contenido m={data} mesAnterior={etiquetaMesAnterior(mes)} />}
             </main>
         </div>
     )
 }
 
-function Contenido({ m }: { m: IMisMetricas }) {
+function Contenido({ m, mesAnterior }: { m: IMisMetricas; mesAnterior: string }) {
     // El vendedor de prueba no existe en el warehouse (invariante de PRUEBA-*): no tiene
     // cartera, así que ninguna métrica se puede calcular — no es un vendedor sin clientes.
     if (m.sinVentas && m.cartera === 0) {
@@ -218,6 +222,7 @@ function Contenido({ m }: { m: IMisMetricas }) {
                             unidad="$M"
                             actual={m.facturacion}
                             anterior={m.facturacionMmaa}
+                            mesAnterior={mesAnterior}
                         />
                         <Anillo
                             testId="anillo-unidades"
@@ -226,6 +231,7 @@ function Contenido({ m }: { m: IMisMetricas }) {
                             unidad="u."
                             actual={m.unidades}
                             anterior={m.unidadesMmaa}
+                            mesAnterior={mesAnterior}
                         />
                         <Anillo
                             testId="anillo-super-rubro"
@@ -234,6 +240,7 @@ function Contenido({ m }: { m: IMisMetricas }) {
                             unidad="SR"
                             actual={m.superRubro}
                             anterior={m.superRubroMmaa}
+                            mesAnterior={mesAnterior}
                         />
                     </div>
                 )}
@@ -355,13 +362,15 @@ interface AnilloProps {
     unidad: string
     actual: number
     anterior: number
+    /** "09/2025": contra qué mes se compara. "MMAA" es jerga, el vendedor no la lee. */
+    mesAnterior: string
 }
 
 /** El anillo mide contra el MMAA, no contra una meta: no hay metas de venta cargadas y
  *  mostrar "88% de tu meta" sobre una meta inventada es peor que no mostrarla. 90% =
  *  llevás el 90% de lo que vendiste en este mismo período el año pasado. Se llena hasta
  *  el 100%; el número de adentro sigue mostrando el real. */
-function Anillo({ testId, titulo, valor, unidad, actual, anterior }: AnilloProps) {
+function Anillo({ testId, titulo, valor, unidad, actual, anterior, mesAnterior }: AnilloProps) {
     const pct = razon(actual, anterior)
     const v = variacion(actual, anterior)
     const lleno = Math.min(Math.max(pct ?? 0, 0), 1)
@@ -386,7 +395,7 @@ function Anillo({ testId, titulo, valor, unidad, actual, anterior }: AnilloProps
                 {valor} <span className="text-[10px] font-bold text-dsmuted">{unidad}</span>
             </p>
             <p className={`text-[10px] font-extrabold leading-tight tabular-nums ${claseVariacion(v)}`}>
-                {v === null ? 'sin dato año pasado' : `${formatVariacion(v)} vs MMAA`}
+                {v === null ? 'sin dato año pasado' : `${formatVariacion(v)} vs ${mesAnterior}`}
             </p>
         </div>
     )
