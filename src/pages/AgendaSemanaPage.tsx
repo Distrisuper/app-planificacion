@@ -349,12 +349,29 @@ export default function AgendaSemanaPage() {
     //   en curso, lo adopta para que la barra flotante aparezca tras un reload.
     // - Si el cliente que teníamos como en curso ya no lo está en el servidor (se cerró
     //   desde otro dispositivo/pestaña), suelta el puntero.
+    //
+    // El cliente en curso NO tiene por qué estar en la agenda del ciclo abierto: el vendedor
+    // puede visitar hoy a un cliente de otra zona desde la vista previa, y eso es un hecho
+    // válido que no mueve el plan (docs/dominio/modelo.md). Por eso se busca también en el
+    // preview que se está mirando, y si no aparece en ninguno de los dos, decide el servidor
+    // (`GET /visitas/activa`) y no la ausencia en la agenda — si no, iniciar una visita en
+    // otra zona soltaba el puntero al instante y la barra flotante no aparecía nunca.
     useEffect(() => {
-        if (!agenda) return
+        if (!agenda && !preview) return
+        const clientesConocidos = [
+            ...(agenda ? DIAS.flatMap(d => agenda[d] ?? []) : []),
+            ...(preview ? DIAS.flatMap(d => preview.dias[d] ?? []) : []),
+        ]
         if (visitaEnCurso) {
-            const actual = DIAS.flatMap(d => agenda[d] ?? []).find(
+            const actual = clientesConocidos.find(
                 c => c.rotacionClienteId === visitaEnCurso.cliente.rotacionClienteId,
             )
+            if (!actual) {
+                // Todavía no se sabe qué dice el servidor: no se suelta nada.
+                if (visitaActiva === undefined) return
+                // El servidor confirma que esta visita sigue abierta: es de otra zona.
+                if (visitaActiva?.id === visitaEnCurso.visitaId) return
+            }
             // 'pendiente' es el hueco entre iniciar y que el refetch de la agenda catchee:
             // no se toca acá. Cualquier otro estado que no sea 'en_curso' significa que la
             // visita ya se resolvió por otro lado — y que NO aparezca en absoluto (`actual`
@@ -369,7 +386,7 @@ export default function AgendaSemanaPage() {
             }
             return
         }
-        const enCurso = DIAS.flatMap(d => agenda[d] ?? []).find(c => c.estado === 'en_curso')
+        const enCurso = clientesConocidos.find(c => c.estado === 'en_curso')
         if (
             enCurso &&
             enCurso.visitaId !== null &&
@@ -390,7 +407,7 @@ export default function AgendaSemanaPage() {
                     : enCurso
             setVisitaEnCurso({ cliente: clienteAAdoptar, visitaId: enCurso.visitaId })
         }
-    }, [agenda, visitaEnCurso])
+    }, [agenda, preview, visitaEnCurso, visitaActiva])
 
     // Barra flotante visible siempre que haya una visita en curso Y el sheet abierto ahora
     // no sea justo el de esa visita (incluye "sheet cerrado del todo").

@@ -829,10 +829,61 @@ it('si el cliente persistido no existe en absoluto en la agenda, suelta el punte
     ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
     // Agenda de OTRO vendedor: no incluye el rotacionClienteId 99999 en absoluto.
     ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+    // Y el servidor de ESTE vendedor no tiene esa visita abierta.
+    ;(api.getVisitaActiva as any).mockResolvedValue(null)
     renderPage()
 
     await waitFor(() => expect(screen.queryByText(/visitando a/i)).not.toBeInTheDocument())
     expect(leerVisitaEnCurso()).toBeNull()
+})
+
+it('una visita en curso de OTRA zona mantiene la barra flotante', async () => {
+    // Regresión: el cliente en curso es de la zona 1 (se inició desde la vista previa) y el
+    // ciclo abierto es el de la zona 3. La reconciliación buscaba al cliente solo en la
+    // agenda del ciclo, no lo encontraba, y soltaba (y vetaba) el puntero: la barra
+    // desaparecía con la visita todavía abierta en el servidor.
+    fijarLunes()
+    const enCurso = { ...clienteLunes, estado: 'en_curso' as const, visitaId: 7 }
+    guardarVisitaEnCurso({ cliente: { ...enCurso, esExtra: false }, visitaId: 7 })
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue(semanaVacia)
+    ;(api.getVisitaActiva as any).mockResolvedValue({
+        id: 7,
+        fechaInicio: new Date().toISOString(),
+        coordCliente: null,
+    })
+    renderPage()
+
+    await waitFor(() => expect(api.getVisitaActiva).toHaveBeenCalled())
+    await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+    expect(await screen.findByTestId('visita-en-curso-bar')).toHaveTextContent(
+        'Visitando a ALMACEN DON JOSE',
+    )
+    expect(leerVisitaEnCurso()?.visitaId).toBe(7)
+})
+
+it('sin puntero local, adopta la visita en curso que trae la vista previa de otra zona', async () => {
+    fijarLunes()
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue(semanaVacia)
+    ;(api.previewSemana as any).mockResolvedValue({
+        semana: 1,
+        clientes: 1,
+        omitidos: [],
+        dias: { ...semanaVacia, LUN: [{ ...clienteLunes, estado: 'en_curso', visitaId: 7 }] },
+    })
+    ;(api.getVisitaActiva as any).mockResolvedValue({
+        id: 7,
+        fechaInicio: new Date().toISOString(),
+        coordCliente: null,
+    })
+    renderPage()
+    await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+    expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /zona anterior/i }))
+    await screen.findByText(/vista previa/i)
+    expect(await screen.findByTestId('visita-en-curso-bar')).toBeInTheDocument()
 })
 
 it('volver a la semana abierta devuelve el modo operable', async () => {
