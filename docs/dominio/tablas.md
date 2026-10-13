@@ -14,6 +14,8 @@ Todas viven en MySQL, base `planificacion`, sobre la conexión `sequelizeWritePl
 ## El mapa
 
 ```
+pl_ruta_cliente              ruta base del vendedor (de ella se copia cada pl_rotacion_cliente)
+
 pl_rotacion ──┬─ pl_rotacion_semana        el set de semanas + nombre de zona
               │
               ├─ pl_ciclo_semana           CUÁNDO recorrió cada semana
@@ -230,6 +232,20 @@ La ficha del comercio que el vendedor releva parado en el local, antes de abrir 
   conoce la regla "sólo si especialidad incluye Monomarca" — esa condición vive en el front
   (`faltantesPerfil`), que es lo único que sabe que los dos campos están relacionados. El
   catálogo, y por lo tanto `pl_ficha_valor`, no tiene forma de expresar "obligatorio si".
+
+## `pl_ruta_cliente` — LA RUTA BASE
+
+La ruta permanente de cada vendedor: qué cliente va cada día (`dia` 1-5) de cada zona
+(`semana`). Cada rotación nueva copia estas filas a `pl_rotacion_cliente` al armarse
+(`RotacionService.leerTemplate`), y `sincronizarPadron` la usa para altas y bajas de clientes.
+Hasta la etapa 1a de importar-rutas-excel vivía en `api-vendedores/src/mocks/agendaMock.json`.
+Un vendedor sin filas acá no pierde su plan al abrir la app: no hay contra qué comparar.
+
+```sql
+UNIQUE KEY uq_ruta_cliente (codigo_particular_vendedor, codigo_particular_cliente, semana, dia)
+```
+
+Mismo grano que `pl_rotacion_cliente`: la celda. DDL en `api-vendedores/docs/db-notes/planificacion-ruta.sql`.
 
 ## Tablas que ya no existen
 
