@@ -22,6 +22,17 @@ it('apunta cada pestaña a su ruta', () => {
     expect(screen.getByRole('link', { name: 'Actividad' })).toHaveAttribute('href', '/analitica/actividad')
 })
 
+it('tiene la pestaña Métricas apuntando a /analitica/metricas', () => {
+    render(
+        <MemoryRouter initialEntries={['/analitica/metricas']}>
+            <AnaliticaTabs />
+        </MemoryRouter>,
+    )
+    const link = screen.getByRole('link', { name: 'Métricas' })
+    expect(link).toHaveAttribute('href', '/analitica/metricas')
+    expect(link).toHaveClass('border-slate-900')
+})
+
 it('muestra el badge "En vivo" solo cuando enVivo es true', () => {
     const { rerender } = render(
         <MemoryRouter initialEntries={['/analitica/actividad']}>

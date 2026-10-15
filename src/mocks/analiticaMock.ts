@@ -597,9 +597,9 @@ export const MOCK_LLAMADOS: IContactoLlamado[] = VENDEDORES.slice(0, 6).flatMap(
 })
 
 export const MOCK_TELEVENDEDORES: ITelevendedorOpcion[] = [
-    { codigoParticularTv: '9001', nombreTv: 'GOMEZ LUCIA (TV)', activo: true },
-    { codigoParticularTv: '9002', nombreTv: 'ROMERO JULIAN (TV)', activo: true },
-    { codigoParticularTv: '9003', nombreTv: 'PAEZ CAROLINA (TV)', activo: false },
+    { codigoParticularTv: '9001', nombreTv: 'GOMEZ LUCIA (TV)', activo: true, perfil: 'farmer', carteras: ['V9', 'CARTERA TV1'] },
+    { codigoParticularTv: '9002', nombreTv: 'ROMERO JULIAN (TV)', activo: true, perfil: 'hunter', carteras: ['CARTERA TV1'] },
+    { codigoParticularTv: '9003', nombreTv: 'PAEZ CAROLINA (TV)', activo: false, perfil: 'hunter', carteras: ['V8'] },
 ]
 
 export const MOCK_DETALLES_LLAMADO: Record<number, ILlamadoDetalle> = Object.fromEntries(
