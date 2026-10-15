@@ -1,12 +1,15 @@
 name: CI
 
+# Corre en todo pull_request (drafts incluidos) y en push a master.
+# Lo mismo que hay que tener en verde antes de abrir el PR: npm run check (lint, tsc, vitest,
+# tests del guard) y el build de producción. Playwright (e2e) no entra: necesita levantar la app.
 on:
   pull_request:
   push:
     branches: [master]
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -17,7 +20,5 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run lint
-      - run: npx tsc -b --noEmit
-      - run: npm test
-      - run: npm run check:hooks
+      - run: npm run check
+      - run: npm run build
