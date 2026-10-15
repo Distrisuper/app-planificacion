@@ -6,7 +6,7 @@ cierto se corrigió o se borró. Si el código y este archivo se contradicen, ga
 corrige acá. El modelo de dominio (plan, hecho, ciclo) está en [`modelo.md`](modelo.md) y el
 esquema en [`tablas.md`](tablas.md).
 
-Los specs de `docs/superpowers/` que se citan son **históricos**: sirven para el porqué, no para el
+Los specs de `docs/superpowers/` son **históricos**: sirven para el porqué, no para el
 estado actual.
 
 ## Stack y patrones
