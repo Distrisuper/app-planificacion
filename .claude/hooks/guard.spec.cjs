@@ -109,7 +109,7 @@ describe('deploy', () => {
 })
 
 // Los servidores de desarrollo no se bloquean (AGENTS.md dice que no hacen falta para
-// verificar: la verificación es `npm run check`). Antes los levantaba solo Paperclip.
+// verificar: la verificación es `npm run check`).
 describe('servidores de desarrollo (permitidos)', () => {
   test('permite npm run dev', () => pasa(bash('npm run dev')))
   test('permite npm run preview', () => pasa(bash('npm run preview')))
