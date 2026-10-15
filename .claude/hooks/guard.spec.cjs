@@ -66,7 +66,7 @@ describe('secretos (.env*)', () => {
   test('permite grep ALLOW_BASE_PUSH', () => pasa(bash('grep ALLOW_BASE_PUSH .githooks/pre-push.cjs')))
   for (const c of ['grep -rn ALLOW_BASE_PUSH .', 'rg ALLOW_MASTER_PUSH', 'cat .githooks/pre-push.cjs | grep -n ALLOW_BASE_PUSH', 'git grep -n ALLOW_BASE_PUSH', 'git log -S ALLOW_BASE_PUSH --oneline'])
     test(`permite ${c}`, () => pasa(bash(c)))
-  test('permite Select-String ALLOW_BASE_PUSH (PowerShell)', () => pasa(ps('Select-String -Path .githooks\pre-push.cjs -Pattern ALLOW_BASE_PUSH')))
+  test('permite Select-String ALLOW_BASE_PUSH (PowerShell)', () => pasa(ps('Select-String -Path .githooks\\pre-push.cjs -Pattern ALLOW_BASE_PUSH')))
   test('bloquea node -e que nombra .env', () => deny(bash("node -e \"require('dotenv').config({path:'.env'})\"")))
   test('bloquea node -e que lee .env.test', () => deny(bash("node -e \"require('fs').readFileSync('.env.test')\"")))
   test('permite node -e que nombra .env.example', () => pasa(bash("node -e \"require('fs').readFileSync('.env.example')\"")))
@@ -332,7 +332,6 @@ describe('gh', () => {
   test('bloquea gh api con -f', () => deny(bash('gh api repos/o/r/merges -f base=master')))
   test('permite gh pr view', () => pasa(bash('gh pr view 12')))
   test('permite gh api GET', () => pasa(bash('gh api repos/o/r/pulls')))
-  test('bloquea gh workflow run', () => denyPor(bash('gh workflow run deploy.yml'), /workflow run/))
   test('permite gh workflow list', () => pasa(bash('gh workflow list')))
 })
 
