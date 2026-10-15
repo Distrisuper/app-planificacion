@@ -490,6 +490,28 @@ describe('hallazgos MAT-49', () => {
     assert.match(require('node:fs').readFileSync(path.join(PROJECT, 'docs', 'agentes', 'guard.md'), 'utf8'), /tramo anterior/))
 })
 
+describe('settings.json', () => {
+  const settings = require('../settings.json')
+  test('apaga el plugin superpowers', () => assert.equal(settings.enabledPlugins['superpowers@superpowers-marketplace'], false))
+  test('deny enumera los .env reales y no usa comodines que tapen las plantillas', () => {
+    const deny = settings.permissions.deny
+    for (const f of ['.env', '.env.local', '.env.bak', '.env.production', '.env-prod', '.env-staging', '.env.tunnel'])
+      assert.ok(deny.includes(`Read(/${f})`) && deny.includes(`Edit(/${f})`), f)
+    assert.ok(!deny.some(r => /\.env\.\*|\.env\*/.test(r)), 'un Read(.env.*) bloquearía .env.example')
+  })
+  test('ask frena roles, auth, workflows y vercel.json', () => {
+    const ask = settings.permissions.ask
+    for (const r of ['Edit(/src/lib/roles.ts)', 'Edit(/src/context/AuthContext.tsx)', 'Edit(/src/api/apiClient.ts)', 'Edit(/.github/workflows/**)', 'Edit(/vercel.json)'])
+      assert.ok(ask.includes(r), r)
+  })
+  test('sin restos de Paperclip', () => assert.doesNotMatch(JSON.stringify(settings), /paperclip|agente:|__agente/i))
+  test('el guard cubre los tools de archivo', () => {
+    const pre = settings.hooks.PreToolUse
+    for (const t of ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
+      assert.ok(pre.some(h => h.matcher.split('|').includes(t)), t)
+  })
+})
+
 describe('robustez', () => {
   test('input sin tool_input no rompe', () => pasa(evaluar({ tool_name: 'Bash' }, ctx())))
   test('input vacío no rompe', () => pasa(evaluar({}, ctx())))
