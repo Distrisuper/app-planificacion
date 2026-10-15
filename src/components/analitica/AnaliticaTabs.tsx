@@ -17,6 +17,9 @@ export default function AnaliticaTabs({ enVivo }: AnaliticaTabsProps) {
             <NavLink to="/analitica" end className={({ isActive }) => tabClase(isActive)}>
                 Analítica de visitas
             </NavLink>
+            <NavLink to="/analitica/metricas" className={({ isActive }) => tabClase(isActive)}>
+                Métricas
+            </NavLink>
             <NavLink
                 to="/analitica/actividad"
                 className={({ isActive }) => `flex items-center gap-2 ${tabClase(isActive)}`}

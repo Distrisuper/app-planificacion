@@ -200,6 +200,25 @@ llamó y fija el canal en "Llamados", porque un TV no visita; pasar a "Todo" o "
 TV. La columna "Quién" es quien hizo el contacto: el vendedor en la visita, el TV en el llamado
 (con "cliente de …" debajo).
 
-Fuera de alcance salvo pedido explícito: ranking de vendedores, novedades para el vendedor, link de
+**Métricas de gerencia (`/analitica/metricas`).** Tres vistas (`vista` en la URL): Productividad,
+Ranking de objeciones y Facturación, con el tipo de persona siempre a la vista y filtrable (`tipo`):
+VENDEDOR (vendedor de calle) y FARMER / HUNTER (el perfil del TV en `pl_tv.perfil`; un TV sin
+perfil se ve como "TV sin perfil" y solo entra con "Todos"). Es el único ranking entre vendedores
+del front y es solo de gerencia: el vendedor sigue viendo solo sus números en `/metricas`.
+- Productividad: cada persona contra su objetivo; el vendedor por visitas válidas
+  (`pctCumplimientoVisitas` de `/analitica/resumen`, que viene en 0..100), el TV por llamados contra
+  la meta diaria de su perfil (`/analitica/televentas/productividad`, en 0..1). Visitas y llamados no
+  se suman. Semáforo de `tonoCumplimiento`, el mismo que "Mis métricas".
+- Objeciones (`/analitica/objeciones/por-persona`): visitas y llamados juntos, por quien registró
+  el motivo. La tarjeta se recuenta desde las personas del recorte, así con un tipo elegido la
+  tarjeta y la tabla dicen lo mismo.
+- Facturación (`POST /sale/analytics`, el mismo pedido que "Vendedores · TODOS" de Versus): filas
+  = carteras (vendor_code), no personas. Su tipo es el perfil de los TV activos que la atienden
+  (`carteras` de `/analitica/televentas`; puede haber farmer y hunter a la vez) o VENDEDOR si no la
+  atiende ninguno; sin ese dato (back viejo) dice "Sin tipo", no VENDEDOR. Colores contra P.6M y
+  PROY con la misma regla de Versus (`src/lib/facturacion.ts`, `src/lib/proyeccionVentas.ts`,
+  copiados de app-vendedores: si cambian allá, se cambian acá). No usa el período de la pantalla.
+
+Fuera de alcance salvo pedido explícito: novedades para el vendedor, link de
 WhatsApp al cliente, recorrido continuo de la visita o del día (requiere app nativa), control
 minuto a minuto de un vendedor.

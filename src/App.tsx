@@ -11,6 +11,7 @@ import AnaliticaPage from '@/pages/AnaliticaPage'
 import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
 import AnaliticaFichasPage from '@/pages/AnaliticaFichasPage'
+import AnaliticaMetricasPage from '@/pages/AnaliticaMetricasPage'
 import RutaPage from '@/pages/RutaPage'
 import SinPermisosPage from '@/pages/SinPermisosPage'
 
@@ -45,6 +46,7 @@ export default function App() {
                                 path="/analitica/vendedor/:codigo"
                                 element={<AnaliticaVendedorPage />}
                             />
+                            <Route path="/analitica/metricas" element={<AnaliticaMetricasPage />} />
                             <Route path="/analitica/ruta" element={<RutaPage />} />
                             <Route path="/analitica/altas" element={<AnaliticaAltasPage />} />
                             <Route path="/analitica/fichas" element={<AnaliticaFichasPage />} />

@@ -230,6 +230,10 @@ export interface ITelevendedorOpcion {
     nombreTv: string
     /** Los inactivos vienen igual: tienen llamados en rangos pasados. */
     activo: boolean
+    /** pl_tv.perfil. Opcional: un backend anterior a la pestaña Métricas no lo manda. */
+    perfil?: 'farmer' | 'hunter' | null
+    /** vendor_code de las carteras que atiende (pl_tv_cartera). Opcional, ídem. */
+    carteras?: string[]
 }
 
 /** GET /analitica/llamados/:id. */
