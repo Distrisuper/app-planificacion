@@ -4,26 +4,38 @@ const { test, describe } = require('node:test')
 const assert = require('node:assert/strict')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
-const { evaluar, esAgente, nombreDeComando } = require('./guard.cjs')
+const guard = require('./guard.cjs')
+const { evaluar, nombreDeComando } = guard
 
 const PROJECT = path.resolve(__dirname, '..', '..')
 
-function ctx(rama = 'feature/algo', agente = true, hooks = '.githooks') {
-  return { projectDir: PROJECT, ramaActual: () => rama, hooksPath: () => hooks, esAgente: agente }
+// El ctx no tiene ningún "modo": el guard aplica siempre.
+function ctx(rama = 'feature/algo', hooks = '.githooks') {
+  return { projectDir: PROJECT, ramaActual: () => rama, hooksPath: () => hooks }
 }
 
 const bash = (command, rama) => evaluar({ tool_name: 'Bash', tool_input: { command }, cwd: PROJECT }, ctx(rama))
 const ps = command => evaluar({ tool_name: 'PowerShell', tool_input: { command }, cwd: PROJECT }, ctx())
-const tool = (tool_name, tool_input, agente = true) => evaluar({ tool_name, tool_input, cwd: PROJECT }, ctx('feature/algo', agente))
-const humano = command => evaluar({ tool_name: 'Bash', tool_input: { command }, cwd: PROJECT }, ctx('master', false))
+const tool = (tool_name, tool_input) => evaluar({ tool_name, tool_input, cwd: PROJECT }, ctx('feature/algo'))
 
 const deny = r => assert.equal(r && r.permissionDecision, 'deny', JSON.stringify(r))
 const pasa = r => assert.equal(r, null, JSON.stringify(r))
+// `denyPor` además mira el motivo: que niegue la regla que corresponde y no otra de rebote.
+const denyPor = (r, motivo) => {
+  deny(r)
+  assert.match(r.permissionDecisionReason, motivo)
+}
 
-describe('detección de modo agente', () => {
-  test('PAPERCLIP_RUN_ID activa el modo agente', () => assert.equal(esAgente({ PAPERCLIP_RUN_ID: 'x' }), true))
-  test('cualquier PAPERCLIP_* lo activa', () => assert.equal(esAgente({ PAPERCLIP_TASK_ID: 'x' }), true))
-  test('sin PAPERCLIP_* no', () => assert.equal(esAgente({ PATH: '/bin', NODE_ENV: 'test' }), false))
+describe('aplica siempre, sin PAPERCLIP_* ni ningún otro modo', () => {
+  test('el módulo ya no exporta esAgente', () => assert.equal(guard.esAgente, undefined))
+  test('el código no menciona PAPERCLIP', () =>
+    assert.doesNotMatch(require('node:fs').readFileSync(path.join(__dirname, 'guard.cjs'), 'utf8'), /PAPERCLIP/))
+  for (const c of ['cat .env', 'vercel --prod', 'git push origin master', 'git push --force', 'gh pr merge 12', 'rm -rf ../otra-cosa', 'printenv'])
+    test(`niega ${c} con un ctx sin ninguna marca de agente`, () =>
+      deny(evaluar({ tool_name: 'Bash', tool_input: { command: c }, cwd: PROJECT }, { projectDir: PROJECT, ramaActual: () => 'master', hooksPath: () => '.githooks' })))
+  test('niega editar el guard', () => deny(tool('Edit', { file_path: '.claude/hooks/guard.cjs' })))
+  test('niega Read de .env.test', () => deny(tool('Read', { file_path: '.env.test' })))
+  test('un ctx roto niega (falla cerrado)', () => deny(evaluar({ tool_name: 'Edit', tool_input: { file_path: 'x' } }, { projectDir: null })))
 })
 
 describe('secretos (.env*)', () => {
@@ -38,13 +50,39 @@ describe('secretos (.env*)', () => {
   test('bloquea --env-file', () => deny(bash('node --env-file=.env.test x.js')))
   test('bloquea printenv', () => deny(bash('printenv')))
   test('bloquea env solo', () => deny(bash('env')))
-  test('bloquea env | grep', () => deny(bash('env | grep PAPERCLIP')))
+  test('bloquea env | grep', () => deny(bash('env | grep TOKEN')))
   test('bloquea Get-ChildItem env:', () => deny(ps('Get-ChildItem env:')))
   test('bloquea GetEnvironmentVariables', () => deny(ps('[Environment]::GetEnvironmentVariables()')))
   test('bloquea ALLOW_MASTER_PUSH', () => deny(bash('ALLOW_MASTER_PUSH=1 git push origin master')))
+  test('bloquea ALLOW_BASE_PUSH', () => deny(bash('ALLOW_BASE_PUSH=1 git push origin master')))
+  test('bloquea $env:ALLOW_BASE_PUSH (PowerShell)', () => deny(ps('$env:ALLOW_BASE_PUSH=1; git push origin master')))
+  test('bloquea export ALLOW_BASE_PUSH', () => deny(bash('export ALLOW_BASE_PUSH=1')))
+  test('bloquea set ALLOW_BASE_PUSH (cmd)', () => deny(ps('set ALLOW_BASE_PUSH=1')))
+  test('bloquea ALLOW_BASE_PUSH=1 delante de un grep', () => deny(bash('ALLOW_BASE_PUSH=1 grep x .githooks/pre-push.cjs')))
+  test('bloquea grep ALLOW_BASE_PUSH con salida a archivo', () => deny(bash('grep ALLOW_BASE_PUSH .githooks/pre-push.cjs > out.txt')))
+  test('bloquea grep ALLOW_BASE_PUSH con sustitución de comandos', () => deny(bash('grep ALLOW_BASE_PUSH $(ALLOW_BASE_PUSH=1 git push origin master)')))
+  test('bloquea echo ALLOW_BASE_PUSH', () => deny(bash('echo ALLOW_BASE_PUSH')))
+  test('bloquea git grep -O con ALLOW_BASE_PUSH', () => deny(bash('git grep -Ovim ALLOW_BASE_PUSH')))
+  test('permite grep ALLOW_BASE_PUSH', () => pasa(bash('grep ALLOW_BASE_PUSH .githooks/pre-push.cjs')))
+  for (const c of ['grep -rn ALLOW_BASE_PUSH .', 'rg ALLOW_MASTER_PUSH', 'cat .githooks/pre-push.cjs | grep -n ALLOW_BASE_PUSH', 'git grep -n ALLOW_BASE_PUSH', 'git log -S ALLOW_BASE_PUSH --oneline'])
+    test(`permite ${c}`, () => pasa(bash(c)))
+  test('permite Select-String ALLOW_BASE_PUSH (PowerShell)', () => pasa(ps('Select-String -Path .githooks\\pre-push.cjs -Pattern ALLOW_BASE_PUSH')))
+  test('bloquea node -e que nombra .env', () => deny(bash("node -e \"require('dotenv').config({path:'.env'})\"")))
+  test('bloquea node -e que lee .env.test', () => deny(bash("node -e \"require('fs').readFileSync('.env.test')\"")))
+  test('permite node -e que nombra .env.example', () => pasa(bash("node -e \"require('fs').readFileSync('.env.example')\"")))
+  test('permite import.meta.env en un grep', () => pasa(bash('grep -rn "import.meta.env.VITE_API_URL" src')))
+  for (const f of ['.env.bak', '.env-prod', '.env-staging', '.env.tunnel', '.env.production', 'agente.env', 'agente-local.env'])
+    test(`bloquea cat ${f}`, () => deny(bash(`cat ${f}`)))
   test('permite .env-example', () => pasa(bash('cat .env-example')))
+  test('permite .env.example', () => pasa(bash('cat .env.example')))
+  test('permite .env.local.example', () => pasa(bash('cat .env.local.example')))
+  // En NTFS `.ENV.LOCAL` es el mismo archivo que `.env.local`.
+  test('bloquea cat .ENV.LOCAL (mayúsculas)', () => deny(bash('cat .ENV.LOCAL')))
+  test('bloquea Read de .ENV (mayúsculas)', () => deny(tool('Read', { file_path: '.ENV' })))
+  test('permite .ENV.EXAMPLE (mayúsculas)', () => pasa(bash('cat .ENV.EXAMPLE')))
+  test('permite copiar la plantilla a otra plantilla', () => pasa(bash('cp .env-example .env.example')))
   test('permite env con comando', () => pasa(bash('env NODE_ENV=test npx vitest run')))
-  test('permite leer una variable de Paperclip', () => pasa(ps('curl.exe -s $env:PAPERCLIP_API_URL/api/health')))
+  test('permite leer una variable puntual', () => pasa(ps('echo $env:VITE_API_URL')))
   test('permite un archivo que solo se parece', () => pasa(bash('cat src/lib/env.ts')))
 })
 
@@ -57,11 +95,24 @@ describe('tools de archivo', () => {
   test('bloquea Grep con glob .env*', () => deny(tool('Grep', { pattern: 'VITE', glob: '.env*' })))
   test('bloquea Grep con glob en llaves', () => deny(tool('Grep', { pattern: 'VITE', glob: '{src/**,.env.test}' })))
   test('permite Read de .env-example', () => pasa(tool('Read', { file_path: '.env-example' })))
+  test('permite Read de .env.example', () => pasa(tool('Read', { file_path: '.env.example' })))
+  test('permite Edit de .env-example', () => pasa(tool('Edit', { file_path: '.env-example' })))
+  test('permite Write de .env.local.example', () => pasa(tool('Write', { file_path: '.env.local.example' })))
+  test('bloquea Read de .env.bak', () => deny(tool('Read', { file_path: '.env.bak' })))
+  test('bloquea Read de agente.env', () => deny(tool('Read', { file_path: 'agente.env' })))
+  test('permite leer settings.json', () => pasa(tool('Read', { file_path: '.claude/settings.json' })))
+  test('permite leer el pre-push', () => pasa(tool('Read', { file_path: '.githooks/pre-push.cjs' })))
+  test('permite Grep en el guard', () => pasa(tool('Grep', { pattern: 'deny', path: '.claude/hooks' })))
   test('permite Grep en src', () => pasa(tool('Grep', { pattern: 'VITE', path: 'src', glob: '*.ts' })))
   test('permite editar código', () => pasa(tool('Edit', { file_path: 'src/App.tsx' })))
   test('bloquea editar el guard', () => deny(tool('Edit', { file_path: '.claude/hooks/guard.cjs' })))
   test('bloquea editar settings.json', () => deny(tool('Write', { file_path: '.claude/settings.json' })))
   test('bloquea editar settings.local.json', () => deny(tool('Edit', { file_path: '.claude/settings.local.json' })))
+  test('bloquea escribir settings.foo.json', () => deny(tool('Write', { file_path: '.claude/settings.foo.json' })))
+  test('bloquea Glob de .env*', () => deny(tool('Glob', { pattern: '**/.env*' })))
+  test('bloquea Glob de .env.test', () => deny(tool('Glob', { pattern: '.env.test' })))
+  test('permite Glob de .env.example', () => pasa(tool('Glob', { pattern: '.env.example' })))
+  test('permite Glob de src', () => pasa(tool('Glob', { pattern: 'src/**/*.ts' })))
   test('bloquea editar .githooks', () => deny(tool('MultiEdit', { file_path: '.githooks/pre-push.cjs' })))
   test('bloquea editar .git/hooks', () => deny(tool('Write', { file_path: path.join(PROJECT, '.git', 'hooks', 'pre-push') })))
   test('permite leer el guard', () => pasa(tool('Read', { file_path: '.claude/hooks/guard.cjs' })))
@@ -83,28 +134,94 @@ describe('deploy', () => {
   test('bloquea npx firebase-tools deploy', () => deny(bash('npx firebase-tools deploy')))
   test('bloquea firebase hosting:channel:deploy', () => deny(bash('firebase hosting:channel:deploy pr-1')))
   test('permite firebase --version', () => pasa(bash('firebase --version')))
+  for (const c of ['npm run deploy', 'npm run deploy:prod', 'pnpm deploy', 'yarn run deploy-staging', 'X=1 npm run deploy'])
+    test(`bloquea ${c}`, () => denyPor(bash(c), /despliega/))
   test('permite leer vercel.json', () => pasa(bash('cat vercel.json')))
 })
 
-describe('servidores (solo por runtime service)', () => {
-  test('bloquea npm run dev', () => deny(bash('npm run dev')))
-  test('bloquea npm run preview', () => deny(bash('npm run preview')))
-  test('bloquea npm start', () => deny(bash('npm start')))
-  test('bloquea pnpm dev', () => deny(bash('pnpm dev')))
-  test('bloquea npm run e2e (webServer = npm run dev)', () => deny(bash('npm run e2e')))
-  test('bloquea npm run e2e:ui', () => deny(bash('npm run e2e:ui')))
-  test('bloquea npx playwright test', () => deny(bash('npx playwright test')))
-  test('bloquea vite pelado', () => deny(bash('vite')))
-  test('bloquea npx vite', () => deny(bash('npx vite --port 5174')))
-  test('bloquea npx vite preview', () => deny(bash('npx vite preview')))
-  test('bloquea vite dev', () => deny(bash('vite dev')))
+// Los servidores de desarrollo no se bloquean (AGENTS.md dice que no hacen falta para
+// verificar: la verificación es `npm run check`).
+describe('servidores de desarrollo (permitidos)', () => {
+  test('permite npm run dev', () => pasa(bash('npm run dev')))
+  test('permite npm run preview', () => pasa(bash('npm run preview')))
+  test('permite npm start', () => pasa(bash('npm start')))
+  test('permite pnpm dev', () => pasa(bash('pnpm dev')))
+  test('permite npm run e2e', () => pasa(bash('npm run e2e')))
+  test('permite npx playwright test', () => pasa(bash('npx playwright test')))
+  test('permite vite pelado', () => pasa(bash('vite')))
+  test('permite npx vite --port', () => pasa(bash('npx vite --port 5174')))
   test('permite npm run build', () => pasa(bash('npm run build')))
+  test('permite npm run check', () => pasa(bash('npm run check')))
   test('permite npx vite build', () => pasa(bash('npx vite build')))
   test('permite npm test', () => pasa(bash('npm test')))
   test('permite npm run test', () => pasa(bash('npm run test')))
   test('permite npx vitest run', () => pasa(bash('npx vitest run src/lib')))
   test('permite npm run lint', () => pasa(bash('npm run lint')))
   test('permite npx playwright install', () => pasa(bash('npx playwright install chromium')))
+})
+
+describe('docker', () => {
+  for (const c of [
+    'docker ps',
+    'docker ps -a',
+    'docker --version',
+    'docker version',
+    'docker logs api',
+    'docker logs -f api',
+    'docker inspect api',
+    'docker compose ps',
+    'docker compose -f docker-compose.local.yml ps',
+    'docker compose logs api',
+    'docker-compose ps',
+    'docker images',
+    'docker info',
+    'docker volume ls',
+    'docker network ls',
+    'docker container ls -a',
+    'docker image ls',
+    'docker compose config',
+    'docker compose version',
+    'docker-compose --version',
+  ])
+    test(`permite ${c} (solo lectura)`, () => pasa(bash(c)))
+  for (const c of [
+    'docker compose up -d',
+    'docker compose -f docker-compose.local.yml up -d',
+    'docker compose down',
+    'docker compose down -v',
+    'docker compose rm -f',
+    'docker-compose up',
+    'docker-compose up -d',
+    'docker-compose down',
+    'docker run -it node',
+    'docker rm api',
+    'docker stop api',
+    'docker kill api',
+    'docker container rm api',
+    'docker container stop api',
+    'docker volume rm datos',
+    'docker volume prune',
+    'docker system prune -af',
+    'docker --context prod compose up -d',
+    'npx docker-compose up',
+    'docker',
+    'docker exec -it api sh',
+    'docker build -t x .',
+    'docker cp api:/x ./x',
+    'docker pull mysql:8',
+    'docker push x',
+    'docker login',
+    'docker tag a b',
+    'docker volume create datos',
+    'docker network create red',
+    'docker compose exec app sh',
+    'docker compose build',
+    'docker compose pull',
+    'docker compose -f docker-compose.local.yml exec app sh',
+    'docker-compose build',
+  ])
+    test(`bloquea ${c}`, () => denyPor(bash(c), /docker/))
+  test('bloquea docker compose up en PowerShell', () => deny(ps('docker.exe compose up -d')))
 })
 
 describe('git push', () => {
@@ -142,7 +259,6 @@ describe('git push', () => {
         { tool_name: 'Bash', tool_input: { command: 'git push' }, cwd: PROJECT },
         {
           projectDir: PROJECT,
-          esAgente: true,
           ramaActual: () => {
             throw new Error('sin git')
           },
@@ -155,10 +271,6 @@ describe('git', () => {
   test('bloquea commit en master', () => deny(bash('git commit -m x', 'master')))
   test('bloquea core.hooksPath', () => deny(bash('git config core.hooksPath /dev/null')))
   test('bloquea git -c core.hooksPath=', () => deny(bash('git -c core.hooksPath= commit -m x')))
-  test('bloquea reset --hard', () => deny(bash('git reset --hard HEAD~1')))
-  test('bloquea checkout .', () => deny(bash('git checkout -- .')))
-  test('bloquea restore .', () => deny(bash('git restore .')))
-  test('bloquea clean -f', () => deny(bash('git clean -fd')))
   test('bloquea branch -D master', () => deny(bash('git branch -D master')))
   test('permite leer core.hooksPath', () => pasa(bash('git config --get core.hooksPath')))
   test('permite commit en rama', () => pasa(bash('git commit -m x')))
@@ -169,13 +281,32 @@ describe('git', () => {
         { tool_name: 'Bash', tool_input: { command: 'git commit -m x' }, cwd: PROJECT },
         {
           projectDir: PROJECT,
-          esAgente: true,
           ramaActual: () => {
             throw new Error('sin git')
           },
         },
       ),
     ))
+})
+
+// Descartar trabajo dentro del worktree es decisión de quien trabaja ahí; fuera, no.
+describe('git: descartar trabajo solo dentro del worktree', () => {
+  const enCwd = (command, cwd) => evaluar({ tool_name: 'Bash', tool_input: { command }, cwd }, ctx())
+  for (const c of ['git reset --hard HEAD~1', 'git reset --hard', 'git clean -fd', 'git checkout .', 'git checkout -- .', 'git restore .', 'git -C src reset --hard'])
+    test(`permite ${c} en el worktree`, () => pasa(bash(c)))
+  for (const c of [
+    'git -C .. reset --hard',
+    'git -C ../otro-repo clean -fd',
+    'git -C /tmp/otro reset --hard HEAD',
+    'git --work-tree ../otro checkout .',
+    'git --work-tree=.. reset --hard',
+    'git --git-dir=../otro/.git reset --hard',
+    'GIT_DIR=../otro/.git git reset --hard',
+    'git -C ../otro restore .',
+  ])
+    test(`bloquea ${c}`, () => denyPor(bash(c), /fuera del worktree/))
+  test('bloquea reset --hard con cwd fuera del worktree', () => denyPor(enCwd('git reset --hard', path.resolve(PROJECT, '..')), /fuera del worktree/))
+  test('permite reset --hard con cwd en una subcarpeta', () => pasa(enCwd('git reset --hard', path.join(PROJECT, 'src'))))
 })
 
 describe('gh', () => {
@@ -205,6 +336,7 @@ describe('gh', () => {
   test('bloquea gh api con -f', () => deny(bash('gh api repos/o/r/merges -f base=master')))
   test('permite gh pr view', () => pasa(bash('gh pr view 12')))
   test('permite gh api GET', () => pasa(bash('gh api repos/o/r/pulls')))
+  test('permite gh workflow list', () => pasa(bash('gh workflow list')))
 })
 
 describe('rm y ssh', () => {
@@ -213,6 +345,7 @@ describe('rm y ssh', () => {
   test('bloquea rm -rf .', () => deny(bash('rm -rf .')))
   test('bloquea rm -rf src', () => deny(bash('rm -rf src')))
   test('bloquea rm -rf .git', () => deny(bash('rm -rf .git')))
+  test('bloquea rm -rf .github', () => deny(bash('rm -rf .github')))
   test('permite rm -rf dist', () => pasa(bash('rm -rf dist')))
   test('permite rm -rf node_modules', () => pasa(bash('rm -rf node_modules')))
   test('bloquea ssh', () => deny(bash('ssh user@host')))
@@ -226,14 +359,23 @@ describe('autoprotección por la terminal', () => {
     deny(bash("node -e \"require('fs').writeFileSync('.githooks/pre-push', '')\"")))
   test('bloquea rm del settings', () => deny(ps('Remove-Item .claude\\settings.json')))
   test('permite leer el guard', () => pasa(bash('cat .claude/hooks/guard.cjs')))
+  test('permite head del guard', () => pasa(bash('head -40 .claude/hooks/guard.cjs')))
+  test('permite grep en el guard', () => pasa(bash('grep -n deny .claude/hooks/guard.cjs')))
+  test("permite sed -n '1,40p' del guard", () => pasa(bash("sed -n '1,40p' .claude/hooks/guard.cjs")))
+  test("permite sed -n '/regla/p' del guard", () => pasa(bash("sed -n '/regla/p' .claude/hooks/guard.cjs")))
+  test('permite cat del settings', () => pasa(bash('cat .claude/settings.json')))
+  test('permite Select-String sobre el pre-push (PowerShell)', () => pasa(ps('Select-String -Path .githooks\\pre-push.cjs -Pattern master')))
+  test('bloquea sed -n con w (escribe)', () => deny(bash("sed -n '1,5w salida' .claude/hooks/guard.cjs")))
+  test('bloquea sed -n -i', () => deny(bash("sed -n -i '1p' .claude/hooks/guard.cjs")))
+  test('bloquea sed sin -n sobre el guard', () => deny(bash("sed 's/a/b/' .claude/hooks/guard.cjs")))
   test('permite correr sus tests', () => pasa(bash('node --test .claude/hooks/guard.spec.cjs .githooks/pre-push.spec.cjs')))
   test('permite npm run check:hooks', () => pasa(bash('npm run check:hooks')))
   test('permite git diff del guard', () => pasa(bash('git diff master -- .claude/hooks/guard.cjs')))
 })
 
-// Un test por hallazgo de la revisión de MAT-37 (Rita). El id va en el nombre.
+// Casos de borde que encontraron revisiones anteriores del guard (MAT-37). El id va en el nombre.
 describe('hallazgos MAT-37', () => {
-  const conHooks = (command, hooks) => evaluar({ tool_name: 'Bash', tool_input: { command }, cwd: PROJECT }, ctx('feature/x', true, hooks))
+  const conHooks = (command, hooks) => evaluar({ tool_name: 'Bash', tool_input: { command }, cwd: PROJECT }, ctx('feature/x', hooks))
   // B2: valor pegado a la flag (gh lo manda igual como POST).
   test('B2 bloquea gh api -fevent=APPROVE', () => deny(bash('gh api repos/o/r/pulls/12/reviews -fevent=APPROVE')))
   test('B2 bloquea gh api -Fevent=APPROVE', () => deny(bash('gh api repos/o/r/pulls/12/reviews -Fevent=APPROVE')))
@@ -279,7 +421,6 @@ describe('hallazgos MAT-37', () => {
         { tool_name: 'Bash', tool_input: { command: 'git push' }, cwd: PROJECT },
         {
           projectDir: PROJECT,
-          esAgente: true,
           ramaActual: () => 'feature/x',
           hooksPath: () => {
             throw new Error('sin git')
@@ -325,7 +466,7 @@ describe('hallazgos MAT-37', () => {
   })
 })
 
-// Un test por hallazgo de la re-revisión de MAT-43 (Rita). El id va en el nombre.
+// Casos de borde de la segunda revisión (MAT-43). El id va en el nombre.
 describe('hallazgos MAT-43', () => {
   // N1: `-R`/`--repo` antes (o en medio) de `pr` no saltea la regla.
   for (const c of [
@@ -373,12 +514,7 @@ describe('hallazgos MAT-43', () => {
     assert.match(require('node:fs').readFileSync(path.join(PROJECT, 'docs', 'agentes', 'guard.md'), 'utf8'), /gh api graphql -f query/))
 })
 
-// Un test por hallazgo de la revisión de MAT-49 (Rita). El id va en el nombre.
-// `denyPor` además mira el motivo: que niegue la regla que corresponde y no otra de rebote.
-const denyPor = (r, motivo) => {
-  deny(r)
-  assert.match(r.permissionDecisionReason, motivo)
-}
+// Casos de borde de la tercera revisión (MAT-49). El id va en el nombre.
 const GUARD = '.claude/hooks/guard.cjs'
 
 describe('hallazgos MAT-49', () => {
@@ -399,7 +535,7 @@ describe('hallazgos MAT-49', () => {
     test(`wrapper bloquea ${c}`, () => denyPor(bash(c), /gh pr merge/))
   test('wrapper bloquea env git push --force', () => denyPor(bash('env git push --force origin feature/x'), /--force/))
   test('wrapper bloquea env printenv', () => denyPor(bash('env printenv'), /volcar/))
-  test('wrapper bloquea time npm run dev', () => denyPor(bash('time npm run dev'), /runtime service/))
+  test('wrapper permite time npm run dev', () => pasa(bash('time npm run dev')))
   test('wrapper permite command -v vercel', () => pasa(bash('command -v vercel')))
   test('wrapper permite time npm test', () => pasa(bash('time npm test')))
   // Deno.env.
@@ -421,34 +557,63 @@ describe('hallazgos MAT-49', () => {
     assert.match(require('node:fs').readFileSync(path.join(PROJECT, 'docs', 'agentes', 'guard.md'), 'utf8'), /tramo anterior/))
 })
 
-describe('el dueño (sin PAPERCLIP_*) no cambia nada', () => {
-  for (const c of [
-    'cat .env.test',
-    'cat .env.local',
-    'vercel --prod',
-    'firebase deploy',
-    'npm run dev',
-    'npm run preview',
-    'npm run e2e',
-    'git push origin master',
-    'git push --force',
-    'git reset --hard',
-    'gh pr merge 12',
-    'rm -rf ../otra-cosa',
-    'printenv',
-  ])
-    test(`permite ${c}`, () => pasa(humano(c)))
-  test('permite editar el guard', () => pasa(tool('Edit', { file_path: '.claude/hooks/guard.cjs' }, false)))
-  test('permite Read de .env.test', () => pasa(tool('Read', { file_path: '.env.test' }, false)))
-  test('un ctx roto tampoco niega', () => pasa(evaluar({ tool_name: 'Edit', tool_input: { file_path: 'x' } }, { projectDir: null })))
+describe('settings.json', () => {
+  const settings = require('../settings.json')
+  test('apaga el plugin superpowers', () => assert.equal(settings.enabledPlugins['superpowers@superpowers-marketplace'], false))
+  test('deny enumera los .env reales y no usa comodines que tapen las plantillas', () => {
+    const deny = settings.permissions.deny
+    for (const f of ['.env', '.env.local', '.env.bak', '.env.production', '.env-prod', '.env-staging', '.env.tunnel'])
+      assert.ok(deny.includes(`Read(/${f})`) && deny.includes(`Edit(/${f})`), f)
+    assert.ok(!deny.some(r => /\.env\.\*|\.env\*/.test(r)), 'un Read(.env.*) bloquearía .env.example')
+  })
+  test('ask frena roles, auth, workflows y vercel.json', () => {
+    const ask = settings.permissions.ask
+    for (const r of ['Edit(/src/lib/roles.ts)', 'Edit(/src/context/AuthContext.tsx)', 'Edit(/src/api/apiClient.ts)', 'Edit(/.github/workflows/**)', 'Edit(/vercel.json)'])
+      assert.ok(ask.includes(r), r)
+  })
+  test('sin restos de Paperclip', () => assert.doesNotMatch(JSON.stringify(settings), /paperclip|agente:|__agente/i))
+  test('registra el hook para Bash, PowerShell, Monitor y las tools de archivos', () => {
+    const matchers = settings.hooks.PreToolUse.map(h => h.matcher)
+    assert.ok(matchers.includes('Bash|PowerShell|Monitor'))
+    assert.ok(matchers.includes('Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob'))
+  })
+  // El mínimo común de los 4 repos de distri (además de lo propio de cada uno).
+  test('deny tiene el mínimo común', () => {
+    const d = settings.permissions.deny
+    for (const r of [
+      'Bash(git push --force:*)',
+      'Bash(git push -f:*)',
+      'Bash(git push --force-with-lease:*)',
+      'Bash(git push --no-verify:*)',
+      'Bash(git push --mirror:*)',
+      'Bash(gh pr merge:*)',
+      'Bash(gh pr ready:*)',
+      'Bash(gh pr review --approve:*)',
+      'Bash(gh pr review -a:*)',
+      'Bash(gh auth token:*)',
+      'Bash(vercel:*)',
+      'Bash(vc:*)',
+      'Bash(npx vercel:*)',
+      'Bash(firebase deploy:*)',
+      'Bash(npx firebase-tools deploy:*)',
+      'Bash(ssh:*)',
+      'Bash(scp:*)',
+    ])
+      assert.ok(d.includes(r), r)
+  })
+  // Sin `/` la ruta es relativa al cwd y se pierde con un `cd`; con `/`, a la raíz del proyecto.
+  test('las reglas de ruta de deny y ask van con prefijo / (o ~/)', () => {
+    const p = settings.permissions
+    for (const r of [...p.deny, ...p.ask].filter(r => /^(Read|Edit|Write)\(/.test(r))) assert.match(r, /^\w+\((\/|~\/)/, r)
+  })
 })
 
 describe('robustez', () => {
   test('input sin tool_input no rompe', () => pasa(evaluar({ tool_name: 'Bash' }, ctx())))
   test('input vacío no rompe', () => pasa(evaluar({}, ctx())))
   test('tool desconocida pasa', () => pasa(tool('WebFetch', { url: 'https://example.com' })))
-  test('en modo agente, si una regla explota se niega', () =>
-    deny(evaluar({ tool_name: 'Edit', tool_input: { file_path: 'x' }, cwd: PROJECT }, { projectDir: null, esAgente: true })))
+  test('si una regla explota se niega', () =>
+    deny(evaluar({ tool_name: 'Edit', tool_input: { file_path: 'x' }, cwd: PROJECT }, { projectDir: null })))
 })
 
 describe('el hook de punta a punta (proceso real)', () => {
@@ -459,19 +624,20 @@ describe('el hook de punta a punta (proceso real)', () => {
       env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, CLAUDE_PROJECT_DIR: PROJECT, ...env },
     })
 
-  for (const c of ['cat .env.test', 'vercel', 'git push --force', 'gh pr review 12 --approve'])
-    test(`con PAPERCLIP_RUN_ID niega ${c}`, () => {
-      const r = correr(c, { PAPERCLIP_RUN_ID: 'simulado' })
+  // El entorno de los procesos no tiene ninguna PAPERCLIP_*: el guard niega igual.
+  for (const c of ['cat .env.test', 'vercel', 'git push --force', 'gh pr review 12 --approve', 'docker compose up -d'])
+    test(`niega ${c} sin ninguna variable de agente`, () => {
+      const r = correr(c, {})
       assert.equal(r.status, 0)
       assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision, 'deny')
     })
-  for (const c of ['cat .env.test', 'vercel', 'git push --force', 'gh pr review 12 --approve'])
-    test(`sin PAPERCLIP_* no dice nada sobre ${c}`, () => {
+  for (const c of ['npm run check', 'git status', 'npm run dev', 'cat .env-example'])
+    test(`no dice nada sobre ${c}`, () => {
       const r = correr(c, {})
       assert.equal(r.status, 0)
       assert.equal(r.stdout, '')
     })
-  // I · uncaughtException: un input `null` sin CLAUDE_PROJECT_DIR rompe fuera de `evaluar`
+  // uncaughtException: un input `null` sin CLAUDE_PROJECT_DIR rompe fuera de `evaluar`
   // (`input.cwd` sobre null).
   const crudo = (input, env) =>
     spawnSync(process.execPath, [path.join(__dirname, 'guard.cjs')], {
@@ -480,25 +646,14 @@ describe('el hook de punta a punta (proceso real)', () => {
       cwd: PROJECT,
       env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, ...env },
     })
-  test('I con PAPERCLIP_RUN_ID, si el hook revienta sale con 2 (bloquea)', () => {
-    const r = crudo('null', { PAPERCLIP_RUN_ID: 'simulado' })
+  test('si el hook revienta sale con 2 (bloquea), sin ninguna variable de agente', () => {
+    const r = crudo('null', {})
     assert.equal(r.status, 2)
     assert.match(r.stderr, /se niega por precaución/)
   })
-  test('I sin PAPERCLIP_*, si el hook revienta sale con 0 y no dice nada', () => {
-    const r = crudo('null', {})
-    assert.equal(r.status, 0)
-    assert.equal(r.stdout, '')
-  })
-  // MAT-43 · JSON roto por stdin.
-  test('menor con PAPERCLIP_RUN_ID, JSON roto por stdin → deny', () => {
-    const r = crudo('{"tool_name":"Bash","tool_input":{"command":"gh pr merge 1"', { PAPERCLIP_RUN_ID: 'simulado' })
+  test('JSON roto por stdin → deny, sin ninguna variable de agente', () => {
+    const r = crudo('{"tool_name":"Bash","tool_input":{"command":"gh pr merge 1"', {})
     assert.equal(r.status, 0, r.stderr)
     deny(JSON.parse(r.stdout).hookSpecificOutput)
-  })
-  test('menor sin PAPERCLIP_*, JSON roto por stdin no dice nada', () => {
-    const r = crudo('{roto', {})
-    assert.equal(r.status, 0)
-    assert.equal(r.stdout, '')
   })
 })
