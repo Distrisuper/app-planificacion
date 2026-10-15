@@ -190,11 +190,25 @@ export interface IContactoLlamado {
 
 export type IContactoFila = IContactoVisita | IContactoLlamado
 
+/** Totales de TODO el filtro (no de la página), calculados por el back. Ignoran el canal y
+ *  la validez, que filtran la tabla y no los KPI. Con TV elegidos las visitas van en 0. */
+export interface IContactosConteos {
+    visitasCerradas: number
+    visitasEnCurso: number
+    noVisita: number
+    llamados: number
+    llamadosAtendidos: number
+    /** Atendidos con algún rubro ganado: el estado 'venta' de Televentas. */
+    llamadosConVenta: number
+}
+
 export interface IContactosPage {
     total: number
     pagina: number
     cant: number
     contactos: IContactoFila[]
+    /** Opcional en la práctica: un back anterior no lo manda, y entonces los KPI van en "—". */
+    conteos?: IContactosConteos
 }
 
 export interface IContactosArgs extends IAnaliticaFiltro {
@@ -204,8 +218,18 @@ export interface IContactosArgs extends IAnaliticaFiltro {
     canal?: CanalContacto[]
     /** Implica canal visita: un llamado no se valida. */
     validez?: ValidezVisita
+    /** Quién llamó (códigos de TV). Implica canal llamado: un TV no visita. */
+    autores?: string[]
     pagina?: number
     cant?: number
+}
+
+/** GET /analitica/televentas: un TV, para el filtro de quién llamó. */
+export interface ITelevendedorOpcion {
+    codigoParticularTv: string
+    nombreTv: string
+    /** Los inactivos vienen igual: tienen llamados en rangos pasados. */
+    activo: boolean
 }
 
 /** GET /analitica/llamados/:id. */

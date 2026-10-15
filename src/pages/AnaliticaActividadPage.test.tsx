@@ -45,6 +45,7 @@ beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getVendedores as any).mockResolvedValue(MOCK_VENDEDORES)
     ;(api.getResumen as any).mockResolvedValue(MOCK_RESUMEN)
+    ;(api.getTelevendedores as any).mockResolvedValue([])
     ;(api.getVisitas as any).mockResolvedValue({
         total: 1,
         pagina: 1,

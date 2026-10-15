@@ -192,6 +192,14 @@ contadores propios (tarjeta "Llamados", KPI de actividad). Los "No visité" viaj
 pero no son un contacto. El filtro de canal vive en la URL (`canal`); la validez implica visitas,
 así que prenderla saca el canal y elegir "Llamados" apaga la validez.
 
+En actividad, los KPI salen de `conteos` (totales de todo el filtro que calcula el back), nunca de
+las filas cargadas: la tabla pagina de a 100 con "Mostrar más", y contar filas cortaba los números
+en cuanto el rango pasaba de una página. Los conteos ignoran canal y validez (filtran la tabla, no
+los KPI). El filtro de TV ("Televentas", `tvs` en la URL, `autores[]` en la API) filtra por quién
+llamó y fija el canal en "Llamados", porque un TV no visita; pasar a "Todo" o "Visitas" suelta los
+TV. La columna "Quién" es quien hizo el contacto: el vendedor en la visita, el TV en el llamado
+(con "cliente de …" debajo).
+
 Fuera de alcance salvo pedido explícito: ranking de vendedores, novedades para el vendedor, link de
 WhatsApp al cliente, recorrido continuo de la visita o del día (requiere app nativa), control
 minuto a minuto de un vendedor.

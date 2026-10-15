@@ -7,6 +7,7 @@ import {
     MOCK_OTRAS_RESOLUCIONES,
     MOCK_RESUMEN,
     MOCK_FICHAS,
+    MOCK_TELEVENDEDORES,
     MOCK_VENDEDORES,
     MOCK_VISITAS,
     MOCK_VISITAS_HOY,
@@ -25,6 +26,7 @@ import type {
     IVendedorMetricas,
     IFichasArgs,
     IFichasRelevadasResponse,
+    ITelevendedorOpcion,
     IVendedorOpcion,
     IVisitaDetalle,
     IVisitasArgs,
@@ -135,17 +137,36 @@ export const getContactos = async (args: IContactosArgs): Promise<IContactosPage
         const { visitas } = canales.includes('visita')
             ? await getVisitas({ ...args, cant: undefined, pagina: undefined })
             : { visitas: [] }
-        const llamados =
-            canales.includes('llamado') && !args.validez
-                ? MOCK_LLAMADOS.filter(l => l.fecha >= args.desde && l.fecha <= args.hasta)
-                      .filter(l => !args.vendedor || l.codigoParticularVendedor === args.vendedor)
-                      .filter(l => !args.vendedores?.length || args.vendedores.includes(l.codigoParticularVendedor))
-                : []
-        const contactos: IContactoFila[] = [
-            ...visitas.map(v => ({ ...v, canal: 'visita' as const })),
+        // Como el back: los conteos son de todo el filtro (sin canal, validez ni página) y
+        // con TV elegidos no entra ninguna visita.
+        const todasLasVisitas = args.autores
+            ? []
+            : (await getVisitas({ ...args, validez: undefined, cant: undefined, pagina: undefined })).visitas
+        const todosLosLlamados = MOCK_LLAMADOS.filter(l => l.fecha >= args.desde && l.fecha <= args.hasta)
+            .filter(l => !args.vendedor || l.codigoParticularVendedor === args.vendedor)
+            .filter(l => !args.vendedores?.length || args.vendedores.includes(l.codigoParticularVendedor))
+            .filter(l => !args.autores || args.autores.includes(l.codigoAutor))
+        const llamados = canales.includes('llamado') && !args.validez ? todosLosLlamados : []
+        const todos: IContactoFila[] = [
+            ...(args.autores ? [] : visitas).map(v => ({ ...v, canal: 'visita' as const })),
             ...llamados,
         ].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))
-        return { total: contactos.length, pagina: args.pagina ?? 1, cant: contactos.length, contactos }
+        const pagina = args.pagina ?? 1
+        const cant = args.cant ?? 50
+        return {
+            total: todos.length,
+            pagina,
+            cant,
+            contactos: todos.slice((pagina - 1) * cant, pagina * cant),
+            conteos: {
+                visitasCerradas: todasLasVisitas.filter(v => v.tipo === 'visita' && v.fechaFin !== null).length,
+                visitasEnCurso: todasLasVisitas.filter(v => v.tipo === 'visita' && v.fechaFin === null).length,
+                noVisita: todasLasVisitas.filter(v => v.tipo === 'no_visita').length,
+                llamados: todosLosLlamados.length,
+                llamadosAtendidos: todosLosLlamados.filter(l => l.tipo === 'atendido').length,
+                llamadosConVenta: todosLosLlamados.filter(l => l.estado === 'venta').length,
+            },
+        }
     }
     const res = await apiClient.get('/planificacion/analitica/contactos', { params: args })
     return res.data.data
@@ -206,6 +227,16 @@ export const getVendedores = async (): Promise<IVendedorOpcion[]> => {
         return MOCK_VENDEDORES
     }
     const res = await apiClient.get('/planificacion/analitica/vendedores')
+    return res.data.data
+}
+
+/** Los TV (activos primero), para filtrar el feed por quién llamó. */
+export const getTelevendedores = async (): Promise<ITelevendedorOpcion[]> => {
+    if (USA_MOCK) {
+        await esperar()
+        return MOCK_TELEVENDEDORES
+    }
+    const res = await apiClient.get('/planificacion/analitica/televentas')
     return res.data.data
 }
 

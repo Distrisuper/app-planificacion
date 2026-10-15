@@ -80,6 +80,27 @@ describe('TablaActividad con llamados', () => {
         )
         expect(screen.getByTestId('estado-llamado-9')).toHaveTextContent('Llamado · Volver a llamar')
     })
+
+    it('la columna "Quién" es el vendedor en la visita y el TV en el llamado', () => {
+        render(<TablaActividad filas={[LLAMADO, VISITA]} onElegirVisita={vi.fn()} />)
+        expect(screen.getByRole('columnheader', { name: 'Quién' })).toBeInTheDocument()
+        expect(screen.queryByRole('columnheader', { name: 'Vendedor' })).not.toBeInTheDocument()
+        expect(screen.getByTestId('quien-llamado-9')).toHaveTextContent('GOMEZ LUCIA')
+        expect(screen.getByTestId('quien-llamado-9')).toHaveTextContent('cliente de ACOSTA MARIANO')
+        expect(screen.getByTestId('quien-1')).toHaveTextContent('ACOSTA MARIANO')
+    })
+
+    it('sin nombre en pl_tv muestra el código del TV', () => {
+        render(<TablaActividad filas={[{ ...LLAMADO, nombreAutor: null }]} onElegirVisita={vi.fn()} />)
+        expect(screen.getByTestId('quien-llamado-9')).toHaveTextContent('9001')
+    })
+
+    it('con un rango de un solo día no repite la fecha en cada fila', () => {
+        const { rerender } = render(<TablaActividad filas={[LLAMADO, VISITA]} onElegirVisita={vi.fn()} />)
+        expect(screen.getAllByText('2026-08-03')).toHaveLength(2)
+        rerender(<TablaActividad filas={[LLAMADO, VISITA]} onElegirVisita={vi.fn()} mostrarFecha={false} />)
+        expect(screen.queryByText('2026-08-03')).not.toBeInTheDocument()
+    })
 })
 
 describe('TablaVisitas con llamados', () => {
