@@ -23,7 +23,7 @@ pl_rotacion ──┬─ pl_rotacion_semana        el set de semanas + nombre de
                                        └─ pl_resolucion ──┬─ pl_resolucion_motivo
                                           EL HECHO        │   motivo a nivel visita
                                                           │
-                                                          └─ pl_visita_rubro ──┬─ pl_visita_rubro_motivo
+                                                          └─ pl_ofrecimiento ──┬─ pl_ofrecimiento_motivo
                                                              propuesta          │   resultado por rubro
                                                              congelada          │
 pl_motivo ─────────────────────────────────────────────────────────────────────┘
@@ -184,17 +184,21 @@ campo `tipo: 'catalogo'`); agregar un catálogo nuevo es sembrar otro `tipo` y a
   lo sigue mostrando por descripción aunque esté inactivo.
 - Seed idempotente y seguro para prod: `docs/db-notes/planificacion-catalogo-alta.sql`.
 
-## `pl_resolucion_motivo` y `pl_visita_rubro` / `pl_visita_rubro_motivo`
+## `pl_resolucion_motivo` y `pl_ofrecimiento` / `pl_ofrecimiento_motivo`
+
+Hasta el renombre de `docs/db-notes/planificacion-ofrecimiento.sql` (api-vendedores) se llamaban
+`pl_visita_rubro` / `pl_visita_rubro_motivo`, con columnas `rubro_code` / `rubro_descripcion`
+(hoy `codigo` / `descripcion`). Los specs viejos usan los nombres anteriores.
 
 - **`pl_resolucion_motivo`** `(resolucion_id, motivo_id)`: los motivos a **nivel visita**. Es la tabla
   que permite responder "cuál es la objeción más frecuente en la zona norte" con un `GROUP BY`, cosa
   que no se puede hacer sobre la frase que va a Cromo.
-- **`pl_visita_rubro`**: la propuesta comercial **congelada al iniciar la visita** — la que el vendedor
-  efectivamente vio, no la que se recalcularía ahora. Guarda `rubro_descripcion` como snapshot porque
+- **`pl_ofrecimiento`**: la propuesta comercial **congelada al iniciar la visita** — la que el vendedor
+  efectivamente vio, no la que se recalcularía ahora. Guarda `descripcion` como snapshot porque
   la descripción puede cambiar. **Sin columna `estado`**: un rubro está resuelto si tiene motivos.
   `origen` distingue `caida` / `minimo` / `manual`, y `es_propuesto = 0` marca lo que agregó el
   vendedor.
-- **`pl_visita_rubro_motivo`**: el resultado por rubro, con `marca` / `competidor` / `pct_diferencia`
+- **`pl_ofrecimiento_motivo`**: el resultado por rubro, con `marca` / `competidor` / `pct_diferencia`
   cuando el motivo `requiere_detalle`. Columnas nullables y **no texto libre**, con el mismo objetivo:
   responder "contra quién perdemos y por cuánto" con un `GROUP BY`.
 - **La marca ofrecida vive en `pl_ofrecimiento_alcance` con `tipo='marca'`** (spec 2026-09-16).
