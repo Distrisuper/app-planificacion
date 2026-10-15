@@ -1,7 +1,8 @@
-# Guard de agentes
+# Guard de Claude Code
 
-Qué le niega este repo a un agente de Paperclip, y por qué. Es el patrón de api-vendedores
-(`.claude/hooks/guard.js` + `.githooks/pre-push`) adaptado a un front que despliega en Vercel.
+Qué niega este repo cuando la acción viene de Claude Code, y por qué. Es el patrón de
+api-vendedores (`.claude/hooks/guard.js` + `.githooks/pre-push`) adaptado a un front que despliega
+en Vercel, y se comporta igual en los cuatro repos de distri (cada uno con su rama base).
 Si una regla molesta, se discute acá y se cambia junto con su test; no se desactiva el hook.
 
 ## Cómo funciona
@@ -10,40 +11,43 @@ Si una regla molesta, se discute acá y se cambia junto con su test; no se desac
   `.claude/settings.json`) sobre `Bash`, `PowerShell`, `Monitor`, `Read`, `Grep`, `Edit`,
   `Write`, `MultiEdit` y `NotebookEdit`. Si la acción está prohibida responde `deny` con la
   razón; si no, no dice nada y aplica el permiso normal.
+- **Aplica siempre.** El hook solo lo invoca Claude Code, así que no hay un "modo persona": lo
+  que niega, una persona lo hace desde su propia terminal. No depende de ninguna variable de
+  entorno.
+- **Falla cerrado**: un error interno del guard niega, un JSON roto por stdin niega, y si el
+  script revienta fuera de la evaluación (`uncaughtException`) sale con código 2, que Claude
+  Code toma como bloqueo.
 - **`.githooks/pre-push`** (→ `pre-push.cjs`) es la segunda capa, para lo que el hook no parsea
-  (un script que pushea por dentro). `npm install` lo activa (`prepare` → `core.hooksPath`), y
-  el archivo tiene que estar como ejecutable en git (`100755`): si no, en Linux/mac git lo
-  ignora. Si `core.hooksPath` no es `.githooks`, el hook niega todo `git push` del agente.
-- **Solo actúan en modo agente**: alguna variable `PAPERCLIP_*` en el entorno (las inyecta
-  Paperclip; es el mismo criterio que la guardia de `vite.config.ts`). **Sin `PAPERCLIP_*` no
-  niegan nada**: la sesión del dueño queda igual que antes.
-- **Excepción: `permissions.deny` de `settings.json`** aplica a todos, dueño incluido. Es una
-  red por si el hook no corre (script faltante, timeout): solo lista lo irreversible
-  (`gh pr merge` / `ready` / `review --approve`, `git push --no-verify` / `--force` / `-f` /
-  `--mirror`, `vercel`, `firebase deploy`). Desde Claude Code no las corre nadie; el dueño las
-  hace desde su terminal.
-- En modo agente falla **cerrado**: un error interno del guard también niega, un JSON roto por
-  stdin también, y si el script revienta fuera de la evaluación (`uncaughtException`) sale con
-  código 2, que Claude Code toma como bloqueo.
+  (un script que pushea por dentro) y para las personas: rechaza todo push que actualice o
+  borre `master` en el remoto, venga de donde venga. Escape, solo para una persona en su
+  terminal: `ALLOW_BASE_PUSH=1 git push ...`. `npm install` lo activa (`prepare` →
+  `core.hooksPath=.githooks`), y el archivo `pre-push` tiene que estar como ejecutable en git
+  (`100755`): si no, en Linux/mac git lo ignora. Si `core.hooksPath` no es `.githooks`, el guard
+  niega todo `git push` desde Claude Code.
+- **`permissions.deny` de `settings.json`** es una red por si el hook no corre (script
+  faltante, timeout): `.env` reales, credenciales, `gh pr merge` / `ready` / `review --approve`,
+  `git push --no-verify` / `--force` / `-f` / `--mirror`, `vercel`, `firebase deploy`, `ssh`, `scp`.
 - Son `.cjs` porque el `package.json` es `"type": "module"`.
 
-## Reglas (solo modo agente)
+## Reglas
 
 | Regla | Porqué |
 |---|---|
-| Leer, buscar o escribir `.env*` (salvo `.env-example`), **incluido `.env.test`**, por tool o por terminal (`cat`, `Get-Content`, `git show HEAD:.env.test`, `--env-file`, globs `.env*`) | Los `.env` del dueño tienen URLs y claves reales. `.env.test` hoy solo tiene valores públicos, pero la regla es por nombre y no por contenido, para que no se afloje el día que alguien le agregue algo. |
-| `env` / `printenv` / `set` / `export` solos (también con asignaciones al frente: `X=1 printenv`), `export -p`, `declare -x` / `-p`, `Get-ChildItem env:`, `process.env` entero o `Deno.env.toObject()` en código que se evalúa (`node -p process.env`, `bun -e`, `deno eval`) | Vuelcan `PAPERCLIP_API_KEY`. Buscar el texto (`rg -n process.env src`) sí se permite. |
-| `vercel` y `vc` (su alias), directos o por `npx` / `npm exec` / `pnpm dlx` / `bunx` | Cualquier comando de la CLI puede desplegar o tocar el proyecto del team. El deploy lo hace el dueño. |
+| Leer, buscar o escribir `.env` reales por tool o por terminal (`cat`, `Get-Content`, `git show HEAD:.env.test`, `--env-file`, globs `.env*`): `.env`, `.env.local`, `.env.bak`, `.env-prod`, `.env.production`, `.env.tunnel`, `agente*.env`… **incluido `.env.test`**. Las plantillas (`.env-example`, `.env.example`, `.env.local.example`) se leen y editan. | Los `.env` locales tienen URLs y claves reales. `.env.test` hoy solo tiene valores públicos, pero la regla es por nombre y no por contenido, para que no se afloje el día que alguien le agregue algo. |
+| `env` / `printenv` / `set` / `export` solos (también con asignaciones al frente: `X=1 printenv`), `export -p`, `declare -x` / `-p`, `Get-ChildItem env:`, `process.env` entero o `Deno.env.toObject()` en código que se evalúa (`node -p process.env`, `bun -e`, `deno eval`) | Vuelcan tokens y claves de la sesión. Buscar el texto (`rg -n process.env src`) o leer una variable puntual sí se permite. |
+| `vercel` y `vc` (su alias), directos o por `npx` / `npm exec` / `pnpm dlx` / `bunx` | Cualquier comando de la CLI puede desplegar o tocar el proyecto del team. El deploy lo hace una persona. |
 | `firebase … deploy` y cualquier `firebase hosting:*` (`hosting:channel:deploy`, `hosting:disable`...) | Hay deploys del ecosistema en Firebase Hosting; `hosting:disable` baja el sitio. |
-| `npm run dev` / `preview` / `start` / `e2e*`, `vite` (salvo `vite build`), `playwright test` | `dev` y `preview` los levanta **solo el runtime service** de Paperclip, que les pasa las `VITE_*` del stack agente. Playwright entra porque su `webServer` corre `npm run dev`. Para verificar: `npm test`, `npm run build`, `npm run lint`. |
-| `git push` a `master` (o parado en `master`; también `heads/master`, `refs/heads/master` y con comillas), con `--force` / `-f` / `--force-with-lease` / refspec `+rama`, `--no-verify`, `--delete` / `-d` / `:rama`, `--all` / `--branches` / `--mirror` / `--tags` / `--prune`, o sin el pre-push activo | El agente pushea **solo la rama de su tarea**: `git push [-u] origin <rama>`. `master` despliega en Vercel. Las opciones largas se comparan por prefijo (`--no-v`, `--for`, `--mi`...), porque git acepta abreviaturas. Vale para `git.exe`, rutas, `X=1 git`, `& git` de PowerShell, `env git` y `git --work-tree . push`. |
-| `gh pr create` sin `--draft`, `gh pr ready`, `gh pr merge`, `gh pr review --approve` / `-a`, `gh workflow run`, `gh api` de escritura (incluye `-fcampo=valor` pegado y aprobar por `.../pulls/<n>/reviews`), `gh api graphql` con `mutation` | El PR se abre en draft; pasarlo a ready y mergear lo decide el dueño. Nadie aprueba su propio trabajo. Vale para `gh.exe`, rutas, `X=1 gh`, `& gh` / `& "C:\…\gh.exe"` / `. gh` de PowerShell, `x & gh`, `(gh …)`, `env` / `command` / `time` / `nohup` / `exec gh`, y con `-R` / `--repo` en cualquier lugar (`gh -R o/r pr merge 1`). |
-| El pre-push rechaza, con `PAPERCLIP_*`, todo push que toque `refs/heads/master` (update o borrado) | La misma política que el hook, a nivel git, para lo que el hook no ve. |
-| `core.hooksPath`, `ALLOW_MASTER_PUSH` | Apagarían el pre-push. |
-| `git commit` en `master`, `reset --hard`, `checkout .` / `restore .`, `clean -f`, `branch -D master` | Descartan trabajo o ensucian la base. |
+| `docker compose up` / `down` / `rm` / `stop` / `kill` (también `docker-compose`), `docker run` / `rm` / `stop` / `kill` (y `docker container …`), `docker volume rm` / `prune`, `docker system prune` | Este front no usa docker; la regla es la común a los cuatro repos (en api-vendedores `docker-compose.yml` es producción). Lo de solo lectura pasa: `docker ps`, `logs`, `inspect`, `--version`, `docker compose ps` / `logs`. |
+| `git push` a `master` (o parado en `master`; también `heads/master`, `refs/heads/master` y con comillas), con `--force` / `-f` / `--force-with-lease` / refspec `+rama`, `--no-verify`, `--delete` / `-d` / `:rama`, `--all` / `--branches` / `--mirror` / `--tags` / `--prune`, o sin el pre-push activo | Desde Claude Code se pushea **solo la rama de la tarea**: `git push [-u] origin <rama>`. `master` despliega en Vercel. Las opciones largas se comparan por prefijo (`--no-v`, `--for`, `--mi`...), porque git acepta abreviaturas. Vale para `git.exe`, rutas, `X=1 git`, `& git` de PowerShell, `env git` y `git --work-tree . push`. |
+| `gh pr create` sin `--draft`, `gh pr ready`, `gh pr merge`, `gh pr review --approve` / `-a`, `gh workflow run`, `gh api` de escritura (incluye `-fcampo=valor` pegado y aprobar por `.../pulls/<n>/reviews`), `gh api graphql` con `mutation` | El PR se abre en draft; pasarlo a ready y mergear lo decide una persona. Nadie aprueba su propio trabajo. Vale para `gh.exe`, rutas, `X=1 gh`, `& gh` / `& "C:\…\gh.exe"` / `. gh` de PowerShell, `x & gh`, `(gh …)`, `env` / `command` / `time` / `nohup` / `exec gh`, y con `-R` / `--repo` en cualquier lugar (`gh -R o/r pr merge 1`). |
+| `core.hooksPath`, `ALLOW_BASE_PUSH` / `ALLOW_MASTER_PUSH` en cualquier comando | Apagarían el pre-push. El escape es para una persona en su terminal. |
+| `git commit` en `master`, `reset --hard`, `checkout .` / `restore .`, `clean -f`, `branch -D master` | Descartan trabajo o ensucian la base. Se niegan siempre, también dentro del propio worktree (igual que en api-vendedores). |
 | `rm -r` fuera del repo, de la raíz o de `src`, `docs`, `.git`, `.claude`, `.githooks`, `e2e`, `public`, `scripts`, `Prototipo` | Los worktrees de otras tareas viven al lado (`../`). |
 | `ssh` / `scp` / `sftp` | Ningún flujo de este front los necesita. |
-| Editar `.claude/hooks/`, `.claude/settings*.json`, `.githooks/`, `.git/hooks/` (por tool, sin distinguir mayúsculas, o por terminal, incluido un comando de lectura con `>`, `>>`, `tee`, `Out-File`, `Set-Content` o `--output`) | Que el agente no pueda apagar su propio guard. Leerlos y correr sus tests sí. |
+| Editar `.claude/hooks/`, `.claude/settings*.json`, `.githooks/`, `.git/hooks/` (por tool, sin distinguir mayúsculas, o por terminal, incluido un comando de lectura con `>`, `>>`, `tee`, `Out-File`, `Set-Content` o `--output`) | Que Claude Code no pueda apagar su propio guard. **Leerlos sí**: `Read`, `Grep`, `cat`, `head`, `tail`, `grep`, `rg`, `Select-String`, `sed -n '<rango>p'`, `git diff/log/show/blame`, y correr sus tests (`npm run check:hooks`). Cambiarlos lo hace una persona. |
+
+Los servidores de desarrollo (`npm run dev`, `vite`, `playwright test`) **no** se bloquean, pero
+para verificar una tarea no hacen falta: la verificación es `npm run check`.
 
 ## Falsos positivos conocidos
 
@@ -57,19 +61,20 @@ Si una regla molesta, se discute acá y se cambia junto con su test; no se desac
   guard también: `-c` puede cambiar el pager o el diff externo. Lo mismo con variables o
   envoltorios delante (`GIT_PAGER=… git log <guard>`, `env … git diff <guard>`,
   `GIT_CONFIG_COUNT=…`, `time cat <guard>`): se niega cualquier prefijo.
+- `sed` sobre el guard solo pasa con la forma `sed -n '<rango o /patrón/>p'`. Cualquier otro
+  script de sed se niega, porque puede escribir (`w`) o correr comandos (`e`).
 
 ## Lo que el guard NO cubre
 
 - `node -e` armando el nombre de un `.env` por partes, o un script propio que lo lea.
 - `Grep` sobre todo el repo sin nombrar `.env*` (ripgrep saltea archivos ocultos por defecto,
   pero no es una garantía del guard).
-- `curl` a la API de Vercel o de GitHub con un token. Lo cubren la regla "nunca deploy"
-  y que el agente no tiene esos tokens.
+- `curl` a la API de Vercel o de GitHub con un token. Lo cubren la regla "nunca deploy" y que
+  la sesión no tiene esos tokens.
 - Un force push de rama hecho desde un script propio: el pre-push solo mira `master`.
 - Evasión deliberada: `bash -c`, `node -e`, `eval`, `pwsh -c`, `$(...)`, alias, o `curl` a la
   API de GitHub con `gh auth token`. El guard es una red para errores honestos; lo que de verdad
-  impide mergear o aprobar es la branch protection de `master` y un token del agente sin esos
-  permisos.
+  impide mergear o aprobar es la branch protection de `master`.
 - **Una variable seteada en un tramo anterior** (`export GIT_EXTERNAL_DIFF=…; git diff <guard>`,
   `$env:GIT_PAGER=…; git log <guard>`) **o un pager configurado en dos pasos**
   (`git config core.pager …` y después `git log <guard>`): el guard mira cada tramo por
@@ -77,20 +82,20 @@ Si una regla molesta, se discute acá y se cambia junto con su test; no se desac
   (`GIT_PAGER=… git log <guard>`). Un cambio al guard hecho así queda en `git status` /
   `git diff` y lo tiene que ver la revisión.
 - `.git/config` (salvo `core.hooksPath`, que el hook chequea antes de cada push),
-  `.github/workflows/` y los settings de usuario de Claude Code.
+  `.github/workflows/` (lo frena `permissions.ask`) y los settings de usuario de Claude Code.
 
 ## Cómo probarlo
 
 ```bash
 npm run check:hooks
 
-# modo agente simulado: las tres devuelven permissionDecision "deny"
-for c in 'cat .env.test' 'vercel' 'git push --force'; do
+# las tres devuelven permissionDecision "deny", sin ninguna variable especial
+for c in 'cat .env' 'vercel' 'git push --force'; do
   echo "{\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"$c\"},\"cwd\":\".\"}" \
-    | PAPERCLIP_RUN_ID=simulado node .claude/hooks/guard.cjs; echo
+    | node .claude/hooks/guard.cjs; echo
 done
 
-# sin PAPERCLIP_*: no imprime nada (el dueño no ve ningún cambio)
-echo '{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"."}' \
-  | env -i PATH="$PATH" node .claude/hooks/guard.cjs
+# un comando permitido no imprime nada
+echo '{"tool_name":"Bash","tool_input":{"command":"npm run check"},"cwd":"."}' \
+  | node .claude/hooks/guard.cjs
 ```

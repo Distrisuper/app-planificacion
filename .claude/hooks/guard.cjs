@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 // Guard determinista para Claude Code (hook PreToolUse). Lee el JSON del hook por stdin y,
-// si la acción es de las que este repo nunca permite a un AGENTE, responde `deny` con la
-// razón. Si no tiene nada que decir, no imprime nada y aplica el permiso normal.
+// si la acción es de las que este repo nunca permite desde Claude Code, responde `deny` con
+// la razón. Si no tiene nada que decir, no imprime nada y aplica el permiso normal.
 //
-// Solo actúa en modo agente: cuando hay alguna variable PAPERCLIP_* en el entorno (las
-// inyecta Paperclip; es el mismo criterio que la guardia de vite.config.ts). En una sesión
-// del dueño no niega nada.
+// Aplica SIEMPRE: el hook solo lo invoca Claude Code, así que no hay un "modo persona" que
+// distinguir. Lo que el guard niega, una persona lo hace desde su propia terminal.
 //
-// Regla de oro: en modo agente falla CERRADO. Cualquier excepción interna → deny.
+// Regla de oro: falla CERRADO. Cualquier excepción interna → deny.
 //
 // Es el patrón de api-vendedores (.claude/hooks/guard.js) adaptado a un front en Vercel.
 // Las reglas y su porqué están en docs/agentes/guard.md. Tests: guard.spec.cjs
@@ -18,10 +17,6 @@ const { execFileSync } = require('node:child_process')
 
 const RAMA_BASE = 'master'
 const RAICES_PROTEGIDAS = ['.git', '.github', '.githooks', '.claude', 'src', 'docs', 'e2e', 'public', 'scripts', 'Prototipo']
-
-function esAgente(env) {
-  return Object.keys(env || {}).some(clave => clave.startsWith('PAPERCLIP_'))
-}
 
 function deny(motivo) {
   return {
@@ -107,11 +102,14 @@ function comandoEfectivo(t) {
 }
 
 // ── secretos ───────────────────────────────────────────────────────────────
-// Cualquier .env* salvo .env-example, incluido .env.test (va trackeado y hoy solo tiene
-// valores públicos, pero el agente no tiene por qué leerlo: la regla es por nombre, no por
-// contenido, así no se afloja el día que alguien le agregue algo). También los globs `.env*`.
+// Cualquier .env* salvo las plantillas (.env-example, .env.example, .env.local.example...),
+// incluido .env.test (va trackeado y hoy solo tiene valores públicos, pero la regla es por
+// nombre, no por contenido, así no se afloja el día que alguien le agregue algo). También
+// los globs `.env*` y los `agente*.env`.
 function esArchivoEnv(nombre) {
-  return /^\.env([.\-*?[].*)?$/.test(nombre) && nombre !== '.env-example'
+  if (/^agente.*\.env$/i.test(nombre)) return true
+  if (!/^\.env([.\-*?[].*)?$/.test(nombre)) return false
+  return !/[.-]example$/.test(nombre)
 }
 
 function nombreDeToken(tok) {
@@ -121,14 +119,15 @@ function nombreDeToken(tok) {
     .pop()
 }
 
-const VOLCADO = 'volcar variables de entorno expone la API key de Paperclip'
+const VOLCADO = 'volcar variables de entorno expone tokens y claves de la sesión'
 const VOLCA_ENTORNO = /process\.env(?![\w.[])|Deno\.env(?!\.(get|has|set|delete)\b)(?!\w)/
 
 function reglaSecretos(seg) {
-  if (/ALLOW_MASTER_PUSH/.test(seg.replace(/['"`]/g, ''))) return deny('ALLOW_MASTER_PUSH es solo para el dueño')
+  const escape = /ALLOW_(BASE|MASTER)_PUSH/.exec(seg.replace(/['"`]/g, ''))
+  if (escape) return deny(`${escape[0]} es el escape del pre-push para una persona en su terminal, no desde Claude Code`)
   const t = tokens(seg)
   const env = t.map(nombreDeToken).find(esArchivoEnv)
-  if (env) return deny(`el comando referencia ${env}; un agente no lee ni escribe .env*`)
+  if (env) return deny(`el comando referencia ${env}; desde Claude Code no se leen ni escriben .env reales`)
   // `X=1 printenv` / `env printenv` vuelcan igual: lo de delante no cambia el comando.
   const c = sinPrefijos(t)
   const cmd = (c[0] || '').toLowerCase()
@@ -162,40 +161,45 @@ function evaluaCodigo(t) {
 // del team: se niega entero, `vc` incluido (es su alias).
 function reglaDeploy(seg) {
   const { cmd, args } = comandoEfectivo(tokens(seg))
-  if (cmd === 'vercel' || cmd === 'vc') return deny('un agente no usa la CLI de Vercel; el deploy lo hace el dueño')
+  if (cmd === 'vercel' || cmd === 'vc') return deny('la CLI de Vercel no se usa desde Claude Code; el deploy lo hace una persona')
   // `deploy` y cualquier `hosting:*` (`hosting:disable` baja el sitio), en cualquier posición.
   if ((cmd === 'firebase' || cmd === 'firebase-tools') && args.some(a => /deploy/i.test(a) || /^hosting:/i.test(a)))
-    return deny('firebase deploy / hosting:* está prohibido para un agente')
+    return deny('firebase deploy / hosting:* no se usa desde Claude Code; el deploy lo hace una persona')
   return null
 }
 
-// ── servidores de desarrollo ───────────────────────────────────────────────
-// `dev` y `preview` solo se levantan por los runtime services de Paperclip, que les pasan
-// las VITE_* del stack agente. Levantados a mano, heredan lo que haya y ocupan puertos.
-// Playwright entra acá porque su webServer (playwright.config.ts) corre `npm run dev`.
-const SCRIPTS_SERVIDOR = /^(dev|preview|start|serve|e2e(:.*)?)$/
+// ── docker ─────────────────────────────────────────────────────────────────
+// Este front no usa docker. La regla es la misma que en los otros repos de distri (en
+// api-vendedores `docker-compose.yml` es producción) para que el guard se comporte igual en
+// los cuatro. Lo de solo lectura pasa (`docker ps`, `logs`, `inspect`, `--version`,
+// `docker compose ps`); lo que crea, para o borra contenedores o volúmenes, no.
+const DOCKER_OPCIONES_CON_VALOR = new Set(['-H', '--host', '-c', '--context', '--config', '-l', '--log-level'])
+const COMPOSE_OPCIONES_CON_VALOR = new Set(['-f', '--file', '-p', '--project-name', '--profile', '--env-file', '--project-directory', '--ansi', '--progress', '--parallel'])
+const COMPOSE_PROHIBIDOS = new Set(['up', 'down', 'rm', 'stop', 'kill'])
+const DOCKER_PROHIBIDOS = new Set(['run', 'rm', 'stop', 'kill'])
 
-function reglaServidor(seg) {
-  const t = sinPrefijos(tokens(seg))
-  const gestor = (t[0] || '').toLowerCase()
-  if (/^(npm|pnpm|yarn|bun)$/.test(gestor)) {
-    // `npm run dev` / `npm start`; pnpm, yarn y bun además aceptan `pnpm dev`.
-    let script = ''
-    if (t[1] === 'run' || t[1] === 'run-script') script = t[2] || ''
-    else if (t[1] === 'start') script = 'start'
-    else if (gestor !== 'npm') script = t[1] || ''
-    if (SCRIPTS_SERVIDOR.test(script))
-      return deny(`${gestor} run ${script} levanta un servidor; eso lo hace el runtime service de Paperclip`)
+function saltearOpciones(t, conValor) {
+  let i = 0
+  while (i < t.length && t[i].startsWith('-')) i += conValor.has(t[i]) ? 2 : 1
+  return t.slice(i)
+}
+
+function reglaDocker(seg) {
+  const { cmd, args } = comandoEfectivo(tokens(seg))
+  if (cmd !== 'docker' && cmd !== 'docker-compose') return null
+  let resto = cmd === 'docker' ? saltearOpciones(args, DOCKER_OPCIONES_CON_VALOR) : ['compose', ...args]
+  const sub = resto[0]
+  if (sub === 'compose') {
+    const csub = saltearOpciones(resto.slice(1), COMPOSE_OPCIONES_CON_VALOR)[0]
+    if (COMPOSE_PROHIBIDOS.has(csub)) return deny(`docker compose ${csub} no se corre desde Claude Code; para verificar alcanza npm run check`)
+    return null
   }
-  const { cmd, args } = comandoEfectivo(t)
-  // `vite` sin subcomando es `vite dev`, y las opciones pueden llevar valor (`--port 5174`):
-  // se permite solo lo que no levanta servidor.
-  if (cmd === 'vite') {
-    if (!args.some(a => a === 'build' || a === 'optimize'))
-      return deny('vite dev/preview lo levanta el runtime service de Paperclip; para verificar usá npm run build')
-  }
-  if (cmd === 'playwright' && args[0] === 'test')
-    return deny('playwright test levanta npm run dev (webServer de playwright.config.ts); eso lo hace el runtime service')
+  resto = resto.slice(1)
+  if (DOCKER_PROHIBIDOS.has(sub)) return deny(`docker ${sub} no se corre desde Claude Code; para verificar alcanza npm run check`)
+  if (sub === 'container' && (DOCKER_PROHIBIDOS.has(resto[0]) || resto[0] === 'prune'))
+    return deny(`docker container ${resto[0]} no se corre desde Claude Code`)
+  if (sub === 'volume' && (resto[0] === 'rm' || resto[0] === 'prune')) return deny(`docker volume ${resto[0]} borra datos`)
+  if (sub === 'system' && resto[0] === 'prune') return deny('docker system prune borra contenedores, imágenes y volúmenes')
   return null
 }
 
@@ -224,7 +228,7 @@ function reglaGit(seg, ctx) {
     const soloLee = sub === 'config' && (resto.includes('--get') || resto.length === 1)
     if (!soloLee) return deny('cambiar core.hooksPath apaga el pre-push')
   }
-  // El agente pushea la rama de su tarea (`git push [-u] origin <rama>`) y nada más.
+  // Desde Claude Code se pushea la rama de la tarea (`git push [-u] origin <rama>`) y nada más.
   if (sub === 'push') {
     const r = reglaPush(resto, ctx)
     if (r) return r
@@ -275,7 +279,7 @@ function reglaPush(resto, ctx) {
   if (ramaActual(ctx) === RAMA_BASE) return deny(`estás en ${RAMA_BASE}; creá una rama antes de pushear`)
   // Sin el pre-push activo, lo único que frena un push a master es este texto.
   if (hooksPath(ctx) !== HOOKS_PATH)
-    return deny(`el pre-push no está activo (core.hooksPath no es ${HOOKS_PATH}); el dueño tiene que correr git config core.hooksPath ${HOOKS_PATH}`)
+    return deny(`el pre-push no está activo (core.hooksPath no es ${HOOKS_PATH}); corré npm install (el prepare lo configura) o git config core.hooksPath ${HOOKS_PATH}`)
   return null
 }
 
@@ -309,14 +313,15 @@ function ramaActual(ctx) {
 }
 
 // ── gh ─────────────────────────────────────────────────────────────────────
-// Mergear a master es desplegar. Un PR se abre solo en draft y un agente no lo pasa a ready.
+// Mergear a master es desplegar. Un PR se abre solo en draft; pasarlo a ready y mergear lo
+// hace una persona.
 // `gh api` con campos y sin -X hace POST.
 function reglaGh(seg) {
   // `gh.exe`, `C:\...\gh.exe`, `X=1 gh`, `"gh"` también.
   const { cmd, args } = comandoEfectivo(tokens(seg))
   if (cmd !== 'gh') return null
   const t = sinRepo(['gh', ...args.map(a => a.replace(/^['"]+|['"]+$/g, ''))])
-  if (t[1] === 'pr' && (t[2] === 'merge' || t[2] === 'ready')) return deny(`gh pr ${t[2]} lo hace el dueño`)
+  if (t[1] === 'pr' && (t[2] === 'merge' || t[2] === 'ready')) return deny(`gh pr ${t[2]} lo hace una persona, no Claude Code`)
   if (t[1] === 'pr' && (t[2] === 'create' || t[2] === 'new')) {
     const args = t.slice(3)
     const draft = args.some(a => a === '--draft' || a === '-d' || a === '--draft=true') && !args.some(a => /^--draft=(?!true$)/.test(a))
@@ -325,7 +330,7 @@ function reglaGh(seg) {
   // Nadie aprueba su propio trabajo. `-a` puede venir combinado (`-ab "ok"`).
   if (t[1] === 'pr' && t[2] === 'review' && t.slice(3).some(esAprobar))
     return deny('gh pr review --approve está prohibido: nadie aprueba su propio trabajo')
-  if (t[1] === 'workflow' && t[2] === 'run') return deny('gh workflow run lo hace el dueño')
+  if (t[1] === 'workflow' && t[2] === 'run') return deny('gh workflow run lo hace una persona, no Claude Code')
   // Aprobar por `gh api` (`.../pulls/<n>/reviews` con event=APPROVE) cae acá: es escritura.
   if (t[1] === 'api') {
     // GraphQL va siempre por POST; una mutation escribe (`mergePullRequest`, reviews...).
@@ -393,13 +398,27 @@ function normalizarRutaGitBash(p) {
 
 // ── ssh ────────────────────────────────────────────────────────────────────
 function reglaSsh(seg) {
-  if (/^(ssh|scp|sftp|ssh-keyscan|ssh-copy-id)$/.test(sinPrefijos(tokens(seg))[0])) return deny('ssh/scp desde un agente está prohibido')
+  if (/^(ssh|scp|sftp|ssh-keyscan|ssh-copy-id)$/.test(sinPrefijos(tokens(seg))[0])) return deny('ssh/scp desde Claude Code está prohibido')
   return null
 }
 
 // ── el guard se protege a sí mismo ─────────────────────────────────────────
 const RUTAS_DEL_GUARD = /(\.claude[\\/](hooks|settings)|\.githooks|\.git[\\/]hooks)/i
-const SOLO_LECTURA = new Set(['cat', 'head', 'tail', 'less', 'more', 'type', 'get-content', 'gc', 'grep', 'rg', 'wc', 'ls', 'dir'])
+const SOLO_LECTURA = new Set(['cat', 'head', 'tail', 'less', 'more', 'type', 'get-content', 'gc', 'grep', 'rg', 'wc', 'ls', 'dir', 'select-string', 'sls', 'findstr'])
+
+// `sed -n '1,40p' <guard>` / `sed -n '/regla/p' <guard>` solo imprime. Se acepta únicamente esa
+// forma (rango o patrón + `p`, sin `-i`): un script de sed puede escribir (`w archivo`, `s///w`)
+// o correr comandos (`e`), y distinguirlo en general no vale la pena.
+const SED_IMPRIME = /^(([\d$]+|\/[^/]*\/)(,([\d$]+|\/[^/]*\/))?)?p$/
+
+function sedSoloImprime(t) {
+  const args = t.slice(1)
+  const flags = args.filter(a => a.startsWith('-'))
+  if (!flags.includes('-n') && !flags.includes('--quiet') && !flags.includes('--silent')) return false
+  if (!flags.every(a => /^(-n|-E|-r|--quiet|--silent)$/.test(a))) return false
+  const script = args.find(a => !a.startsWith('-'))
+  return !!script && SED_IMPRIME.test(script)
+}
 
 // Un comando de lectura con salida a archivo escribe igual: `cat /dev/null > guard.cjs`,
 // `git show HEAD~3:x --output=.claude/settings.json`. No cuentan `2>&1` ni `> /dev/null`.
@@ -412,7 +431,7 @@ function escribeArchivo(seg, t) {
 function reglaAutoproteccion(seg) {
   if (!RUTAS_DEL_GUARD.test(seg)) return null
   const t = tokens(seg)
-  if (escribeArchivo(seg, t)) return deny('un agente no modifica el guard ni los hooks de git')
+  if (escribeArchivo(seg, t)) return deny('desde Claude Code no se modifica el guard ni los hooks de git')
   // `GIT_PAGER=x git log <guard>`, `env GIT_EXTERNAL_DIFF=x git diff <guard>`,
   // `GIT_CONFIG_COUNT=1 …`: el entorno cambia qué corre git (pager, diff externo, config).
   // No ve lo seteado en un tramo anterior (`export X=…; git log`): ver docs/agentes/guard.md.
@@ -426,9 +445,10 @@ function reglaAutoproteccion(seg) {
   const configura = git.slice(0, i).some(a => a === '-c' || a.startsWith('--config-env'))
   const lee =
     SOLO_LECTURA.has(cmd) ||
+    (cmd === 'sed' && sedSoloImprime(t)) ||
     (cmd === 'git' && !configura && /^(diff|log|show|status|blame)$/.test(git[i] || '')) ||
     (cmd === 'node' && t[1] === '--test')
-  return lee ? null : deny('un agente no modifica el guard ni los hooks de git')
+  return lee ? null : deny('desde Claude Code no se modifica el guard ni los hooks de git')
 }
 
 // ── tools de archivo ───────────────────────────────────────────────────────
@@ -443,11 +463,11 @@ function reglaArchivo(input, ctx) {
   const fp = ti.file_path || ti.notebook_path
   if (!fp) return null
   const { abs, rel, nombre } = relativo(fp, input, ctx)
-  if (esArchivoEnv(nombre)) return deny(`un agente no lee ni escribe ${nombre}`)
+  if (esArchivoEnv(nombre)) return deny(`desde Claude Code no se lee ni escribe ${nombre}`)
   if (input.tool_name === 'Read') return null
   // Sin distinguir mayúsculas: en NTFS `.CLAUDE/Hooks/guard.cjs` es el mismo archivo.
   if (/^(\.claude\/(hooks\/|settings(\.local)?\.json$)|\.githooks\/)/i.test(rel) || abs.split(path.sep).join('/').toLowerCase().includes('/.git/hooks/'))
-    return deny(`un agente no edita ${rel}: es parte del guard`)
+    return deny(`desde Claude Code no se edita ${rel}: es parte del guard`)
   return null
 }
 
@@ -459,12 +479,11 @@ function reglaGrep(input) {
     .flatMap(b => String(b).split(/[{},\s]/))
     .map(nombreDeToken)
   const env = partes.find(esArchivoEnv)
-  return env ? deny(`un agente no busca dentro de ${env}`) : null
+  return env ? deny(`desde Claude Code no se busca dentro de ${env}`) : null
 }
 
 // ── entrada ────────────────────────────────────────────────────────────────
 function evaluar(input, ctx) {
-  if (!ctx || !ctx.esAgente) return null
   try {
     const tool = input && input.tool_name
     // Monitor también corre un comando de shell.
@@ -476,7 +495,7 @@ function evaluar(input, ctx) {
           reglaSecretos(seg) ||
           reglaAutoproteccion(seg) ||
           reglaDeploy(seg) ||
-          reglaServidor(seg) ||
+          reglaDocker(seg) ||
           reglaGit(seg, ctx) ||
           reglaGh(seg) ||
           reglaRm(seg, input, ctx) ||
@@ -511,9 +530,8 @@ function hooksPathReal(cwd) {
 }
 
 // Si el hook revienta fuera de `evaluar` (input raro, stdout roto...), Claude Code lo toma
-// como error no bloqueante y la acción pasa. En modo agente eso también es deny: exit 2.
+// como error no bloqueante y la acción pasa. Por eso sale con 2, que Claude Code toma como bloqueo.
 function fallaCerrado(e) {
-  if (!esAgente(process.env)) process.exit(0)
   process.stderr.write(`[guard app-planificacion] guard.cjs falló (${e && e.message}); se niega por precaución\n`)
   process.exit(2)
 }
@@ -529,16 +547,15 @@ function main() {
     try {
       input = JSON.parse(raw || '{}')
     } catch {
-      // Sin poder leer la acción no se sabe qué se aprueba: en modo agente, deny.
+      // Sin poder leer la acción no se sabe qué se aprueba: deny.
       input = {}
-      if (esAgente(process.env)) r = deny('guard.cjs no pudo leer el JSON del hook; se niega por precaución')
+      r = deny('guard.cjs no pudo leer el JSON del hook; se niega por precaución')
     }
     const projectDir = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd()
     const ctx = {
       projectDir,
       ramaActual: () => ramaActualReal(input.cwd || projectDir),
       hooksPath: () => hooksPathReal(input.cwd || projectDir),
-      esAgente: esAgente(process.env),
     }
     r = r || evaluar(input, ctx)
     if (r) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', ...r } }))
@@ -548,4 +565,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { evaluar, esAgente, esArchivoEnv, nombreDeComando, RAMA_BASE }
+module.exports = { evaluar, esArchivoEnv, nombreDeComando, RAMA_BASE }
