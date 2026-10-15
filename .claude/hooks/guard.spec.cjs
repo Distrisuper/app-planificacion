@@ -76,6 +76,10 @@ describe('secretos (.env*)', () => {
   test('permite .env-example', () => pasa(bash('cat .env-example')))
   test('permite .env.example', () => pasa(bash('cat .env.example')))
   test('permite .env.local.example', () => pasa(bash('cat .env.local.example')))
+  // En NTFS `.ENV.LOCAL` es el mismo archivo que `.env.local`.
+  test('bloquea cat .ENV.LOCAL (mayúsculas)', () => deny(bash('cat .ENV.LOCAL')))
+  test('bloquea Read de .ENV (mayúsculas)', () => deny(tool('Read', { file_path: '.ENV' })))
+  test('permite .ENV.EXAMPLE (mayúsculas)', () => pasa(bash('cat .ENV.EXAMPLE')))
   test('permite copiar la plantilla a otra plantilla', () => pasa(bash('cp .env-example .env.example')))
   test('permite env con comando', () => pasa(bash('env NODE_ENV=test npx vitest run')))
   test('permite leer una variable puntual', () => pasa(ps('echo $env:VITE_API_URL')))

@@ -106,10 +106,11 @@ function comandoEfectivo(t) {
 // incluido .env.test (va trackeado y hoy solo tiene valores públicos, pero la regla es por
 // nombre, no por contenido, así no se afloja el día que alguien le agregue algo). También
 // los globs `.env*` y los `agente*.env`.
+// Sin distinguir mayúsculas: en NTFS `.ENV.LOCAL` es el mismo archivo que `.env.local`.
 function esArchivoEnv(nombre) {
   if (/^agente.*\.env$/i.test(nombre)) return true
-  if (!/^\.env([.\-*?[].*)?$/.test(nombre)) return false
-  return !/[.-]example$/.test(nombre)
+  if (!/^\.env([.\-*?[].*)?$/i.test(nombre)) return false
+  return !/[.-]example$/i.test(nombre)
 }
 
 function nombreDeToken(tok) {
