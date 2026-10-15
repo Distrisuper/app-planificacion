@@ -122,11 +122,27 @@ function nombreDeToken(tok) {
 const VOLCADO = 'volcar variables de entorno expone tokens y claves de la sesión'
 const VOLCA_ENTORNO = /process\.env(?![\w.[])|Deno\.env(?!\.(get|has|set|delete)\b)(?!\w)/
 
+// Además de por token, se busca el nombre en el tramo entero: dentro de código
+// (`node -e "require('dotenv').config({path:'.env'})"`) el token no queda limpio. El `.env`
+// tiene que empezar después de un separador, así `process.env.X` o `import.meta.env.VITE_*`
+// no cuentan; `esArchivoEnv` decide si es real o plantilla.
+const NOMBRA_ENV = /(^|[\s'"`(=:\\/,])(\.env[\w.*?\-[\]]*|agente[\w.*?\-[\]]*\.env(?![\w.-]))/gi
+
+function envNombrado(texto) {
+  for (const m of String(texto).matchAll(NOMBRA_ENV)) if (esArchivoEnv(m[2])) return m[2]
+  return null
+}
+
+// Escapes del pre-push: son de la persona, en su terminal. Desde Claude Code no se setean en
+// ninguna forma (`X=1 git push`, `export X=1`, `$env:X = "1"`, `set X=1`). Nombrarlos en un
+// comando de solo lectura (`grep ALLOW_BASE_PUSH .githooks/pre-push.cjs`, `git log -S …`) sí.
+const ESCAPES_PRE_PUSH = /ALLOW_(BASE|MASTER)_PUSH/i
+
 function reglaSecretos(seg) {
-  const escape = /ALLOW_(BASE|MASTER)_PUSH/.exec(seg.replace(/['"`]/g, ''))
-  if (escape) return deny(`${escape[0]} es el escape del pre-push para una persona en su terminal, no desde Claude Code`)
+  const escape = ESCAPES_PRE_PUSH.exec(seg.replace(/['"`]/g, ''))
+  if (escape && !soloLee(seg)) return deny(`${escape[0]} es el escape del pre-push para una persona en su terminal, no desde Claude Code`)
   const t = tokens(seg)
-  const env = t.map(nombreDeToken).find(esArchivoEnv)
+  const env = t.map(nombreDeToken).find(esArchivoEnv) || envNombrado(seg)
   if (env) return deny(`el comando referencia ${env}; desde Claude Code no se leen ni escriben .env reales`)
   // `X=1 printenv` / `env printenv` vuelcan igual: lo de delante no cambia el comando.
   const c = sinPrefijos(t)
@@ -159,7 +175,16 @@ function evaluaCodigo(t) {
 // La app despliega en Vercel (y el ecosistema tiene deploys en Firebase Hosting, p. ej.
 // pagos-lupa.web.app). Desde la CLI cualquier `vercel` puede desplegar o tocar el proyecto
 // del team: se niega entero, `vc` incluido (es su alias).
+// `npm run deploy`, `pnpm deploy:prod`, `yarn run deploy-x` → nombre del script.
+function scriptDeNpm(t) {
+  const cmd = nombreDeComando(t[0])
+  if (!/^(npm|pnpm|yarn|bun)$/.test(cmd)) return null
+  return t[1] === 'run' || t[1] === 'run-script' ? t[2] || '' : t[1] || ''
+}
+
 function reglaDeploy(seg) {
+  const script = scriptDeNpm(sinPrefijos(tokens(seg)))
+  if (script && /^deploy/i.test(script)) return deny(`el script ${script} despliega; el deploy lo hace una persona`)
   const { cmd, args } = comandoEfectivo(tokens(seg))
   if (cmd === 'vercel' || cmd === 'vc') return deny('la CLI de Vercel no se usa desde Claude Code; el deploy lo hace una persona')
   // `deploy` y cualquier `hosting:*` (`hosting:disable` baja el sitio), en cualquier posición.
@@ -171,12 +196,17 @@ function reglaDeploy(seg) {
 // ── docker ─────────────────────────────────────────────────────────────────
 // Este front no usa docker. La regla es la misma que en los otros repos de distri (en
 // api-vendedores `docker-compose.yml` es producción) para que el guard se comporte igual en
-// los cuatro. Lo de solo lectura pasa (`docker ps`, `logs`, `inspect`, `--version`,
-// `docker compose ps`); lo que crea, para o borra contenedores o volúmenes, no.
+// los cuatro. Solo lectura, por lista blanca: `ps`, `logs`, `inspect`, `images`, `version`,
+// `info`, `--version`, `volume ls`, `network ls`, `container ls`, `compose ps/logs/config`.
+// Todo lo demás (`run`, `exec`, `build`, `cp`, `pull`, `up`, `down`, `rm`...) se niega.
 const DOCKER_OPCIONES_CON_VALOR = new Set(['-H', '--host', '-c', '--context', '--config', '-l', '--log-level'])
 const COMPOSE_OPCIONES_CON_VALOR = new Set(['-f', '--file', '-p', '--project-name', '--profile', '--env-file', '--project-directory', '--ansi', '--progress', '--parallel'])
-const COMPOSE_PROHIBIDOS = new Set(['up', 'down', 'rm', 'stop', 'kill'])
-const DOCKER_PROHIBIDOS = new Set(['run', 'rm', 'stop', 'kill'])
+const DOCKER_LECTURA = new Set(['ps', 'logs', 'inspect', 'images', 'version', 'info'])
+// `docker container ls`, `docker volume ls`, `docker network inspect x`: forma larga.
+const DOCKER_OBJETOS = new Set(['container', 'image', 'volume', 'network'])
+const DOCKER_OBJETO_LECTURA = new Set(['ls', 'list', 'ps', 'logs', 'inspect'])
+const COMPOSE_LECTURA = new Set(['ps', 'logs', 'config', 'ls', 'images', 'version', 'top'])
+const SOLO_VERSION = a => a.length === 1 && (a[0] === '--version' || a[0] === '-v')
 
 function saltearOpciones(t, conValor) {
   let i = 0
@@ -187,20 +217,19 @@ function saltearOpciones(t, conValor) {
 function reglaDocker(seg) {
   const { cmd, args } = comandoEfectivo(tokens(seg))
   if (cmd !== 'docker' && cmd !== 'docker-compose') return null
+  if (cmd === 'docker' && SOLO_VERSION(args)) return null
   let resto = cmd === 'docker' ? saltearOpciones(args, DOCKER_OPCIONES_CON_VALOR) : ['compose', ...args]
   const sub = resto[0]
   if (sub === 'compose') {
+    if (SOLO_VERSION(resto.slice(1))) return null
     const csub = saltearOpciones(resto.slice(1), COMPOSE_OPCIONES_CON_VALOR)[0]
-    if (COMPOSE_PROHIBIDOS.has(csub)) return deny(`docker compose ${csub} no se corre desde Claude Code; para verificar alcanza npm run check`)
-    return null
+    if (COMPOSE_LECTURA.has(csub)) return null
+    return deny(`docker compose ${csub || ''} no es de solo lectura; desde Claude Code docker es solo lectura (ps, logs, config). Para verificar alcanza npm run check`)
   }
   resto = resto.slice(1)
-  if (DOCKER_PROHIBIDOS.has(sub)) return deny(`docker ${sub} no se corre desde Claude Code; para verificar alcanza npm run check`)
-  if (sub === 'container' && (DOCKER_PROHIBIDOS.has(resto[0]) || resto[0] === 'prune'))
-    return deny(`docker container ${resto[0]} no se corre desde Claude Code`)
-  if (sub === 'volume' && (resto[0] === 'rm' || resto[0] === 'prune')) return deny(`docker volume ${resto[0]} borra datos`)
-  if (sub === 'system' && resto[0] === 'prune') return deny('docker system prune borra contenedores, imágenes y volúmenes')
-  return null
+  if (DOCKER_LECTURA.has(sub)) return null
+  if (DOCKER_OBJETOS.has(sub) && DOCKER_OBJETO_LECTURA.has(saltearOpciones(resto, new Set())[0])) return null
+  return deny(`docker ${sub || ''} no es de solo lectura; desde Claude Code docker es solo lectura (ps, logs, inspect). Para verificar alcanza npm run check`)
 }
 
 // ── git ────────────────────────────────────────────────────────────────────
@@ -214,7 +243,28 @@ function indiceSubcomandoGit(t) {
   return i
 }
 
-function reglaGit(seg, ctx) {
+// Directorios sobre los que va a operar git: el cwd movido por cada `-C`, y `--work-tree` /
+// `--git-dir` si aparecen.
+function directoriosGit(t, cwd) {
+  let dir = cwd
+  const dirs = []
+  const i = indiceSubcomandoGit(t)
+  for (let k = 0; k < i; k++) {
+    const a = t[k]
+    if (a === '-C') dir = path.resolve(dir, normalizarRutaGitBash(t[++k] || ''))
+    else if (a === '--work-tree' || a === '--git-dir') dirs.push(path.resolve(dir, normalizarRutaGitBash(t[++k] || '')))
+    else if (/^--(work-tree|git-dir)=/.test(a)) dirs.push(path.resolve(dir, normalizarRutaGitBash(a.split('=').slice(1).join('='))))
+    else if (GIT_OPCIONES_CON_VALOR.has(a)) k++
+  }
+  return [dir, ...dirs]
+}
+
+function dentroDe(raiz, abs) {
+  const rel = path.relative(path.resolve(raiz), abs)
+  return !rel.startsWith('..') && !path.isAbsolute(rel)
+}
+
+function reglaGit(seg, input, ctx) {
   // `git.exe`, `C:\...\git.exe`, `X=1 git`, `"git"` también: ahora que el push de rama se
   // permite, el pre-push solo cubre master y esta regla es la que frena force/--no-verify.
   const { cmd, args } = comandoEfectivo(tokens(seg))
@@ -234,9 +284,17 @@ function reglaGit(seg, ctx) {
     if (r) return r
   }
   if (sub === 'commit' && ramaActual(ctx) === RAMA_BASE) return deny(`nunca se commitea en ${RAMA_BASE}; creá una rama`)
-  if (sub === 'reset' && resto.includes('--hard')) return deny('git reset --hard descarta trabajo')
-  if ((sub === 'checkout' || sub === 'restore') && resto.includes('.')) return deny(`git ${sub} . descarta cambios sin commitear`)
-  if (sub === 'clean' && resto.some(a => /^-[a-zA-Z]*f/.test(a))) return deny('git clean -f borra archivos no versionados')
+  // Descartar trabajo: dentro del worktree es decisión de quien trabaja ahí; fuera (otro
+  // checkout, `-C ..`, `--work-tree`, `GIT_DIR=`) puede borrar trabajo ajeno.
+  const descarta =
+    (sub === 'reset' && resto.includes('--hard')) ||
+    (sub === 'clean' && resto.some(a => /^-[a-zA-Z]*f/.test(a) || a === '--force')) ||
+    ((sub === 'checkout' || sub === 'restore') && resto.includes('.'))
+  if (descarta) {
+    const cwd = (input && input.cwd) || ctx.projectDir
+    const fuera = /(^|\s)GIT_(DIR|WORK_TREE)=/.test(seg) || directoriosGit(t, cwd).some(d => !dentroDe(ctx.projectDir, d))
+    if (fuera) return deny(`git ${sub} fuera del worktree descarta trabajo ajeno`)
+  }
   if (sub === 'branch' && resto.some(a => a === '-D' || a === '-d') && resto.includes(RAMA_BASE))
     return deny(`borrar ${RAMA_BASE} está prohibido`)
   return null
@@ -404,7 +462,7 @@ function reglaSsh(seg) {
 
 // ── el guard se protege a sí mismo ─────────────────────────────────────────
 const RUTAS_DEL_GUARD = /(\.claude[\\/](hooks|settings)|\.githooks|\.git[\\/]hooks)/i
-const SOLO_LECTURA = new Set(['cat', 'head', 'tail', 'less', 'more', 'type', 'get-content', 'gc', 'grep', 'rg', 'wc', 'ls', 'dir', 'select-string', 'sls', 'findstr'])
+const SOLO_LECTURA = new Set(['cat', 'head', 'tail', 'less', 'more', 'type', 'get-content', 'gc', 'grep', 'rg', 'wc', 'nl', 'ls', 'dir', 'stat', 'file', 'select-string', 'sls', 'findstr'])
 
 // `sed -n '1,40p' <guard>` / `sed -n '/regla/p' <guard>` solo imprime. Se acepta únicamente esa
 // forma (rango o patrón + `p`, sin `-i`): un script de sed puede escribir (`w archivo`, `s///w`)
@@ -428,6 +486,34 @@ function escribeArchivo(seg, t) {
   return t.some(a => /^(tee|tee-object|out-file|set-content|add-content|--output(=.*)?)$/i.test(a))
 }
 
+// true si el comando del tramo es un lector: `cat`, `grep`, `rg`..., `sed -n 'Np'`, `node
+// --test` o `git diff/log/show/grep...`. `git -C . diff` también lee: se saltean las opciones
+// globales, salvo `-c` / `--config-env`, que pueden cambiar pager, alias o diff externo y
+// hacer que escriba. `git grep -O<cmd>` abre los archivos con un comando: no lee.
+function esComandoDeLectura(t) {
+  const cmd = nombreDeComando(t[0])
+  const git = t.slice(1)
+  const i = indiceSubcomandoGit(git)
+  const configura = git.slice(0, i).some(a => a === '-c' || a.startsWith('--config-env'))
+  return (
+    SOLO_LECTURA.has(cmd) ||
+    (cmd === 'sed' && sedSoloImprime(t)) ||
+    (cmd === 'git' && !configura && /^(diff|log|show|status|blame|grep|ls-files)$/.test(git[i] || '') && !git.slice(i + 1).some(a => /^(-O|--open-files-in-pager)/.test(a))) ||
+    (cmd === 'node' && t[1] === '--test')
+  )
+}
+
+// true si el tramo entero solo lee: un lector, sin salida a archivo, sin nada delante que
+// cambie qué corre o con qué entorno (`X=1 grep`, `env …`) y sin sustitución de comandos
+// (`$(…)`, backticks, `<(…)`), que correría otra cosa adentro.
+function soloLee(seg) {
+  if (/\$\(|`|[<>]\(/.test(seg)) return false
+  const t = tokens(seg)
+  if (escribeArchivo(seg, t)) return false
+  if (sinPrefijos(t).length < t.length) return false
+  return esComandoDeLectura(t)
+}
+
 function reglaAutoproteccion(seg) {
   if (!RUTAS_DEL_GUARD.test(seg)) return null
   const t = tokens(seg)
@@ -437,18 +523,7 @@ function reglaAutoproteccion(seg) {
   // No ve lo seteado en un tramo anterior (`export X=…; git log`): ver docs/agentes/guard.md.
   if (sinPrefijos(t).length < t.length)
     return deny('con variables de entorno o envoltorios delante, leer el guard puede correr un pager o diff externo')
-  const cmd = (t[0] || '').toLowerCase()
-  // `git -C . diff <guard>` también lee: se saltean las opciones globales. Salvo `-c` /
-  // `--config-env`, que pueden cambiar pager, alias o diff externo y hacer que escriba.
-  const git = t.slice(1)
-  const i = indiceSubcomandoGit(git)
-  const configura = git.slice(0, i).some(a => a === '-c' || a.startsWith('--config-env'))
-  const lee =
-    SOLO_LECTURA.has(cmd) ||
-    (cmd === 'sed' && sedSoloImprime(t)) ||
-    (cmd === 'git' && !configura && /^(diff|log|show|status|blame)$/.test(git[i] || '')) ||
-    (cmd === 'node' && t[1] === '--test')
-  return lee ? null : deny('desde Claude Code no se modifica el guard ni los hooks de git')
+  return esComandoDeLectura(t) ? null : deny('desde Claude Code no se modifica el guard ni los hooks de git')
 }
 
 // ── tools de archivo ───────────────────────────────────────────────────────
@@ -466,15 +541,17 @@ function reglaArchivo(input, ctx) {
   if (esArchivoEnv(nombre)) return deny(`desde Claude Code no se lee ni escribe ${nombre}`)
   if (input.tool_name === 'Read') return null
   // Sin distinguir mayúsculas: en NTFS `.CLAUDE/Hooks/guard.cjs` es el mismo archivo.
-  if (/^(\.claude\/(hooks\/|settings(\.local)?\.json$)|\.githooks\/)/i.test(rel) || abs.split(path.sep).join('/').toLowerCase().includes('/.git/hooks/'))
+  if (/^(\.claude\/(hooks\/|settings(\.[\w-]+)?\.json$)|\.githooks\/)/i.test(rel) || abs.split(path.sep).join('/').toLowerCase().includes('/.git/hooks/'))
     return deny(`desde Claude Code no se edita ${rel}: es parte del guard`)
   return null
 }
 
+// Grep (`path`, `glob`) y Glob (`pattern`, `path`): nombrar un .env real es leerlo o listarlo.
+// En Grep, `pattern` es la regex de contenido, no una ruta: no cuenta.
 function reglaGrep(input) {
   const ti = input.tool_input || {}
   // `glob` puede ser una lista con llaves: "*.{ts,env}" o "{src/**,.env.test}".
-  const partes = [ti.path, ti.glob]
+  const partes = [ti.path, ti.glob, input.tool_name === 'Glob' ? ti.pattern : null]
     .filter(Boolean)
     .flatMap(b => String(b).split(/[{},\s]/))
     .map(nombreDeToken)
@@ -496,7 +573,7 @@ function evaluar(input, ctx) {
           reglaAutoproteccion(seg) ||
           reglaDeploy(seg) ||
           reglaDocker(seg) ||
-          reglaGit(seg, ctx) ||
+          reglaGit(seg, input, ctx) ||
           reglaGh(seg) ||
           reglaRm(seg, input, ctx) ||
           reglaSsh(seg)
@@ -506,7 +583,7 @@ function evaluar(input, ctx) {
     }
     if (tool === 'Read' || tool === 'Edit' || tool === 'Write' || tool === 'MultiEdit' || tool === 'NotebookEdit')
       return reglaArchivo(input, ctx)
-    if (tool === 'Grep') return reglaGrep(input)
+    if (tool === 'Grep' || tool === 'Glob') return reglaGrep(input)
     return null
   } catch (e) {
     return deny(`guard.cjs falló (${e && e.message}); se niega por precaución`)

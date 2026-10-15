@@ -97,7 +97,7 @@
         ]
       },
       {
-        "matcher": "Read|Grep|Edit|Write|MultiEdit|NotebookEdit",
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob",
         "hooks": [
           {
             "type": "command",

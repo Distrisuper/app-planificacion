@@ -8,8 +8,8 @@ Si una regla molesta, se discute acá y se cambia junto con su test; no se desac
 ## Cómo funciona
 
 - **`.claude/hooks/guard.cjs`** corre como hook `PreToolUse` de Claude Code (registrado en
-  `.claude/settings.json`) sobre `Bash`, `PowerShell`, `Monitor`, `Read`, `Grep`, `Edit`,
-  `Write`, `MultiEdit` y `NotebookEdit`. Si la acción está prohibida responde `deny` con la
+  `.claude/settings.json`) sobre `Bash`, `PowerShell`, `Monitor`, `Edit`, `Write`,
+  `MultiEdit`, `NotebookEdit`, `Read`, `Grep` y `Glob`. Si la acción está prohibida responde `deny` con la
   razón; si no, no dice nada y aplica el permiso normal.
 - **Aplica siempre.** El hook solo lo invoca Claude Code, así que no hay un "modo persona": lo
   que niega, una persona lo hace desde su propia terminal. No depende de ninguna variable de
@@ -26,25 +26,27 @@ Si una regla molesta, se discute acá y se cambia junto con su test; no se desac
   niega todo `git push` desde Claude Code.
 - **`permissions.deny` de `settings.json`** es una red por si el hook no corre (script
   faltante, timeout): `.env` reales, credenciales, `gh pr merge` / `ready` / `review --approve`,
-  `git push --no-verify` / `--force` / `-f` / `--mirror`, `vercel`, `firebase deploy`, `ssh`, `scp`.
+  `gh auth token`, `git push --no-verify` / `--force` / `-f` / `--force-with-lease` / `--mirror`,
+  `vercel` / `vc` / `npx vercel`, `firebase deploy`, `ssh`, `scp`. Las rutas van con `/` delante
+  (relativas a la raíz del proyecto, no al cwd).
 - Son `.cjs` porque el `package.json` es `"type": "module"`.
 
 ## Reglas
 
 | Regla | Porqué |
 |---|---|
-| Leer, buscar o escribir `.env` reales por tool o por terminal (`cat`, `Get-Content`, `git show HEAD:.env.test`, `--env-file`, globs `.env*`): `.env`, `.env.local`, `.env.bak`, `.env-prod`, `.env.production`, `.env.tunnel`, `agente*.env`… **incluido `.env.test`**. Las plantillas (`.env-example`, `.env.example`, `.env.local.example`) se leen y editan. | Los `.env` locales tienen URLs y claves reales. `.env.test` hoy solo tiene valores públicos, pero la regla es por nombre y no por contenido, para que no se afloje el día que alguien le agregue algo. |
+| Leer, buscar o escribir `.env` reales por tool o por terminal (`cat`, `Get-Content`, `git show HEAD:.env.test`, `--env-file`, `node -e "…('.env')"`, globs `.env*`; por tool `Read`, `Grep`, `Glob`): `.env`, `.env.local`, `.env.bak`, `.env-prod`, `.env.production`, `.env.tunnel`, `agente*.env`… **incluido `.env.test`**. Las plantillas (`.env-example`, `.env.example`, `.env.local.example`) se leen y editan. | Los `.env` locales tienen URLs y claves reales. `.env.test` hoy solo tiene valores públicos, pero la regla es por nombre y no por contenido, para que no se afloje el día que alguien le agregue algo. |
 | `env` / `printenv` / `set` / `export` solos (también con asignaciones al frente: `X=1 printenv`), `export -p`, `declare -x` / `-p`, `Get-ChildItem env:`, `process.env` entero o `Deno.env.toObject()` en código que se evalúa (`node -p process.env`, `bun -e`, `deno eval`) | Vuelcan tokens y claves de la sesión. Buscar el texto (`rg -n process.env src`) o leer una variable puntual sí se permite. |
-| `vercel` y `vc` (su alias), directos o por `npx` / `npm exec` / `pnpm dlx` / `bunx` | Cualquier comando de la CLI puede desplegar o tocar el proyecto del team. El deploy lo hace una persona. |
+| `vercel` y `vc` (su alias), directos o por `npx` / `npm exec` / `pnpm dlx` / `bunx`; scripts `npm run deploy*` | Cualquier comando de la CLI puede desplegar o tocar el proyecto del team. El deploy lo hace una persona. |
 | `firebase … deploy` y cualquier `firebase hosting:*` (`hosting:channel:deploy`, `hosting:disable`...) | Hay deploys del ecosistema en Firebase Hosting; `hosting:disable` baja el sitio. |
-| `docker compose up` / `down` / `rm` / `stop` / `kill` (también `docker-compose`), `docker run` / `rm` / `stop` / `kill` (y `docker container …`), `docker volume rm` / `prune`, `docker system prune` | Este front no usa docker; la regla es la común a los cuatro repos (en api-vendedores `docker-compose.yml` es producción). Lo de solo lectura pasa: `docker ps`, `logs`, `inspect`, `--version`, `docker compose ps` / `logs`. |
+| docker salvo lectura: todo subcomando fuera de la lista blanca (`run`, `exec`, `build`, `cp`, `pull`, `push`, `compose up` / `down` / `exec` / `build` / `pull`...) | Este front no usa docker; la regla es la común a los cuatro repos (en api-vendedores `docker-compose.yml` es producción). Pasa solo la lista blanca de lectura: `docker ps`, `logs`, `inspect`, `images`, `version`, `info`, `--version`, `container` / `image` / `volume` / `network ls`, `docker compose ps` / `logs` / `config`. |
 | `git push` a `master` (o parado en `master`; también `heads/master`, `refs/heads/master` y con comillas), con `--force` / `-f` / `--force-with-lease` / refspec `+rama`, `--no-verify`, `--delete` / `-d` / `:rama`, `--all` / `--branches` / `--mirror` / `--tags` / `--prune`, o sin el pre-push activo | Desde Claude Code se pushea **solo la rama de la tarea**: `git push [-u] origin <rama>`. `master` despliega en Vercel. Las opciones largas se comparan por prefijo (`--no-v`, `--for`, `--mi`...), porque git acepta abreviaturas. Vale para `git.exe`, rutas, `X=1 git`, `& git` de PowerShell, `env git` y `git --work-tree . push`. |
 | `gh pr create` sin `--draft`, `gh pr ready`, `gh pr merge`, `gh pr review --approve` / `-a`, `gh workflow run`, `gh api` de escritura (incluye `-fcampo=valor` pegado y aprobar por `.../pulls/<n>/reviews`), `gh api graphql` con `mutation` | El PR se abre en draft; pasarlo a ready y mergear lo decide una persona. Nadie aprueba su propio trabajo. Vale para `gh.exe`, rutas, `X=1 gh`, `& gh` / `& "C:\…\gh.exe"` / `. gh` de PowerShell, `x & gh`, `(gh …)`, `env` / `command` / `time` / `nohup` / `exec gh`, y con `-R` / `--repo` en cualquier lugar (`gh -R o/r pr merge 1`). |
-| `core.hooksPath`, `ALLOW_BASE_PUSH` / `ALLOW_MASTER_PUSH` en cualquier comando | Apagarían el pre-push. El escape es para una persona en su terminal. |
-| `git commit` en `master`, `reset --hard`, `checkout .` / `restore .`, `clean -f`, `branch -D master` | Descartan trabajo o ensucian la base. Se niegan siempre, también dentro del propio worktree (igual que en api-vendedores). |
+| `core.hooksPath`; **setear** `ALLOW_BASE_PUSH` / `ALLOW_MASTER_PUSH` (`X=1 …`, `export`, `$env:`, `set`) | Apagarían el pre-push. El escape es para una persona en su terminal. Nombrarlos en un comando de solo lectura (`grep`, `rg`, `cat`, `git grep`, `git log -S`), sin redirección a archivo ni sustitución de comandos, sí pasa. |
+| `git commit` en `master`, `branch -D master`; `reset --hard`, `checkout .` / `restore .`, `clean -f` **fuera** del worktree (`-C ..`, `--work-tree`, `--git-dir`, `GIT_DIR=`, cwd fuera) | Ensucian la base o descartan trabajo ajeno. Dentro del propio worktree, descartar es decisión de quien trabaja ahí y pasa (igual en los cuatro repos). |
 | `rm -r` fuera del repo, de la raíz o de `src`, `docs`, `.git`, `.claude`, `.githooks`, `e2e`, `public`, `scripts`, `Prototipo` | Los worktrees de otras tareas viven al lado (`../`). |
-| `ssh` / `scp` / `sftp` | Ningún flujo de este front los necesita. |
-| Editar `.claude/hooks/`, `.claude/settings*.json`, `.githooks/`, `.git/hooks/` (por tool, sin distinguir mayúsculas, o por terminal, incluido un comando de lectura con `>`, `>>`, `tee`, `Out-File`, `Set-Content` o `--output`) | Que Claude Code no pueda apagar su propio guard. **Leerlos sí**: `Read`, `Grep`, `cat`, `head`, `tail`, `grep`, `rg`, `Select-String`, `sed -n '<rango>p'`, `git diff/log/show/blame`, y correr sus tests (`npm run check:hooks`). Cambiarlos lo hace una persona. |
+| `ssh` / `scp` / `sftp` / `ssh-keyscan` / `ssh-copy-id` | Ningún flujo de este front los necesita. |
+| Editar `.claude/hooks/`, `.claude/settings*.json`, `.githooks/`, `.git/hooks/` (por tool, sin distinguir mayúsculas, o por terminal, incluido un comando de lectura con `>`, `>>`, `tee`, `Out-File`, `Set-Content` o `--output`) | Que Claude Code no pueda apagar su propio guard. **Leerlos sí**: `Read`, `Grep`, `cat`, `head`, `tail`, `grep`, `rg`, `Select-String`, `sed -n '<rango>p'`, `git diff/log/show/blame/grep`, y correr sus tests (`npm run check:hooks`). Cambiarlos lo hace una persona. |
 
 Los servidores de desarrollo (`npm run dev`, `vite`, `playwright test`) **no** se bloquean, pero
 para verificar una tarea no hacen falta: la verificación es `npm run check`.

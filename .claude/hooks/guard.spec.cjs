@@ -20,6 +20,11 @@ const tool = (tool_name, tool_input) => evaluar({ tool_name, tool_input, cwd: PR
 
 const deny = r => assert.equal(r && r.permissionDecision, 'deny', JSON.stringify(r))
 const pasa = r => assert.equal(r, null, JSON.stringify(r))
+// `denyPor` además mira el motivo: que niegue la regla que corresponde y no otra de rebote.
+const denyPor = (r, motivo) => {
+  deny(r)
+  assert.match(r.permissionDecisionReason, motivo)
+}
 
 describe('aplica siempre, sin PAPERCLIP_* ni ningún otro modo', () => {
   test('el módulo ya no exporta esAgente', () => assert.equal(guard.esAgente, undefined))
@@ -51,6 +56,21 @@ describe('secretos (.env*)', () => {
   test('bloquea ALLOW_MASTER_PUSH', () => deny(bash('ALLOW_MASTER_PUSH=1 git push origin master')))
   test('bloquea ALLOW_BASE_PUSH', () => deny(bash('ALLOW_BASE_PUSH=1 git push origin master')))
   test('bloquea $env:ALLOW_BASE_PUSH (PowerShell)', () => deny(ps('$env:ALLOW_BASE_PUSH=1; git push origin master')))
+  test('bloquea export ALLOW_BASE_PUSH', () => deny(bash('export ALLOW_BASE_PUSH=1')))
+  test('bloquea set ALLOW_BASE_PUSH (cmd)', () => deny(ps('set ALLOW_BASE_PUSH=1')))
+  test('bloquea ALLOW_BASE_PUSH=1 delante de un grep', () => deny(bash('ALLOW_BASE_PUSH=1 grep x .githooks/pre-push.cjs')))
+  test('bloquea grep ALLOW_BASE_PUSH con salida a archivo', () => deny(bash('grep ALLOW_BASE_PUSH .githooks/pre-push.cjs > out.txt')))
+  test('bloquea grep ALLOW_BASE_PUSH con sustitución de comandos', () => deny(bash('grep ALLOW_BASE_PUSH $(ALLOW_BASE_PUSH=1 git push origin master)')))
+  test('bloquea echo ALLOW_BASE_PUSH', () => deny(bash('echo ALLOW_BASE_PUSH')))
+  test('bloquea git grep -O con ALLOW_BASE_PUSH', () => deny(bash('git grep -Ovim ALLOW_BASE_PUSH')))
+  test('permite grep ALLOW_BASE_PUSH', () => pasa(bash('grep ALLOW_BASE_PUSH .githooks/pre-push.cjs')))
+  for (const c of ['grep -rn ALLOW_BASE_PUSH .', 'rg ALLOW_MASTER_PUSH', 'cat .githooks/pre-push.cjs | grep -n ALLOW_BASE_PUSH', 'git grep -n ALLOW_BASE_PUSH', 'git log -S ALLOW_BASE_PUSH --oneline'])
+    test(`permite ${c}`, () => pasa(bash(c)))
+  test('permite Select-String ALLOW_BASE_PUSH (PowerShell)', () => pasa(ps('Select-String -Path .githooks\pre-push.cjs -Pattern ALLOW_BASE_PUSH')))
+  test('bloquea node -e que nombra .env', () => deny(bash("node -e \"require('dotenv').config({path:'.env'})\"")))
+  test('bloquea node -e que lee .env.test', () => deny(bash("node -e \"require('fs').readFileSync('.env.test')\"")))
+  test('permite node -e que nombra .env.example', () => pasa(bash("node -e \"require('fs').readFileSync('.env.example')\"")))
+  test('permite import.meta.env en un grep', () => pasa(bash('grep -rn "import.meta.env.VITE_API_URL" src')))
   for (const f of ['.env.bak', '.env-prod', '.env-staging', '.env.tunnel', '.env.production', 'agente.env', 'agente-local.env'])
     test(`bloquea cat ${f}`, () => deny(bash(`cat ${f}`)))
   test('permite .env-example', () => pasa(bash('cat .env-example')))
@@ -84,6 +104,11 @@ describe('tools de archivo', () => {
   test('bloquea editar el guard', () => deny(tool('Edit', { file_path: '.claude/hooks/guard.cjs' })))
   test('bloquea editar settings.json', () => deny(tool('Write', { file_path: '.claude/settings.json' })))
   test('bloquea editar settings.local.json', () => deny(tool('Edit', { file_path: '.claude/settings.local.json' })))
+  test('bloquea escribir settings.foo.json', () => deny(tool('Write', { file_path: '.claude/settings.foo.json' })))
+  test('bloquea Glob de .env*', () => deny(tool('Glob', { pattern: '**/.env*' })))
+  test('bloquea Glob de .env.test', () => deny(tool('Glob', { pattern: '.env.test' })))
+  test('permite Glob de .env.example', () => pasa(tool('Glob', { pattern: '.env.example' })))
+  test('permite Glob de src', () => pasa(tool('Glob', { pattern: 'src/**/*.ts' })))
   test('bloquea editar .githooks', () => deny(tool('MultiEdit', { file_path: '.githooks/pre-push.cjs' })))
   test('bloquea editar .git/hooks', () => deny(tool('Write', { file_path: path.join(PROJECT, '.git', 'hooks', 'pre-push') })))
   test('permite leer el guard', () => pasa(tool('Read', { file_path: '.claude/hooks/guard.cjs' })))
@@ -105,6 +130,8 @@ describe('deploy', () => {
   test('bloquea npx firebase-tools deploy', () => deny(bash('npx firebase-tools deploy')))
   test('bloquea firebase hosting:channel:deploy', () => deny(bash('firebase hosting:channel:deploy pr-1')))
   test('permite firebase --version', () => pasa(bash('firebase --version')))
+  for (const c of ['npm run deploy', 'npm run deploy:prod', 'pnpm deploy', 'yarn run deploy-staging', 'X=1 npm run deploy'])
+    test(`bloquea ${c}`, () => denyPor(bash(c), /despliega/))
   test('permite leer vercel.json', () => pasa(bash('cat vercel.json')))
 })
 
@@ -143,6 +170,14 @@ describe('docker', () => {
     'docker compose logs api',
     'docker-compose ps',
     'docker images',
+    'docker info',
+    'docker volume ls',
+    'docker network ls',
+    'docker container ls -a',
+    'docker image ls',
+    'docker compose config',
+    'docker compose version',
+    'docker-compose --version',
   ])
     test(`permite ${c} (solo lectura)`, () => pasa(bash(c)))
   for (const c of [
@@ -165,8 +200,23 @@ describe('docker', () => {
     'docker system prune -af',
     'docker --context prod compose up -d',
     'npx docker-compose up',
+    'docker',
+    'docker exec -it api sh',
+    'docker build -t x .',
+    'docker cp api:/x ./x',
+    'docker pull mysql:8',
+    'docker push x',
+    'docker login',
+    'docker tag a b',
+    'docker volume create datos',
+    'docker network create red',
+    'docker compose exec app sh',
+    'docker compose build',
+    'docker compose pull',
+    'docker compose -f docker-compose.local.yml exec app sh',
+    'docker-compose build',
   ])
-    test(`bloquea ${c}`, () => deny(bash(c)))
+    test(`bloquea ${c}`, () => denyPor(bash(c), /docker/))
   test('bloquea docker compose up en PowerShell', () => deny(ps('docker.exe compose up -d')))
 })
 
@@ -217,10 +267,6 @@ describe('git', () => {
   test('bloquea commit en master', () => deny(bash('git commit -m x', 'master')))
   test('bloquea core.hooksPath', () => deny(bash('git config core.hooksPath /dev/null')))
   test('bloquea git -c core.hooksPath=', () => deny(bash('git -c core.hooksPath= commit -m x')))
-  test('bloquea reset --hard', () => deny(bash('git reset --hard HEAD~1')))
-  test('bloquea checkout .', () => deny(bash('git checkout -- .')))
-  test('bloquea restore .', () => deny(bash('git restore .')))
-  test('bloquea clean -f', () => deny(bash('git clean -fd')))
   test('bloquea branch -D master', () => deny(bash('git branch -D master')))
   test('permite leer core.hooksPath', () => pasa(bash('git config --get core.hooksPath')))
   test('permite commit en rama', () => pasa(bash('git commit -m x')))
@@ -237,6 +283,26 @@ describe('git', () => {
         },
       ),
     ))
+})
+
+// Descartar trabajo dentro del worktree es decisión de quien trabaja ahí; fuera, no.
+describe('git: descartar trabajo solo dentro del worktree', () => {
+  const enCwd = (command, cwd) => evaluar({ tool_name: 'Bash', tool_input: { command }, cwd }, ctx())
+  for (const c of ['git reset --hard HEAD~1', 'git reset --hard', 'git clean -fd', 'git checkout .', 'git checkout -- .', 'git restore .', 'git -C src reset --hard'])
+    test(`permite ${c} en el worktree`, () => pasa(bash(c)))
+  for (const c of [
+    'git -C .. reset --hard',
+    'git -C ../otro-repo clean -fd',
+    'git -C /tmp/otro reset --hard HEAD',
+    'git --work-tree ../otro checkout .',
+    'git --work-tree=.. reset --hard',
+    'git --git-dir=../otro/.git reset --hard',
+    'GIT_DIR=../otro/.git git reset --hard',
+    'git -C ../otro restore .',
+  ])
+    test(`bloquea ${c}`, () => denyPor(bash(c), /fuera del worktree/))
+  test('bloquea reset --hard con cwd fuera del worktree', () => denyPor(enCwd('git reset --hard', path.resolve(PROJECT, '..')), /fuera del worktree/))
+  test('permite reset --hard con cwd en una subcarpeta', () => pasa(enCwd('git reset --hard', path.join(PROJECT, 'src'))))
 })
 
 describe('gh', () => {
@@ -266,6 +332,8 @@ describe('gh', () => {
   test('bloquea gh api con -f', () => deny(bash('gh api repos/o/r/merges -f base=master')))
   test('permite gh pr view', () => pasa(bash('gh pr view 12')))
   test('permite gh api GET', () => pasa(bash('gh api repos/o/r/pulls')))
+  test('bloquea gh workflow run', () => denyPor(bash('gh workflow run deploy.yml'), /workflow run/))
+  test('permite gh workflow list', () => pasa(bash('gh workflow list')))
 })
 
 describe('rm y ssh', () => {
@@ -274,6 +342,7 @@ describe('rm y ssh', () => {
   test('bloquea rm -rf .', () => deny(bash('rm -rf .')))
   test('bloquea rm -rf src', () => deny(bash('rm -rf src')))
   test('bloquea rm -rf .git', () => deny(bash('rm -rf .git')))
+  test('bloquea rm -rf .github', () => deny(bash('rm -rf .github')))
   test('permite rm -rf dist', () => pasa(bash('rm -rf dist')))
   test('permite rm -rf node_modules', () => pasa(bash('rm -rf node_modules')))
   test('bloquea ssh', () => deny(bash('ssh user@host')))
@@ -443,11 +512,6 @@ describe('hallazgos MAT-43', () => {
 })
 
 // Casos de borde de la tercera revisión (MAT-49). El id va en el nombre.
-// `denyPor` además mira el motivo: que niegue la regla que corresponde y no otra de rebote.
-const denyPor = (r, motivo) => {
-  deny(r)
-  assert.match(r.permissionDecisionReason, motivo)
-}
 const GUARD = '.claude/hooks/guard.cjs'
 
 describe('hallazgos MAT-49', () => {
@@ -505,10 +569,39 @@ describe('settings.json', () => {
       assert.ok(ask.includes(r), r)
   })
   test('sin restos de Paperclip', () => assert.doesNotMatch(JSON.stringify(settings), /paperclip|agente:|__agente/i))
-  test('el guard cubre los tools de archivo', () => {
-    const pre = settings.hooks.PreToolUse
-    for (const t of ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'])
-      assert.ok(pre.some(h => h.matcher.split('|').includes(t)), t)
+  test('registra el hook para Bash, PowerShell, Monitor y las tools de archivos', () => {
+    const matchers = settings.hooks.PreToolUse.map(h => h.matcher)
+    assert.ok(matchers.includes('Bash|PowerShell|Monitor'))
+    assert.ok(matchers.includes('Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob'))
+  })
+  // El mínimo común de los 4 repos de distri (además de lo propio de cada uno).
+  test('deny tiene el mínimo común', () => {
+    const d = settings.permissions.deny
+    for (const r of [
+      'Bash(git push --force:*)',
+      'Bash(git push -f:*)',
+      'Bash(git push --force-with-lease:*)',
+      'Bash(git push --no-verify:*)',
+      'Bash(git push --mirror:*)',
+      'Bash(gh pr merge:*)',
+      'Bash(gh pr ready:*)',
+      'Bash(gh pr review --approve:*)',
+      'Bash(gh pr review -a:*)',
+      'Bash(gh auth token:*)',
+      'Bash(vercel:*)',
+      'Bash(vc:*)',
+      'Bash(npx vercel:*)',
+      'Bash(firebase deploy:*)',
+      'Bash(npx firebase-tools deploy:*)',
+      'Bash(ssh:*)',
+      'Bash(scp:*)',
+    ])
+      assert.ok(d.includes(r), r)
+  })
+  // Sin `/` la ruta es relativa al cwd y se pierde con un `cd`; con `/`, a la raíz del proyecto.
+  test('las reglas de ruta de deny y ask van con prefijo / (o ~/)', () => {
+    const p = settings.permissions
+    for (const r of [...p.deny, ...p.ask].filter(r => /^(Read|Edit|Write)\(/.test(r))) assert.match(r, /^\w+\((\/|~\/)/, r)
   })
 })
 
