@@ -110,10 +110,14 @@ export default function AnaliticaVendedorPage() {
     const hasta = params.get('hasta') ?? ''
     // El rango vive en la URL: así "Volver a la analítica" lo arrastra y el link se
     // puede compartir. `replace` para no llenar el historial con cada fecha tocada.
-    const validezParam = params.get('validez')
-    const validez: FiltroValidez | undefined =
-        validezParam === 'valida' || validezParam === 'no_validada' ? validezParam : undefined
     const canal = canalDeParam(params.get('canal'))
+    const validezParam = params.get('validez')
+    // La validez es de visitas: con "Llamados" no aplica (una URL armada a mano con las dos
+    // cosas manda el canal).
+    const validez: FiltroValidez | undefined =
+        canal !== 'llamado' && (validezParam === 'valida' || validezParam === 'no_validada')
+            ? validezParam
+            : undefined
     const escribir = (cambios: { desde?: string; hasta?: string; validez?: FiltroValidez; canal?: CanalContacto }) =>
         setParams(
             {
@@ -126,8 +130,10 @@ export default function AnaliticaVendedorPage() {
         )
     const setRango = (d: string, h: string) => escribir({ desde: d, hasta: h, validez, canal })
     // Tocar el filtro activo lo apaga: es un toggle, no hay botón de "todas" aparte. La
-    // validez es de visitas: prenderla saca el filtro de canal (un llamado no se valida).
-    const toggleValidez = (v: FiltroValidez) => escribir({ validez: validez === v ? undefined : v })
+    // validez es de visitas: prenderla pasa el canal a "Visitas" (un llamado no se valida),
+    // así el selector muestra lo que trae la tabla. Apagarla deja el canal como estaba.
+    const toggleValidez = (v: FiltroValidez) =>
+        validez === v ? escribir({ canal }) : escribir({ validez: v, canal: 'visita' })
     // Y elegir "Llamados" apaga la validez, por lo mismo.
     const setCanal = (c: CanalContacto | undefined) =>
         escribir({ canal: c, validez: c === 'llamado' ? undefined : validez })
@@ -363,8 +369,14 @@ export default function AnaliticaVendedorPage() {
                     <div className="space-y-3">
                         <TablaVisitas
                             visitas={visitas}
-                            onElegirVisita={setVisitaElegida}
-                            onElegirLlamado={setLlamadoElegido}
+                            onElegirVisita={id => {
+                                setLlamadoElegido(null)
+                                setVisitaElegida(id)
+                            }}
+                            onElegirLlamado={id => {
+                                setVisitaElegida(null)
+                                setLlamadoElegido(id)
+                            }}
                             toleranciaMetros={criterio?.toleranciaMetros}
                         />
                         <div className="flex items-center justify-between text-xs text-slate-500">

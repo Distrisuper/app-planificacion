@@ -111,18 +111,31 @@ describe('/analitica/actividad', () => {
         expect(within(kpiCerradas).getByText('1')).toBeInTheDocument()
     })
 
-    it('el filtro "Llamados" pide solo ese canal', async () => {
+    it('pide una página grande: los llamados no le sacan lugar a las visitas', async () => {
         montar()
         await waitFor(() => expect(api.getContactos).toHaveBeenCalled())
+        expect(ultimaLlamada().cant).toBe(200)
+    })
+
+    it('el filtro "Llamados" deja solo los llamados en la tabla, sin mover los KPI', async () => {
+        montar()
+        await waitFor(() => expect(screen.getByText('KIOSCO SUR')).toBeInTheDocument())
         await userEvent.click(screen.getByRole('button', { name: 'Llamados' }))
-        await waitFor(() => expect(ultimaLlamada().canal).toEqual(['llamado']))
+        await waitFor(() => expect(screen.queryByText('CALDERON ALEJANDRO PABLO')).not.toBeInTheDocument())
+        expect(screen.getByText('KIOSCO SUR')).toBeInTheDocument()
+        const kpiCerradas = screen.getByText('Visitas cerradas').parentElement!
+        expect(within(kpiCerradas).getByText('1')).toBeInTheDocument()
+        // No vuelve a pedir con canal: el filtro es de la tabla.
+        expect(ultimaLlamada().canal).toBeUndefined()
     })
 
     it('el canal se lee de la URL', async () => {
         montar('&canal=visita')
-        await waitFor(() => expect(api.getContactos).toHaveBeenCalled())
-        expect(ultimaLlamada().canal).toEqual(['visita'])
+        await waitFor(() => expect(screen.getByText('CALDERON ALEJANDRO PABLO')).toBeInTheDocument())
+        expect(screen.queryByText('KIOSCO SUR')).not.toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Visitas' })).toHaveAttribute('aria-pressed', 'true')
+        const kpiLlamados = screen.getByText('Llamados', { selector: 'p' }).parentElement!
+        expect(within(kpiLlamados).getByText('1')).toBeInTheDocument()
     })
 
     it('tocar un llamado abre su detalle, no el de una visita', async () => {
@@ -179,11 +192,19 @@ describe('/analitica/vendedor/:codigo', () => {
         expect(ultimaLlamada().validez).toBeUndefined()
     })
 
-    it('filtrar por validez vuelve a "Visitas": un llamado no se valida', async () => {
+    it('filtrar por validez pasa el canal a "Visitas": un llamado no se valida', async () => {
         montar('&canal=llamado')
         await waitFor(() => expect(api.getContactos).toHaveBeenCalled())
         await userEvent.click(await screen.findByRole('button', { name: /^Válidas/ }))
         await waitFor(() => expect(ultimaLlamada().validez).toBe('valida'))
-        expect(ultimaLlamada().canal).toBeUndefined()
+        expect(ultimaLlamada().canal).toEqual(['visita'])
+        expect(screen.getByRole('button', { name: 'Visitas' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('una URL con "Llamados" y validez manda el canal y descarta la validez', async () => {
+        montar('&canal=llamado&validez=valida')
+        await waitFor(() => expect(api.getContactos).toHaveBeenCalled())
+        expect(ultimaLlamada().canal).toEqual(['llamado'])
+        expect(ultimaLlamada().validez).toBeUndefined()
     })
 })

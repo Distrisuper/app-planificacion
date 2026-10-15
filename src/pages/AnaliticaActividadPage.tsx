@@ -35,13 +35,11 @@ export default function AnaliticaActividadPage() {
     const { data: roster } = useVendedores()
     const criterio = useCriterioVisita()
     const { data: resumen } = useResumen(filtro)
+    // Sin canal y con el máximo del endpoint: los KPI salen de esta misma página, y no
+    // pueden cambiar con el filtro de la tabla ni perder visitas porque los llamados
+    // ocupen lugar (antes eran 50 visitas; ahora 200 contactos).
     const { data: pagina, isLoading, isError } = useContactos(
-        {
-            desde: filtro.desde,
-            hasta: filtro.hasta,
-            vendedores: filtro.vendedores,
-            ...(canal ? { canal: [canal] } : {}),
-        },
+        { desde: filtro.desde, hasta: filtro.hasta, vendedores: filtro.vendedores, cant: 200 },
         { refrescarCada: enVivo ? REFRESCO_MS : 0 },
     )
 
@@ -50,13 +48,15 @@ export default function AnaliticaActividadPage() {
         nombre: v.nombreVendedor,
     }))
 
-    const filas = pagina?.contactos ?? []
-    const visitas = filas.flatMap(f => (f.canal === 'visita' ? [f] : []))
+    const todas = pagina?.contactos ?? []
+    // El canal filtra la tabla, no los KPI.
+    const filas = canal ? todas.filter(f => f.canal === canal) : todas
+    const visitas = todas.flatMap(f => (f.canal === 'visita' ? [f] : []))
     const cerradas = visitas.filter(f => f.tipo === 'visita' && f.fechaFin !== null).length
     const enCurso = visitas.filter(f => f.tipo === 'visita' && f.fechaFin === null).length
     const noVisitas = visitas.filter(f => f.tipo === 'no_visita').length
     // Los llamados se cuentan aparte: no son visitas ni suman a la cobertura.
-    const llamados = filas.length - visitas.length
+    const llamados = todas.length - visitas.length
 
     const kpis = [
         { titulo: 'Visitas cerradas', valor: formatNumero(cerradas) },
@@ -110,8 +110,14 @@ export default function AnaliticaActividadPage() {
                 {filas.length > 0 && (
                     <TablaActividad
                         filas={filas}
-                        onElegirVisita={setVisitaElegida}
-                        onElegirLlamado={setLlamadoElegido}
+                        onElegirVisita={id => {
+                            setLlamadoElegido(null)
+                            setVisitaElegida(id)
+                        }}
+                        onElegirLlamado={id => {
+                            setVisitaElegida(null)
+                            setLlamadoElegido(id)
+                        }}
                         toleranciaMetros={criterio?.toleranciaMetros}
                     />
                 )}
