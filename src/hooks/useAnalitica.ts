@@ -6,6 +6,7 @@ import {
     getLlamadoDetalle,
     getObjeciones,
     getResumen,
+    getTelevendedores,
     getVendedores,
     getVisitaDetalle,
     getVisitas,
@@ -47,12 +48,14 @@ export const analiticaKeys = {
             // filas cacheadas de "Todo".
             (a.canal ?? []).join(','),
             a.validez ?? '',
+            (a.autores ?? []).join(','),
         ] as const,
     detalle: (id: number) => ['analitica', 'visita', id] as const,
     detalleLlamado: (id: number) => ['analitica', 'llamado', id] as const,
     objeciones: (a: IObjecionesArgs) =>
         ['analitica', 'objeciones', a.desde, a.hasta, a.zona ?? '', a.rubro ?? ''] as const,
     vendedores: () => ['analitica', 'vendedores'] as const,
+    televendedores: () => ['analitica', 'televendedores'] as const,
     criterio: () => ['analitica', 'criterio'] as const,
     altas: (f: IAnaliticaFiltro) =>
         ['analitica', 'altas', f.desde, f.hasta, (f.vendedores ?? []).join(',')] as const,
@@ -113,8 +116,10 @@ export function useContactos(args: IContactosArgs, opciones: OpcionesVisitas = {
     })
 }
 
-/** Como `useVisitasPaginadas`, sobre el feed de contactos. */
-export function useContactosPaginados(args: Omit<IContactosArgs, 'pagina'>) {
+/** Como `useVisitasPaginadas`, sobre el feed de contactos. Con `refrescarCada` vuelve a
+ *  pedir las páginas ya cargadas (la vista en vivo de actividad). */
+export function useContactosPaginados(args: Omit<IContactosArgs, 'pagina'>, opciones: OpcionesVisitas = {}) {
+    const refrescarCada = opciones.refrescarCada ?? 0
     return useInfiniteQuery({
         queryKey: [...analiticaKeys.contactos(args), 'paginadas', args.cant ?? 0] as const,
         queryFn: ({ pageParam }) => getContactos({ ...args, pagina: pageParam }),
@@ -125,6 +130,17 @@ export function useContactosPaginados(args: Omit<IContactosArgs, 'pagina'>) {
                 ? ultima.pagina + 1
                 : undefined
         },
+        refetchInterval: refrescarCada > 0 ? refrescarCada : false,
+        staleTime: refrescarCada > 0 ? 0 : undefined,
+    })
+}
+
+/** Los TV cambian menos que el roster de vendedores: misma media hora de caché. */
+export function useTelevendedores() {
+    return useQuery({
+        queryKey: analiticaKeys.televendedores(),
+        queryFn: getTelevendedores,
+        staleTime: 30 * 60 * 1000,
     })
 }
 

@@ -8,7 +8,7 @@ import AnaliticaActividadPage from './AnaliticaActividadPage'
 import AnaliticaVendedorPage from './AnaliticaVendedorPage'
 import { MOCK_RESUMEN, MOCK_VENDEDORES } from '@/mocks/analiticaMock'
 import * as api from '@/api/analitica'
-import type { IContactoLlamado, IContactoVisita, IContactosPage } from '@/types/analitica'
+import type { IContactoLlamado, IContactoVisita, IContactosConteos, IContactosPage } from '@/types/analitica'
 
 vi.mock('@/api/analitica')
 vi.mock('@/context/AuthContext', () => ({
@@ -50,11 +50,29 @@ const LLAMADO: IContactoLlamado = {
     resultado: 'ganado',
 }
 
-const pagina = (contactos: IContactosPage['contactos']): IContactosPage => ({
+/** Los conteos que mandaría el back para estas filas (todo el filtro, sin canal). */
+const conteosDe = (contactos: IContactosPage['contactos']): IContactosConteos => {
+    const visitas = contactos.flatMap(f => (f.canal === 'visita' ? [f] : []))
+    const llamados = contactos.flatMap(f => (f.canal === 'llamado' ? [f] : []))
+    return {
+        visitasCerradas: visitas.filter(v => v.tipo === 'visita' && v.fechaFin !== null).length,
+        visitasEnCurso: visitas.filter(v => v.tipo === 'visita' && v.fechaFin === null).length,
+        noVisita: visitas.filter(v => v.tipo === 'no_visita').length,
+        llamados: llamados.length,
+        llamadosAtendidos: llamados.filter(l => l.tipo === 'atendido').length,
+        llamadosConVenta: llamados.filter(l => l.estado === 'venta').length,
+    }
+}
+
+const pagina = (
+    contactos: IContactosPage['contactos'],
+    conteos: IContactosConteos = conteosDe(contactos),
+): IContactosPage => ({
     total: contactos.length,
     pagina: 1,
     cant: contactos.length,
     contactos,
+    conteos,
 })
 
 function conQuery(ui: ReactNode, ruta: string, path: string) {
@@ -79,7 +97,17 @@ beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getVendedores as any).mockResolvedValue(MOCK_VENDEDORES)
     ;(api.getResumen as any).mockResolvedValue(MOCK_RESUMEN)
-    ;(api.getContactos as any).mockResolvedValue(pagina([LLAMADO, VISITA]))
+    // Como el back: el canal filtra las filas, los conteos son de todo el filtro.
+    ;(api.getContactos as any).mockImplementation(async (a: api.IContactosArgs) =>
+        pagina(
+            [LLAMADO, VISITA].filter(f => !a.canal || a.canal.includes(f.canal)),
+            conteosDe([LLAMADO, VISITA]),
+        ),
+    )
+    ;(api.getTelevendedores as any).mockResolvedValue([
+        { codigoParticularTv: '9001', nombreTv: 'GOMEZ LUCIA', activo: true },
+        { codigoParticularTv: '9002', nombreTv: 'ROMERO JULIAN', activo: false },
+    ])
     ;(api.getLlamadoDetalle as any).mockResolvedValue({
         ...LLAMADO,
         motivos: [],
@@ -111,22 +139,78 @@ describe('/analitica/actividad', () => {
         expect(within(kpiCerradas).getByText('1')).toBeInTheDocument()
     })
 
-    it('pide una página grande: los llamados no le sacan lugar a las visitas', async () => {
+    it('los KPI salen de los conteos del back, no de las filas de la página', async () => {
+        ;(api.getContactos as any).mockResolvedValue({
+            ...pagina([LLAMADO, VISITA]),
+            total: 330,
+            conteos: {
+                visitasCerradas: 250,
+                visitasEnCurso: 5,
+                noVisita: 3,
+                llamados: 72,
+                llamadosAtendidos: 41,
+                llamadosConVenta: 12,
+            },
+        })
         montar()
-        await waitFor(() => expect(api.getContactos).toHaveBeenCalled())
-        expect(ultimaLlamada().cant).toBe(200)
+        const kpiCerradas = (await screen.findByText('Visitas cerradas')).parentElement!
+        await waitFor(() => expect(within(kpiCerradas).getByText('250')).toBeInTheDocument())
+        const kpiLlamados = screen.getByText('Llamados', { selector: 'p' }).parentElement!
+        expect(within(kpiLlamados).getByText('72')).toBeInTheDocument()
+        expect(within(kpiLlamados).getByText('41 atendidos · 12 con venta')).toBeInTheDocument()
     })
 
-    it('el filtro "Llamados" deja solo los llamados en la tabla, sin mover los KPI', async () => {
+    it('pagina de a 100 y "Mostrar más" pide la página siguiente', async () => {
+        ;(api.getContactos as any).mockImplementation(async (a: api.IContactosArgs) => ({
+            ...pagina(a.pagina === 2 ? [VISITA] : [LLAMADO]),
+            pagina: a.pagina ?? 1,
+            total: 2,
+        }))
+        montar()
+        await waitFor(() => expect(screen.getByText('KIOSCO SUR')).toBeInTheDocument())
+        expect(ultimaLlamada()).toMatchObject({ cant: 100, pagina: 1 })
+        expect(screen.getByText('Mostrando 1 de 2')).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Mostrar más' }))
+        await waitFor(() => expect(screen.getByText('CALDERON ALEJANDRO PABLO')).toBeInTheDocument())
+        expect(ultimaLlamada()).toMatchObject({ pagina: 2 })
+        expect(screen.queryByRole('button', { name: 'Mostrar más' })).not.toBeInTheDocument()
+    })
+
+    it('el filtro "Llamados" pide ese canal y los KPI no se mueven', async () => {
         montar()
         await waitFor(() => expect(screen.getByText('KIOSCO SUR')).toBeInTheDocument())
         await userEvent.click(screen.getByRole('button', { name: 'Llamados' }))
         await waitFor(() => expect(screen.queryByText('CALDERON ALEJANDRO PABLO')).not.toBeInTheDocument())
+        expect(ultimaLlamada().canal).toEqual(['llamado'])
         expect(screen.getByText('KIOSCO SUR')).toBeInTheDocument()
         const kpiCerradas = screen.getByText('Visitas cerradas').parentElement!
         expect(within(kpiCerradas).getByText('1')).toBeInTheDocument()
-        // No vuelve a pedir con canal: el filtro es de la tabla.
-        expect(ultimaLlamada().canal).toBeUndefined()
+    })
+
+    it('elegir un TV filtra por quién llamó y deja el canal en "Llamados"', async () => {
+        montar()
+        await userEvent.click(await screen.findByRole('button', { name: /Televentas: Todos/ }))
+        await userEvent.click(await screen.findByRole('checkbox', { name: 'GOMEZ LUCIA' }))
+        await waitFor(() => expect(ultimaLlamada().autores).toEqual(['9001']))
+        expect(ultimaLlamada().canal).toEqual(['llamado'])
+        expect(screen.getByRole('button', { name: 'Llamados' })).toHaveAttribute('aria-pressed', 'true')
+        expect(screen.getByRole('button', { name: /Televentas: GOMEZ LUCIA/ })).toBeInTheDocument()
+    })
+
+    it('los TV se leen de la URL, y pasar a "Visitas" los suelta', async () => {
+        montar('&tvs=9001,9002')
+        await waitFor(() => expect(ultimaLlamada().autores).toEqual(['9001', '9002']))
+        await userEvent.click(screen.getByRole('button', { name: 'Visitas' }))
+        await waitFor(() => expect(ultimaLlamada().canal).toEqual(['visita']))
+        expect(ultimaLlamada().autores).toBeUndefined()
+    })
+
+    it('en el llamado se ve quién llamó y de qué vendedor es el cliente', async () => {
+        montar()
+        await waitFor(() => expect(screen.getByText('KIOSCO SUR')).toBeInTheDocument())
+        const fila = screen.getByText('KIOSCO SUR').closest('tr')!
+        expect(within(fila).getByText('GOMEZ LUCIA')).toBeInTheDocument()
+        expect(within(fila).getByText('cliente de ACOSTA MARIANO')).toBeInTheDocument()
     })
 
     it('el canal se lee de la URL', async () => {

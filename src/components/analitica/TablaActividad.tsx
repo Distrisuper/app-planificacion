@@ -13,6 +13,8 @@ interface TablaActividadProps {
     /** De `useCriterioVisita`, que la página ya tiene. Sin él se pinta con el respaldo
      *  (TOLERANCIA_METROS) mientras carga. */
     toleranciaMetros?: number
+    /** false con un rango de un solo día: la fecha sería la misma en todas las filas. */
+    mostrarFecha?: boolean
 }
 
 const ETIQUETA_RESULTADO: Record<string, string> = {
@@ -50,7 +52,13 @@ function estadoDe(fila: IVisitaFila): Estado {
 
 const etiquetaResultado = (r: ResultadoMotivo | null) => (r ? ETIQUETA_RESULTADO[r] : '—')
 
-export default function TablaActividad({ filas, onElegirVisita, onElegirLlamado, toleranciaMetros }: TablaActividadProps) {
+export default function TablaActividad({
+    filas,
+    onElegirVisita,
+    onElegirLlamado,
+    toleranciaMetros,
+    mostrarFecha = true,
+}: TablaActividadProps) {
     return (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
@@ -58,7 +66,7 @@ export default function TablaActividad({ filas, onElegirVisita, onElegirLlamado,
                     <tr>
                         <th className="px-3 py-2 text-left">Hora</th>
                         <th className="px-3 py-2 text-left">Estado</th>
-                        <th className="px-3 py-2 text-left">Vendedor</th>
+                        <th className="px-3 py-2 text-left">Quién</th>
                         <th className="px-3 py-2 text-left">Código</th>
                         <th className="px-3 py-2 text-left">Cliente</th>
                         <th className="px-3 py-2 text-right">Duración</th>
@@ -69,7 +77,16 @@ export default function TablaActividad({ filas, onElegirVisita, onElegirLlamado,
                 </thead>
                 <tbody>
                     {filas.map(f => {
-                        if (esLlamado(f)) return <FilaLlamado key={`l-${f.llamadoId}`} f={f} onElegir={onElegirLlamado} />
+                        if (esLlamado(f)) {
+                            return (
+                                <FilaLlamado
+                                    key={`l-${f.llamadoId}`}
+                                    f={f}
+                                    onElegir={onElegirLlamado}
+                                    mostrarFecha={mostrarFecha}
+                                />
+                            )
+                        }
                         const estado = estadoDe(f)
                         return (
                             <tr
@@ -79,7 +96,7 @@ export default function TablaActividad({ filas, onElegirVisita, onElegirLlamado,
                             >
                                 <td className="whitespace-nowrap px-3 py-2 text-slate-600">
                                     {horaNegocio(f.fechaInicio)}
-                                    <span className="ml-2 text-xs text-slate-400">{f.fecha}</span>
+                                    {mostrarFecha && <span className="ml-2 text-xs text-slate-400">{f.fecha}</span>}
                                 </td>
                                 <td className="px-3 py-2">
                                     <span
@@ -89,17 +106,19 @@ export default function TablaActividad({ filas, onElegirVisita, onElegirLlamado,
                                         {estado.texto}
                                     </span>
                                 </td>
-                                <td className="px-3 py-2 text-slate-700">{f.nombreVendedor}</td>
+                                <td data-testid={`quien-${f.visitaId}`} className="px-3 py-2 text-slate-700">
+                                    {f.nombreVendedor}
+                                </td>
                                 <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500">
                                     {f.codigoParticularCliente}
                                 </td>
                                 <td className="px-3 py-2 text-slate-900">{f.nombreCliente}</td>
-                                <td className="px-3 py-2 text-right text-slate-700">
+                                <td className="whitespace-nowrap px-3 py-2 text-right text-slate-700">
                                     {formatDuracion(f.duracionMin)}
                                 </td>
                                 <td
                                     data-testid={`distancia-${f.visitaId}`}
-                                    className={`px-3 py-2 text-right ${CLASE_DISTANCIA[claseDistancia(f.distanciaInicioMetros, f.distanciaFinMetros, toleranciaMetros)]}`}
+                                    className={`whitespace-nowrap px-3 py-2 text-right ${CLASE_DISTANCIA[claseDistancia(f.distanciaInicioMetros, f.distanciaFinMetros, toleranciaMetros)]}`}
                                 >
                                     {formatDistancia(peorDistancia(f.distanciaInicioMetros, f.distanciaFinMetros))}
                                 </td>
@@ -120,8 +139,17 @@ export default function TablaActividad({ filas, onElegirVisita, onElegirLlamado,
     )
 }
 
-/** Un llamado de Televentas: sin duración ni distancia (no hay GPS), con quién llamó. */
-function FilaLlamado({ f, onElegir }: { f: IContactoLlamado; onElegir?: (llamadoId: number) => void }) {
+/** Un llamado de Televentas: sin duración ni distancia (no hay GPS). "Quién" es el TV que
+ *  llamó; el vendedor dueño del cliente va debajo, en gris. */
+function FilaLlamado({
+    f,
+    onElegir,
+    mostrarFecha,
+}: {
+    f: IContactoLlamado
+    onElegir?: (llamadoId: number) => void
+    mostrarFecha: boolean
+}) {
     return (
         <tr
             onClick={() => onElegir?.(f.llamadoId)}
@@ -129,7 +157,7 @@ function FilaLlamado({ f, onElegir }: { f: IContactoLlamado; onElegir?: (llamado
         >
             <td className="whitespace-nowrap px-3 py-2 text-slate-600">
                 {horaNegocio(f.fechaInicio)}
-                <span className="ml-2 text-xs text-slate-400">{f.fecha}</span>
+                {mostrarFecha && <span className="ml-2 text-xs text-slate-400">{f.fecha}</span>}
             </td>
             <td className="px-3 py-2">
                 <span
@@ -140,9 +168,12 @@ function FilaLlamado({ f, onElegir }: { f: IContactoLlamado; onElegir?: (llamado
                     Llamado · {ETIQUETA_ESTADO_LLAMADO[f.estado]}
                 </span>
             </td>
-            <td className="px-3 py-2 text-slate-700">
-                {f.nombreVendedor}
-                <span className="block text-xs text-slate-400">llamó {f.nombreAutor ?? f.codigoAutor}</span>
+            <td data-testid={`quien-llamado-${f.llamadoId}`} className="px-3 py-2 text-slate-700">
+                <span className="inline-flex items-center gap-1">
+                    <Phone aria-hidden className="h-3 w-3 text-sky-700" />
+                    {f.nombreAutor ?? f.codigoAutor}
+                </span>
+                <span className="block text-xs text-slate-400">cliente de {f.nombreVendedor}</span>
             </td>
             <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500">
                 {f.codigoParticularCliente}

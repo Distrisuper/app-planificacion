@@ -21,6 +21,12 @@ interface FiltrosAnaliticaProps {
     /** El atajo "Todo el período". Sólo lo pasa la pantalla que admite no filtrar por fecha
      *  ("Datos del comercio"); sin él, el botón no se dibuja. */
     onTodoElPeriodo?: () => void
+    /** Igual que los vendedores, para filtrar por el TV que llamó. Sin
+     *  `televendedoresDisponibles` no se dibuja. */
+    televendedoresDisponibles?: VendedorOpcion[]
+    tvsElegidos?: string[]
+    onToggleTv?: (codigo: string) => void
+    onLimpiarTvs?: () => void
     /** No hay rango elegido: las fechas se muestran vacías en vez del default del hook,
      *  que no es lo que se está aplicando. */
     sinRango?: boolean
@@ -64,11 +70,20 @@ export default function FiltrosAnalitica({
     onToggleVendedor,
     onLimpiar,
     onTodoElPeriodo,
+    televendedoresDisponibles,
+    tvsElegidos = [],
+    onToggleTv,
+    onLimpiarTvs,
     sinRango = false,
 }: FiltrosAnaliticaProps) {
-    const [abierto, setAbierto] = useState(false)
     const elegidos = filtro.vendedores ?? []
     const etiqueta = elegidos.length === 0 ? 'Todos' : `${elegidos.length} vendedores`
+    const etiquetaTvs =
+        tvsElegidos.length === 0
+            ? 'Todos'
+            : tvsElegidos.length === 1
+              ? (televendedoresDisponibles?.find(t => t.codigo === tvsElegidos[0])?.nombre ?? tvsElegidos[0])
+              : `${tvsElegidos.length} TV`
 
     return (
         <div className="flex flex-wrap items-end gap-3 border-b border-slate-200 bg-white px-6 py-4">
@@ -114,36 +129,68 @@ export default function FiltrosAnalitica({
             </div>
 
             {vendedoresDisponibles && (
-                <div className="relative">
-                    <Button variant="outline" size="sm" onClick={() => setAbierto(a => !a)}>
-                        Vendedores: {etiqueta}
-                        <ChevronDown className="ml-1 h-4 w-4" />
-                    </Button>
-                    {abierto && (
-                        <div className="absolute z-20 mt-1 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-2 shadow-lg">
-                            <button
-                                type="button"
-                                onClick={onLimpiar}
-                                className="mb-1 w-full rounded px-2 py-1 text-left text-xs text-slate-500 hover:bg-slate-50"
-                            >
-                                Ver todos
-                            </button>
-                            {vendedoresDisponibles.map(v => (
-                                <label
-                                    key={v.codigo}
-                                    className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50"
-                                >
-                                    <input
-                                        type="checkbox"
-                                        aria-label={v.nombre}
-                                        checked={elegidos.includes(v.codigo)}
-                                        onChange={() => onToggleVendedor?.(v.codigo)}
-                                    />
-                                    {v.nombre}
-                                </label>
-                            ))}
-                        </div>
-                    )}
+                <SelectorMultiple
+                    titulo={`Vendedores: ${etiqueta}`}
+                    opciones={vendedoresDisponibles}
+                    elegidos={elegidos}
+                    onToggle={c => onToggleVendedor?.(c)}
+                    onLimpiar={() => onLimpiar?.()}
+                />
+            )}
+
+            {televendedoresDisponibles && (
+                <SelectorMultiple
+                    titulo={`Televentas: ${etiquetaTvs}`}
+                    opciones={televendedoresDisponibles}
+                    elegidos={tvsElegidos}
+                    onToggle={c => onToggleTv?.(c)}
+                    onLimpiar={() => onLimpiarTvs?.()}
+                />
+            )}
+        </div>
+    )
+}
+
+interface SelectorMultipleProps {
+    titulo: string
+    opciones: VendedorOpcion[]
+    elegidos: string[]
+    onToggle: (codigo: string) => void
+    onLimpiar: () => void
+}
+
+/** El desplegable con checkboxes de vendedores y de TV. */
+function SelectorMultiple({ titulo, opciones, elegidos, onToggle, onLimpiar }: SelectorMultipleProps) {
+    const [abierto, setAbierto] = useState(false)
+    return (
+        <div className="relative">
+            <Button variant="outline" size="sm" onClick={() => setAbierto(a => !a)}>
+                {titulo}
+                <ChevronDown className="ml-1 h-4 w-4" />
+            </Button>
+            {abierto && (
+                <div className="absolute z-20 mt-1 max-h-72 w-64 overflow-y-auto rounded-md border border-slate-200 bg-white p-2 shadow-lg">
+                    <button
+                        type="button"
+                        onClick={onLimpiar}
+                        className="mb-1 w-full rounded px-2 py-1 text-left text-xs text-slate-500 hover:bg-slate-50"
+                    >
+                        Ver todos
+                    </button>
+                    {opciones.map(o => (
+                        <label
+                            key={o.codigo}
+                            className="flex items-center gap-2 rounded px-2 py-1 text-sm hover:bg-slate-50"
+                        >
+                            <input
+                                type="checkbox"
+                                aria-label={o.nombre}
+                                checked={elegidos.includes(o.codigo)}
+                                onChange={() => onToggle(o.codigo)}
+                            />
+                            {o.nombre}
+                        </label>
+                    ))}
                 </div>
             )}
         </div>

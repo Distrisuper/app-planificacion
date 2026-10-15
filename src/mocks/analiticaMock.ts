@@ -3,6 +3,7 @@ import type {
     IAnaliticaResumen,
     IContactoLlamado,
     ILlamadoDetalle,
+    ITelevendedorOpcion,
     ICoord,
     IObjecionesResumen,
     IVendedorMetricas,
@@ -588,11 +589,18 @@ export const MOCK_LLAMADOS: IContactoLlamado[] = VENDEDORES.slice(0, 6).flatMap(
         nombreVendedor: v.nombreVendedor,
         codigoParticularCliente: `C${3000 + i * 4 + j}`,
         nombreCliente: CLIENTES[(i + j) % CLIENTES.length],
-        codigoAutor: '9001',
-        nombreAutor: 'GOMEZ LUCIA (TV)',
+        ...(i % 2 === 0
+            ? { codigoAutor: '9001', nombreAutor: 'GOMEZ LUCIA (TV)' }
+            : { codigoAutor: '9002', nombreAutor: 'ROMERO JULIAN (TV)' }),
         ...DESENLACES[(i + j) % DESENLACES.length],
     }))
 })
+
+export const MOCK_TELEVENDEDORES: ITelevendedorOpcion[] = [
+    { codigoParticularTv: '9001', nombreTv: 'GOMEZ LUCIA (TV)', activo: true },
+    { codigoParticularTv: '9002', nombreTv: 'ROMERO JULIAN (TV)', activo: true },
+    { codigoParticularTv: '9003', nombreTv: 'PAEZ CAROLINA (TV)', activo: false },
+]
 
 export const MOCK_DETALLES_LLAMADO: Record<number, ILlamadoDetalle> = Object.fromEntries(
     MOCK_LLAMADOS.map(l => [
