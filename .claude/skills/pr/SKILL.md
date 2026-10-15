@@ -12,6 +12,11 @@ Un solo intento ordenado. Si un paso falla, arreglá la causa y repetí ese paso
 `git branch --show-current` no puede ser la rama base del repo (ver "Git y PR" en `AGENTS.md`).
 Si estás en la base, creá `feature/<slug>` desde ahí antes de seguir.
 
+Actualizá la rama contra la base remota: `git fetch origin` y `git rebase origin/<base>` (la base es la
+de `AGENTS.md`, o la que diga el requerimiento: por ejemplo `staging` para el back de televentas). Si hay
+conflictos, resolvelos manteniendo lo que ya está en la base y lo que pide la tarea. Así el PR no llega
+atrasado ni con conflictos, y el check del paso 2 corre sobre el código que se va a mergear.
+
 ## 2. Check completo
 
 `npm run check` tiene que terminar en exit 0. Guardá el resumen de los tests para el PR.
