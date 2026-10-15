@@ -1,6 +1,9 @@
 {
   "enabledPlugins": {
-    "superpowers@superpowers-marketplace": false
+    "superpowers@superpowers-marketplace": false,
+    "chrome-devtools-mcp@chrome-devtools-plugins": false,
+    "frontend-design@claude-plugins-official": false,
+    "mastra-skills@mastra-agent-skills": false
   },
   "permissions": {
     "allow": [
