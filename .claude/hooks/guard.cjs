@@ -279,6 +279,10 @@ function reglaGit(seg, input, ctx) {
     const soloLee = sub === 'config' && (resto.includes('--get') || resto.length === 1)
     if (!soloLee) return deny('cambiar core.hooksPath apaga el pre-push')
   }
+  // Antes que las demás: en el checkout principal, "creá una rama" no es la salida.
+  const cwd = (input && input.cwd) || ctx.projectDir
+  const principal = reglaCheckoutPrincipalGit(sub, resto, ctx, directoriosGit(t, cwd)[0])
+  if (principal) return principal
   // Desde Claude Code se pushea la rama de la tarea (`git push [-u] origin <rama>`) y nada más.
   if (sub === 'push') {
     const r = reglaPush(resto, ctx)
@@ -292,7 +296,6 @@ function reglaGit(seg, input, ctx) {
     (sub === 'clean' && resto.some(a => /^-[a-zA-Z]*f/.test(a) || a === '--force')) ||
     ((sub === 'checkout' || sub === 'restore') && resto.includes('.'))
   if (descarta) {
-    const cwd = (input && input.cwd) || ctx.projectDir
     const fuera = /(^|\s)GIT_(DIR|WORK_TREE)=/.test(seg) || directoriosGit(t, cwd).some(d => !dentroDe(ctx.projectDir, d))
     if (fuera) return deny(`git ${sub} fuera del worktree descarta trabajo ajeno`)
   }
@@ -369,6 +372,67 @@ function ramaActual(ctx) {
   } catch {
     return RAMA_BASE
   }
+}
+
+// ── checkout principal ─────────────────────────────────────────────────────
+// Cada tarea se trabaja en un worktree propio (los de Orca, en orca/workspaces/...; los de
+// Claude Code, en .claude/worktrees/...). El checkout principal del repo es solo para leer,
+// actualizar la base y crear worktrees: pasó que una sesión abierta ahí creó una rama y dejó
+// el checkout parado en otra rama. Ahí se niega editar archivos del proyecto y todo git que
+// cambie el estado; fuera (cualquier worktree enlazado) esta regla no dice nada.
+const CHECKOUT_PRINCIPAL =
+  'estás en el checkout principal del repo: las tareas se trabajan en un worktree ' +
+  '(`orca worktree create --repo name:<repo> --name <slug> --agent claude` o `git worktree add`). ' +
+  'Acá solo se lee, se actualiza la base y se crean worktrees'
+const GIT_CAMBIA_ESTADO = new Set(['commit', 'add', 'rm', 'mv', 'merge', 'rebase', 'cherry-pick', 'revert', 'reset', 'push', 'restore', 'clean'])
+// `git branch` lista (o borra, para limpiar) con estas flags; con un nombre y sin ellas crea,
+// renombra o copia una rama.
+const BRANCH_LISTA_O_BORRA =
+  /^(-[lravdD]+|--(list|all|remotes|verbose|show-current|contains|no-contains|merged|no-merged|points-at|format|sort|column|no-column|color|no-color|delete))(=|$)/
+const TAG_LISTA = /^(-l|-n\d*|--(list|contains|no-contains|merged|no-merged|points-at|format|sort|column|no-column|color|no-color))(=|$)/
+// `checkout -b/-B`, `switch -c/-C/--create/--force-create`, `--orphan`, `--detach`: mueven
+// el HEAD a algo que no es la base.
+const MUEVE_HEAD = /^(-[a-zA-Z]*[bBcCd]|--(create|force-create|orphan|detach))(=|$)/
+
+// true si el subcomando de git cambia el estado del checkout (archivos, índice, ramas, HEAD).
+// `fetch`, `pull --ff-only`, `worktree ...` y la lectura no cuentan. Volver a la base con
+// `checkout`/`switch` tampoco: es lo que se hace para limpiar.
+function gitCambiaEstado(sub, resto) {
+  if (GIT_CAMBIA_ESTADO.has(sub)) return true
+  if (sub === 'pull') return !resto.includes('--ff-only')
+  if (sub === 'stash') return !/^(list|show)$/.test(resto[0] || '')
+  const posicionales = resto.filter(a => !a.startsWith('-'))
+  if (sub === 'tag') return posicionales.length > 0 && !resto.some(a => TAG_LISTA.test(a))
+  if (sub === 'branch') return posicionales.length > 0 && !resto.some(a => BRANCH_LISTA_O_BORRA.test(a))
+  if (sub === 'checkout' || sub === 'switch') {
+    if (resto.some(a => MUEVE_HEAD.test(a))) return true
+    // `git checkout -` vuelve a la rama anterior; `-- archivo` restaura archivos.
+    return resto.filter(a => a === '-' || !a.startsWith('-')).some(a => a !== RAMA_BASE)
+  }
+  return false
+}
+
+// Regla de orden, no de seguridad: si no se puede saber dónde se está (git falla, el ctx no
+// trae la función), no se niega. `dir` es el directorio donde va a correr git (`-C`).
+function esCheckoutPrincipal(ctx, dir) {
+  try {
+    return typeof ctx.esCheckoutPrincipal === 'function' && ctx.esCheckoutPrincipal(dir) === true
+  } catch {
+    return false
+  }
+}
+
+function reglaCheckoutPrincipalGit(sub, resto, ctx, dir) {
+  if (!gitCambiaEstado(sub, resto)) return null
+  return esCheckoutPrincipal(ctx, dir) ? deny(CHECKOUT_PRINCIPAL) : null
+}
+
+// Archivos del proyecto: los de un worktree nativo de Claude Code (`.claude/worktrees/...`)
+// viven adentro de la carpeta del checkout principal pero no son de él.
+function reglaCheckoutPrincipalArchivo(abs, ctx) {
+  if (!dentroDe(ctx.projectDir, abs)) return null
+  if (dentroDe(path.join(ctx.projectDir, '.claude', 'worktrees'), abs)) return null
+  return esCheckoutPrincipal(ctx) ? deny(CHECKOUT_PRINCIPAL) : null
 }
 
 // ── gh ─────────────────────────────────────────────────────────────────────
@@ -544,7 +608,7 @@ function reglaArchivo(input, ctx) {
   // Sin distinguir mayúsculas: en NTFS `.CLAUDE/Hooks/guard.cjs` es el mismo archivo.
   if (/^(\.claude\/(hooks\/|settings(\.[\w-]+)?\.json$)|\.githooks\/)/i.test(rel) || abs.split(path.sep).join('/').toLowerCase().includes('/.git/hooks/'))
     return deny(`desde Claude Code no se edita ${rel}: es parte del guard`)
-  return null
+  return reglaCheckoutPrincipalArchivo(abs, ctx)
 }
 
 // Grep (`path`, `glob`) y Glob (`pattern`, `path`): nombrar un .env real es leerlo o listarlo.
@@ -607,6 +671,30 @@ function hooksPathReal(cwd) {
   }).trim()
 }
 
+// Checkout principal: su git-dir es el común (`.git`); el de un worktree enlazado es
+// `.git/worktrees/<nombre>`. Si git falla (no es un repo, git viejo sin --path-format),
+// false: esta regla es de orden, no de seguridad.
+function normalizarDirGit(p) {
+  const r = path.resolve(p.trim()).replace(/\\/g, '/').replace(/\/+$/, '')
+  return process.platform === 'win32' ? r.toLowerCase() : r
+}
+
+function esCheckoutPrincipalReal(cwd) {
+  try {
+    const [gitDir, comun] = execFileSync('git', ['rev-parse', '--path-format=absolute', '--git-dir', '--git-common-dir'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .split(/\r?\n/)
+      .filter(Boolean)
+    if (!gitDir || !comun) return false
+    return normalizarDirGit(gitDir) === normalizarDirGit(comun)
+  } catch {
+    return false
+  }
+}
+
 // Si el hook revienta fuera de `evaluar` (input raro, stdout roto...), Claude Code lo toma
 // como error no bloqueante y la acción pasa. Por eso sale con 2, que Claude Code toma como bloqueo.
 function fallaCerrado(e) {
@@ -634,6 +722,7 @@ function main() {
       projectDir,
       ramaActual: () => ramaActualReal(input.cwd || projectDir),
       hooksPath: () => hooksPathReal(input.cwd || projectDir),
+      esCheckoutPrincipal: dir => esCheckoutPrincipalReal(dir || input.cwd || projectDir),
     }
     r = r || evaluar(input, ctx)
     if (r) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', ...r } }))
@@ -643,4 +732,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { evaluar, esArchivoEnv, nombreDeComando, RAMA_BASE }
+module.exports = { evaluar, esArchivoEnv, esCheckoutPrincipalReal, nombreDeComando, RAMA_BASE }
