@@ -33,15 +33,22 @@ export const tipoDePerfil = (perfil: ITelevendedorOpcion['perfil']): TipoPersona
     perfil ?? 'sin_perfil'
 
 /**
- * El tipo de una CARTERA (vendor_code) en Facturación: las ventas son de la cartera, no de
- * una persona. Si la atiende algún TV activo de Televentas, es el perfil de ese TV (una
- * cartera puede tener un farmer y un hunter a la vez: van los dos); si no, es de un
- * VENDEDOR de calle. Los TV inactivos no cuentan: ya no la atienden.
+ * Los tipos de una CARTERA (vendor_code) en Facturación: las ventas son de la cartera, no de
+ * una persona, y la pueden trabajar varios. Lleva:
+ * - VENDEDOR si es la de un vendedor de calle (está en el roster de planificación,
+ *   `/analitica/vendedores`) o si no la atiende ningún TV;
+ * - el perfil de cada TV activo que la atiende (un farmer y un hunter pueden compartirla).
+ * Una cartera de vendedor atendida por un TV lleva los dos (VENDEDOR · FARMER) y aparece con
+ * los dos filtros (decisión del usuario). Los TV inactivos no cuentan: ya no la atienden.
  *
  * Con un backend que todavía no manda `carteras`, no se puede saber: devuelve [] y la
  * pantalla muestra "Sin tipo" en vez de decir VENDEDOR sin saberlo.
  */
-export function tiposDeCartera(codigo: string, tvs: ITelevendedorOpcion[] | undefined): TipoPersona[] {
+export function tiposDeCartera(
+    codigo: string,
+    tvs: ITelevendedorOpcion[] | undefined,
+    vendedoresDeCalle: Set<string>,
+): TipoPersona[] {
     if (!tvs || tvs.some(tv => tv.carteras === undefined)) return []
     const clave = codigo.trim().toUpperCase()
     const tipos = new Set<TipoPersona>()
@@ -49,7 +56,11 @@ export function tiposDeCartera(codigo: string, tvs: ITelevendedorOpcion[] | unde
         if (!tv.activo) continue
         if (tv.carteras!.some(c => c.trim().toUpperCase() === clave)) tipos.add(tipoDePerfil(tv.perfil))
     }
-    if (tipos.size === 0) return ['vendedor']
-    const orden: TipoPersona[] = ['farmer', 'hunter', 'sin_perfil']
+    if (tipos.size === 0 || vendedoresDeCalle.has(clave)) tipos.add('vendedor')
+    const orden: TipoPersona[] = ['vendedor', 'farmer', 'hunter', 'sin_perfil']
     return orden.filter(t => tipos.has(t))
 }
+
+/** Los códigos del roster de planificación, normalizados para cruzar con vendor_code. */
+export const clavesDeVendedores = (codigos: string[]): Set<string> =>
+    new Set(codigos.map(c => c.trim().toUpperCase()))

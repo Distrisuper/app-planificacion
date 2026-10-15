@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import AnaliticaMetricasPage from './AnaliticaMetricasPage'
-import { MOCK_RESUMEN, MOCK_TELEVENDEDORES } from '@/mocks/analiticaMock'
+import { MOCK_RESUMEN, MOCK_TELEVENDEDORES, MOCK_VENDEDORES } from '@/mocks/analiticaMock'
 import {
     MOCK_OBJECIONES_POR_PERSONA,
     MOCK_PRODUCTIVIDAD_TV,
@@ -34,6 +34,7 @@ beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getResumen as any).mockResolvedValue(MOCK_RESUMEN)
     ;(api.getTelevendedores as any).mockResolvedValue(MOCK_TELEVENDEDORES)
+    ;(api.getVendedores as any).mockResolvedValue(MOCK_VENDEDORES)
     ;(apiEquipo.getProductividadTv as any).mockResolvedValue(MOCK_PRODUCTIVIDAD_TV)
     ;(apiEquipo.getObjecionesPorPersona as any).mockResolvedValue(MOCK_OBJECIONES_POR_PERSONA)
     ;(apiEquipo.getVentasVendedores as any).mockResolvedValue(MOCK_VENTAS_VENDEDORES)
@@ -128,12 +129,17 @@ describe('Ranking de objeciones', () => {
 })
 
 describe('Facturación', () => {
-    it('el tipo de la cartera sale del TV que la atiende; sin TV, VENDEDOR', async () => {
+    it('el tipo de la cartera: VENDEDOR si es de calle, más el perfil de cada TV que la atiende', async () => {
         montar('/analitica/metricas?vista=facturacion')
+        // Solo de Televentas: farmer y hunter, sin VENDEDOR.
         const tv1 = await screen.findByTestId('fila-facturacion-CARTERA TV1')
         await waitFor(() => expect(within(tv1).getByText('FARMER')).toBeInTheDocument())
         expect(within(tv1).getByText('HUNTER')).toBeInTheDocument()
-        expect(within(screen.getByTestId('fila-facturacion-V9')).getByText('FARMER')).toBeInTheDocument()
+        expect(within(tv1).queryByText('VENDEDOR')).not.toBeInTheDocument()
+        // V9 es de un vendedor de calle y además la atiende un farmer: los dos.
+        const v9 = screen.getByTestId('fila-facturacion-V9')
+        await waitFor(() => expect(within(v9).getByText('VENDEDOR')).toBeInTheDocument())
+        expect(within(v9).getByText('FARMER')).toBeInTheDocument()
         expect(within(screen.getByTestId('fila-facturacion-V1')).getByText('VENDEDOR')).toBeInTheDocument()
         // V8 la tenía un TV inactivo: hoy es de un vendedor.
         expect(within(screen.getByTestId('fila-facturacion-V8')).getByText('VENDEDOR')).toBeInTheDocument()
@@ -168,6 +174,12 @@ describe('Facturación', () => {
         expect(orden().at(-1)).toBe('fila-facturacion-V8')
         fireEvent.click(screen.getByRole('button', { name: /P\.6M/ }))
         expect(orden()[0]).toBe('fila-facturacion-V8')
+    })
+
+    it('la cartera de un vendedor atendida por un TV aparece con los dos filtros', async () => {
+        montar('/analitica/metricas?vista=facturacion&tipo=vendedor')
+        expect(await screen.findByTestId('fila-facturacion-V9')).toBeInTheDocument()
+        await waitFor(() => expect(screen.queryByTestId('fila-facturacion-CARTERA TV1')).not.toBeInTheDocument())
     })
 
     it('el filtro de tipo deja solo las carteras de ese perfil', async () => {

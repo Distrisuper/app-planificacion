@@ -1,4 +1,4 @@
-import { formatVentas, sumarVendedores, tonoCelda, valorColumna } from './facturacion'
+import { formatVentas, sumarVendedores, tonoCelda, tonoDelMes, valorColumna } from './facturacion'
 import type { IVentasVendedor } from '@/types/metricasEquipo'
 
 const V: IVentasVendedor = {
@@ -69,6 +69,14 @@ describe('tonoCelda (contra P.6M, umbrales de Versus)', () => {
         expect(tonoCelda(10, -50)).toBe('alto')
         expect(tonoCelda(-10, -50)).toBe('critico')
     })
+})
+
+it('tonoDelMes compara la proyección del mes, no lo vendido hasta hoy', () => {
+    // jueves 15/10/2026 14:00 ART: 11 de 24 días hábiles. 50 hoy → 109 al cierre.
+    const ahora = new Date('2026-10-15T17:00:00Z')
+    expect(tonoCelda(50, 100)).toBe('bajo')
+    expect(tonoDelMes(50, 100, ahora)).toBe('ok')
+    expect(tonoDelMes(0, 100, ahora)).toBe('sin_valor')
 })
 
 it('formatVentas: enteros con miles; SR con un decimal', () => {

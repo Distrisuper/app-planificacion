@@ -1,3 +1,4 @@
+import { proyectarMes } from './proyeccionVentas'
 import type { IVentasVendedor, PeriodoVentas } from '@/types/metricasEquipo'
 
 /** U = unidades, $ = pesos (monto nominal), SR = super rubros con el mínimo cumplido. */
@@ -67,6 +68,12 @@ export function tonoCelda(valor: number, ref6m: number): TonoCelda {
     if (ratio >= UMBRAL.bajo) return 'bajo'
     return 'critico'
 }
+
+/** El tono del mes en curso: se compara su PROYECCIÓN al cierre contra P.6M, aunque la celda
+ *  muestre lo vendido hasta hoy (la misma regla que Versus). Un mes a medias contra el promedio
+ *  de meses enteros saldría rojo por construcción. */
+export const tonoDelMes = (vendidoHastaHoy: number, ref6m: number, ahora: Date = new Date()): TonoCelda =>
+    tonoCelda(proyectarMes(vendidoHastaHoy, ahora), ref6m)
 
 export const CLASE_TONO: Record<TonoCelda, string> = {
     sin_valor: 'text-slate-400',

@@ -1,18 +1,19 @@
 import { useState } from 'react'
 import { Search } from 'lucide-react'
-import { useTelevendedores } from '@/hooks/useAnalitica'
+import { useTelevendedores, useVendedores } from '@/hooks/useAnalitica'
 import { useVentasVendedores } from '@/hooks/useMetricasEquipo'
 import {
     CLASE_TONO,
     formatVentas,
     sumarVendedores,
     tonoCelda,
+    tonoDelMes,
     valorColumna,
     type ColumnaVentas,
     type VistaVentas,
 } from '@/lib/facturacion'
 import { avanceDelMes, proyectarMes } from '@/lib/proyeccionVentas'
-import { pasaFiltro, tiposDeCartera, type FiltroTipo } from '@/lib/tipoPersona'
+import { clavesDeVendedores, pasaFiltro, tiposDeCartera, type FiltroTipo } from '@/lib/tipoPersona'
 import { cn } from '@/lib/utils'
 import type { IVentasVendedor } from '@/types/metricasEquipo'
 import { BadgeTipo, CLASE_NUM, Cargando, Encabezado, ErrorBloque, Segmentado, Tarjeta, comparar, useOrden } from './ui'
@@ -40,7 +41,8 @@ interface FacturacionVendedoresProps {
  * Facturación por cartera, como "Vendedores · TODOS" de Versus: el mes en curso (ACTUAL, o
  * PROY = proyectado al cierre) contra el mes anterior y los promedios mensuales de 3, 6 y 12
  * meses. Cada celda se pinta contra P.6M (la referencia, que no se pinta). Las ventas son de
- * la CARTERA: su tipo es el perfil del TV que la atiende, o VENDEDOR si no la atiende ninguno.
+ * la CARTERA: lleva VENDEDOR si es de un vendedor de calle y el perfil de cada TV que la
+ * atiende (ver tiposDeCartera).
  */
 export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedoresProps) {
     const [vista, setVista] = useState<VistaVentas>('$')
@@ -48,7 +50,10 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
     const [buscar, setBuscar] = useState('')
     const { orden, ordenarPor } = useOrden<Columna>({ columna: 'p6m', dir: 'desc' })
     const { data, isLoading, isError, refetch } = useVentasVendedores()
-    const { data: tvs } = useTelevendedores()
+    const televendedores = useTelevendedores()
+    const tvs = televendedores.data
+    const { data: roster } = useVendedores()
+    const deCalle = clavesDeVendedores((roster ?? []).map(r => r.codigoParticularVendedor))
 
     const proyectado = modoMes === 'proy'
     const avance = avanceDelMes()
@@ -60,7 +65,7 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
 
     const q = buscar.trim().toLowerCase()
     const filas = (data ?? [])
-        .map(v => ({ v, tipos: tiposDeCartera(v.code, tvs) }))
+        .map(v => ({ v, tipos: tiposDeCartera(v.code, tvs, deCalle) }))
         .filter(({ tipos }) => filtroTipo === 'todos' || pasaFiltro(tipos, filtroTipo))
         .filter(({ v }) => !q || v.name.toLowerCase().includes(q) || v.code.toLowerCase().includes(q))
     filas.sort((a, b) =>
@@ -75,7 +80,13 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
     const celda = (v: IVentasVendedor, c: ColumnaVentas, fuerte = false) => {
         const n = valor(v, c)
         const esRef = c === 'p6m'
-        const tono = esRef ? null : tonoCelda(n, valorColumna(v, 'p6m', vista))
+        const ref6m = valorColumna(v, 'p6m', vista)
+        // El mes en curso se pinta con su proyección aunque se muestre lo vendido hasta hoy.
+        const tono = esRef
+            ? null
+            : c === 'actual'
+              ? tonoDelMes(valorColumna(v, 'actual', vista), ref6m)
+              : tonoCelda(n, ref6m)
         return (
             <td key={c} className={cn('px-2 py-1.5 text-right', esRef && 'bg-slate-50')}>
                 <span
@@ -132,7 +143,13 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
             {isError && <ErrorBloque texto="No se pudo cargar la facturación." onReintentar={() => refetch()} />}
             {data && filas.length === 0 && (
                 <p className="py-8 text-center text-sm text-slate-500">
-                    {q ? `Ningún vendedor coincide con «${buscar}».` : 'Sin ventas para mostrar.'}
+                    {q
+                        ? `Ningún vendedor coincide con «${buscar}».`
+                        : filtroTipo !== 'todos' && televendedores.isLoading
+                          ? 'Cargando el tipo de cada cartera…'
+                          : filtroTipo !== 'todos' && (data ?? []).every(v => tiposDeCartera(v.code, tvs, deCalle).length === 0)
+                            ? 'El tipo de las carteras todavía no está disponible: probá con "Todos".'
+                            : 'Sin ventas para mostrar.'}
                 </p>
             )}
 

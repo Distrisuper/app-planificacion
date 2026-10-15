@@ -94,7 +94,7 @@ export default function ProductividadEquipo({ desde, hasta, filtroTipo }: Produc
                 {tvs.isError && verTvs && (
                     <ErrorBloque texto="No se pudieron cargar los llamados de Televentas." onReintentar={() => tvs.refetch()} />
                 )}
-                {!cargando && filas.length === 0 && !resumen.isError && (
+                {!cargando && filas.length === 0 && !resumen.isError && !(tvs.isError && verTvs) && (
                     <p className="py-8 text-center text-sm text-slate-500">Sin actividad en este período.</p>
                 )}
                 {filas.length > 0 && (
