@@ -93,3 +93,17 @@ export const AYUDA_DURACION_PROMEDIO = (
         </p>
     </div>
 )
+
+export const AYUDA_LLAMADOS = (
+    <div>
+        <Titulo>Llamados</Titulo>
+        <p className="mt-1">
+            Llamados de Televentas a los clientes de este vendedor en el rango (sin las
+            reagendas). Los hace el televendedor, no el vendedor: por eso van aparte y no suman
+            a las visitas, las horas, la cobertura ni la efectividad.
+        </p>
+        <Nota>
+            &quot;Con venta&quot; son los atendidos en los que se ganó al menos un rubro.
+        </Nota>
+    </div>
+)

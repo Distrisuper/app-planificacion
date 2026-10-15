@@ -10,13 +10,17 @@ import {
     AYUDA_DURACION_PROMEDIO,
     AYUDA_EFECTIVIDAD_COMERCIAL,
     AYUDA_HORAS,
+    AYUDA_LLAMADOS,
     ayudaVisitas,
     AYUDA_VISITAS_POR_DIA,
 } from '@/components/analitica/ayudaDetalleVendedor'
 import DetalleVisitaPanel from '@/components/analitica/DetalleVisitaPanel'
-import { useCriterioVisita, useResumen, useVisitasPaginadas } from '@/hooks/useAnalitica'
+import DetalleLlamadoPanel from '@/components/analitica/DetalleLlamadoPanel'
+import FiltroCanal from '@/components/analitica/FiltroCanal'
+import { useContactosPaginados, useCriterioVisita, useResumen } from '@/hooks/useAnalitica'
 import { formatDuracion, formatHoras, formatNumero, formatPct } from '@/lib/analiticaFormat'
-import type { ValidezVisita } from '@/types/analitica'
+import { canalDeParam } from '@/lib/contactos'
+import type { CanalContacto, ValidezVisita } from '@/types/analitica'
 
 /** 'sin_coord' no se ofrece: no es un juicio sobre el vendedor, y ya tiene su aviso. */
 type FiltroValidez = Exclude<ValidezVisita, 'sin_coord'>
@@ -106,21 +110,35 @@ export default function AnaliticaVendedorPage() {
     const hasta = params.get('hasta') ?? ''
     // El rango vive en la URL: así "Volver a la analítica" lo arrastra y el link se
     // puede compartir. `replace` para no llenar el historial con cada fecha tocada.
+    const canal = canalDeParam(params.get('canal'))
     const validezParam = params.get('validez')
+    // La validez es de visitas: con "Llamados" no aplica (una URL armada a mano con las dos
+    // cosas manda el canal).
     const validez: FiltroValidez | undefined =
-        validezParam === 'valida' || validezParam === 'no_validada' ? validezParam : undefined
-    const setRango = (d: string, h: string) =>
+        canal !== 'llamado' && (validezParam === 'valida' || validezParam === 'no_validada')
+            ? validezParam
+            : undefined
+    const escribir = (cambios: { desde?: string; hasta?: string; validez?: FiltroValidez; canal?: CanalContacto }) =>
         setParams(
-            { desde: d, hasta: h, ...(validez ? { validez } : {}) },
+            {
+                desde: cambios.desde ?? desde,
+                hasta: cambios.hasta ?? hasta,
+                ...(cambios.validez ? { validez: cambios.validez } : {}),
+                ...(cambios.canal ? { canal: cambios.canal } : {}),
+            },
             { replace: true },
         )
-    // Tocar el filtro activo lo apaga: es un toggle, no hay botón de "todas" aparte.
+    const setRango = (d: string, h: string) => escribir({ desde: d, hasta: h, validez, canal })
+    // Tocar el filtro activo lo apaga: es un toggle, no hay botón de "todas" aparte. La
+    // validez es de visitas: prenderla pasa el canal a "Visitas" (un llamado no se valida),
+    // así el selector muestra lo que trae la tabla. Apagarla deja el canal como estaba.
     const toggleValidez = (v: FiltroValidez) =>
-        setParams(
-            { desde, hasta, ...(validez === v ? {} : { validez: v }) },
-            { replace: true },
-        )
+        validez === v ? escribir({ canal }) : escribir({ validez: v, canal: 'visita' })
+    // Y elegir "Llamados" apaga la validez, por lo mismo.
+    const setCanal = (c: CanalContacto | undefined) =>
+        escribir({ canal: c, validez: c === 'llamado' ? undefined : validez })
     const [visitaElegida, setVisitaElegida] = useState<number | null>(null)
+    const [llamadoElegido, setLlamadoElegido] = useState<number | null>(null)
 
     const { data: resumen } = useResumen({ desde, hasta })
     const criterio = useCriterioVisita()
@@ -130,8 +148,15 @@ export default function AnaliticaVendedorPage() {
         hasNextPage,
         fetchNextPage,
         isFetchingNextPage,
-    } = useVisitasPaginadas({ desde, hasta, vendedor: codigo, validez, cant: 100 })
-    const visitas = data?.pages.flatMap(p => p.visitas) ?? []
+    } = useContactosPaginados({
+        desde,
+        hasta,
+        vendedor: codigo,
+        validez,
+        ...(canal ? { canal: [canal] } : {}),
+        cant: 100,
+    })
+    const visitas = data?.pages.flatMap(p => p.contactos) ?? []
     const total = data?.pages[0]?.total ?? 0
 
     const vendedor = resumen?.vendedores.find(v => v.codigoParticularVendedor === codigo)
@@ -247,9 +272,37 @@ export default function AnaliticaVendedorPage() {
                                 valor: formatDuracion(vendedor.duracionPromedioMin),
                                 prom: formatDuracion(promedios.duracionPromedioMin),
                             },
+                            // Los llamados de Televentas a sus clientes, aparte: no suman a
+                            // ninguna de las tarjetas de arriba. Sin el dato (backend anterior)
+                            // la tarjeta no aparece, en vez de mostrar un 0 falso.
+                            ...(vendedor.llamados !== undefined
+                                ? [
+                                      {
+                                          titulo: 'Llamados',
+                                          ayuda: AYUDA_LLAMADOS,
+                                          valor: formatNumero(vendedor.llamados),
+                                          prom: formatNumero(promedios.llamados ?? null),
+                                          desglose: (
+                                              <div className="-mx-1.5 space-y-0.5">
+                                                  <FilaDesglose
+                                                      punto="bg-sky-500"
+                                                      etiqueta="Atendidos"
+                                                      valor={formatNumero(vendedor.llamadosAtendidos ?? null)}
+                                                  />
+                                                  <FilaDesglose
+                                                      punto="bg-emerald-500"
+                                                      etiqueta="Con venta"
+                                                      valor={formatNumero(vendedor.llamadosConVenta ?? null)}
+                                                  />
+                                              </div>
+                                          ),
+                                      },
+                                  ]
+                                : []),
                         ] satisfies Tarjeta[]).map((k: Tarjeta) => (
                             <div
                                 key={k.titulo}
+                                data-testid={`tarjeta-${k.titulo}`}
                                 // El desglose va AL LADO del número: debajo hacía la tarjeta
                                 // más alta, y la fila estiraba las demás a esa altura.
                                 className={`min-w-[9.5rem] rounded-lg border border-slate-200 bg-white px-4 py-3 ${
@@ -296,13 +349,19 @@ export default function AnaliticaVendedorPage() {
                     </p>
                 )}
 
+                <FiltroCanal canal={canal} onCambiar={setCanal} />
+
                 {isLoading && <p className="text-sm text-slate-500">Cargando…</p>}
 
                 {data && visitas.length === 0 && (
                     <div className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600">
                         {validez
                             ? `Sin visitas ${validez === 'valida' ? 'válidas' : 'no validadas'} en este rango.`
-                            : 'Sin visitas en este rango.'}
+                            : canal === 'llamado'
+                              ? 'Sin llamados en este rango.'
+                              : canal === 'visita'
+                                ? 'Sin visitas en este rango.'
+                                : 'Sin visitas ni llamados en este rango.'}
                     </div>
                 )}
 
@@ -310,7 +369,14 @@ export default function AnaliticaVendedorPage() {
                     <div className="space-y-3">
                         <TablaVisitas
                             visitas={visitas}
-                            onElegirVisita={setVisitaElegida}
+                            onElegirVisita={id => {
+                                setLlamadoElegido(null)
+                                setVisitaElegida(id)
+                            }}
+                            onElegirLlamado={id => {
+                                setVisitaElegida(null)
+                                setLlamadoElegido(id)
+                            }}
                             toleranciaMetros={criterio?.toleranciaMetros}
                         />
                         <div className="flex items-center justify-between text-xs text-slate-500">
@@ -335,6 +401,13 @@ export default function AnaliticaVendedorPage() {
                     <DetalleVisitaPanel
                         visitaId={visitaElegida}
                         onCerrar={() => setVisitaElegida(null)}
+                    />
+                )}
+
+                {llamadoElegido !== null && (
+                    <DetalleLlamadoPanel
+                        llamadoId={llamadoElegido}
+                        onCerrar={() => setLlamadoElegido(null)}
                     />
                 )}
             </main>

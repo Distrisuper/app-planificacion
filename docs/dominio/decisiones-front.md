@@ -184,6 +184,14 @@ Rutas (`src/App.tsx`): vendedor `/` (agenda) y `/metricas`; gerencia `/analitica
 `/analitica/actividad`, `/analitica/vendedor/:codigo`, `/analitica/ruta` (edición de la rotación
 con drag & drop), `/analitica/altas`, `/analitica/fichas`; además `/login` y `/sin-permisos`.
 
+**Contactos en gerencia (visitas y llamados).** Actividad y el detalle del vendedor leen
+`GET /analitica/contactos`: visitas y llamados de Televentas mezclados, cada fila con su `canal`
+(`visita` | `llamado`; el chat sería un canal más). Los llamados se atribuyen al vendedor dueño del
+cliente y muestran quién llamó. **No suman** a visitas, horas, cobertura ni efectividad: van con
+contadores propios (tarjeta "Llamados", KPI de actividad). Los "No visité" viajan en el mismo feed
+pero no son un contacto. El filtro de canal vive en la URL (`canal`); la validez implica visitas,
+así que prenderla saca el canal y elegir "Llamados" apaga la validez.
+
 Fuera de alcance salvo pedido explícito: ranking de vendedores, novedades para el vendedor, link de
 WhatsApp al cliente, recorrido continuo de la visita o del día (requiere app nativa), control
 minuto a minuto de un vendedor.

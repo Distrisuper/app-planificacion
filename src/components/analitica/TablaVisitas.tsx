@@ -1,11 +1,15 @@
 import { claseDistancia, formatDistancia, formatDuracion, peorDistancia } from '@/lib/analiticaFormat'
+import { Phone } from 'lucide-react'
 import { horaNegocio } from '@/lib/fechas'
-import type { IVisitaFila } from '@/types/analitica'
+import { esLlamado, ETIQUETA_ESTADO_LLAMADO } from '@/lib/contactos'
+import type { IContactoFila, IContactoLlamado, IVisitaFila } from '@/types/analitica'
 import type { ResultadoMotivo } from '@/types/planificacion'
 
 interface TablaVisitasProps {
-    visitas: IVisitaFila[]
+    /** Filas de /visitas o del feed de contactos (visitas y llamados mezclados). */
+    visitas: (IVisitaFila | IContactoFila)[]
     onElegirVisita: (visitaId: number) => void
+    onElegirLlamado?: (llamadoId: number) => void
     /** De `useCriterioVisita`, que la página ya tiene. Sin él se pinta con el respaldo
      *  (TOLERANCIA_METROS) mientras carga. */
     toleranciaMetros?: number
@@ -34,7 +38,7 @@ const CLASE_DISTANCIA: Record<string, string> = {
 
 const etiquetaResultado = (r: ResultadoMotivo | null) => (r ? ETIQUETA_RESULTADO[r] : '—')
 
-export default function TablaVisitas({ visitas, onElegirVisita, toleranciaMetros }: TablaVisitasProps) {
+export default function TablaVisitas({ visitas, onElegirVisita, onElegirLlamado, toleranciaMetros }: TablaVisitasProps) {
     return (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
@@ -51,9 +55,11 @@ export default function TablaVisitas({ visitas, onElegirVisita, toleranciaMetros
                     </tr>
                 </thead>
                 <tbody>
-                    {visitas.map(v => (
+                    {visitas.map(v => esLlamado(v) ? (
+                        <FilaLlamado key={`l-${v.llamadoId}`} l={v} onElegir={onElegirLlamado} />
+                    ) : (
                         <tr
-                            key={v.visitaId}
+                            key={`v-${v.visitaId}`}
                             onClick={() => onElegirVisita(v.visitaId)}
                             className="cursor-pointer border-b border-slate-100 hover:bg-blue-50"
                         >
@@ -93,5 +99,41 @@ export default function TablaVisitas({ visitas, onElegirVisita, toleranciaMetros
                 </tbody>
             </table>
         </div>
+    )
+}
+
+/** Un llamado de Televentas al cliente: sin duración ni distancia (no hay GPS). Se marca
+ *  como llamado al lado del cliente, con quién llamó y el desenlace. */
+function FilaLlamado({ l, onElegir }: { l: IContactoLlamado; onElegir?: (llamadoId: number) => void }) {
+    return (
+        <tr
+            onClick={() => onElegir?.(l.llamadoId)}
+            className="cursor-pointer border-b border-slate-100 bg-sky-50/40 hover:bg-blue-50"
+        >
+            <td className="px-3 py-2 text-slate-600">{l.fecha}</td>
+            <td className="px-3 py-2 text-slate-600">{horaNegocio(l.fechaInicio)}</td>
+            <td className="px-3 py-2 text-right text-slate-400">—</td>
+            <td className="px-3 py-2 text-right text-slate-400">—</td>
+            <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500">
+                {l.codigoParticularCliente}
+            </td>
+            <td className="px-3 py-2 text-slate-900">
+                {l.nombreCliente}
+                <span
+                    data-testid={`canal-llamado-${l.llamadoId}`}
+                    className="mt-0.5 flex items-center gap-1 text-xs text-sky-700"
+                >
+                    <Phone aria-hidden className="h-3 w-3" />
+                    Llamado · {ETIQUETA_ESTADO_LLAMADO[l.estado]} · {l.nombreAutor ?? l.codigoAutor}
+                </span>
+            </td>
+            <td className="px-3 py-2 text-slate-600">{l.motivos.length > 0 ? l.motivos.join(', ') : '—'}</td>
+            <td
+                data-testid={`resultado-llamado-${l.llamadoId}`}
+                className={`px-3 py-2 ${l.resultado ? COLOR_RESULTADO[l.resultado] : 'text-slate-400'}`}
+            >
+                {etiquetaResultado(l.resultado)}
+            </td>
+        </tr>
     )
 }
