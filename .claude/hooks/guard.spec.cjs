@@ -1,6 +1,6 @@
 // Tests del guard. Se corren con `npm run check:hooks` (node:test, sin Vitest: el guard
 // tiene que poder probarse con `node` pelado, igual que se ejecuta).
-const { test, describe } = require('node:test')
+const { test, describe, after } = require('node:test')
 const assert = require('node:assert/strict')
 const path = require('node:path')
 const { spawnSync } = require('node:child_process')
@@ -655,5 +655,167 @@ describe('el hook de punta a punta (proceso real)', () => {
     const r = crudo('{"tool_name":"Bash","tool_input":{"command":"gh pr merge 1"', {})
     assert.equal(r.status, 0, r.stderr)
     deny(JSON.parse(r.stdout).hookSpecificOutput)
+  })
+})
+
+// Las tareas se trabajan en un worktree; el checkout principal es solo para leer,
+// actualizar la base y crear worktrees.
+describe('checkout principal', () => {
+  const BASE = guard.RAMA_BASE
+  const enCheckout = (principal, rama) => input =>
+    evaluar({ cwd: PROJECT, ...input }, { ...ctx(rama), esCheckoutPrincipal: () => principal })
+  const principal = enCheckout(true, BASE)
+  const worktree = enCheckout(false, 'feature/algo')
+  const cmd = command => ({ tool_name: 'Bash', tool_input: { command } })
+  const denyPrincipal = r => denyPor(r, /checkout principal/)
+
+  for (const c of [
+    'git commit -m x',
+    'git add src/x.ts',
+    'git checkout -b feature/x',
+    'git checkout -B feature/x',
+    'git switch -c x',
+    'git switch --create x',
+    'git branch nueva',
+    'git branch -m nueva',
+    'git switch feature/x',
+    'git checkout feature/x',
+    'git checkout -',
+    'git checkout -- src/x.ts',
+    'git stash',
+    'git stash pop',
+    'git tag v1',
+    'git merge feature/x',
+    `git rebase origin/${BASE}`,
+    `git reset --hard origin/${BASE}`,
+    'git restore src/x.ts',
+    'git clean -fd',
+    'git pull',
+    'git push -u origin feature/x',
+    'git -C . commit -m x',
+  ])
+    test(`niega ${c}`, () => denyPrincipal(principal(cmd(c))))
+  test('niega Edit de src/x.ts', () =>
+    denyPrincipal(principal({ tool_name: 'Edit', tool_input: { file_path: 'src/x.ts' } })))
+  test('niega Write de un archivo del proyecto', () =>
+    denyPrincipal(
+      principal({ tool_name: 'Write', tool_input: { file_path: path.join(PROJECT, 'docs', 'x.md') } }),
+    ))
+  test('niega PowerShell git commit', () =>
+    denyPrincipal(principal({ tool_name: 'PowerShell', tool_input: { command: 'git commit -m x' } })))
+
+  for (const c of [
+    'git status',
+    'git log --oneline -5',
+    'git diff',
+    'git show HEAD',
+    'git grep x',
+    'git blame src/x.ts',
+    'git ls-files',
+    'git rev-parse HEAD',
+    'git remote -v',
+    'git config --get core.hooksPath',
+    'git branch',
+    'git branch -a',
+    'git branch -vv',
+    'git branch --show-current',
+    'git branch --list feature/*',
+    'git branch -d feature/vieja',
+    'git tag',
+    'git tag -l',
+    'git stash list',
+    'git fetch origin',
+    'git pull --ff-only',
+    `git worktree add ../x -b feature/x origin/${BASE}`,
+    'git worktree list',
+    'git worktree remove ../x',
+    'git worktree prune',
+    `git switch ${BASE}`,
+    `git checkout ${BASE}`,
+    'npm run check',
+    'cat package.json',
+  ])
+    test(`permite ${c}`, () => pasa(principal(cmd(c))))
+  test('permite Read', () => pasa(principal({ tool_name: 'Read', tool_input: { file_path: 'src/x.ts' } })))
+  test('permite escribir fuera del proyecto', () =>
+    pasa(
+      principal({
+        tool_name: 'Write',
+        tool_input: { file_path: path.resolve(PROJECT, '..', 'notas.md') },
+      }),
+    ))
+  test('permite editar un worktree nativo de Claude Code (.claude/worktrees)', () =>
+    pasa(
+      principal({
+        tool_name: 'Edit',
+        tool_input: { file_path: path.join(PROJECT, '.claude', 'worktrees', 'x', 'src', 'a.ts') },
+      }),
+    ))
+  test('las reglas de antes siguen: push --force se niega igual', () =>
+    deny(principal(cmd('git push --force origin feature/x'))))
+
+  test('en un worktree permite Edit de src/x.ts', () =>
+    pasa(worktree({ tool_name: 'Edit', tool_input: { file_path: 'src/x.ts' } })))
+  test('en un worktree permite git commit en una rama feature', () => pasa(worktree(cmd('git commit -m x'))))
+  test('en un worktree permite git checkout -b', () => pasa(worktree(cmd('git checkout -b feature/x'))))
+  test('un ctx sin esCheckoutPrincipal se toma como worktree', () => pasa(bash('git commit -m x')))
+  test('si esCheckoutPrincipal tira, no se niega', () =>
+    pasa(
+      evaluar({ tool_name: 'Bash', tool_input: { command: 'git commit -m x' }, cwd: PROJECT }, {
+        ...ctx(),
+        esCheckoutPrincipal: () => {
+          throw new Error('sin git')
+        },
+      }),
+    ))
+  test('`git -C <dir>` pregunta por ese directorio', () => {
+    const dirs = []
+    evaluar({ tool_name: 'Bash', tool_input: { command: 'git -C ../otro commit -m x' }, cwd: PROJECT }, {
+      ...ctx(),
+      esCheckoutPrincipal: d => (dirs.push(d), false),
+    })
+    assert.deepEqual(dirs, [path.resolve(PROJECT, '../otro')])
+  })
+})
+
+describe('checkout principal: detección real', () => {
+  const fs = require('node:fs')
+  const os = require('node:os')
+  const { execFileSync } = require('node:child_process')
+  const { esCheckoutPrincipalReal } = require('./guard.cjs')
+  const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'guard-principal-'))
+  const principal = path.join(raiz, 'repo')
+  const enlazado = path.join(raiz, 'wt')
+  const git = (cwd, ...args) => execFileSync('git', args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+  fs.mkdirSync(principal)
+  git(principal, 'init', '-q')
+  git(principal, '-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'commit.gpgsign=false', 'commit', '-q', '--allow-empty', '-m', 'init')
+  git(principal, 'worktree', 'add', '-q', enlazado, '-b', 'feature/x')
+
+  test('da true en el checkout principal', () => assert.equal(esCheckoutPrincipalReal(principal), true))
+  test('da true en una subcarpeta del checkout principal', () => {
+    fs.mkdirSync(path.join(principal, 'src'))
+    assert.equal(esCheckoutPrincipalReal(path.join(principal, 'src')), true)
+  })
+  test('da false en el worktree enlazado', () => assert.equal(esCheckoutPrincipalReal(enlazado), false))
+  test('da false fuera de un repo', () => {
+    const suelta = path.join(raiz, 'suelta')
+    fs.mkdirSync(suelta)
+    // Que git no suba a buscar un repo más arriba de la carpeta temporal.
+    const antes = process.env.GIT_CEILING_DIRECTORIES
+    process.env.GIT_CEILING_DIRECTORIES = raiz
+    try {
+      assert.equal(esCheckoutPrincipalReal(suelta), false)
+    } finally {
+      if (antes === undefined) delete process.env.GIT_CEILING_DIRECTORIES
+      else process.env.GIT_CEILING_DIRECTORIES = antes
+    }
+  })
+  after(() => {
+    try {
+      fs.rmSync(raiz, { recursive: true, force: true })
+    } catch {
+      // en Windows .git/objects puede quedar de solo lectura; es una carpeta temporal
+    }
   })
 })
