@@ -72,6 +72,14 @@ export interface IVendedorMetricas {
     pctNoOfrecidos: number | null
     /** Ofrecimientos sin resolver en visitas ya cerradas. Mide calidad del dato. */
     ofrecimientosSinResolver: number
+
+    // Llamados de Televentas a los clientes del vendedor (el dueño del cliente al llamar).
+    // Van aparte: no suman a visitas, horas, cobertura ni efectividad. Opcionales: un
+    // backend anterior a /analitica/contactos no los manda, y la tarjeta no se inventa.
+    llamados?: number
+    llamadosAtendidos?: number
+    /** Atendidos con algún rubro ganado (el estado "venta" de Televentas). */
+    llamadosConVenta?: number
 }
 
 export interface IAnaliticaResumen {
@@ -143,6 +151,86 @@ export interface IVisitasArgs extends IAnaliticaFiltro {
     validez?: ValidezVisita
     pagina?: number
     cant?: number
+}
+
+/** Por dónde se contactó al cliente. Hoy visita o llamado; el chat sería un canal más. */
+export type CanalContacto = 'visita' | 'llamado'
+
+/** Una fila de visita del feed de contactos: la misma de /visitas, con su canal. Incluye
+ *  los "No visité", que NO son un contacto (nadie habló con el cliente): no se cuentan
+ *  como tal. */
+export interface IContactoVisita extends IVisitaFila {
+    canal: 'visita'
+}
+
+/** Lo que dejó un llamado, con la regla de Televentas. */
+export type EstadoLlamado = 'venta' | 'pendiente_pedido' | 'sin_venta' | 'no_atendio' | 'volver_a_llamar'
+
+/** Un llamado de Televentas. Sin duración, distancias ni validez: no hay GPS. */
+export interface IContactoLlamado {
+    canal: 'llamado'
+    llamadoId: number
+    tipo: 'atendido' | 'no_atendido'
+    estado: EstadoLlamado
+    /** Día de negocio del llamado (YYYY-MM-DD). */
+    fecha: string
+    /** Instante ISO UTC; la hora visible se formatea con `horaNegocio`. */
+    fechaInicio: string
+    /** El vendedor dueño del cliente al llamar. */
+    codigoParticularVendedor: string
+    nombreVendedor: string
+    codigoParticularCliente: string
+    nombreCliente: string
+    /** Quién llamó (el TV). */
+    codigoAutor: string
+    nombreAutor: string | null
+    motivos: string[]
+    resultado: ResultadoMotivo | null
+}
+
+export type IContactoFila = IContactoVisita | IContactoLlamado
+
+export interface IContactosPage {
+    total: number
+    pagina: number
+    cant: number
+    contactos: IContactoFila[]
+}
+
+export interface IContactosArgs extends IAnaliticaFiltro {
+    vendedor?: string
+    cliente?: string
+    /** Ausente = todos los canales. */
+    canal?: CanalContacto[]
+    /** Implica canal visita: un llamado no se valida. */
+    validez?: ValidezVisita
+    pagina?: number
+    cant?: number
+}
+
+/** GET /analitica/llamados/:id. */
+export interface ILlamadoDetalle {
+    llamadoId: number
+    fecha: string
+    fechaInicio: string
+    tipo: 'atendido' | 'no_atendido'
+    estado: EstadoLlamado
+    codigoParticularVendedor: string
+    nombreVendedor: string
+    codigoParticularCliente: string
+    nombreCliente: string
+    codigoAutor: string
+    nombreAutor: string | null
+    /** Los motivos del llamado ("No atiende", "Volver a llamar"). */
+    motivos: string[]
+    ofrecimientos: {
+        codigo: string
+        descripcion: string
+        motivos: { descripcion: string; resultado: string | null; valores: Record<string, string | number> }[]
+        marcas: string[]
+    }[]
+    observaciones: string | null
+    proximoContacto: string | null
 }
 
 export interface IOfrecimientoMotivoDetalle {

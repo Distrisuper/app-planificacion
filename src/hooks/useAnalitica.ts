@@ -1,13 +1,16 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     getAltas,
+    getContactos,
     getCriterioVisita,
+    getLlamadoDetalle,
     getObjeciones,
     getResumen,
     getVendedores,
     getVisitaDetalle,
     getVisitas,
     vincularAlta,
+    type IContactosArgs,
     type IObjecionesArgs,
     type IVisitasArgs,
 } from '@/api/analitica'
@@ -31,7 +34,22 @@ export const analiticaKeys = {
             (a.tipo ?? []).join(','),
             a.validez ?? '',
         ] as const,
+    contactos: (a: IContactosArgs) =>
+        [
+            'analitica',
+            'contactos',
+            a.vendedor ?? '',
+            (a.vendedores ?? []).join(','),
+            a.desde,
+            a.hasta,
+            a.cliente ?? '',
+            // El canal es un filtro más: sin él en la clave, "Llamados" mostraría las
+            // filas cacheadas de "Todo".
+            (a.canal ?? []).join(','),
+            a.validez ?? '',
+        ] as const,
     detalle: (id: number) => ['analitica', 'visita', id] as const,
+    detalleLlamado: (id: number) => ['analitica', 'llamado', id] as const,
     objeciones: (a: IObjecionesArgs) =>
         ['analitica', 'objeciones', a.desde, a.hasta, a.zona ?? '', a.rubro ?? ''] as const,
     vendedores: () => ['analitica', 'vendedores'] as const,
@@ -81,6 +99,40 @@ export function useVisitasPaginadas(args: Omit<IVisitasArgs, 'pagina'>) {
                 ? ultima.pagina + 1
                 : undefined
         },
+    })
+}
+
+/** Visitas y llamados mezclados (una página). Sin `vendedor` es la vista del equipo. */
+export function useContactos(args: IContactosArgs, opciones: OpcionesVisitas = {}) {
+    const refrescarCada = opciones.refrescarCada ?? 0
+    return useQuery({
+        queryKey: analiticaKeys.contactos(args),
+        queryFn: () => getContactos(args),
+        refetchInterval: refrescarCada > 0 ? refrescarCada : false,
+        staleTime: refrescarCada > 0 ? 0 : undefined,
+    })
+}
+
+/** Como `useVisitasPaginadas`, sobre el feed de contactos. */
+export function useContactosPaginados(args: Omit<IContactosArgs, 'pagina'>) {
+    return useInfiniteQuery({
+        queryKey: [...analiticaKeys.contactos(args), 'paginadas', args.cant ?? 0] as const,
+        queryFn: ({ pageParam }) => getContactos({ ...args, pagina: pageParam }),
+        initialPageParam: 1,
+        getNextPageParam: (ultima, paginas) => {
+            const cargadas = paginas.reduce((a, p) => a + p.contactos.length, 0)
+            return cargadas < ultima.total && ultima.contactos.length > 0
+                ? ultima.pagina + 1
+                : undefined
+        },
+    })
+}
+
+export function useLlamadoDetalle(llamadoId: number | null) {
+    return useQuery({
+        queryKey: analiticaKeys.detalleLlamado(llamadoId ?? 0),
+        queryFn: () => getLlamadoDetalle(llamadoId as number),
+        enabled: llamadoId !== null,
     })
 }
 

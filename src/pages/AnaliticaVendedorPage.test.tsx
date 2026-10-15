@@ -34,6 +34,12 @@ function montar(codigo = 'V1') {
 beforeEach(() => {
     vi.clearAllMocks()
     ;(api.getResumen as any).mockResolvedValue(MOCK_RESUMEN)
+    // La página pide /contactos (visitas y llamados). Estos tests son de las visitas: el
+    // feed se arma con lo que devuelva el mock de getVisitas de cada caso, mismos args.
+    ;(api.getContactos as any).mockImplementation(async (args: api.IContactosArgs) => {
+        const { visitas, ...resto } = await api.getVisitas(args)
+        return { ...resto, contactos: visitas.map(v => ({ ...v, canal: 'visita' })) }
+    })
 })
 
 it('muestra el nombre del vendedor y sus visitas', async () => {
@@ -60,7 +66,7 @@ it('pide las visitas del vendedor de la URL con el rango de la query', async () 
 it('sin visitas en el rango muestra un vacío explícito', async () => {
     ;(api.getVisitas as any).mockResolvedValue({ total: 0, pagina: 1, cant: 0, visitas: [] })
     montar()
-    await waitFor(() => expect(screen.getByText(/sin visitas en este rango/i)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(/sin visitas ni llamados en este rango/i)).toBeInTheDocument())
 })
 
 it('ofrece volver al nivel 1 conservando el rango', async () => {

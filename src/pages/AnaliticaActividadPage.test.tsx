@@ -51,6 +51,12 @@ beforeEach(() => {
         cant: 1,
         visitas: [FILA],
     })
+    // La página pide /contactos (visitas y llamados). Estos tests son de las visitas: el
+    // feed se arma con lo que devuelva el mock de getVisitas de cada caso, mismos args.
+    ;(api.getContactos as any).mockImplementation(async (args: api.IContactosArgs) => {
+        const { visitas, ...resto } = await api.getVisitas(args)
+        return { ...resto, contactos: visitas.map(v => ({ ...v, canal: 'visita' })) }
+    })
 })
 
 it('sin rango en la URL arranca en hoy', async () => {

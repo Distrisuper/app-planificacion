@@ -1,6 +1,8 @@
 import { apiClient } from './apiClient'
 import {
     MOCK_DETALLES,
+    MOCK_DETALLES_LLAMADO,
+    MOCK_LLAMADOS,
     MOCK_OBJECIONES,
     MOCK_OTRAS_RESOLUCIONES,
     MOCK_RESUMEN,
@@ -11,6 +13,10 @@ import {
 } from '@/mocks/analiticaMock'
 import { incluyeHoy } from '@/lib/fechas'
 import type {
+    IContactoFila,
+    IContactosArgs,
+    IContactosPage,
+    ILlamadoDetalle,
     IAltaRelevada,
     IAnaliticaFiltro,
     IAnaliticaResumen,
@@ -26,7 +32,7 @@ import type {
     IVincularAltaResult,
 } from '@/types/analitica'
 
-export type { IVisitasArgs }
+export type { IVisitasArgs, IContactosArgs }
 
 const USA_MOCK = import.meta.env.VITE_ANALITICA_MOCK === '1'
 
@@ -115,6 +121,44 @@ export const getVisitas = async (args: IVisitasArgs): Promise<IVisitasPage> => {
         return { total: visitas.length, pagina: args.pagina ?? 1, cant: visitas.length, visitas }
     }
     const res = await apiClient.get('/planificacion/analitica/visitas', { params: args })
+    return res.data.data
+}
+
+/**
+ * Visitas y llamados de Televentas mezclados, lo último arriba. El backend los une y
+ * pagina en SQL: juntar dos páginas acá no daría una página correcta.
+ */
+export const getContactos = async (args: IContactosArgs): Promise<IContactosPage> => {
+    if (USA_MOCK) {
+        await esperar()
+        const canales = args.canal?.length ? args.canal : ['visita', 'llamado']
+        const { visitas } = canales.includes('visita')
+            ? await getVisitas({ ...args, cant: undefined, pagina: undefined })
+            : { visitas: [] }
+        const llamados =
+            canales.includes('llamado') && !args.validez
+                ? MOCK_LLAMADOS.filter(l => l.fecha >= args.desde && l.fecha <= args.hasta)
+                      .filter(l => !args.vendedor || l.codigoParticularVendedor === args.vendedor)
+                      .filter(l => !args.vendedores?.length || args.vendedores.includes(l.codigoParticularVendedor))
+                : []
+        const contactos: IContactoFila[] = [
+            ...visitas.map(v => ({ ...v, canal: 'visita' as const })),
+            ...llamados,
+        ].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))
+        return { total: contactos.length, pagina: args.pagina ?? 1, cant: contactos.length, contactos }
+    }
+    const res = await apiClient.get('/planificacion/analitica/contactos', { params: args })
+    return res.data.data
+}
+
+export const getLlamadoDetalle = async (llamadoId: number): Promise<ILlamadoDetalle> => {
+    if (USA_MOCK) {
+        await esperar()
+        const detalle = MOCK_DETALLES_LLAMADO[llamadoId]
+        if (!detalle) throw new Error('Llamado no encontrado')
+        return detalle
+    }
+    const res = await apiClient.get(`/planificacion/analitica/llamados/${llamadoId}`)
     return res.data.data
 }
 

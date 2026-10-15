@@ -1,6 +1,8 @@
 import { horaNegocio, isoLocal } from '@/lib/fechas'
 import type {
     IAnaliticaResumen,
+    IContactoLlamado,
+    ILlamadoDetalle,
     ICoord,
     IObjecionesResumen,
     IVendedorMetricas,
@@ -47,6 +49,9 @@ function vendedor(over: Partial<IVendedorMetricas> & {
         efectividadComercial: 0.4,
         pctNoOfrecidos: 0.18,
         ofrecimientosSinResolver: 2,
+        llamados: 18,
+        llamadosAtendidos: 11,
+        llamadosConVenta: 4,
     }
     return { ...base, ...over }
 }
@@ -309,6 +314,9 @@ const PROMEDIOS: IVendedorMetricas = {
     efectividadComercial: promediar('efectividadComercial'),
     pctNoOfrecidos: promediar('pctNoOfrecidos'),
     ofrecimientosSinResolver: promediar('ofrecimientosSinResolver')!,
+    llamados: promediar('llamados')!,
+    llamadosAtendidos: promediar('llamadosAtendidos')!,
+    llamadosConVenta: promediar('llamadosConVenta')!,
 }
 
 export const MOCK_RESUMEN: IAnaliticaResumen = {
@@ -557,6 +565,66 @@ export const MOCK_DETALLES: Record<number, IVisitaDetalle> = Object.fromEntries(
     [...Object.values(MOCK_VISITAS).flat(), ...MOCK_OTRAS_RESOLUCIONES, ...MOCK_VISITAS_HOY].map(
         (fila, i) => [fila.visitaId, detalleDe(fila, i % 20)],
     ),
+)
+
+/** Llamados de Televentas a clientes de cada vendedor: tres en la semana del fixture y uno
+ *  hoy, con los cuatro desenlaces que la tabla tiene que distinguir. */
+const DESENLACES: Pick<IContactoLlamado, 'tipo' | 'estado' | 'motivos' | 'resultado'>[] = [
+    { tipo: 'atendido', estado: 'venta', motivos: ['Saqué pedido'], resultado: 'ganado' },
+    { tipo: 'no_atendido', estado: 'no_atendio', motivos: ['No atiende'], resultado: null },
+    { tipo: 'atendido', estado: 'sin_venta', motivos: ['Precio'], resultado: 'perdido' },
+    { tipo: 'no_atendido', estado: 'volver_a_llamar', motivos: ['Volver a llamar'], resultado: null },
+]
+let seqLlamado = 5000
+
+export const MOCK_LLAMADOS: IContactoLlamado[] = VENDEDORES.slice(0, 6).flatMap((v, i) => {
+    const hoy = isoLocal(new Date())
+    return ['2026-07-21', '2026-07-22', '2026-07-23', hoy].map((fecha, j) => ({
+        canal: 'llamado' as const,
+        llamadoId: seqLlamado++,
+        fecha,
+        fechaInicio: instante(fecha, 10 + j, (i * 11) % 60),
+        codigoParticularVendedor: v.codigoParticularVendedor,
+        nombreVendedor: v.nombreVendedor,
+        codigoParticularCliente: `C${3000 + i * 4 + j}`,
+        nombreCliente: CLIENTES[(i + j) % CLIENTES.length],
+        codigoAutor: '9001',
+        nombreAutor: 'GOMEZ LUCIA (TV)',
+        ...DESENLACES[(i + j) % DESENLACES.length],
+    }))
+})
+
+export const MOCK_DETALLES_LLAMADO: Record<number, ILlamadoDetalle> = Object.fromEntries(
+    MOCK_LLAMADOS.map(l => [
+        l.llamadoId,
+        {
+            llamadoId: l.llamadoId,
+            fecha: l.fecha,
+            fechaInicio: l.fechaInicio,
+            tipo: l.tipo,
+            estado: l.estado,
+            codigoParticularVendedor: l.codigoParticularVendedor,
+            nombreVendedor: l.nombreVendedor,
+            codigoParticularCliente: l.codigoParticularCliente,
+            nombreCliente: l.nombreCliente,
+            codigoAutor: l.codigoAutor,
+            nombreAutor: l.nombreAutor,
+            motivos: l.tipo === 'no_atendido' ? l.motivos : [],
+            ofrecimientos:
+                l.tipo === 'atendido'
+                    ? [
+                          {
+                              codigo: '12',
+                              descripcion: 'Filtros',
+                              motivos: [{ descripcion: l.motivos[0], resultado: l.resultado, valores: {} }],
+                              marcas: ['FRAS-LE'],
+                          },
+                      ]
+                    : [],
+            observaciones: l.tipo === 'atendido' ? 'Pide la lista nueva por WhatsApp.' : null,
+            proximoContacto: l.estado === 'volver_a_llamar' ? l.fecha : null,
+        },
+    ]),
 )
 
 export const MOCK_OBJECIONES: IObjecionesResumen = {

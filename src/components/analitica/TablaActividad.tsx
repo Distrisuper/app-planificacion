@@ -1,11 +1,15 @@
 import { claseDistancia, formatDistancia, formatDuracion, peorDistancia } from '@/lib/analiticaFormat'
+import { Phone } from 'lucide-react'
 import { horaNegocio } from '@/lib/fechas'
-import type { IVisitaFila } from '@/types/analitica'
+import { esLlamado, ETIQUETA_ESTADO_LLAMADO } from '@/lib/contactos'
+import type { IContactoFila, IContactoLlamado, IVisitaFila } from '@/types/analitica'
 import type { ResultadoMotivo } from '@/types/planificacion'
 
 interface TablaActividadProps {
-    filas: IVisitaFila[]
+    /** Filas de /visitas o del feed de contactos (visitas y llamados mezclados). */
+    filas: (IVisitaFila | IContactoFila)[]
     onElegirVisita: (visitaId: number) => void
+    onElegirLlamado?: (llamadoId: number) => void
     /** De `useCriterioVisita`, que la página ya tiene. Sin él se pinta con el respaldo
      *  (TOLERANCIA_METROS) mientras carga. */
     toleranciaMetros?: number
@@ -46,7 +50,7 @@ function estadoDe(fila: IVisitaFila): Estado {
 
 const etiquetaResultado = (r: ResultadoMotivo | null) => (r ? ETIQUETA_RESULTADO[r] : '—')
 
-export default function TablaActividad({ filas, onElegirVisita, toleranciaMetros }: TablaActividadProps) {
+export default function TablaActividad({ filas, onElegirVisita, onElegirLlamado, toleranciaMetros }: TablaActividadProps) {
     return (
         <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
             <table className="w-full text-sm">
@@ -65,10 +69,11 @@ export default function TablaActividad({ filas, onElegirVisita, toleranciaMetros
                 </thead>
                 <tbody>
                     {filas.map(f => {
+                        if (esLlamado(f)) return <FilaLlamado key={`l-${f.llamadoId}`} f={f} onElegir={onElegirLlamado} />
                         const estado = estadoDe(f)
                         return (
                             <tr
-                                key={f.visitaId}
+                                key={`v-${f.visitaId}`}
                                 onClick={() => onElegirVisita(f.visitaId)}
                                 className="cursor-pointer border-b border-slate-100 hover:bg-blue-50"
                             >
@@ -112,5 +117,45 @@ export default function TablaActividad({ filas, onElegirVisita, toleranciaMetros
                 </tbody>
             </table>
         </div>
+    )
+}
+
+/** Un llamado de Televentas: sin duración ni distancia (no hay GPS), con quién llamó. */
+function FilaLlamado({ f, onElegir }: { f: IContactoLlamado; onElegir?: (llamadoId: number) => void }) {
+    return (
+        <tr
+            onClick={() => onElegir?.(f.llamadoId)}
+            className="cursor-pointer border-b border-slate-100 hover:bg-blue-50"
+        >
+            <td className="whitespace-nowrap px-3 py-2 text-slate-600">
+                {horaNegocio(f.fechaInicio)}
+                <span className="ml-2 text-xs text-slate-400">{f.fecha}</span>
+            </td>
+            <td className="px-3 py-2">
+                <span
+                    data-testid={`estado-llamado-${f.llamadoId}`}
+                    className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800"
+                >
+                    <Phone aria-hidden className="h-3 w-3" />
+                    Llamado · {ETIQUETA_ESTADO_LLAMADO[f.estado]}
+                </span>
+            </td>
+            <td className="px-3 py-2 text-slate-700">
+                {f.nombreVendedor}
+                <span className="block text-xs text-slate-400">llamó {f.nombreAutor ?? f.codigoAutor}</span>
+            </td>
+            <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-slate-500">
+                {f.codigoParticularCliente}
+            </td>
+            <td className="px-3 py-2 text-slate-900">{f.nombreCliente}</td>
+            <td className="px-3 py-2 text-right text-slate-400">—</td>
+            <td data-testid={`distancia-llamado-${f.llamadoId}`} className="px-3 py-2 text-right text-slate-400">
+                —
+            </td>
+            <td className="px-3 py-2 text-slate-600">{f.motivos.length > 0 ? f.motivos.join(', ') : '—'}</td>
+            <td className={`px-3 py-2 ${f.resultado ? COLOR_RESULTADO[f.resultado] : 'text-slate-400'}`}>
+                {etiquetaResultado(f.resultado)}
+            </td>
+        </tr>
     )
 }
