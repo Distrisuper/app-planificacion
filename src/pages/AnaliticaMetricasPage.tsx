@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
-import SelectorPeriodo, { type ModoPeriodo } from '@/components/analitica/SelectorPeriodo'
+import FiltroPeriodo from '@/components/analitica/FiltroPeriodo'
 import FacturacionVendedores from '@/components/analitica/metricas/FacturacionVendedores'
 import ProductividadEquipo from '@/components/analitica/metricas/ProductividadEquipo'
 import RankingObjeciones from '@/components/analitica/metricas/RankingObjeciones'
-import { Segmentado } from '@/components/analitica/metricas/ui'
+import Pestanas from '@/components/ui/Pestanas'
+import Segmentado from '@/components/ui/Segmentado'
 import { rangoDia, rangoMes, rangoSemana } from '@/lib/fechas'
+import type { ModoPeriodo } from '@/lib/periodo'
 import { OPCIONES_FILTRO_TIPO, type FiltroTipo } from '@/lib/tipoPersona'
-import { cn } from '@/lib/utils'
 
 export type VistaMetricas = 'productividad' | 'objeciones' | 'facturacion'
 
@@ -27,6 +28,10 @@ const esTipo = (v: string | null): v is FiltroTipo => OPCIONES_FILTRO_TIPO.some(
  * tipo viven en la URL (atrás/recargar/compartir los conservan); el período es de la pantalla,
  * como en Efectividad. Facturación no usa el período: trae sus columnas fijas (mes, M.ANT,
  * P.3M, P.6M, P.12M), como Versus.
+ *
+ * Es la pantalla de referencia del estándar UI (skill `ui-planificacion`): una sola fila con las
+ * subsecciones a la izquierda y los filtros a la derecha, todo a 32 px, y el contenido con el
+ * mismo borde izquierdo que el encabezado.
  */
 export default function AnaliticaMetricasPage() {
     const [params, setParams] = useSearchParams()
@@ -44,39 +49,33 @@ export default function AnaliticaMetricasPage() {
     }
 
     return (
-        <div className="min-h-screen bg-[#EEF1F6]">
+        <div className="min-h-screen bg-superficie">
             <EncabezadoAnalitica>
-                <div className="flex flex-wrap items-center gap-3 border-t border-slate-200 px-6 py-3">
-                    <nav aria-label="Métricas" className="flex gap-1 rounded-xl bg-slate-100 p-1">
-                        {VISTAS.map(v => (
-                            <button
-                                key={v.valor}
-                                type="button"
-                                aria-current={vista === v.valor ? 'page' : undefined}
-                                onClick={() => escribir('vista', v.valor, 'productividad')}
-                                className={cn(
-                                    'h-9 rounded-lg px-4 text-sm font-semibold transition-colors',
-                                    vista === v.valor ? 'bg-white text-dsnavytext shadow-sm' : 'text-slate-500 hover:text-slate-800',
-                                )}
-                            >
-                                {v.etiqueta}
-                            </button>
-                        ))}
-                    </nav>
-                    <span className="flex-1" />
-                    <Segmentado
-                        etiqueta="Tipo de persona"
-                        opciones={OPCIONES_FILTRO_TIPO.map(o => ({ valor: o.valor, etiqueta: o.etiqueta }))}
-                        valor={filtroTipo}
-                        onCambiar={t => escribir('tipo', t, 'vendedor')}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-linea px-6 py-2.5">
+                    <Pestanas
+                        etiqueta="Métricas"
+                        opciones={VISTAS}
+                        valor={vista}
+                        onCambiar={v => escribir('vista', v, 'productividad')}
                     />
-                    {vista !== 'facturacion' && (
-                        <SelectorPeriodo modo={modo} fecha={fecha} onCambiarModo={setModo} onCambiarFecha={setFecha} />
-                    )}
+                    <div className="ml-auto flex flex-wrap items-center gap-2">
+                        <Segmentado
+                            etiqueta="Tipo de persona"
+                            opciones={OPCIONES_FILTRO_TIPO.map(o => ({ valor: o.valor, etiqueta: o.etiqueta }))}
+                            valor={filtroTipo}
+                            onCambiar={t => escribir('tipo', t, 'vendedor')}
+                        />
+                        {vista !== 'facturacion' && (
+                            <>
+                                <span className="mx-1 h-5 w-px bg-linea" aria-hidden />
+                                <FiltroPeriodo modo={modo} fecha={fecha} onCambiarModo={setModo} onCambiarFecha={setFecha} />
+                            </>
+                        )}
+                    </div>
                 </div>
             </EncabezadoAnalitica>
 
-            <main className="mx-auto max-w-7xl px-6 py-6">
+            <main className="px-6 py-5">
                 {vista === 'productividad' && <ProductividadEquipo desde={desde} hasta={hasta} filtroTipo={filtroTipo} />}
                 {vista === 'objeciones' && <RankingObjeciones desde={desde} hasta={hasta} filtroTipo={filtroTipo} />}
                 {vista === 'facturacion' && <FacturacionVendedores filtroTipo={filtroTipo} />}

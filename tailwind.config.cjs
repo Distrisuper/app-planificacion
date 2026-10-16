@@ -22,6 +22,21 @@ module.exports = {
                 dsorange: '#B45309',
                 dsmuted: '#697585',
                 dsline: '#E7E9F0',
+                // Tokens semánticos (variables en src/index.css). Lo nuevo usa estos, no los ds*.
+                superficie: 'rgb(var(--superficie) / <alpha-value>)',
+                tarjeta: 'rgb(var(--tarjeta) / <alpha-value>)',
+                tinta: {
+                    DEFAULT: 'rgb(var(--tinta) / <alpha-value>)',
+                    2: 'rgb(var(--tinta-2) / <alpha-value>)',
+                },
+                linea: 'rgb(var(--linea) / <alpha-value>)',
+                primario: 'rgb(var(--primario) / <alpha-value>)',
+                estado: {
+                    ok: { fondo: 'rgb(var(--estado-ok-fondo) / <alpha-value>)', texto: 'rgb(var(--estado-ok-texto) / <alpha-value>)' },
+                    atencion: { fondo: 'rgb(var(--estado-atencion-fondo) / <alpha-value>)', texto: 'rgb(var(--estado-atencion-texto) / <alpha-value>)' },
+                    mal: { fondo: 'rgb(var(--estado-mal-fondo) / <alpha-value>)', texto: 'rgb(var(--estado-mal-texto) / <alpha-value>)' },
+                    neutro: { fondo: 'rgb(var(--estado-neutro-fondo) / <alpha-value>)', texto: 'rgb(var(--estado-neutro-texto) / <alpha-value>)' },
+                },
             },
         },
     },
