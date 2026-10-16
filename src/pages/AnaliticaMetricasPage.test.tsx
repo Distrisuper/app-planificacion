@@ -69,16 +69,18 @@ describe('Productividad (vista por defecto)', () => {
         expect(screen.queryByTestId('fila-productividad-V1')).not.toBeInTheDocument()
     })
 
-    it('las columnas son Objetivo, Cumplimiento y Contactos, con el objetivo de cada uno', async () => {
+    it('las columnas son Objetivo, Logrado y Cumplimiento: la meta, lo hecho y el % de lo hecho', async () => {
         montar()
         await screen.findByTestId('fila-productividad-V1')
         const encabezados = screen.getAllByRole('columnheader').map(th => th.textContent)
-        expect(encabezados).toEqual(['', 'Persona', 'Objetivo', 'Cumplimiento', 'Contactos'])
+        expect(encabezados).toEqual(['', 'Persona', 'Objetivo', 'Logrado', 'Cumplimiento'])
         // V1: 40 visitas válidas al 104% → objetivo ≈ 38.
-        expect(within(screen.getByTestId('fila-productividad-V1')).getByText('38')).toBeInTheDocument()
-        // El TV 9001 trae 75 llamados de objetivo.
+        const v1 = within(screen.getByTestId('fila-productividad-V1'))
+        expect(v1.getAllByRole('cell').slice(2).map(c => c.textContent)).toEqual(['38', '40visitas válidas', '104%'])
+        // El TV 9001: 81 llamados contra 75 de objetivo.
         pulsar('Farmer')
-        expect(within(await screen.findByTestId('fila-productividad-9001')).getByText('75')).toBeInTheDocument()
+        const ana = within(await screen.findByTestId('fila-productividad-9001'))
+        expect(ana.getAllByRole('cell').slice(2).map(c => c.textContent)).toEqual(['75', '81llamados', '108%'])
     })
 
     it('debajo del nombre, el código se ve en el TV pero no en el vendedor', async () => {
@@ -143,6 +145,17 @@ describe('Ranking de objeciones', () => {
         // "No trabaja la marca o cambió" (4): V1 9, V4 2.
         fireEvent.click(screen.getByTestId('motivo-4'))
         expect((await filas()).slice(0, 2)).toEqual(['fila-objeciones-V1', 'fila-objeciones-V4'])
+    })
+
+    it('cambiar de tipo no repinta los motivos: cada uno conserva su color', async () => {
+        montar('/analitica/metricas?vista=objeciones')
+        const color = async (id: number) => (await screen.findByTestId(`motivo-${id}`)).style.borderLeftColor
+        const antes = await color(2)
+        expect(antes).not.toBe('')
+        // Con Farmer, "Pasa pedido" (2) pasa a ser el primero del recorte.
+        pulsar('Farmer')
+        await waitFor(() => expect(screen.getByTestId('total-objeciones')).toHaveTextContent('1 persona'))
+        expect(await color(2)).toBe(antes)
     })
 
     it('en el ranking, el código se ve debajo del TV pero no del vendedor', async () => {

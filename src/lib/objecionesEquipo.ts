@@ -46,3 +46,27 @@ export function motivoPrincipal(
     }
     return mejor
 }
+
+/** Un color por motivo (identidad), validado para daltonismo sobre fondo blanco. Va siempre
+ *  junto al nombre del motivo: algunos tienen poco contraste y no se leen solos. */
+export const COLORES_MOTIVO = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948']
+/** Del noveno motivo en adelante: no se generan colores nuevos. */
+export const COLOR_MOTIVO_OTRO = '#94a3b8'
+
+/**
+ * El color de cada motivo sale de su lugar en el ranking que manda el backend (`data.motivos`),
+ * no del recorte por tipo: así cambiar Vendedor / Farmer / Hunter no repinta los motivos.
+ */
+export function coloresDeMotivos(motivos: { motivoId: number }[]): Map<number, string> {
+    return new Map(motivos.map((m, i) => [m.motivoId, COLORES_MOTIVO[i] ?? COLOR_MOTIVO_OTRO]))
+}
+
+/** Una sola gama (azul) de claro a oscuro para la cantidad de cada celda de la tabla. */
+export const RAMPA_CALOR = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95']
+
+/** El fondo de una celda según su peso (0..1 contra la celda más alta de la tabla). En los
+ *  dos tonos más oscuros el texto va en blanco para que se lea. */
+export function calorCelda(peso: number): { fondo: string; textoClaro: boolean } {
+    const paso = Math.min(RAMPA_CALOR.length - 1, Math.floor(peso * RAMPA_CALOR.length))
+    return { fondo: RAMPA_CALOR[paso], textoClaro: paso >= RAMPA_CALOR.length - 2 }
+}

@@ -1,7 +1,14 @@
 import { useState } from 'react'
 import { useObjecionesPorPersona, useRubrosCatalogo } from '@/hooks/useMetricasEquipo'
 import { formatPct } from '@/lib/analiticaFormat'
-import { cantidadDe, motivoPrincipal, recortarObjeciones } from '@/lib/objecionesEquipo'
+import {
+    COLOR_MOTIVO_OTRO,
+    calorCelda,
+    cantidadDe,
+    coloresDeMotivos,
+    motivoPrincipal,
+    recortarObjeciones,
+} from '@/lib/objecionesEquipo'
 import type { FiltroTipo } from '@/lib/tipoPersona'
 import { cn } from '@/lib/utils'
 import { CLASE_NUM, Cargando, ErrorBloque, Tarjeta } from './ui'
@@ -12,6 +19,11 @@ const MOTIVOS_VISIBLES = 6
 const MOTIVOS_EN_TABLA = 6
 
 const ENTERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
+
+/** El color de un motivo, siempre al lado de su nombre. */
+const Punto = ({ color, className }: { color: string; className?: string }) => (
+    <span aria-hidden className={cn('inline-block h-2.5 w-2.5 shrink-0 rounded-full align-middle', className)} style={{ backgroundColor: color }} />
+)
 
 interface RankingObjecionesProps {
     desde: string
@@ -44,6 +56,9 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
             : b.total - a.total,
     )
     const maxCelda = Math.max(1, ...personas.flatMap(p => columnas.map(m => cantidadDe(p, m.motivoId))))
+    // Del ranking del backend, no del recorte: cambiar de tipo no repinta los motivos.
+    const colores = coloresDeMotivos(data?.motivos ?? [])
+    const colorDe = (motivoId: number) => colores.get(motivoId) ?? COLOR_MOTIVO_OTRO
 
     const cambiarRubro = (valor: string) => {
         setRubro(valor || undefined)
@@ -100,16 +115,19 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                     title={m.descripcion}
                                     onClick={() => setElegido(e => (e === m.motivoId ? null : m.motivoId))}
                                     className={cn(
-                                        'flex min-w-0 flex-col rounded-xl border px-3 py-2 text-left transition-colors',
-                                        elegido === m.motivoId
-                                            ? 'border-dsnavy/40 bg-dsnavy/10 text-dsnavy'
-                                            : 'border-slate-200 text-slate-800 hover:bg-slate-50',
+                                        'flex min-w-0 flex-col rounded-xl border border-l-4 px-3 py-2 text-left text-slate-800 transition-colors',
+                                        elegido === m.motivoId ? 'border-slate-300 ring-1 ring-slate-300' : 'border-slate-200 hover:bg-slate-50',
                                         elegido !== m.motivoId && Math.round(m.pct * 100) === 0 && 'opacity-60',
                                     )}
+                                    style={{
+                                        borderLeftColor: colorDe(m.motivoId),
+                                        // El elegido se tiñe con su color (~12%).
+                                        backgroundColor: elegido === m.motivoId ? `${colorDe(m.motivoId)}1f` : undefined,
+                                    }}
                                 >
                                     <span className="truncate text-[13px] font-medium">{m.descripcion}</span>
                                     <span className={cn(CLASE_NUM, 'mt-0.5 flex items-baseline gap-1.5')}>
-                                        <span className="text-lg font-bold text-dsnavy">{ENTERO.format(m.cantidad)}</span>
+                                        <span className="text-lg font-bold text-slate-900">{ENTERO.format(m.cantidad)}</span>
                                         <span className="text-xs text-slate-500">{formatPct(m.pct)}</span>
                                     </span>
                                 </button>
@@ -167,7 +185,10 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                                 motivoElegido?.motivoId === m.motivoId && 'text-dsnavy',
                                             )}
                                         >
-                                            <span className="line-clamp-2">{m.descripcion}</span>
+                                            <span className="inline-flex items-start justify-end gap-1.5">
+                                                <Punto color={colorDe(m.motivoId)} />
+                                                <span className="line-clamp-2">{m.descripcion}</span>
+                                            </span>
                                         </th>
                                     ))}
                                 </tr>
@@ -187,6 +208,7 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                                 {ENTERO.format(p.total)}
                                             </td>
                                             <td className="whitespace-nowrap px-3 py-2 text-left">
+                                                {principal && <Punto color={colorDe(principal.motivoId)} className="mr-1.5" />}
                                                 <span className="text-slate-800">{principal?.descripcion ?? '—'}</span>
                                                 {principal && p.total > 0 && (
                                                     <span className={cn(CLASE_NUM, 'ml-1.5 text-xs text-slate-400')}>
@@ -197,7 +219,7 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                             {columnas.map(m => {
                                                 const c = cantidadDe(p, m.motivoId)
                                                 // Más oscuro cuanto más pesa la celda dentro de la tabla.
-                                                const peso = c / maxCelda
+                                                const calor = calorCelda(c / maxCelda)
                                                 return (
                                                     <td key={m.motivoId} className="px-2 py-1.5 text-right last:pr-4">
                                                         <span
@@ -205,12 +227,18 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                                                 CLASE_NUM,
                                                                 'inline-flex min-w-[4.5rem] items-baseline justify-end gap-1.5 whitespace-nowrap rounded-lg px-2 py-1',
                                                                 c === 0 && 'text-slate-300',
-                                                                motivoElegido?.motivoId === m.motivoId && 'ring-1 ring-dsnavy/30',
+                                                                motivoElegido?.motivoId === m.motivoId && 'ring-2 ring-slate-900/30',
                                                             )}
-                                                            style={c > 0 ? { backgroundColor: `rgba(33, 61, 130, ${(0.06 + peso * 0.3).toFixed(3)})` } : undefined}
+                                                            style={c > 0 ? { backgroundColor: calor.fondo } : undefined}
                                                         >
-                                                            <span className="font-semibold text-slate-900">{c > 0 ? ENTERO.format(c) : '—'}</span>
-                                                            {c > 0 && <span className="text-[10.5px] text-slate-600">{formatPct(c / p.total)}</span>}
+                                                            <span className={cn('font-semibold', calor.textoClaro && c > 0 ? 'text-white' : 'text-slate-900')}>
+                                                                {c > 0 ? ENTERO.format(c) : '—'}
+                                                            </span>
+                                                            {c > 0 && (
+                                                                <span className={cn('text-[10.5px]', calor.textoClaro ? 'text-white/85' : 'text-slate-900')}>
+                                                                    {formatPct(c / p.total)}
+                                                                </span>
+                                                            )}
                                                         </span>
                                                     </td>
                                                 )

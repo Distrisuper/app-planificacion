@@ -8,7 +8,7 @@ import { pasaFiltro, type FiltroTipo } from '@/lib/tipoPersona'
 import { cn } from '@/lib/utils'
 import { CLASE_NUM, Cargando, Encabezado, ErrorBloque, Kpi, Tarjeta, comparar, useOrden } from './ui'
 
-type Columna = 'nombre' | 'objetivo' | 'cumplimiento' | 'contactos'
+type Columna = 'nombre' | 'objetivo' | 'actividad' | 'cumplimiento'
 
 const ENTERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 
@@ -111,8 +111,8 @@ export default function ProductividadEquipo({ desde, hasta, filtroTipo }: Produc
                                     <th className="w-10 px-3 py-2.5" aria-label="Posición" />
                                     <Encabezado columna="nombre" orden={orden} onOrdenar={ordenarPor} alinear="left">Persona</Encabezado>
                                     <Encabezado columna="objetivo" orden={orden} onOrdenar={ordenarPor}>Objetivo</Encabezado>
-                                    <Encabezado columna="cumplimiento" orden={orden} onOrdenar={ordenarPor}>Cumplimiento</Encabezado>
-                                    <Encabezado columna="contactos" orden={orden} onOrdenar={ordenarPor} className="pr-5">Contactos</Encabezado>
+                                    <Encabezado columna="actividad" orden={orden} onOrdenar={ordenarPor}>Logrado</Encabezado>
+                                    <Encabezado columna="cumplimiento" orden={orden} onOrdenar={ordenarPor} className="pr-5">Cumplimiento</Encabezado>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -130,12 +130,16 @@ export default function ProductividadEquipo({ desde, hasta, filtroTipo }: Produc
                                             {!f.esVendedor && <p className="text-[11px] text-slate-400">{f.codigo}</p>}
                                         </td>
                                         <td className={cn(CLASE_NUM, 'px-3 py-2.5 text-right')}>
-                                            <span className="font-semibold text-slate-900">
+                                            <span className="text-slate-900">
                                                 {f.objetivo === null ? 's/d' : ENTERO.format(f.objetivo)}
                                             </span>
+                                        </td>
+                                        {/* Lo mismo que mide el %: visitas válidas o llamados contra el objetivo. */}
+                                        <td className={cn(CLASE_NUM, 'px-3 py-2.5 text-right')}>
+                                            <span className="font-semibold text-slate-900">{ENTERO.format(f.actividad)}</span>
                                             <p className="text-[11px] text-slate-400">{f.esVendedor ? 'visitas válidas' : 'llamados'}</p>
                                         </td>
-                                        <td className="px-3 py-2.5 text-right">
+                                        <td className="px-3 py-2.5 pr-5 text-right">
                                             <span
                                                 className={cn(
                                                     CLASE_NUM,
@@ -145,10 +149,6 @@ export default function ProductividadEquipo({ desde, hasta, filtroTipo }: Produc
                                             >
                                                 {formatPct(f.cumplimiento)}
                                             </span>
-                                        </td>
-                                        <td className={cn(CLASE_NUM, 'px-3 py-2.5 pr-5 text-right')}>
-                                            <span className="text-slate-900">{ENTERO.format(f.contactos)}</span>
-                                            <p className="text-[11px] text-slate-400">{f.esVendedor ? 'clientes' : 'atendidos'}</p>
                                         </td>
                                     </tr>
                                 ))}
