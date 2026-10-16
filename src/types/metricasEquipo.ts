@@ -21,8 +21,8 @@ export interface IProductividadTv {
     /** Clientes de sus carteras que le tocan en el mes (sin VNA; una cartera compartida se
      *  reparte según la meta diaria de sus TV). Opcional: un back anterior no lo manda. */
     objetivoMensual?: number | null
-    /** El mensual prorrateado al período por días hábiles (lunes a viernes): mes completo =
-     *  el mensual, aunque esté en curso; semana y día, su parte. null sin perfil. */
+    /** Mes calendario: objetivoMensual (entero aunque esté en curso). Día o semana:
+     *  metaDiaria × días hábiles (un día = 15 farmer, 35 hunter). null sin perfil. */
     objetivo: number | null
     /** llamados / objetivo (0..n, sin tope). null si no hay objetivo. */
     pctCumplimiento: number | null

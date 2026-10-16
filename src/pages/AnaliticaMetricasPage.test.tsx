@@ -110,7 +110,9 @@ describe('Productividad (vista por defecto)', () => {
         const ayuda = await screen.findByRole('dialog')
         expect(ayuda).toHaveTextContent(/clientes de sus carteras/i)
         expect(ayuda).toHaveTextContent(/según su meta diaria/i)
-        expect(ayuda).toHaveTextContent(/días hábiles/i)
+        // El día del TV es su meta fija; la semana, la meta por sus días hábiles.
+        expect(ayuda).toHaveTextContent(/Día: su meta diaria \(15 Farmer, 35 Hunter\)/)
+        expect(ayuda).toHaveTextContent(/Semana: la meta diaria por los días hábiles de la semana/)
     })
 
     it('pide las dos fuentes con el mismo rango', async () => {
