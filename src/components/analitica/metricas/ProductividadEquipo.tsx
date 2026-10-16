@@ -8,7 +8,7 @@ import { pasaFiltro, type FiltroTipo } from '@/lib/tipoPersona'
 import { cn } from '@/lib/utils'
 import { BadgeTipo, CLASE_NUM, Cargando, Encabezado, ErrorBloque, Kpi, Tarjeta, comparar, useOrden } from './ui'
 
-type Columna = 'nombre' | 'actividad' | 'cumplimiento' | 'contactos' | 'efectividad'
+type Columna = 'nombre' | 'objetivo' | 'cumplimiento' | 'contactos'
 
 const ENTERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 
@@ -99,15 +99,14 @@ export default function ProductividadEquipo({ desde, hasta, filtroTipo }: Produc
                 )}
                 {filas.length > 0 && (
                     <div className="-mx-5 overflow-x-auto">
-                        <table className="w-full min-w-[720px] text-sm">
+                        <table className="w-full min-w-[600px] text-sm">
                             <thead className="border-y border-slate-200 bg-slate-50/70">
                                 <tr>
                                     <th className="w-10 px-3 py-2.5" aria-label="Posición" />
                                     <Encabezado columna="nombre" orden={orden} onOrdenar={ordenarPor} alinear="left">Persona</Encabezado>
-                                    <Encabezado columna="actividad" orden={orden} onOrdenar={ordenarPor}>Actividad</Encabezado>
+                                    <Encabezado columna="objetivo" orden={orden} onOrdenar={ordenarPor}>Objetivo</Encabezado>
                                     <Encabezado columna="cumplimiento" orden={orden} onOrdenar={ordenarPor}>Cumplimiento</Encabezado>
-                                    <Encabezado columna="contactos" orden={orden} onOrdenar={ordenarPor}>Contactos</Encabezado>
-                                    <Encabezado columna="efectividad" orden={orden} onOrdenar={ordenarPor} className="pr-5">Efectividad</Encabezado>
+                                    <Encabezado columna="contactos" orden={orden} onOrdenar={ordenarPor} className="pr-5">Contactos</Encabezado>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
@@ -124,10 +123,13 @@ export default function ProductividadEquipo({ desde, hasta, filtroTipo }: Produc
                                                 <span className="truncate font-semibold text-slate-900">{f.nombre}</span>
                                                 <BadgeTipo tipo={f.tipo} />
                                             </div>
-                                            <p className="text-[11px] text-slate-400">{f.codigo}</p>
+                                            {/* El código del vendedor es su alias (FEDE, VTA 1) y repite el nombre. */}
+                                            {!f.esVendedor && <p className="text-[11px] text-slate-400">{f.codigo}</p>}
                                         </td>
                                         <td className={cn(CLASE_NUM, 'px-3 py-2.5 text-right')}>
-                                            <span className="font-semibold text-slate-900">{ENTERO.format(f.actividad)}</span>
+                                            <span className="font-semibold text-slate-900">
+                                                {f.objetivo === null ? 's/d' : ENTERO.format(f.objetivo)}
+                                            </span>
                                             <p className="text-[11px] text-slate-400">{f.esVendedor ? 'visitas válidas' : 'llamados'}</p>
                                         </td>
                                         <td className="px-3 py-2.5 text-right">
@@ -141,13 +143,9 @@ export default function ProductividadEquipo({ desde, hasta, filtroTipo }: Produc
                                                 {formatPct(f.cumplimiento)}
                                             </span>
                                         </td>
-                                        <td className={cn(CLASE_NUM, 'px-3 py-2.5 text-right')}>
+                                        <td className={cn(CLASE_NUM, 'px-3 py-2.5 pr-5 text-right')}>
                                             <span className="text-slate-900">{ENTERO.format(f.contactos)}</span>
                                             <p className="text-[11px] text-slate-400">{f.esVendedor ? 'clientes' : 'atendidos'}</p>
-                                        </td>
-                                        <td className={cn(CLASE_NUM, 'px-3 py-2.5 pr-5 text-right')}>
-                                            <span className="text-slate-900">{formatPct(f.efectividad)}</span>
-                                            <p className="text-[11px] text-slate-400">{f.esVendedor ? 'ganados / ofrecidos' : 'con venta / atendidos'}</p>
                                         </td>
                                     </tr>
                                 ))}

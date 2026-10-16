@@ -51,7 +51,9 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
     }
 
     return (
-        <div className={cn('grid grid-cols-1 gap-5 xl:grid-cols-[minmax(320px,400px)_1fr]', isPlaceholderData && 'opacity-60')}>
+        // Motivos arriba y ranking abajo, los dos a todo el ancho: al lado, la tabla quedaba
+        // angosta y cada fila crecía a 3-4 renglones.
+        <div className={cn('space-y-5', isPlaceholderData && 'opacity-60')}>
             <Tarjeta
                 titulo="Objeciones"
                 subtitulo={
@@ -87,31 +89,33 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                     <p className="py-6 text-sm text-slate-500">Sin objeciones en este período.</p>
                 )}
                 {ranking.length > 0 && (
-                    <div className="flex flex-1 flex-col">
-                        <div className="grid grid-cols-[minmax(0,1fr)_4rem_3.5rem] gap-3 border-b border-slate-200 px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                            <span>Motivo</span>
-                            <span className="text-right">Cant.</span>
-                            <span className="text-right">%</span>
+                    <div className="flex flex-col">
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                            {visibles.map(m => (
+                                <button
+                                    key={m.motivoId}
+                                    type="button"
+                                    aria-pressed={elegido === m.motivoId}
+                                    data-testid={`motivo-${m.motivoId}`}
+                                    title={m.descripcion}
+                                    onClick={() => setElegido(e => (e === m.motivoId ? null : m.motivoId))}
+                                    className={cn(
+                                        'flex min-w-0 flex-col rounded-xl border px-3 py-2 text-left transition-colors',
+                                        elegido === m.motivoId
+                                            ? 'border-dsnavy/40 bg-dsnavy/10 text-dsnavy'
+                                            : 'border-slate-200 text-slate-800 hover:bg-slate-50',
+                                        elegido !== m.motivoId && Math.round(m.pct * 100) === 0 && 'opacity-60',
+                                    )}
+                                >
+                                    <span className="truncate text-[13px] font-medium">{m.descripcion}</span>
+                                    <span className={cn(CLASE_NUM, 'mt-0.5 flex items-baseline gap-1.5')}>
+                                        <span className="text-lg font-bold text-dsnavy">{ENTERO.format(m.cantidad)}</span>
+                                        <span className="text-xs text-slate-500">{formatPct(m.pct)}</span>
+                                    </span>
+                                </button>
+                            ))}
                         </div>
-                        {visibles.map(m => (
-                            <button
-                                key={m.motivoId}
-                                type="button"
-                                aria-pressed={elegido === m.motivoId}
-                                data-testid={`motivo-${m.motivoId}`}
-                                onClick={() => setElegido(e => (e === m.motivoId ? null : m.motivoId))}
-                                className={cn(
-                                    'grid w-full grid-cols-[minmax(0,1fr)_4rem_3.5rem] items-center gap-3 rounded-md border-b border-slate-100 px-2 py-2 text-left text-sm transition-colors',
-                                    elegido === m.motivoId ? 'bg-dsnavy/10 font-semibold text-dsnavy' : 'text-slate-800 hover:bg-slate-50',
-                                    elegido !== m.motivoId && Math.round(m.pct * 100) === 0 && 'opacity-60',
-                                )}
-                            >
-                                <span className="truncate">{m.descripcion}</span>
-                                <span className={cn(CLASE_NUM, 'text-right font-bold text-dsnavy')}>{ENTERO.format(m.cantidad)}</span>
-                                <span className={cn(CLASE_NUM, 'text-right text-slate-500')}>{formatPct(m.pct)}</span>
-                            </button>
-                        ))}
-                        <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-3">
                             <p className="text-xs text-slate-500">Tocá un motivo para ver quién lo registra más.</p>
                             {(ocultos > 0 || todos) && ranking.length > MOTIVOS_VISIBLES && (
                                 <button
@@ -173,23 +177,24 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                     const principal = motivoPrincipal(p, ranking)
                                     return (
                                         <tr key={`${p.tipo}:${p.codigo}`} data-testid={`fila-objeciones-${p.codigo}`}>
-                                            <td className={cn(CLASE_NUM, 'px-3 py-2.5 text-center text-xs text-slate-400')}>{i + 1}</td>
-                                            <td className="px-3 py-2.5">
+                                            <td className={cn(CLASE_NUM, 'px-3 py-2 text-center text-xs text-slate-400')}>{i + 1}</td>
+                                            <td className="px-3 py-2">
                                                 <div className="flex items-center gap-2">
                                                     <span className="truncate font-semibold text-slate-900">{p.nombre || p.codigo}</span>
                                                     <BadgeTipo tipo={p.tipo} />
                                                 </div>
-                                                <p className="text-[11px] text-slate-400">{p.codigo}</p>
+                                                {/* El código del vendedor es su alias (FEDE, VTA 1) y repite el nombre. */}
+                                                {p.tipo !== 'vendedor' && <p className="text-[11px] text-slate-400">{p.codigo}</p>}
                                             </td>
-                                            <td className={cn(CLASE_NUM, 'px-3 py-2.5 text-right font-bold text-slate-900')}>
+                                            <td className={cn(CLASE_NUM, 'px-3 py-2 text-right font-bold text-slate-900')}>
                                                 {ENTERO.format(p.total)}
                                             </td>
-                                            <td className="px-3 py-2.5 text-left">
+                                            <td className="whitespace-nowrap px-3 py-2 text-left">
                                                 <span className="text-slate-800">{principal?.descripcion ?? '—'}</span>
                                                 {principal && p.total > 0 && (
-                                                    <p className={cn(CLASE_NUM, 'text-[11px] text-slate-400')}>
-                                                        {formatPct(cantidadDe(p, principal.motivoId) / p.total)} de las suyas
-                                                    </p>
+                                                    <span className={cn(CLASE_NUM, 'ml-1.5 text-xs text-slate-400')}>
+                                                        {formatPct(cantidadDe(p, principal.motivoId) / p.total)}
+                                                    </span>
                                                 )}
                                             </td>
                                             {columnas.map(m => {
@@ -201,7 +206,7 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                                         <span
                                                             className={cn(
                                                                 CLASE_NUM,
-                                                                'inline-flex min-w-[3.5rem] flex-col items-end rounded-lg px-2 py-1',
+                                                                'inline-flex min-w-[4.5rem] items-baseline justify-end gap-1.5 whitespace-nowrap rounded-lg px-2 py-1',
                                                                 c === 0 && 'text-slate-300',
                                                                 motivoElegido?.motivoId === m.motivoId && 'ring-1 ring-dsnavy/30',
                                                             )}

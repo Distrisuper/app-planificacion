@@ -12,6 +12,8 @@ export interface IFilaProductividad {
     tipo: TipoPersona
     /** Visitas válidas (vendedor) o llamados (TV). */
     actividad: number
+    /** Visitas válidas (vendedor) o llamados (TV) que pide el período. null = s/d. */
+    objetivo: number | null
     /** 0..n contra el objetivo del período. null = sin objetivo vigente (s/d). */
     cumplimiento: number | null
     /** Clientes distintos visitados (vendedor) o llamados atendidos (TV). */
@@ -29,6 +31,12 @@ export function filaDeVendedor(v: IVendedorMetricas): IFilaProductividad {
         nombre: v.nombreVendedor,
         tipo: 'vendedor',
         actividad: v.visitasValidas,
+        // /analitica/resumen no manda el objetivo, solo pct = visitas × 100 / objetivo
+        // (prorrateado al período): se invierte. Con 0 visitas el pct es 0 y no se puede.
+        objetivo:
+            v.pctCumplimientoVisitas && v.visitasValidas > 0
+                ? (v.visitasValidas * 100) / v.pctCumplimientoVisitas
+                : null,
         // /analitica/resumen manda los cumplimientos en escala 0..100.
         cumplimiento: v.pctCumplimientoVisitas === null ? null : v.pctCumplimientoVisitas / 100,
         contactos: v.clientesDistintos,
@@ -45,6 +53,7 @@ export function filaDeTv(tv: IProductividadTv): IFilaProductividad {
         nombre: tv.nombreTv || tv.codigoParticularTv,
         tipo: tv.perfil ?? 'sin_perfil',
         actividad: tv.llamados,
+        objetivo: tv.objetivo,
         cumplimiento: tv.pctCumplimiento,
         contactos: tv.atendidos,
         efectividad: tv.atendidos > 0 ? tv.conVenta / tv.atendidos : null,

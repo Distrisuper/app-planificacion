@@ -57,6 +57,22 @@ describe('Productividad (vista por defecto)', () => {
         expect(within(screen.getByTestId('fila-productividad-9004')).getByText('TV SIN PERFIL')).toBeInTheDocument()
     })
 
+    it('las columnas son Objetivo, Cumplimiento y Contactos, con el objetivo de cada uno', async () => {
+        montar()
+        await screen.findByTestId('fila-productividad-V1')
+        const encabezados = screen.getAllByRole('columnheader').map(th => th.textContent)
+        expect(encabezados).toEqual(['', 'Persona', 'Objetivo', 'Cumplimiento', 'Contactos'])
+        // V1: 40 visitas válidas al 104% → objetivo ≈ 38. El TV 9001 trae 75 llamados.
+        expect(within(screen.getByTestId('fila-productividad-V1')).getByText('38')).toBeInTheDocument()
+        expect(within(screen.getByTestId('fila-productividad-9001')).getByText('75')).toBeInTheDocument()
+    })
+
+    it('debajo del nombre, el código se ve en el TV pero no en el vendedor', async () => {
+        montar()
+        expect(within(await screen.findByTestId('fila-productividad-V1')).queryByText('V1')).not.toBeInTheDocument()
+        expect(within(screen.getByTestId('fila-productividad-9001')).getByText('9001')).toBeInTheDocument()
+    })
+
     it('pide las dos fuentes con el mismo rango', async () => {
         montar()
         await screen.findByTestId('fila-productividad-9001')
@@ -108,6 +124,12 @@ describe('Ranking de objeciones', () => {
         // "No trabaja la marca o cambió" (4): el hunter 9002 (11) le gana a V1 (9).
         fireEvent.click(screen.getByTestId('motivo-4'))
         expect((await filas())[0]).toBe('fila-objeciones-9002')
+    })
+
+    it('en el ranking, el código se ve debajo del TV pero no del vendedor', async () => {
+        montar('/analitica/metricas?vista=objeciones')
+        expect(within(await screen.findByTestId('fila-objeciones-V1')).queryByText('V1')).not.toBeInTheDocument()
+        expect(within(screen.getByTestId('fila-objeciones-9002')).getByText('9002')).toBeInTheDocument()
     })
 
     it('con un tipo, la tarjeta recuenta solo las objeciones de ese tipo', async () => {
