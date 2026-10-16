@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { nombreMes, nombreSemana } from '@/lib/fechas'
+import { diaHabilVecino, nombreDia, nombreMes, nombreSemana } from '@/lib/fechas'
 
-export type ModoPeriodo = 'semana' | 'mes'
+export type ModoPeriodo = 'dia' | 'semana' | 'mes'
 
 interface SelectorPeriodoProps {
     modo: ModoPeriodo
@@ -10,11 +10,16 @@ interface SelectorPeriodoProps {
     onCambiarFecha: (fecha: Date) => void
 }
 
-const DIAS_POR_PASO: Record<ModoPeriodo, number> = { semana: 7, mes: 0 }
+const MODOS: { valor: ModoPeriodo; etiqueta: string }[] = [
+    { valor: 'dia', etiqueta: 'Día' },
+    { valor: 'semana', etiqueta: 'Semana' },
+    { valor: 'mes', etiqueta: 'Mes' },
+]
 
-/** Selector de rango para Efectividad: alterna entre semana y mes.
+/** Selector de rango: día, semana o mes.
  *  Cambiar de modo resetea la fecha a hoy — evita arrastrar, por ejemplo, un 31 de
- *  un mes largo a una semana que no existe en el mes corto. */
+ *  un mes largo a una semana que no existe en el mes corto. El día salta los fines de
+ *  semana (sin objetivo). */
 export default function SelectorPeriodo({
     modo,
     fecha,
@@ -24,58 +29,56 @@ export default function SelectorPeriodo({
     const cambiarModo = (siguiente: ModoPeriodo) => {
         if (siguiente === modo) return
         onCambiarModo(siguiente)
-        onCambiarFecha(new Date())
+        // Un sábado o domingo no tiene objetivo: el Día arranca en el último día hábil.
+        const hoy = new Date()
+        const finde = hoy.getDay() === 0 || hoy.getDay() === 6
+        onCambiarFecha(siguiente === 'dia' && finde ? diaHabilVecino(hoy, -1) : hoy)
     }
 
-    const avanzar = (delta: number) => {
+    const avanzar = (delta: 1 | -1) => {
         if (modo === 'mes') {
             onCambiarFecha(new Date(fecha.getFullYear(), fecha.getMonth() + delta, 1))
+        } else if (modo === 'dia') {
+            onCambiarFecha(diaHabilVecino(fecha, delta))
         } else {
             const siguiente = new Date(fecha)
-            siguiente.setDate(fecha.getDate() + delta * DIAS_POR_PASO.semana)
+            siguiente.setDate(fecha.getDate() + delta * 7)
             onCambiarFecha(siguiente)
         }
     }
 
-    const etiqueta = modo === 'mes' ? 'mes' : 'semana'
+    const etiqueta = MODOS.find(m => m.valor === modo)!.etiqueta
+    const nombre = modo === 'mes' ? nombreMes(fecha) : modo === 'dia' ? nombreDia(fecha) : nombreSemana(fecha)
 
     return (
         <div className="flex items-center gap-3">
             <div className="flex rounded-md border border-slate-200 text-xs">
-                <button
-                    type="button"
-                    onClick={() => cambiarModo('semana')}
-                    className={`rounded-l-md px-2 py-1 ${
-                        modo === 'semana' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                >
-                    Semana
-                </button>
-                <button
-                    type="button"
-                    onClick={() => cambiarModo('mes')}
-                    className={`rounded-r-md px-2 py-1 ${
-                        modo === 'mes' ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                >
-                    Mes
-                </button>
+                {MODOS.map(m => (
+                    <button
+                        key={m.valor}
+                        type="button"
+                        onClick={() => cambiarModo(m.valor)}
+                        className={`px-2 py-1 first:rounded-l-md last:rounded-r-md ${
+                            modo === m.valor ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                    >
+                        {m.etiqueta}
+                    </button>
+                ))}
             </div>
             <div className="flex items-center gap-2">
                 <button
                     type="button"
-                    aria-label={`${etiqueta === 'mes' ? 'Mes' : 'Semana'} anterior`}
+                    aria-label={`${etiqueta} anterior`}
                     onClick={() => avanzar(-1)}
                     className="rounded p-1 text-slate-500 hover:bg-slate-100"
                 >
                     <ChevronLeft className="h-4 w-4" />
                 </button>
-                <span className="min-w-[9rem] text-center text-sm font-medium text-slate-700">
-                    {modo === 'mes' ? nombreMes(fecha) : nombreSemana(fecha)}
-                </span>
+                <span className="min-w-[9rem] text-center text-sm font-medium text-slate-700">{nombre}</span>
                 <button
                     type="button"
-                    aria-label={`${etiqueta === 'mes' ? 'Mes' : 'Semana'} siguiente`}
+                    aria-label={`${etiqueta} siguiente`}
                     onClick={() => avanzar(1)}
                     className="rounded p-1 text-slate-500 hover:bg-slate-100"
                 >

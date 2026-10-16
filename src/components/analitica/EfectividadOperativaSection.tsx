@@ -5,7 +5,7 @@ import ObjecionesMercado from './ObjecionesMercado'
 import SelectorPeriodo, { type ModoPeriodo } from './SelectorPeriodo'
 import TablaEfectividadOperativa from './TablaEfectividadOperativa'
 import { useCriterioVisita, useResumen } from '@/hooks/useAnalitica'
-import { rangoMes, rangoSemana } from '@/lib/fechas'
+import { rangoDia, rangoMes, rangoSemana } from '@/lib/fechas'
 
 /** Único bloque de /analitica: KPIs + tabla + objeciones, todos sobre el mismo rango
  *  elegido acá (semana o mes) — ver
@@ -14,7 +14,7 @@ export default function EfectividadOperativaSection() {
     const navigate = useNavigate()
     const [modo, setModo] = useState<ModoPeriodo>('mes')
     const [fecha, setFecha] = useState(() => new Date())
-    const filtro = modo === 'mes' ? rangoMes(fecha) : rangoSemana(fecha)
+    const filtro = modo === 'mes' ? rangoMes(fecha) : modo === 'dia' ? rangoDia(fecha) : rangoSemana(fecha)
     const { data, isLoading, isError } = useResumen(filtro)
     const criterio = useCriterioVisita()
 
@@ -40,7 +40,7 @@ export default function EfectividadOperativaSection() {
 
             {data && data.vendedores.length === 0 && (
                 <p className="text-sm text-slate-500">
-                    Sin datos para {modo === 'mes' ? 'este mes' : 'esta semana'}.
+                    Sin datos para {modo === 'mes' ? 'este mes' : modo === 'dia' ? 'este día' : 'esta semana'}.
                 </p>
             )}
 
