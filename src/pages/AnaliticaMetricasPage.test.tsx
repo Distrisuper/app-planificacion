@@ -366,6 +366,18 @@ describe('Productividad con el estándar UI', () => {
         expect(total.getAllByRole('cell').map(c => c.textContent)).toEqual(['Total', '120', '50', '75%'])
     })
 
+    it('con un vendedor de 0 visitas (objetivo desconocido) el total no inventa un cumplimiento', async () => {
+        ;(api.getResumen as any).mockResolvedValue({
+            ...MOCK_RESUMEN,
+            vendedores: [...VENDEDORES_OBJETIVO_40.slice(0, 2), { ...base, codigoParticularVendedor: 'V9', nombreVendedor: 'CERO VISITAS', visitasValidas: 0, pctCumplimientoVisitas: 0 }],
+        })
+        montarConRutas()
+        await screen.findByTestId('fila-productividad-V9')
+        // Sin el objetivo de V9, 60 / 80 = 75% mentiría: objetivo, Faltan y cumplimiento quedan en "—".
+        const total = within(screen.getByTestId('fila-total'))
+        expect(total.getAllByRole('cell').map(c => c.textContent)).toEqual(['Total', '—', '60', '—', '—'])
+    })
+
     it('el cumplimiento va en un pill con el semáforo: ≥80% ok, ≥50% atención, el resto mal', async () => {
         conObjetivo40()
         montarConRutas()

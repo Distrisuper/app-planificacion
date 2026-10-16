@@ -68,9 +68,19 @@ function objetivoComun(filas: FilaTabla[]): number | null {
     return filas.every(f => Math.round(f.objetivo!) === primero) ? primero : null
 }
 
+/** Un vendedor sin objetivo no es "sin objetivo": con 0 visitas el % es 0 y el objetivo no se puede
+ *  invertir. Dejarlo afuera de los totales los inflaría (40 + 40 + 0 de 120 daría 100%), así que
+ *  con alguno así los totales que dependen del objetivo quedan en s/d. */
+const objetivoDesconocido = (filas: FilaTabla[]) => filas.some(f => f.esVendedor && f.objetivo === null)
+
+/** Suma de una columna que depende del objetivo, fila por fila redondeada como se ve. */
+const sumaConObjetivo = (valor: (f: FilaTabla) => number | null) => (filas: FilaTabla[]) =>
+    objetivoDesconocido(filas) ? null : filas.reduce((s, f) => s + Math.round(valor(f) ?? 0), 0)
+
 /** El cumplimiento de las filas que se ven: lo logrado contra lo pedido, solo de las que tienen
  *  objetivo (no el promedio de porcentajes), como `resumenTvs`. */
 function cumplimientoTotal(filas: FilaTabla[]): number | null {
+    if (objetivoDesconocido(filas)) return null
     const conObjetivo = filas.filter(f => f.objetivo !== null && f.objetivo > 0)
     const objetivo = conObjetivo.reduce((s, f) => s + f.objetivo!, 0)
     return objetivo > 0 ? conObjetivo.reduce((s, f) => s + f.actividad, 0) / objetivo : null
@@ -111,14 +121,14 @@ export default function ProductividadEquipo({ desde, hasta, filtroTipo }: Produc
                     // El código del vendedor es su alias (FEDE, VTA 1) y repite el nombre.
                     secundaria: f => (f.esVendedor ? null : f.codigo),
                 }),
-                ...(conColumnaObjetivo ? [c.cantidad('objetivo', 'Objetivo', f => f.objetivo, { total: 'suma' })] : []),
+                ...(conColumnaObjetivo ? [c.cantidad('objetivo', 'Objetivo', f => f.objetivo, { total: sumaConObjetivo(f => f.objetivo) })] : []),
                 // Lo mismo que mide el %: visitas válidas o llamados contra el objetivo. La unidad va
                 // en el encabezado y no en cada fila.
                 c.cantidad('actividad', verVendedores ? 'Visitas válidas' : 'Llamados', f => f.actividad, {
                     total: 'suma',
                     ancho: 136,
                 }),
-                c.cantidad('faltan', 'Faltan', f => f.faltan, { total: 'suma' }),
+                c.cantidad('faltan', 'Faltan', f => f.faltan, { total: sumaConObjetivo(f => f.faltan) }),
                 c.porcentaje('cumplimiento', 'Cumplimiento', f => f.cumplimiento, {
                     tono: v => TONO_PILL[tonoCumplimiento(v)],
                     total: cumplimientoTotal,
