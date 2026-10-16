@@ -87,6 +87,7 @@ agenda, visita, ciclo o resoluciones. Las que más se rompen:
 Modo directo: del requerimiento al PR draft sin pedir aprobaciones intermedias.
 
 1. Leé el código que toca la tarea. Las decisiones técnicas las tomás vos y las anotás en el PR.
+   UI: pantalla, tabla, filtros o KPIs → skill `ui-planificacion` (`.claude/skills/ui-planificacion/SKILL.md`).
 2. Escribí primero los tests que prueban el "listo cuando" del requerimiento y miralos fallar.
    Pocos mocks: mockeá solo el borde (HTTP, base, reloj).
 3. Implementá hasta que pasen. No levantes la app, docker ni bases para verificar: la verificación es
