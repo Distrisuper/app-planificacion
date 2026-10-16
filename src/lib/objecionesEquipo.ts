@@ -13,18 +13,30 @@ export interface IMotivoRanking {
  * El recorte por tipo de persona. La tarjeta de motivos y la tabla salen de las MISMAS
  * personas: con "Farmer" la tarjeta cuenta solo las objeciones de los farmer, así los dos
  * números nunca se contradicen. Los motivos se recuentan desde las personas.
+ *
+ * Los motivos `no_ofrecido` ("No lo ofrecí") no son objeciones del cliente: se sacan de todo,
+ * también del total de cada persona, y quien solo tenía esos queda afuera. `catalogo` son los
+ * motivos que quedan, en el orden del backend (no cambia con el filtro: de ahí salen los colores).
  */
 export function recortarObjeciones(data: IObjecionesPorPersona, filtro: FiltroTipo) {
-    const personas = data.personas.filter(p => pasaFiltro([p.tipo], filtro))
+    const catalogo = data.motivos.filter(m => m.resultado !== 'no_ofrecido')
+    const valen = new Set(catalogo.map(m => m.motivoId))
+    const personas = data.personas
+        .filter(p => pasaFiltro([p.tipo], filtro))
+        .map(p => {
+            const motivos = p.motivos.filter(m => valen.has(m.motivoId))
+            return { ...p, motivos, total: motivos.reduce((s, m) => s + m.cantidad, 0) }
+        })
+        .filter(p => p.total > 0)
     const total = personas.reduce((s, p) => s + p.total, 0)
     const conteo = new Map<number, number>()
     for (const p of personas) for (const m of p.motivos) conteo.set(m.motivoId, (conteo.get(m.motivoId) ?? 0) + m.cantidad)
-    const motivos: IMotivoRanking[] = data.motivos
+    const motivos: IMotivoRanking[] = catalogo
         .map(m => ({ motivoId: m.motivoId, descripcion: m.descripcion, cantidad: conteo.get(m.motivoId) ?? 0 }))
         .filter(m => m.cantidad > 0)
         .map(m => ({ ...m, pct: total > 0 ? m.cantidad / total : 0 }))
         .sort((a, b) => b.cantidad - a.cantidad || a.motivoId - b.motivoId)
-    return { total, motivos, personas }
+    return { total, motivos, personas, catalogo }
 }
 
 export const cantidadDe = (persona: IObjecionesPorPersona['personas'][number], motivoId: number): number =>
