@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import AnaliticaMetricasPage from './AnaliticaMetricasPage'
 import { MOCK_RESUMEN, MOCK_TELEVENDEDORES, MOCK_VENDEDORES } from '@/mocks/analiticaMock'
@@ -48,7 +48,7 @@ describe('Productividad (vista por defecto)', () => {
     it('arranca en Vendedor, sin TV mezclados y sin etiquetas de tipo', async () => {
         montar()
         const v1 = await screen.findByTestId('fila-productividad-V1')
-        expect(within(v1).getByText('visitas válidas')).toBeInTheDocument()
+        expect(screen.getByRole('columnheader', { name: 'Visitas válidas' })).toBeInTheDocument()
         expect(within(v1).queryByText('VENDEDOR')).not.toBeInTheDocument()
         expect(screen.queryByTestId('fila-productividad-9001')).not.toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Vendedor', pressed: true })).toBeInTheDocument()
@@ -64,24 +64,25 @@ describe('Productividad (vista por defecto)', () => {
     it('con un perfil de TV quedan solo esos TV, sin etiqueta', async () => {
         montar('/analitica/metricas?tipo=farmer')
         const ana = await screen.findByTestId('fila-productividad-9001')
-        expect(within(ana).getByText('llamados')).toBeInTheDocument()
+        expect(screen.getByRole('columnheader', { name: 'Llamados' })).toBeInTheDocument()
         expect(within(ana).queryByText('FARMER')).not.toBeInTheDocument()
         expect(screen.queryByTestId('fila-productividad-9002')).not.toBeInTheDocument()
         expect(screen.queryByTestId('fila-productividad-V1')).not.toBeInTheDocument()
     })
 
-    it('las columnas son Objetivo, Logrado y Cumplimiento: la meta, lo hecho y el % de lo hecho', async () => {
+    it('las columnas son Objetivo, lo logrado, Faltan y Cumplimiento: la meta, lo hecho, lo que falta y el %', async () => {
         montar()
         await screen.findByTestId('fila-productividad-V1')
         const encabezados = screen.getAllByRole('columnheader').map(th => th.textContent)
-        expect(encabezados).toEqual(['', 'Persona', 'Objetivo', 'Logrado', 'Cumplimiento'])
-        // V1: 40 visitas válidas al 104% → objetivo ≈ 38.
+        expect(encabezados).toEqual(['#', 'Persona', 'Objetivo', 'Visitas válidas', 'Faltan', 'Cumplimiento'])
+        // V1: 40 visitas válidas al 104% → objetivo ≈ 38, no le falta nada.
         const v1 = within(screen.getByTestId('fila-productividad-V1'))
-        expect(v1.getAllByRole('cell').slice(2).map(c => c.textContent)).toEqual(['38', '40visitas válidas', '104%'])
-        // El TV 9001: 81 llamados contra 75 de objetivo.
+        expect(v1.getAllByRole('cell').slice(2).map(c => c.textContent)).toEqual(['38', '40', '0', '104%'])
+        // El TV 9001: 81 llamados contra 75 de objetivo. Es el único Farmer: el objetivo va al subtítulo.
         pulsar('Farmer')
         const ana = within(await screen.findByTestId('fila-productividad-9001'))
-        expect(ana.getAllByRole('cell').slice(2).map(c => c.textContent)).toEqual(['75', '81llamados', '108%'])
+        expect(ana.getAllByRole('cell').slice(2).map(c => c.textContent)).toEqual(['81', '0', '108%'])
+        expect(screen.getByText('Objetivo: 75 llamados por persona')).toBeInTheDocument()
     })
 
     it('debajo del nombre, el código se ve en el TV pero no en el vendedor', async () => {
@@ -296,4 +297,122 @@ it('las sub-pestañas cambian la vista', async () => {
     expect(await screen.findByTestId('fila-facturacion-V1')).toBeInTheDocument()
     pulsar('Ranking de objeciones')
     expect(await screen.findByTestId('motivo-2')).toBeInTheDocument()
+})
+
+describe('Productividad con el estándar UI', () => {
+    /** La página dentro de rutas reales: para ver a dónde navega y qué queda en la URL. */
+    function montarConRutas(ruta = '/analitica/metricas') {
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        const Ubicacion = () => {
+            const { pathname, search } = useLocation()
+            return <p data-testid="ubicacion">{pathname + search}</p>
+        }
+        return render(
+            <QueryClientProvider client={qc}>
+                <MemoryRouter initialEntries={[ruta]}>
+                    <Routes>
+                        <Route path="/analitica/metricas" element={<AnaliticaMetricasPage />} />
+                        <Route path="/analitica/vendedor/:codigo" element={<p>Detalle del vendedor</p>} />
+                    </Routes>
+                    <Ubicacion />
+                </MemoryRouter>
+            </QueryClientProvider>,
+        )
+    }
+
+    // Objetivo 40 para todos (visitas × 100 / pct): V1 llega justo, V2 a la mitad, V3 se pasa, V4 al 25%.
+    const base = MOCK_RESUMEN.vendedores[0]
+    const VENDEDORES_OBJETIVO_40 = [
+        { ...base, codigoParticularVendedor: 'V1', nombreVendedor: 'ACOSTA MARIANO', visitasValidas: 40, pctCumplimientoVisitas: 100 },
+        { ...base, codigoParticularVendedor: 'V2', nombreVendedor: 'BENITEZ DE LA FUENTE', visitasValidas: 20, pctCumplimientoVisitas: 50 },
+        { ...base, codigoParticularVendedor: 'V3', nombreVendedor: 'CABRERA DIEGO', visitasValidas: 50, pctCumplimientoVisitas: 125 },
+        { ...base, codigoParticularVendedor: 'V4', nombreVendedor: 'DOMINGUEZ SILVINA', visitasValidas: 10, pctCumplimientoVisitas: 25 },
+    ]
+    const conObjetivo40 = () => (api.getResumen as any).mockResolvedValue({ ...MOCK_RESUMEN, vendedores: VENDEDORES_OBJETIVO_40 })
+    const celdas = (codigo: string) =>
+        within(screen.getByTestId(`fila-productividad-${codigo}`)).getAllByRole('cell').map(c => c.textContent)
+
+    it('si el objetivo es el mismo para todas las filas, va al subtítulo y no es columna', async () => {
+        conObjetivo40()
+        montarConRutas()
+        await screen.findByTestId('fila-productividad-V1')
+        expect(screen.getByText('Objetivo: 40 visitas válidas por persona')).toBeInTheDocument()
+        expect(screen.queryByRole('columnheader', { name: 'Objetivo' })).not.toBeInTheDocument()
+    })
+
+    it('si el objetivo varía entre las filas (TVs), queda como columna', async () => {
+        ;(apiEquipo.getProductividadTv as any).mockResolvedValue({
+            ...MOCK_PRODUCTIVIDAD_TV,
+            tvs: [
+                MOCK_PRODUCTIVIDAD_TV.tvs[0],
+                { ...MOCK_PRODUCTIVIDAD_TV.tvs[0], codigoParticularTv: '9003', nombreTv: 'PAZ ANA', objetivo: 60, pctCumplimiento: 0.5, llamados: 30 },
+            ],
+        })
+        montarConRutas('/analitica/metricas?tipo=farmer')
+        await screen.findByTestId('fila-productividad-9003')
+        expect(screen.getByRole('columnheader', { name: 'Objetivo' })).toBeInTheDocument()
+        expect(screen.queryByText(/^Objetivo: /)).not.toBeInTheDocument()
+        expect(celdas('9003').slice(2)).toEqual(['60', '30', '30', '50%'])
+    })
+
+    it('Faltan es objetivo menos logrado, nunca negativo, y el total suma lo de la tabla', async () => {
+        conObjetivo40()
+        montarConRutas()
+        await screen.findByTestId('fila-productividad-V1')
+        expect(celdas('V2').slice(2)).toEqual(['20', '20', '50%'])
+        expect(celdas('V3').slice(2)).toEqual(['50', '0', '125%'])
+        // 120 visitas de 160 pedidas: le faltan 20 + 30 al equipo y el cumplimiento es 120 / 160.
+        const total = within(screen.getByTestId('fila-total'))
+        expect(total.getAllByRole('cell').map(c => c.textContent)).toEqual(['Total', '120', '50', '75%'])
+    })
+
+    it('el cumplimiento va en un pill con el semáforo: ≥80% ok, ≥50% atención, el resto mal', async () => {
+        conObjetivo40()
+        montarConRutas()
+        await screen.findByTestId('fila-productividad-V1')
+        const tono = (codigo: string, texto: string) =>
+            within(screen.getByTestId(`fila-productividad-${codigo}`)).getByText(texto).getAttribute('data-tono')
+        expect(tono('V1', '100%')).toBe('ok')
+        expect(tono('V2', '50%')).toBe('atencion')
+        expect(tono('V4', '25%')).toBe('mal')
+    })
+
+    it('los nombres van en title case, no en mayúsculas', async () => {
+        conObjetivo40()
+        montarConRutas()
+        expect(await screen.findByText('Acosta Mariano')).toBeInTheDocument()
+        expect(screen.getByText('Benitez de la Fuente')).toBeInTheDocument()
+        expect(screen.queryByText('ACOSTA MARIANO')).not.toBeInTheDocument()
+    })
+
+    it('el clic en un vendedor abre su detalle con el período; un TV no navega', async () => {
+        montarConRutas('/analitica/metricas?tipo=farmer')
+        fireEvent.click(await screen.findByTestId('fila-productividad-9001'))
+        expect(screen.getByTestId('ubicacion')).toHaveTextContent('/analitica/metricas?tipo=farmer')
+        pulsar('Vendedor')
+        fireEvent.click(await screen.findByTestId('fila-productividad-V1'))
+        expect(await screen.findByText('Detalle del vendedor')).toBeInTheDocument()
+        expect(screen.getByTestId('ubicacion').textContent).toMatch(/^\/analitica\/vendedor\/V1\?desde=\d{4}-\d{2}-\d{2}&hasta=/)
+    })
+
+    it('la vista y el tipo quedan en la URL; los valores por defecto no se escriben', async () => {
+        montarConRutas()
+        await screen.findByTestId('fila-productividad-V1')
+        pulsar('Hunter')
+        expect(screen.getByTestId('ubicacion').textContent).toBe('/analitica/metricas?tipo=hunter')
+        pulsar('Ranking de objeciones')
+        expect(screen.getByTestId('ubicacion').textContent).toBe('/analitica/metricas?tipo=hunter&vista=objeciones')
+        pulsar('Productividad')
+        pulsar('Vendedor')
+        expect(screen.getByTestId('ubicacion').textContent).toBe('/analitica/metricas')
+    })
+
+    it('las subsecciones, el tipo y el período comparten una sola fila de controles', async () => {
+        montarConRutas()
+        await screen.findByTestId('fila-productividad-V1')
+        const fila = screen.getByRole('navigation', { name: 'Métricas' }).parentElement!
+        expect(within(fila).getByRole('group', { name: 'Tipo de persona' })).toBeInTheDocument()
+        expect(within(fila).getByRole('group', { name: 'Período' })).toBeInTheDocument()
+        expect(within(fila).getByRole('button', { name: 'Mes anterior' })).toBeInTheDocument()
+    })
 })
