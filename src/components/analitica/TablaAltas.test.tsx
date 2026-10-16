@@ -17,17 +17,22 @@ const alta: IAltaRelevada = {
     detalle: { nombre: 'Piche', localidad: 'Zárate' }, contacto: null, camposCargados: 2, camposTotal: 15,
 }
 
-it('una fila por alta con comercio, localidad, vendedor, estado, fecha y completo; tocar elige', () => {
+it('una fila por alta: comercio (con localidad y vendedor debajo), estado, fecha y % de datos; tocar elige', () => {
     const onElegir = vi.fn()
     render(<TablaAltas filas={[alta]} esquema={ESQUEMA} onElegir={onElegir} />)
     expect(screen.getByText('Piche')).toBeInTheDocument()
-    expect(screen.getByText('Zárate')).toBeInTheDocument()
-    expect(screen.getByText('Gómez')).toBeInTheDocument()
+    expect(screen.getByText('Zárate · Gómez')).toBeInTheDocument()
     expect(screen.getByText('No visitó')).toBeInTheDocument()
-    expect(screen.getByText('2026-09-21')).toBeInTheDocument()
-    expect(screen.getByText('2/15')).toBeInTheDocument()
+    expect(screen.getByText('21/09/26')).toBeInTheDocument()
+    // 2 de 15 campos.
+    expect(screen.getByText('13%')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Piche'))
     expect(onElegir).toHaveBeenCalledWith(alta)
+})
+
+it('el estado es la única marca con color: visitada sin vínculo pide atención', () => {
+    render(<TablaAltas filas={[{ ...alta, estado: 'visitada' }]} esquema={ESQUEMA} onElegir={() => {}} />)
+    expect(screen.getByText('Visitada').closest('[data-tono]')).toHaveAttribute('data-tono', 'atencion')
 })
 
 it('sin detalle muestra "Cliente nuevo" y —', () => {
@@ -44,5 +49,6 @@ it('una alta vinculada muestra la marca "En Flexxus" con el código', () => {
             onElegir={() => {}}
         />,
     )
-    expect(screen.getByText(/en flexxus · 10034/i)).toBeInTheDocument()
+    expect(screen.getByText('En Flexxus').closest('[data-tono]')).toHaveAttribute('data-tono', 'ok')
+    expect(screen.getByText(/Flexxus 10034/)).toBeInTheDocument()
 })

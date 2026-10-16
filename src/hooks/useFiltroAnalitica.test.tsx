@@ -43,6 +43,15 @@ it('toggleVendedor agrega y saca del filtro', () => {
     expect(result.current.filtro.vendedores).toEqual(['V4'])
 })
 
+it('setVendedores reemplaza la lista entera (el selector múltiple manda la lista nueva)', () => {
+    const { result } = renderHook(() => useFiltroAnalitica(), {
+        wrapper: wrapperCon('/analitica?desde=2026-07-20&hasta=2026-07-24&vendedores=V1'),
+    })
+    act(() => result.current.setVendedores(['V4', 'V7']))
+    expect(result.current.filtro.vendedores).toEqual(['V4', 'V7'])
+    expect(result.current.filtro.desde).toBe('2026-07-20')
+})
+
 it('limpiarVendedores deja el filtro en todos', () => {
     const { result } = renderHook(() => useFiltroAnalitica(), {
         wrapper: wrapperCon('/analitica?desde=2026-07-20&hasta=2026-07-24&vendedores=V1,V4'),

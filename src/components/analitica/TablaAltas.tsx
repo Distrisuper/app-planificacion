@@ -1,4 +1,9 @@
+import { useMemo } from 'react'
+import TablaDatos from '@/components/ui/tabla/TablaDatos'
+import { definirColumnas } from '@/components/ui/tabla/columnas'
+import type { TonoPill } from '@/components/ui/Pill'
 import { ETIQUETA_ESTADO_ALTA, valorVisible } from '@/lib/altasCsv'
+import { titleCaseNombre } from '@/lib/textFormat'
 import type { IAltaRelevada } from '@/types/analitica'
 import type { EstadoCicloCliente, IEsquemaAlta } from '@/types/planificacion'
 
@@ -8,56 +13,60 @@ interface TablaAltasProps {
     onElegir: (alta: IAltaRelevada) => void
 }
 
-const CLASE_ESTADO: Record<EstadoCicloCliente, string> = {
-    pendiente: 'bg-slate-100 text-slate-600',
-    en_curso: 'bg-amber-100 text-amber-800',
-    visitada: 'bg-emerald-100 text-emerald-700',
-    no_visita: 'bg-slate-100 text-slate-600',
+type EstadoFila = EstadoCicloCliente | 'en_flexxus'
+
+/**
+ * La única métrica con color es el estado. Lo que le queda a administración es lo visitado SIN
+ * vínculo (atención: falta darla de alta en Flexxus); lo ya vinculado está ok. El resto, neutro.
+ * `orden` pone primero lo que hay que hacer.
+ */
+const ESTADOS_ALTA: Record<EstadoFila, { etiqueta: string; tono: TonoPill; orden: number }> = {
+    visitada: { etiqueta: ETIQUETA_ESTADO_ALTA.visitada, tono: 'atencion', orden: 1 },
+    en_curso: { etiqueta: ETIQUETA_ESTADO_ALTA.en_curso, tono: 'neutro', orden: 2 },
+    pendiente: { etiqueta: ETIQUETA_ESTADO_ALTA.pendiente, tono: 'neutro', orden: 3 },
+    no_visita: { etiqueta: ETIQUETA_ESTADO_ALTA.no_visita, tono: 'neutro', orden: 4 },
+    en_flexxus: { etiqueta: 'En Flexxus', tono: 'ok', orden: 5 },
 }
 
-const o = (v: string | null | undefined) => (v && v !== '' ? v : '—')
+const estadoDe = (a: IAltaRelevada): EstadoFila => (a.vinculo ? 'en_flexxus' : a.estado)
 
-/** Las columnas "Comercio" y "Localidad" son las claves `nombre` y `localidad` si el esquema
- *  las trae; si un esquema futuro no tuviera `localidad`, la columna sale con —. */
+/** "Comercio" y "Localidad" son las claves `nombre` y `localidad` si el esquema las trae. El
+ *  vendedor va debajo del comercio, con la localidad: el filtro de arriba ya elige vendedores. */
 export default function TablaAltas({ filas, esquema, onElegir }: TablaAltasProps) {
+    const columnas = useMemo(
+        () =>
+            definirColumnas<IAltaRelevada>(c => [
+                c.texto('comercio', 'Comercio', a => valorVisible(esquema, a, 'nombre') ?? 'Cliente nuevo', {
+                    secundaria: a =>
+                        [
+                            valorVisible(esquema, a, 'localidad'),
+                            titleCaseNombre(a.vendedor.nombre || a.vendedor.codigo),
+                            a.vinculo && `Flexxus ${a.vinculo.codigoParticularCliente}`,
+                        ]
+                            .filter(Boolean)
+                            .join(' · '),
+                }),
+                c.estado('estado', 'Estado', estadoDe, ESTADOS_ALTA),
+                c.fecha('visita', 'Visita', a => a.fechaVisita),
+                c.porcentaje('datos', 'Datos cargados', a => (a.camposTotal > 0 ? a.camposCargados / a.camposTotal : null), {
+                    ancho: 120,
+                }),
+            ]),
+        [esquema],
+    )
+
     return (
-        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-            <table className="w-full text-sm">
-                <thead className="bg-slate-50 text-xs uppercase text-slate-500">
-                    <tr>
-                        <th className="px-3 py-2 text-left">Comercio</th>
-                        <th className="px-3 py-2 text-left">Localidad</th>
-                        <th className="px-3 py-2 text-left">Vendedor</th>
-                        <th className="px-3 py-2 text-left">Estado</th>
-                        <th className="px-3 py-2 text-left">Fecha</th>
-                        <th className="px-3 py-2 text-right">Completo</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {filas.map(a => (
-                        <tr key={a.rotacionClienteId} onClick={() => onElegir(a)}
-                            className="cursor-pointer border-b border-slate-100 hover:bg-blue-50">
-                            <td className="px-3 py-2 font-medium text-slate-900">{valorVisible(esquema, a, 'nombre') ?? 'Cliente nuevo'}</td>
-                            <td className="px-3 py-2 text-slate-600">{o(valorVisible(esquema, a, 'localidad'))}</td>
-                            <td className="px-3 py-2 text-slate-600">{a.vendedor.nombre || a.vendedor.codigo}</td>
-                            <td className="px-3 py-2">
-                                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${CLASE_ESTADO[a.estado]}`}>
-                                    {ETIQUETA_ESTADO_ALTA[a.estado]}
-                                </span>
-                                {/* Lo que falta es lo visitado SIN esta marca: el alta ya se
-                                    dio de alta en Flexxus y su ficha pasó al cliente. */}
-                                {a.vinculo && (
-                                    <span className="ml-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                                        En Flexxus · {a.vinculo.codigoParticularCliente}
-                                    </span>
-                                )}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-2 text-slate-600">{o(a.fechaVisita)}</td>
-                            <td className="px-3 py-2 text-right tabular-nums text-slate-600">{a.camposCargados}/{a.camposTotal}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+        <TablaDatos
+            datos={filas}
+            columnas={columnas}
+            getRowId={a => String(a.rotacionClienteId)}
+            etiqueta="Clientes nuevos"
+            unidad={{ singular: 'cliente nuevo', plural: 'clientes nuevos' }}
+            buscar={{ placeholder: 'Buscar comercio, localidad o vendedor…' }}
+            ordenInicial={{ id: 'estado', desc: false }}
+            onClickFila={onElegir}
+            etiquetaFila={a => `Ver ${valorVisible(esquema, a, 'nombre') ?? 'cliente nuevo'}`}
+            testIdFila={a => `fila-alta-${a.rotacionClienteId}`}
+        />
     )
 }

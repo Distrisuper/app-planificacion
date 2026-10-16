@@ -1,4 +1,23 @@
-import { avanzarPeriodo, fechaAlCambiarModo, nombrePeriodo } from './periodo'
+import { avanzarPeriodo, fechaAlCambiarModo, nombrePeriodo, periodoDeRango, rangoDePeriodo } from './periodo'
+
+describe('rango ↔ período (para pantallas que guardan desde/hasta en la URL)', () => {
+    it('rangoDePeriodo: el día, la semana de lunes a viernes y el mes calendario', () => {
+        const viernes = new Date(2026, 9, 16)
+        expect(rangoDePeriodo('dia', viernes)).toEqual({ desde: '2026-10-16', hasta: '2026-10-16' })
+        expect(rangoDePeriodo('semana', viernes)).toEqual({ desde: '2026-10-12', hasta: '2026-10-16' })
+        expect(rangoDePeriodo('mes', viernes)).toEqual({ desde: '2026-10-01', hasta: '2026-10-31' })
+    })
+
+    it('periodoDeRango reconoce un día, una semana y un mes', () => {
+        expect(periodoDeRango('2026-10-16', '2026-10-16')).toEqual({ modo: 'dia', fecha: new Date(2026, 9, 16) })
+        expect(periodoDeRango('2026-09-21', '2026-09-25')).toEqual({ modo: 'semana', fecha: new Date(2026, 8, 21) })
+        expect(periodoDeRango('2026-10-01', '2026-10-31')).toEqual({ modo: 'mes', fecha: new Date(2026, 9, 1) })
+    })
+
+    it('un rango libre de un link viejo se lee como el mes de su inicio', () => {
+        expect(periodoDeRango('2026-10-05', '2026-10-20')).toEqual({ modo: 'mes', fecha: new Date(2026, 9, 5) })
+    })
+})
 
 describe('periodo', () => {
     it('el mes avanza al día 1 del mes siguiente (un 31 no se arrastra a un mes corto)', () => {

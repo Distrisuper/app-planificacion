@@ -32,23 +32,23 @@ export default function VinculoFlexxus({ alta, onVincular }: VinculoFlexxusProps
 
     return (
         <section>
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Cliente en Flexxus</h3>
-            <div className="rounded-lg border border-slate-200 px-3 py-3 text-sm">
+            <h3 className="mb-2 text-[13px] font-semibold text-tinta-2">Cliente en Flexxus</h3>
+            <div className="rounded-lg border border-linea px-3 py-3 text-sm">
                 {alta.vinculo ? (
                     <div className="flex items-start gap-2">
-                        <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+                        <Link2 className="mt-0.5 h-4 w-4 shrink-0 text-estado-ok-texto" />
                         <div>
-                            <p className="font-medium text-slate-900">Vinculada al cliente {alta.vinculo.codigoParticularCliente}</p>
-                            <p className="text-xs text-slate-500">
+                            <p className="font-medium text-tinta">Vinculada al cliente {alta.vinculo.codigoParticularCliente}</p>
+                            <p className="text-xs text-tinta-2">
                                 {alta.vinculo.vinculadoPor} · {fechaHoraNegocio(alta.vinculo.vinculadoEn)}
                             </p>
                         </div>
                     </div>
                 ) : alta.estado !== 'visitada' ? (
-                    <p className="text-slate-500">Se vincula después de la visita.</p>
+                    <p className="text-tinta-2">Se vincula después de la visita.</p>
                 ) : onVincular ? (
                     <div className="space-y-2">
-                        <p className="text-slate-600">
+                        <p className="text-tinta-2">
                             Cuando lo des de alta en Flexxus, pegá acá su código: la ficha del comercio pasa al cliente.
                         </p>
                         <div className="flex gap-2">
@@ -60,16 +60,16 @@ export default function VinculoFlexxus({ alta, onVincular }: VinculoFlexxusProps
                                 onKeyDown={e => { if (e.key === 'Enter') void vincular() }}
                                 maxLength={50}
                                 placeholder="Código de cliente"
-                                className="min-w-0 flex-1 rounded-md border border-slate-300 px-2.5 py-1.5 text-sm outline-none focus:border-slate-500"
+                                className="min-w-0 flex-1 rounded-md h-8 border border-linea bg-tarjeta px-2.5 text-sm text-tinta outline-none focus-visible:ring-2 focus-visible:ring-primario"
                             />
                             <Button onClick={vincular} disabled={vinculando || codigo.trim() === ''} loading={vinculando}>
                                 Vincular
                             </Button>
                         </div>
-                        {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+                        {error && <p role="alert" className="text-xs text-estado-mal-texto">{error}</p>}
                     </div>
                 ) : (
-                    <p className="text-slate-500">Sin vincular.</p>
+                    <p className="text-tinta-2">Sin vincular.</p>
                 )}
             </div>
         </section>

@@ -25,6 +25,19 @@ function renderPage() {
     )
 }
 
+/** El vendedor se elige con el `Selector` del estándar: abrir la lista y tocar la opción. */
+async function elegirEnSelector(nombre: string) {
+    await userEvent.click(screen.getByRole('button', { name: 'Vendedor' }))
+    await userEvent.click(await screen.findByRole('option', { name: nombre }))
+}
+
+/** Espera a que el roster haya cargado (la opción aparece en la lista) y la vuelve a cerrar. */
+async function esperarRoster(nombre: string) {
+    await userEvent.click(screen.getByRole('button', { name: 'Vendedor' }))
+    await screen.findByRole('option', { name: nombre })
+    await userEvent.keyboard('{Escape}')
+}
+
 beforeEach(() => {
     vi.clearAllMocks()
     authMock.mockReturnValue({
@@ -42,16 +55,14 @@ beforeEach(() => {
 describe('RutaPage', () => {
     it('sin vendedor elegido no pide ninguna rotación', async () => {
         renderPage()
-        await screen.findByRole('option', { name: 'Juan Pérez' })
+        await esperarRoster('Juan Pérez')
         expect(apiAdmin.getRotaciones).not.toHaveBeenCalled()
     })
 
     it('pide la cola del vendedor recién elegido', async () => {
         vi.mocked(apiAdmin.getRotaciones).mockResolvedValue([])
         renderPage()
-        await screen.findByRole('option', { name: 'Juan Pérez' })
-
-        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+        await elegirEnSelector('Juan Pérez')
 
         expect(apiAdmin.getRotaciones).toHaveBeenCalledWith('V 2')
     })
@@ -98,8 +109,7 @@ describe('RutaPage', () => {
         })
 
         renderPage()
-        await screen.findByRole('option', { name: 'Juan Pérez' })
-        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+        await elegirEnSelector('Juan Pérez')
 
         // Nombres exactos: la card activa también tiene un botón "Nombrar Ronda Agosto"
         // (DescripcionInline) y "Cancelar Programada #1" que colisionan por substring con
@@ -139,8 +149,7 @@ describe('RutaPage', () => {
         vi.mocked(apiAdmin.cancelarRotacion).mockResolvedValue(undefined)
 
         renderPage()
-        await screen.findByRole('option', { name: 'Juan Pérez' })
-        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+        await elegirEnSelector('Juan Pérez')
 
         await userEvent.click(await screen.findByRole('button', { name: 'Programada #1' }))
         await userEvent.click(screen.getByRole('button', { name: 'Cancelar Programada #1' }))
@@ -179,8 +188,7 @@ describe('RutaPage', () => {
         }))
 
         renderPage()
-        await screen.findByRole('option', { name: 'Juan Pérez' })
-        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+        await elegirEnSelector('Juan Pérez')
 
         // Primero se visitan las DOS rotaciones para dejarlas en caché. Es lo que hace que
         // el bug sea alcanzable: con la rotación destino ya cacheada, React Query entrega
@@ -230,8 +238,7 @@ describe('RutaPage', () => {
         vi.mocked(apiAdmin.getRotacion).mockRejectedValue(new Error('404'))
 
         renderPage()
-        await screen.findByRole('option', { name: 'Juan Pérez' })
-        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+        await elegirEnSelector('Juan Pérez')
 
         expect(await screen.findByText(/no se pudo cargar el plan/i)).toBeInTheDocument()
     })
@@ -262,8 +269,7 @@ describe('RutaPage', () => {
 
     async function elegirVendedor() {
         renderPage()
-        await screen.findByRole('option', { name: 'Juan Pérez' })
-        await userEvent.selectOptions(screen.getByLabelText('Vendedor'), 'V 2')
+        await elegirEnSelector('Juan Pérez')
     }
 
     it('ofrece agregar clientes en la rotación abierta', async () => {
@@ -345,10 +351,12 @@ describe('RutaPage', () => {
             { codigoParticularVendedor: 'NACHO', nombreVendedor: 'NACHO' },
         ])
         renderPage()
-        await screen.findByRole('option', { name: 'ROSSI' })
+        await userEvent.click(screen.getByRole('button', { name: 'Vendedor' }))
+        // Los nombres van con formato de nombre, no en las MAYÚSCULAS del backend.
+        await screen.findByRole('option', { name: 'Rossi' })
         const opciones = screen.getAllByRole('option').map(o => o.textContent)
-        expect(opciones).toContain('ROSSI')
-        expect(opciones).not.toContain('NACHO')
+        expect(opciones).toContain('Rossi')
+        expect(opciones).not.toContain('Nacho')
         expect(opciones[opciones.length - 1]).toBe('Mi vendedor de prueba')
     })
 })

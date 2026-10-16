@@ -19,7 +19,7 @@ it('tiene la pestaña Métricas apuntando a /analitica/metricas', () => {
     )
     const link = screen.getByRole('link', { name: 'Métricas' })
     expect(link).toHaveAttribute('href', '/analitica/metricas')
-    expect(link).toHaveClass('border-slate-900')
+    expect(link).toHaveAttribute('aria-current', 'page')
 })
 
 it('apunta la pestaña Ruta a /analitica/ruta', () => {
@@ -40,8 +40,8 @@ it('marca Ruta como activa cuando es la ruta actual', () => {
             <AnaliticaTabs />
         </MemoryRouter>,
     )
-    expect(screen.getByRole('link', { name: 'Ruta' })).toHaveClass('border-slate-900')
-    expect(screen.getByRole('link', { name: 'Métricas' })).toHaveClass('border-transparent')
+    expect(screen.getByRole('link', { name: 'Ruta' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Métricas' })).not.toHaveAttribute('aria-current')
 })
 
 it('apunta la pestaña Altas a /analitica/altas, después de Ruta', () => {

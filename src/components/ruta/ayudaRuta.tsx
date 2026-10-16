@@ -13,7 +13,7 @@ export function AyudaRuta() {
     return (
         <div className="space-y-3">
             <div>
-                <p className="font-semibold text-slate-800">Qué es esta pantalla</p>
+                <p className="font-semibold text-tinta">Qué es esta pantalla</p>
                 <p className="mt-0.5">
                     El plan de visitas del vendedor: una fila por semana de su rotación, una
                     columna por día. Cada card es <b>una visita planificada</b>, no un cliente
@@ -22,7 +22,7 @@ export function AyudaRuta() {
             </div>
 
             <div>
-                <p className="font-semibold text-slate-800">Mover ≠ agregar</p>
+                <p className="font-semibold text-tinta">Mover ≠ agregar</p>
                 <ul className="mt-0.5 space-y-1">
                     <li>
                         <b>Arrastrar</b> una card, o <b>Traer acá</b> desde el buscador, mueve
@@ -45,7 +45,7 @@ export function AyudaRuta() {
             </div>
 
             <div>
-                <p className="font-semibold text-slate-800">Los carteles de las cards</p>
+                <p className="font-semibold text-tinta">Los carteles de las cards</p>
                 <ul className="mt-0.5 space-y-1">
                     <li>
                         <b>AGREGADO</b> — el cliente no estaba en esta vuelta y se lo sumó a
@@ -63,7 +63,7 @@ export function AyudaRuta() {
             </div>
 
             <div>
-                <p className="font-semibold text-slate-800">Lo que no se puede</p>
+                <p className="font-semibold text-tinta">Lo que no se puede</p>
                 <p className="mt-0.5">
                     Una visita <b>ya resuelta</b> (visitada o declarada no visitada) no se mueve
                     ni se quita: el hecho ya pasó y no se reescribe. Y una rotación{' '}

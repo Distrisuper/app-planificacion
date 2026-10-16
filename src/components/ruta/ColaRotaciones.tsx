@@ -62,14 +62,14 @@ export default function ColaRotaciones({
                         key={rotacion.id}
                         className={`inline-flex items-center gap-1 rounded-full border pl-1 ${
                             activa
-                                ? 'border-slate-900 bg-slate-900 text-white'
-                                : 'border-slate-300 bg-white text-slate-700'
+                                ? 'border-primario bg-tarjeta font-semibold text-tinta ring-1 ring-primario'
+                                : 'border-linea bg-tarjeta text-tinta-2 hover:text-tinta'
                         }`}
                     >
                         <button
                             type="button"
                             onClick={() => onElegir(rotacion.id)}
-                            className="rounded-full px-3 py-1 text-sm font-medium"
+                            className="h-7 rounded-full px-3 text-[13px]"
                         >
                             {etiquetaDe(rotacion)}
                         </button>
@@ -84,7 +84,7 @@ export default function ColaRotaciones({
                             <span
                                 title="El vendedor está trabajando sobre esta rotación"
                                 className={`mr-1 inline-flex items-center gap-1 text-[11px] font-medium ${
-                                    activa ? 'text-emerald-300' : 'text-emerald-700'
+                                    'text-estado-ok-texto'
                                 }`}
                             >
                                 <span
@@ -102,7 +102,7 @@ export default function ColaRotaciones({
                             <span
                                 title={`Posición ${rotacion.orden} en la cola`}
                                 className={`text-[11px] font-medium ${
-                                    activa ? 'text-slate-300' : 'text-slate-400'
+                                    'text-tinta-2'
                                 }`}
                             >
                                 {`#${rotacion.orden}`}
@@ -133,7 +133,7 @@ export default function ColaRotaciones({
                                         onReordenar(rotacion.id, (rotacion.orden ?? 1) - 1)
                                     }
                                     className={`rounded-full p-1 disabled:opacity-30 ${
-                                        activa ? 'hover:bg-white/20' : 'hover:bg-slate-100'
+                                        'hover:bg-superficie'
                                     }`}
                                 >
                                     <ChevronLeft className="h-3.5 w-3.5" />
@@ -146,7 +146,7 @@ export default function ColaRotaciones({
                                         onReordenar(rotacion.id, (rotacion.orden ?? 1) + 1)
                                     }
                                     className={`rounded-full p-1 disabled:opacity-30 ${
-                                        activa ? 'hover:bg-white/20' : 'hover:bg-slate-100'
+                                        'hover:bg-superficie'
                                     }`}
                                 >
                                     <ChevronRight className="h-3.5 w-3.5" />
@@ -159,7 +159,7 @@ export default function ColaRotaciones({
                                 aria-label={`Cancelar ${etiquetaDe(rotacion)}`}
                                 onClick={() => setACancelar(rotacion)}
                                 className={`mr-1 rounded-full p-1 ${
-                                    activa ? 'hover:bg-white/20' : 'hover:bg-slate-100'
+                                    'hover:bg-superficie'
                                 }`}
                             >
                                 <X className="h-3.5 w-3.5" />
