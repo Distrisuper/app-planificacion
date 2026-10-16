@@ -235,7 +235,7 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                                                 {c > 0 ? ENTERO.format(c) : '—'}
                                                             </span>
                                                             {c > 0 && (
-                                                                <span className={cn('text-[10.5px]', calor.textoClaro ? 'text-white/80' : 'text-slate-700')}>
+                                                                <span className={cn('text-[10.5px]', calor.textoClaro ? 'text-white/85' : 'text-slate-900')}>
                                                                     {formatPct(c / p.total)}
                                                                 </span>
                                                             )}

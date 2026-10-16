@@ -147,6 +147,17 @@ describe('Ranking de objeciones', () => {
         expect((await filas()).slice(0, 2)).toEqual(['fila-objeciones-V1', 'fila-objeciones-V4'])
     })
 
+    it('cambiar de tipo no repinta los motivos: cada uno conserva su color', async () => {
+        montar('/analitica/metricas?vista=objeciones')
+        const color = async (id: number) => (await screen.findByTestId(`motivo-${id}`)).style.borderLeftColor
+        const antes = await color(2)
+        expect(antes).not.toBe('')
+        // Con Farmer, "Pasa pedido" (2) pasa a ser el primero del recorte.
+        pulsar('Farmer')
+        await waitFor(() => expect(screen.getByTestId('total-objeciones')).toHaveTextContent('1 persona'))
+        expect(await color(2)).toBe(antes)
+    })
+
     it('en el ranking, el código se ve debajo del TV pero no del vendedor', async () => {
         montar('/analitica/metricas?vista=objeciones')
         expect(within(await screen.findByTestId('fila-objeciones-V1')).queryByText('V1')).not.toBeInTheDocument()
