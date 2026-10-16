@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import HelpPopover from '@/components/analitica/HelpPopover'
 import { useResumen } from '@/hooks/useAnalitica'
 import { useProductividadTv } from '@/hooks/useMetricasEquipo'
 import { formatPct } from '@/lib/analiticaFormat'
@@ -9,6 +10,28 @@ import { cn } from '@/lib/utils'
 import { CLASE_NUM, Cargando, Encabezado, ErrorBloque, Kpi, Tarjeta, comparar, useOrden } from './ui'
 
 type Columna = 'nombre' | 'objetivo' | 'actividad' | 'cumplimiento'
+
+/** Cómo sale el objetivo de cada uno según el período (Día, Semana, Mes). */
+function AyudaObjetivo() {
+    return (
+        <div className="space-y-2">
+            <p>
+                <b>Vendedor:</b> su objetivo de visitas válidas del mes. En Semana o Día, la parte que
+                corresponde a esos días hábiles.
+            </p>
+            <p>
+                <b>TV:</b> en el mes, llamar a los clientes de sus carteras (sin VNA). Si un Farmer y un
+                Hunter comparten una cartera, se la reparten según su meta diaria (15 y 35 llamados): el
+                Hunter se lleva más clientes.
+            </p>
+            <p>
+                <b>Semana y Día:</b> la parte del mes según los días hábiles, de lunes a viernes. Ej.: con
+                22 días hábiles, un día pide 1/22 del mes.
+            </p>
+            <p>El mes en curso pide el mes entero: el % sube a medida que pasan los días.</p>
+        </div>
+    )
+}
 
 const ENTERO = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 
@@ -90,7 +113,12 @@ export default function ProductividadEquipo({ desde, hasta, filtroTipo }: Produc
                 subtitulo={
                     verVendedores
                         ? 'Cada vendedor contra su objetivo de visitas válidas del período.'
-                        : 'Cada TV contra su objetivo de llamados del período (la meta diaria de su perfil).'
+                        : 'Cada TV contra su objetivo del período: llamar a los clientes de su parte de la cartera.'
+                }
+                derecha={
+                    <HelpPopover label="Cómo se calcula el objetivo">
+                        <AyudaObjetivo />
+                    </HelpPopover>
                 }
             >
                 {cargando && <Cargando />}

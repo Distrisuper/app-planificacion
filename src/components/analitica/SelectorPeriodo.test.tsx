@@ -100,3 +100,39 @@ it('clickear el modo ya activo no dispara cambios', async () => {
     expect(onCambiarModo).not.toHaveBeenCalled()
     expect(onCambiarFecha).not.toHaveBeenCalled()
 })
+
+describe('modo día', () => {
+    it('muestra el día con su nombre', () => {
+        render(
+            <SelectorPeriodo modo="dia" fecha={new Date(2026, 9, 16)} onCambiarModo={vi.fn()} onCambiarFecha={vi.fn()} />,
+        )
+        expect(screen.getByText('Viernes 16/10')).toBeInTheDocument()
+    })
+
+    it('"Día siguiente" salta el fin de semana: del viernes al lunes', async () => {
+        const onCambiarFecha = vi.fn()
+        render(
+            <SelectorPeriodo modo="dia" fecha={new Date(2026, 9, 16)} onCambiarModo={vi.fn()} onCambiarFecha={onCambiarFecha} />,
+        )
+        await userEvent.click(screen.getByRole('button', { name: 'Día siguiente' }))
+        expect(onCambiarFecha).toHaveBeenCalledWith(new Date(2026, 9, 19))
+    })
+
+    it('"Día anterior" salta el fin de semana: del lunes al viernes', async () => {
+        const onCambiarFecha = vi.fn()
+        render(
+            <SelectorPeriodo modo="dia" fecha={new Date(2026, 9, 19)} onCambiarModo={vi.fn()} onCambiarFecha={onCambiarFecha} />,
+        )
+        await userEvent.click(screen.getByRole('button', { name: 'Día anterior' }))
+        expect(onCambiarFecha).toHaveBeenCalledWith(new Date(2026, 9, 16))
+    })
+
+    it('se elige con el botón Día', async () => {
+        const onCambiarModo = vi.fn()
+        render(
+            <SelectorPeriodo modo="mes" fecha={new Date(2026, 9, 16)} onCambiarModo={onCambiarModo} onCambiarFecha={vi.fn()} />,
+        )
+        await userEvent.click(screen.getByRole('button', { name: 'Día' }))
+        expect(onCambiarModo).toHaveBeenCalledWith('dia')
+    })
+})

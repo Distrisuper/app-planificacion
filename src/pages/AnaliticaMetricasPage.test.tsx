@@ -91,6 +91,28 @@ describe('Productividad (vista por defecto)', () => {
         expect(within(await screen.findByTestId('fila-productividad-9001')).getByText('9001')).toBeInTheDocument()
     })
 
+    it('con Día pide las dos fuentes para un solo día', async () => {
+        montar()
+        await screen.findByTestId('fila-productividad-V1')
+        pulsar('Día')
+        await waitFor(() => {
+            const { desde, hasta } = (apiEquipo.getProductividadTv as any).mock.lastCall[0]
+            expect(desde).toBe(hasta)
+        })
+        const { desde, hasta } = (api.getResumen as any).mock.lastCall[0]
+        expect(desde).toBe(hasta)
+    })
+
+    it('una ayuda explica cómo sale el objetivo de cada uno, según el período', async () => {
+        montar()
+        await screen.findByTestId('fila-productividad-V1')
+        fireEvent.click(screen.getByRole('button', { name: 'Cómo se calcula el objetivo' }))
+        const ayuda = await screen.findByRole('dialog')
+        expect(ayuda).toHaveTextContent(/clientes de sus carteras/i)
+        expect(ayuda).toHaveTextContent(/según su meta diaria/i)
+        expect(ayuda).toHaveTextContent(/días hábiles/i)
+    })
+
     it('pide las dos fuentes con el mismo rango', async () => {
         montar()
         await screen.findByTestId('fila-productividad-V1')

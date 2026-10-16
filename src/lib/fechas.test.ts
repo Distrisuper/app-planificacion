@@ -4,8 +4,11 @@ import {
     horaNegocio,
     incluyeHoy,
     isoLocal,
+    diaHabilVecino,
+    nombreDia,
     nombreMes,
     nombreSemana,
+    rangoDia,
     rangoHoy,
     rangoMes,
     rangoSemana,
@@ -120,5 +123,22 @@ describe('rangoSemana', () => {
 describe('nombreSemana', () => {
     it('devuelve "DD/MM al DD/MM" de la semana que contiene la fecha', () => {
         expect(nombreSemana(new Date(2026, 7, 18))).toBe('17/08 al 21/08')
+    })
+})
+
+describe('día', () => {
+    it('rangoDia: desde y hasta son el mismo día', () => {
+        expect(rangoDia(new Date(2026, 9, 16, 22, 30))).toEqual({ desde: '2026-10-16', hasta: '2026-10-16' })
+    })
+
+    it('nombreDia: "Viernes 16/10"', () => {
+        expect(nombreDia(new Date(2026, 9, 16))).toBe('Viernes 16/10')
+        expect(nombreDia(new Date(2026, 9, 19))).toBe('Lunes 19/10')
+    })
+
+    it('diaHabilVecino salta sábado y domingo en los dos sentidos', () => {
+        expect(diaHabilVecino(new Date(2026, 9, 16), 1)).toEqual(new Date(2026, 9, 19))
+        expect(diaHabilVecino(new Date(2026, 9, 19), -1)).toEqual(new Date(2026, 9, 16))
+        expect(diaHabilVecino(new Date(2026, 9, 14), 1)).toEqual(new Date(2026, 9, 15))
     })
 })

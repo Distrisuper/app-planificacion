@@ -104,6 +104,29 @@ export function rangoSemana(fecha: Date): { desde: string; hasta: string } {
     return { desde: isoLocal(lunes), hasta: isoLocal(viernes) }
 }
 
+/** Un solo día: el tercer rango del selector, junto a semana y mes. */
+export function rangoDia(fecha: Date): { desde: string; hasta: string } {
+    const dia = isoLocal(fecha)
+    return { desde: dia, hasta: dia }
+}
+
+/** El día hábil (lunes a viernes) anterior o siguiente: el selector de día no se para en
+ *  un sábado o un domingo, que no tienen objetivo. */
+export function diaHabilVecino(fecha: Date, sentido: 1 | -1): Date {
+    const d = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate())
+    do d.setDate(d.getDate() + sentido)
+    while (d.getDay() === 0 || d.getDay() === 6)
+    return d
+}
+
+const NOMBRES_DIA = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+/** "Viernes 16/10". A mano, como `nombreMes`. */
+export function nombreDia(fecha: Date): string {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${NOMBRES_DIA[fecha.getDay()]} ${pad(fecha.getDate())}/${pad(fecha.getMonth() + 1)}`
+}
+
 /** "18/08 al 22/08". Mismo criterio manual que `nombreMes`: no depender del locale del runtime. */
 export function nombreSemana(fecha: Date): string {
     const { desde, hasta } = rangoSemana(fecha)

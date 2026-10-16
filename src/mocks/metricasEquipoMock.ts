@@ -15,15 +15,15 @@ export const MOCK_PRODUCTIVIDAD_TV: IProductividadTvResponse = {
     tvs: [
         {
             codigoParticularTv: '9001', nombreTv: 'GOMEZ LUCIA (TV)', perfil: 'farmer', activo: true,
-            llamados: 81, atendidos: 46, conVenta: 19, metaDiaria: 15, objetivo: 75, pctCumplimiento: 1.08,
+            llamados: 81, atendidos: 46, conVenta: 19, metaDiaria: 15, objetivoMensual: 330, objetivo: 75, pctCumplimiento: 1.08,
         },
         {
             codigoParticularTv: '9002', nombreTv: 'ROMERO JULIAN (TV)', perfil: 'hunter', activo: true,
-            llamados: 142, atendidos: 51, conVenta: 12, metaDiaria: 35, objetivo: 175, pctCumplimiento: 0.811,
+            llamados: 142, atendidos: 51, conVenta: 12, metaDiaria: 35, objetivoMensual: 770, objetivo: 175, pctCumplimiento: 0.811,
         },
         {
             codigoParticularTv: '9004', nombreTv: '', perfil: null, activo: false,
-            llamados: 6, atendidos: 2, conVenta: 0, metaDiaria: 0, objetivo: null, pctCumplimiento: null,
+            llamados: 6, atendidos: 2, conVenta: 0, metaDiaria: 0, objetivoMensual: null, objetivo: null, pctCumplimiento: null,
         },
     ],
 }

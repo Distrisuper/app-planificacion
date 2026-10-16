@@ -6,7 +6,7 @@ import FacturacionVendedores from '@/components/analitica/metricas/FacturacionVe
 import ProductividadEquipo from '@/components/analitica/metricas/ProductividadEquipo'
 import RankingObjeciones from '@/components/analitica/metricas/RankingObjeciones'
 import { Segmentado } from '@/components/analitica/metricas/ui'
-import { rangoMes, rangoSemana } from '@/lib/fechas'
+import { rangoDia, rangoMes, rangoSemana } from '@/lib/fechas'
 import { OPCIONES_FILTRO_TIPO, type FiltroTipo } from '@/lib/tipoPersona'
 import { cn } from '@/lib/utils'
 
@@ -34,7 +34,7 @@ export default function AnaliticaMetricasPage() {
     const filtroTipo: FiltroTipo = esTipo(params.get('tipo')) ? (params.get('tipo') as FiltroTipo) : 'vendedor'
     const [modo, setModo] = useState<ModoPeriodo>('mes')
     const [fecha, setFecha] = useState(() => new Date())
-    const { desde, hasta } = modo === 'mes' ? rangoMes(fecha) : rangoSemana(fecha)
+    const { desde, hasta } = modo === 'mes' ? rangoMes(fecha) : modo === 'dia' ? rangoDia(fecha) : rangoSemana(fecha)
 
     const escribir = (clave: 'vista' | 'tipo', valor: string, porDefecto: string) => {
         const siguiente = new URLSearchParams(params)
