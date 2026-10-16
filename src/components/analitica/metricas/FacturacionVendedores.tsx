@@ -191,9 +191,12 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
                             {filas.map(({ v, tipos }, i) => (
                                 <tr key={v.code} data-testid={`fila-facturacion-${v.code}`}>
                                     <td className={cn(CLASE_NUM, 'px-3 py-2 text-center text-xs text-slate-400')}>{i + 1}</td>
-                                    <td className="max-w-[260px] px-3 py-2">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="truncate font-semibold text-slate-900">{v.name}</span>
+                                    <td className="max-w-[300px] px-3 py-2">
+                                        {/* Los tipos van abajo, con el código: en la misma línea que el
+                                            nombre (hasta tres) lo truncaban a 8 letras. */}
+                                        <p title={v.name} className="truncate font-semibold text-slate-900">{v.name}</p>
+                                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                                            <span className="mr-0.5 text-[11px] text-slate-400">{v.code}</span>
                                             {tipos.map(t => (
                                                 <BadgeTipo key={t} tipo={t} />
                                             ))}
@@ -201,7 +204,6 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
                                                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">Sin tipo</span>
                                             )}
                                         </div>
-                                        <p className="text-[11px] text-slate-400">{v.code}</p>
                                     </td>
                                     {celda(v, 'actual')}
                                     {COLUMNAS_PERIODO.map(c => celda(v, c.id))}
