@@ -40,8 +40,8 @@ describe('tiposDeCartera', () => {
     })
 })
 
-it('pasaFiltro: todos pasa siempre; un tipo pasa si está', () => {
-    expect(pasaFiltro([], 'todos')).toBe(true)
+it('pasaFiltro: un tipo pasa si está', () => {
+    expect(pasaFiltro([], 'vendedor')).toBe(false)
     expect(pasaFiltro(['vendedor', 'farmer'], 'vendedor')).toBe(true)
     expect(pasaFiltro(['vendedor', 'farmer'], 'farmer')).toBe(true)
     expect(pasaFiltro(['vendedor'], 'farmer')).toBe(false)

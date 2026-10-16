@@ -4,7 +4,7 @@ import { formatPct } from '@/lib/analiticaFormat'
 import { cantidadDe, motivoPrincipal, recortarObjeciones } from '@/lib/objecionesEquipo'
 import type { FiltroTipo } from '@/lib/tipoPersona'
 import { cn } from '@/lib/utils'
-import { BadgeTipo, CLASE_NUM, Cargando, ErrorBloque, Tarjeta } from './ui'
+import { CLASE_NUM, Cargando, ErrorBloque, Tarjeta } from './ui'
 
 /** Los motivos que se ven de entrada; el resto, plegado (como la tarjeta de Versus). */
 const MOTIVOS_VISIBLES = 6
@@ -179,10 +179,7 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                         <tr key={`${p.tipo}:${p.codigo}`} data-testid={`fila-objeciones-${p.codigo}`}>
                                             <td className={cn(CLASE_NUM, 'px-3 py-2 text-center text-xs text-slate-400')}>{i + 1}</td>
                                             <td className="px-3 py-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="truncate font-semibold text-slate-900">{p.nombre || p.codigo}</span>
-                                                    <BadgeTipo tipo={p.tipo} />
-                                                </div>
+                                                <p className="truncate font-semibold text-slate-900">{p.nombre || p.codigo}</p>
                                                 {/* El código del vendedor es su alias (FEDE, VTA 1) y repite el nombre. */}
                                                 {p.tipo !== 'vendedor' && <p className="text-[11px] text-slate-400">{p.codigo}</p>}
                                             </td>

@@ -44,17 +44,29 @@ beforeEach(() => {
 const pulsar = (nombre: string) => fireEvent.click(screen.getByRole('button', { name: nombre }))
 
 describe('Productividad (vista por defecto)', () => {
-    it('lista vendedores y TV juntos, cada uno con su tipo', async () => {
+    it('arranca en Vendedor, sin TV mezclados y sin etiquetas de tipo', async () => {
         montar()
-        const ana = await screen.findByTestId('fila-productividad-9001')
-        expect(within(ana).getByText('FARMER')).toBeInTheDocument()
-        expect(within(ana).getByText('llamados')).toBeInTheDocument()
-        expect(within(screen.getByTestId('fila-productividad-9002')).getByText('HUNTER')).toBeInTheDocument()
         const v1 = await screen.findByTestId('fila-productividad-V1')
-        expect(within(v1).getByText('VENDEDOR')).toBeInTheDocument()
         expect(within(v1).getByText('visitas válidas')).toBeInTheDocument()
-        // Sin perfil ni nombre: se ve el código.
-        expect(within(screen.getByTestId('fila-productividad-9004')).getByText('TV SIN PERFIL')).toBeInTheDocument()
+        expect(within(v1).queryByText('VENDEDOR')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('fila-productividad-9001')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Vendedor', pressed: true })).toBeInTheDocument()
+    })
+
+    it('no hay opción "Todos": vendedor y TV no se mezclan, ni con la URL vieja', async () => {
+        montar('/analitica/metricas?tipo=todos')
+        await screen.findByTestId('fila-productividad-V1')
+        expect(screen.queryByRole('button', { name: 'Todos' })).not.toBeInTheDocument()
+        expect(screen.queryByTestId('fila-productividad-9001')).not.toBeInTheDocument()
+    })
+
+    it('con un perfil de TV quedan solo esos TV, sin etiqueta', async () => {
+        montar('/analitica/metricas?tipo=farmer')
+        const ana = await screen.findByTestId('fila-productividad-9001')
+        expect(within(ana).getByText('llamados')).toBeInTheDocument()
+        expect(within(ana).queryByText('FARMER')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('fila-productividad-9002')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('fila-productividad-V1')).not.toBeInTheDocument()
     })
 
     it('las columnas son Objetivo, Cumplimiento y Contactos, con el objetivo de cada uno', async () => {
@@ -62,20 +74,23 @@ describe('Productividad (vista por defecto)', () => {
         await screen.findByTestId('fila-productividad-V1')
         const encabezados = screen.getAllByRole('columnheader').map(th => th.textContent)
         expect(encabezados).toEqual(['', 'Persona', 'Objetivo', 'Cumplimiento', 'Contactos'])
-        // V1: 40 visitas válidas al 104% → objetivo ≈ 38. El TV 9001 trae 75 llamados.
+        // V1: 40 visitas válidas al 104% → objetivo ≈ 38.
         expect(within(screen.getByTestId('fila-productividad-V1')).getByText('38')).toBeInTheDocument()
-        expect(within(screen.getByTestId('fila-productividad-9001')).getByText('75')).toBeInTheDocument()
+        // El TV 9001 trae 75 llamados de objetivo.
+        pulsar('Farmer')
+        expect(within(await screen.findByTestId('fila-productividad-9001')).getByText('75')).toBeInTheDocument()
     })
 
     it('debajo del nombre, el código se ve en el TV pero no en el vendedor', async () => {
         montar()
         expect(within(await screen.findByTestId('fila-productividad-V1')).queryByText('V1')).not.toBeInTheDocument()
-        expect(within(screen.getByTestId('fila-productividad-9001')).getByText('9001')).toBeInTheDocument()
+        pulsar('Farmer')
+        expect(within(await screen.findByTestId('fila-productividad-9001')).getByText('9001')).toBeInTheDocument()
     })
 
     it('pide las dos fuentes con el mismo rango', async () => {
         montar()
-        await screen.findByTestId('fila-productividad-9001')
+        await screen.findByTestId('fila-productividad-V1')
         const { desde, hasta } = (api.getResumen as any).mock.calls[0][0]
         expect(apiEquipo.getProductividadTv).toHaveBeenCalledWith({ desde, hasta })
     })
@@ -89,47 +104,52 @@ describe('Productividad (vista por defecto)', () => {
         expect(screen.queryByTestId('fila-productividad-9002')).not.toBeInTheDocument()
     })
 
-    it('si falla Televentas, los vendedores se siguen viendo', async () => {
+    it('si falla Televentas, los vendedores se siguen viendo y el aviso sale al pasar a un perfil de TV', async () => {
         ;(apiEquipo.getProductividadTv as any).mockRejectedValue(new Error('404'))
         montar()
         expect(await screen.findByTestId('fila-productividad-V1')).toBeInTheDocument()
+        pulsar('Farmer')
         expect(await screen.findByText('No se pudieron cargar los llamados de Televentas.')).toBeInTheDocument()
     })
 })
 
 describe('Ranking de objeciones', () => {
-    it('la tarjeta muestra 6 motivos y pliega el resto', async () => {
+    it('la tarjeta muestra 6 motivos de los vendedores y pliega el resto', async () => {
         montar('/analitica/metricas?vista=objeciones')
         expect(await screen.findByTestId('motivo-1')).toBeInTheDocument()
-        expect(screen.getByTestId('total-objeciones')).toHaveTextContent(String(MOCK_OBJECIONES_POR_PERSONA.total))
-        const masAllaDeSeis = MOCK_OBJECIONES_POR_PERSONA.motivos[6]
-        expect(screen.queryByTestId(`motivo-${masAllaDeSeis.motivoId}`)).not.toBeInTheDocument()
+        const deVendedores = MOCK_OBJECIONES_POR_PERSONA.personas.filter(p => p.tipo === 'vendedor')
+        const total = deVendedores.reduce((s, p) => s + p.total, 0)
+        expect(screen.getByTestId('total-objeciones')).toHaveTextContent(`${total} objeciones · ${deVendedores.length} personas`)
+        // Entre los vendedores, "7" y "8" son los dos menos registrados.
+        expect(screen.queryByTestId('motivo-7')).not.toBeInTheDocument()
         pulsar('Ver 2 motivos más')
-        expect(screen.getByTestId(`motivo-${masAllaDeSeis.motivoId}`)).toBeInTheDocument()
+        expect(screen.getByTestId('motivo-7')).toBeInTheDocument()
     })
 
-    it('cada persona con su tipo; tocar un motivo ordena por quién más lo registra', async () => {
+    it('sin etiquetas de tipo; tocar un motivo ordena por quién más lo registra', async () => {
         montar('/analitica/metricas?vista=objeciones')
         const filas = async () => (await screen.findAllByTestId(/^fila-objeciones-/)).map(f => f.dataset.testid)
-        // Por total: V1 primero.
+        // Por total: V1 primero, y ningún TV.
         expect((await filas())[0]).toBe('fila-objeciones-V1')
-        expect(within(screen.getByTestId('fila-objeciones-9002')).getByText('HUNTER')).toBeInTheDocument()
+        expect(screen.queryByTestId('fila-objeciones-9002')).not.toBeInTheDocument()
+        expect(within(screen.getByTestId('fila-objeciones-V1')).queryByText('VENDEDOR')).not.toBeInTheDocument()
 
-        // "Pasa pedido" (2): V1 31, V2 27, 9002 22, 9001 17…
+        // "Pasa pedido" (2): V1 31, V2 27, V3 14, V4 7.
         fireEvent.click(screen.getByTestId('motivo-2'))
         expect(screen.getByRole('heading', { name: 'Ranking · Pasa pedido' })).toBeInTheDocument()
-        expect((await filas()).slice(0, 4)).toEqual([
-            'fila-objeciones-V1', 'fila-objeciones-V2', 'fila-objeciones-9002', 'fila-objeciones-9001',
+        expect(await filas()).toEqual([
+            'fila-objeciones-V1', 'fila-objeciones-V2', 'fila-objeciones-V3', 'fila-objeciones-V4',
         ])
-        // "No trabaja la marca o cambió" (4): el hunter 9002 (11) le gana a V1 (9).
+        // "No trabaja la marca o cambió" (4): V1 9, V4 2.
         fireEvent.click(screen.getByTestId('motivo-4'))
-        expect((await filas())[0]).toBe('fila-objeciones-9002')
+        expect((await filas()).slice(0, 2)).toEqual(['fila-objeciones-V1', 'fila-objeciones-V4'])
     })
 
     it('en el ranking, el código se ve debajo del TV pero no del vendedor', async () => {
         montar('/analitica/metricas?vista=objeciones')
         expect(within(await screen.findByTestId('fila-objeciones-V1')).queryByText('V1')).not.toBeInTheDocument()
-        expect(within(screen.getByTestId('fila-objeciones-9002')).getByText('9002')).toBeInTheDocument()
+        pulsar('Hunter')
+        expect(within(await screen.findByTestId('fila-objeciones-9002')).getByText('9002')).toBeInTheDocument()
     })
 
     it('con un tipo, la tarjeta recuenta solo las objeciones de ese tipo', async () => {
@@ -151,40 +171,37 @@ describe('Ranking de objeciones', () => {
 })
 
 describe('Facturación', () => {
-    it('el tipo de la cartera: VENDEDOR si es de calle, más el perfil de cada TV que la atiende', async () => {
+    it('arranca en Vendedor: las carteras de calle (aunque las atienda un TV), sin etiquetas de tipo', async () => {
         montar('/analitica/metricas?vista=facturacion')
-        // Solo de Televentas: farmer y hunter, sin VENDEDOR.
-        const tv1 = await screen.findByTestId('fila-facturacion-CARTERA TV1')
-        await waitFor(() => expect(within(tv1).getByText('FARMER')).toBeInTheDocument())
-        expect(within(tv1).getByText('HUNTER')).toBeInTheDocument()
-        expect(within(tv1).queryByText('VENDEDOR')).not.toBeInTheDocument()
-        // V9 es de un vendedor de calle y además la atiende un farmer: los dos.
-        const v9 = screen.getByTestId('fila-facturacion-V9')
-        await waitFor(() => expect(within(v9).getByText('VENDEDOR')).toBeInTheDocument())
-        expect(within(v9).getByText('FARMER')).toBeInTheDocument()
-        expect(within(screen.getByTestId('fila-facturacion-V1')).getByText('VENDEDOR')).toBeInTheDocument()
-        // V8 la tenía un TV inactivo: hoy es de un vendedor.
-        expect(within(screen.getByTestId('fila-facturacion-V8')).getByText('VENDEDOR')).toBeInTheDocument()
+        // V9 es de un vendedor de calle y además la atiende un farmer; V8 la tenía un TV inactivo.
+        const v9 = await screen.findByTestId('fila-facturacion-V9')
+        expect(screen.getByTestId('fila-facturacion-V1')).toBeInTheDocument()
+        expect(screen.getByTestId('fila-facturacion-V8')).toBeInTheDocument()
+        // Solo de Televentas: no entra.
+        await waitFor(() => expect(screen.queryByTestId('fila-facturacion-CARTERA TV1')).not.toBeInTheDocument())
+        expect(within(v9).queryByText('VENDEDOR')).not.toBeInTheDocument()
+        expect(within(v9).queryByText('FARMER')).not.toBeInTheDocument()
     })
 
-    it('con un backend sin carteras no inventa el tipo', async () => {
+    it('con un backend sin carteras no inventa el tipo: avisa que no está disponible', async () => {
         ;(api.getTelevendedores as any).mockResolvedValue(
             MOCK_TELEVENDEDORES.map(({ codigoParticularTv, nombreTv, activo }) => ({ codigoParticularTv, nombreTv, activo })),
         )
         montar('/analitica/metricas?vista=facturacion')
-        const v1 = await screen.findByTestId('fila-facturacion-V1')
-        await waitFor(() => expect(within(v1).getByText('Sin tipo')).toBeInTheDocument())
-        expect(within(v1).queryByText('VENDEDOR')).not.toBeInTheDocument()
+        expect(await screen.findByText('El tipo de las carteras todavía no está disponible.')).toBeInTheDocument()
+        expect(screen.queryByTestId('fila-facturacion-V1')).not.toBeInTheDocument()
     })
 
-    it('TOTALES suma las carteras; U / $ / SR cambian lo que se lee', async () => {
+    it('TOTALES suma las carteras del filtro; U / $ / SR cambian lo que se lee', async () => {
         montar('/analitica/metricas?vista=facturacion')
+        await waitFor(() => expect(screen.queryByTestId('fila-facturacion-CARTERA TV1')).not.toBeInTheDocument())
         const totales = await screen.findByTestId('fila-totales')
-        const sumaMes = MOCK_VENTAS_VENDEDORES.reduce((s, v) => s + v.totalsByPeriod.thisMonth!.amount, 0)
+        const deVendedores = MOCK_VENTAS_VENDEDORES.filter(v => v.code !== 'CARTERA TV1')
+        const sumaMes = deVendedores.reduce((s, v) => s + v.totalsByPeriod.thisMonth!.amount, 0)
         expect(totales).toHaveTextContent(new Intl.NumberFormat('es-AR').format(Math.round(sumaMes)))
 
         pulsar('U')
-        const unidades = MOCK_VENTAS_VENDEDORES.reduce((s, v) => s + v.totalsByPeriod.thisMonth!.units, 0)
+        const unidades = deVendedores.reduce((s, v) => s + v.totalsByPeriod.thisMonth!.units, 0)
         expect(screen.getByTestId('fila-totales')).toHaveTextContent(new Intl.NumberFormat('es-AR').format(unidades))
     })
 
