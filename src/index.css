@@ -8,6 +8,28 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tokens semánticos del estándar UI (skill `ui-planificacion`). Los componentes nuevos usan
+   estos nombres y nunca hex ni paleta cruda. Los valores son los de siempre: `dsnavytext`,
+   `dsmuted`, `dsline`, `dsnavy`, el fondo de la app y el semáforo de cumplimiento
+   (emerald/amber/red de Tailwind); cambiar un color es cambiarlo acá. Van como canales RGB
+   para que Tailwind acepte opacidad (`bg-tarjeta/80`). */
+:root {
+    --superficie: 238 241 246;   /* #EEF1F6, el fondo de la app */
+    --tarjeta: 255 255 255;
+    --tinta: 24 38 69;           /* dsnavytext */
+    --tinta-2: 105 117 133;      /* dsmuted */
+    --linea: 231 233 240;        /* dsline */
+    --primario: 33 61 130;       /* dsnavy */
+    --estado-ok-fondo: 209 250 229;        /* emerald-100 */
+    --estado-ok-texto: 6 95 70;            /* emerald-800 */
+    --estado-atencion-fondo: 254 243 199;  /* amber-100 */
+    --estado-atencion-texto: 146 64 14;    /* amber-800 */
+    --estado-mal-fondo: 254 226 226;       /* red-100 */
+    --estado-mal-texto: 185 28 28;         /* red-700 */
+    --estado-neutro-fondo: 241 245 249;    /* slate-100 */
+    --estado-neutro-texto: 100 116 139;    /* slate-500 */
+}
+
 html, body, #root { height: 100%; }
 body { margin: 0; background: #eef1f6; -webkit-tap-highlight-color: transparent; font-family: 'Inter', system-ui, sans-serif; }
 
