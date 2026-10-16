@@ -68,7 +68,7 @@ export default function DescripcionInline({
                         setEditando(false)
                     }
                 }}
-                className="w-40 rounded border border-slate-300 px-1.5 py-0.5 text-xs text-slate-900"
+                className="w-40 rounded border border-linea bg-tarjeta px-1.5 py-0.5 text-xs text-tinta focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primario"
             />
         )
     }
@@ -76,7 +76,7 @@ export default function DescripcionInline({
     return (
         <span className="inline-flex items-center gap-1">
             {(mostrarValor ?? true) && (
-                <span className={valor ? 'text-slate-500' : 'text-slate-400 italic'}>
+                <span className={valor ? 'text-tinta-2' : 'italic text-tinta-2'}>
                     {valor ?? placeholder}
                 </span>
             )}
@@ -84,7 +84,7 @@ export default function DescripcionInline({
                 type="button"
                 aria-label={etiquetaAccesible}
                 onClick={abrir}
-                className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="rounded p-0.5 text-tinta-2 hover:bg-superficie hover:text-tinta"
             >
                 <Pencil className="h-3 w-3" />
             </button>

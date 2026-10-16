@@ -1,4 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { rangoMes } from '@/lib/fechas'
+import { titleCaseNombre } from '@/lib/textFormat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
@@ -60,6 +62,33 @@ it('Exportar CSV arma el archivo con las filas filtradas', async () => {
     await screen.findByText('Piche')
     fireEvent.click(screen.getByRole('button', { name: /exportar csv/i }))
     expect(descargar).toHaveBeenCalledWith(expect.stringMatching(/^altas-\d{4}-\d{2}-\d{2}\.csv$/), expect.stringContaining('Piche'))
+})
+
+it('el período es Día/Semana/Mes: arranca en la semana de la URL y Mes pide el mes entero', async () => {
+    vi.mocked(apiAnalitica.getAltas).mockResolvedValue([alta])
+    montar('/analitica/altas?desde=2026-09-21&hasta=2026-09-25')
+    await screen.findByText('Piche')
+    expect(screen.getByRole('button', { name: 'Semana' })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText('21/09 al 25/09')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Mes' }))
+    await waitFor(() =>
+        expect(apiAnalitica.getAltas).toHaveBeenLastCalledWith(expect.objectContaining({ desde: expect.stringMatching(/-01$/) })),
+    )
+    const { desde, hasta } = vi.mocked(apiAnalitica.getAltas).mock.lastCall![0]
+    expect(rangoMes(new Date())).toEqual({ desde, hasta })
+})
+
+it('los vendedores se eligen con el selector del estándar y viajan al backend', async () => {
+    vi.mocked(apiAnalitica.getAltas).mockResolvedValue([alta])
+    montar('/analitica/altas?desde=2026-09-21&hasta=2026-09-25')
+    await screen.findByText('Piche')
+    fireEvent.click(screen.getByRole('button', { name: 'Vendedores' }))
+    fireEvent.click(await screen.findByRole('option', { name: titleCaseNombre(MOCK_VENDEDORES[0].nombreVendedor) }))
+    await waitFor(() =>
+        expect(apiAnalitica.getAltas).toHaveBeenLastCalledWith(
+            expect.objectContaining({ vendedores: [MOCK_VENDEDORES[0].codigoParticularVendedor] }),
+        ),
+    )
 })
 
 it('sin altas en el rango lo dice', async () => {

@@ -7,8 +7,7 @@ import ProductividadEquipo from '@/components/analitica/metricas/ProductividadEq
 import RankingObjeciones from '@/components/analitica/metricas/RankingObjeciones'
 import Pestanas from '@/components/ui/Pestanas'
 import Segmentado from '@/components/ui/Segmentado'
-import { rangoDia, rangoMes, rangoSemana } from '@/lib/fechas'
-import type { ModoPeriodo } from '@/lib/periodo'
+import { rangoDePeriodo, type ModoPeriodo } from '@/lib/periodo'
 import { OPCIONES_FILTRO_TIPO, type FiltroTipo } from '@/lib/tipoPersona'
 
 export type VistaMetricas = 'productividad' | 'objeciones' | 'facturacion'
@@ -39,7 +38,7 @@ export default function AnaliticaMetricasPage() {
     const filtroTipo: FiltroTipo = esTipo(params.get('tipo')) ? (params.get('tipo') as FiltroTipo) : 'vendedor'
     const [modo, setModo] = useState<ModoPeriodo>('mes')
     const [fecha, setFecha] = useState(() => new Date())
-    const { desde, hasta } = modo === 'mes' ? rangoMes(fecha) : modo === 'dia' ? rangoDia(fecha) : rangoSemana(fecha)
+    const { desde, hasta } = rangoDePeriodo(modo, fecha)
 
     const escribir = (clave: 'vista' | 'tipo', valor: string, porDefecto: string) => {
         const siguiente = new URLSearchParams(params)
@@ -50,30 +49,32 @@ export default function AnaliticaMetricasPage() {
 
     return (
         <div className="min-h-screen bg-superficie">
-            <EncabezadoAnalitica>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-linea px-6 py-2.5">
-                    <Pestanas
-                        etiqueta="Métricas"
-                        opciones={VISTAS}
-                        valor={vista}
-                        onCambiar={v => escribir('vista', v, 'productividad')}
-                    />
-                    <div className="ml-auto flex flex-wrap items-center gap-2">
-                        <Segmentado
-                            etiqueta="Tipo de persona"
-                            opciones={OPCIONES_FILTRO_TIPO.map(o => ({ valor: o.valor, etiqueta: o.etiqueta }))}
-                            valor={filtroTipo}
-                            onCambiar={t => escribir('tipo', t, 'vendedor')}
+            <EncabezadoAnalitica
+                filtros={
+                    <>
+                        <Pestanas
+                            etiqueta="Métricas"
+                            opciones={VISTAS}
+                            valor={vista}
+                            onCambiar={v => escribir('vista', v, 'productividad')}
                         />
-                        {vista !== 'facturacion' && (
-                            <>
-                                <span className="mx-1 h-5 w-px bg-linea" aria-hidden />
-                                <FiltroPeriodo modo={modo} fecha={fecha} onCambiarModo={setModo} onCambiarFecha={setFecha} />
-                            </>
-                        )}
-                    </div>
-                </div>
-            </EncabezadoAnalitica>
+                        <div className="ml-auto flex flex-wrap items-center gap-2">
+                            <Segmentado
+                                etiqueta="Tipo de persona"
+                                opciones={OPCIONES_FILTRO_TIPO.map(o => ({ valor: o.valor, etiqueta: o.etiqueta }))}
+                                valor={filtroTipo}
+                                onCambiar={t => escribir('tipo', t, 'vendedor')}
+                            />
+                            {vista !== 'facturacion' && (
+                                <>
+                                    <span className="mx-1 h-5 w-px bg-linea" aria-hidden />
+                                    <FiltroPeriodo modo={modo} fecha={fecha} onCambiarModo={setModo} onCambiarFecha={setFecha} />
+                                </>
+                            )}
+                        </div>
+                    </>
+                }
+            />
 
             <main className="px-6 py-5">
                 {vista === 'productividad' && <ProductividadEquipo desde={desde} hasta={hasta} filtroTipo={filtroTipo} />}

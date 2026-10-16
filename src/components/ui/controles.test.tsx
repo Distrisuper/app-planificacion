@@ -1,9 +1,24 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { vi } from 'vitest'
+import Boton from './Boton'
 import EstadoVista from './EstadoVista'
 import PasoPeriodo from './PasoPeriodo'
 import Pestanas from './Pestanas'
 import Segmentado from './Segmentado'
+
+describe('Boton', () => {
+    it('es un botón (no submit) a 32 px que avisa el clic y se puede deshabilitar', () => {
+        const onClick = vi.fn()
+        const { rerender } = render(<Boton onClick={onClick}>Exportar CSV</Boton>)
+        const boton = screen.getByRole('button', { name: 'Exportar CSV' })
+        expect(boton).toHaveAttribute('type', 'button')
+        expect(boton).toHaveClass('h-8')
+        fireEvent.click(boton)
+        expect(onClick).toHaveBeenCalledTimes(1)
+        rerender(<Boton onClick={onClick} disabled>Exportar CSV</Boton>)
+        expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeDisabled()
+    })
+})
 
 describe('Segmentado', () => {
     it('es un grupo con nombre; la opción activa va con aria-pressed y tocar otra la elige', () => {

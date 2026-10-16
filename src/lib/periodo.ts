@@ -1,4 +1,4 @@
-import { diaHabilVecino, nombreDia, nombreMes, nombreSemana } from '@/lib/fechas'
+import { diaHabilVecino, nombreDia, nombreMes, nombreSemana, rangoDia, rangoMes, rangoSemana } from '@/lib/fechas'
 
 export type ModoPeriodo = 'dia' | 'semana' | 'mes'
 
@@ -24,6 +24,27 @@ export function avanzarPeriodo(modo: ModoPeriodo, fecha: Date, delta: 1 | -1): D
     const siguiente = new Date(fecha)
     siguiente.setDate(fecha.getDate() + delta * 7)
     return siguiente
+}
+
+/** El rango `desde`/`hasta` (YYYY-MM-DD) de un período: el día, la semana de lunes a viernes o
+ *  el mes calendario que contiene `fecha`. */
+export function rangoDePeriodo(modo: ModoPeriodo, fecha: Date): { desde: string; hasta: string } {
+    return modo === 'mes' ? rangoMes(fecha) : modo === 'dia' ? rangoDia(fecha) : rangoSemana(fecha)
+}
+
+const aFechaLocal = (iso: string) => {
+    const [a, m, d] = iso.split('-').map(Number)
+    return new Date(a, m - 1, d)
+}
+
+/** El período de un rango guardado en la URL (Altas): un día, una semana de lunes a viernes o un
+ *  mes calendario. Un rango libre de un link viejo se lee como el mes en que empieza. */
+export function periodoDeRango(desde: string, hasta: string): { modo: ModoPeriodo; fecha: Date } {
+    const fecha = aFechaLocal(desde)
+    if (desde === hasta) return { modo: 'dia', fecha }
+    const semana = rangoSemana(fecha)
+    if (semana.desde === desde && semana.hasta === hasta) return { modo: 'semana', fecha }
+    return { modo: 'mes', fecha }
 }
 
 /** "Octubre 2026", "12/10 al 16/10" o "Viernes 16/10". */

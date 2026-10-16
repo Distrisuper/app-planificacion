@@ -1,29 +1,40 @@
-import { useState } from 'react'
-import FiltrosAnalitica from '@/components/analitica/FiltrosAnalitica'
-import AnaliticaTabs from '@/components/analitica/AnaliticaTabs'
-import TablaAltas from '@/components/analitica/TablaAltas'
+import { useMemo, useRef, useState } from 'react'
+import { Download } from 'lucide-react'
 import DetalleAltaPanel from '@/components/analitica/DetalleAltaPanel'
-import AccountMenu from '@/components/AccountMenu'
-import { Button } from '@/components/ui/button'
-import { useAccionesDeCuenta } from '@/hooks/useAccionesDeCuenta'
-import { useAuth } from '@/context/AuthContext'
+import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
+import FiltroPeriodo from '@/components/analitica/FiltroPeriodo'
+import TablaAltas from '@/components/analitica/TablaAltas'
+import Boton from '@/components/ui/Boton'
+import EstadoVista from '@/components/ui/EstadoVista'
+import Panel from '@/components/ui/Panel'
+import Selector from '@/components/ui/Selector'
 import { useFiltroAnalitica } from '@/hooks/useFiltroAnalitica'
 import { useAltasRelevadas, useVendedores, useVincularAlta } from '@/hooks/useAnalitica'
-import { errorData } from '@/lib/apiError'
 import { useEsquemaAlta } from '@/hooks/useEsquemaAlta'
-import { aCsv, descargarCsv } from '@/lib/csv'
+import { errorData } from '@/lib/apiError'
 import { filasCsvAltas, nombreArchivoAltas } from '@/lib/altasCsv'
+import { aCsv, descargarCsv } from '@/lib/csv'
+import { rangoMes } from '@/lib/fechas'
+import { periodoDeRango, rangoDePeriodo, type ModoPeriodo } from '@/lib/periodo'
+import { titleCaseNombre } from '@/lib/textFormat'
+
+const corto = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 
 /**
  * Relevamiento de los clientes nuevos para administración (spec 2026-09-21): qué cargó cada
- * vendedor en "Datos del comercio", y el CSV para tenerlo al lado del ERP. Los filtros son
- * los mismos de /analitica (rango + vendedores). El CSV se arma en el front desde el mismo
+ * vendedor en "Datos del comercio", y el CSV para tenerlo al lado del ERP. El período (Día,
+ * Semana o Mes, por defecto el mes en curso) y los vendedores viven en la URL (`desde`/`hasta`/
+ * `vendedores`), así un link compartido abre lo mismo. El CSV se arma en el front desde el mismo
  * payload filtrado, recorriendo el esquema: un campo nuevo en la API aparece solo.
  */
 export default function AnaliticaAltasPage() {
-    const { user, logout } = useAuth()
-    const accionesDeCuenta = useAccionesDeCuenta()
-    const { filtro, setRango, toggleVendedor, limpiarVendedores } = useFiltroAnalitica()
+    const mesEnCurso = useMemo(() => rangoMes(new Date()), [])
+    const { filtro, setRango, setVendedores } = useFiltroAnalitica(mesEnCurso)
+    const periodo = periodoDeRango(filtro.desde, filtro.hasta)
+    // FiltroPeriodo avisa el modo y después la fecha: el modo nuevo se guarda acá para que el
+    // rango que se escribe sea el del modo elegido y no el anterior.
+    const modoElegido = useRef<ModoPeriodo | null>(null)
+
     // Por id y no la fila: al vincular, el listado se refresca y el panel tiene que mostrar la
     // fila nueva (con su vínculo), no la foto de cuando se abrió.
     const [elegidaId, setElegidaId] = useState<number | null>(null)
@@ -31,11 +42,11 @@ export default function AnaliticaAltasPage() {
 
     const { data: roster } = useVendedores()
     const esquema = useEsquemaAlta()
-    const { data: altas, isLoading, isError } = useAltasRelevadas(filtro)
+    const altas = useAltasRelevadas(filtro)
 
-    const opciones = (roster ?? []).map(v => ({ codigo: v.codigoParticularVendedor, nombre: v.nombreVendedor }))
-    const listo = esquema.data && altas
-    const elegida = altas?.find(a => a.rotacionClienteId === elegidaId) ?? null
+    const opciones = (roster ?? []).map(v => ({ valor: v.codigoParticularVendedor, etiqueta: titleCaseNombre(v.nombreVendedor) }))
+    const listo = esquema.data && altas.data
+    const elegida = altas.data?.find(a => a.rotacionClienteId === elegidaId) ?? null
 
     async function onVincular(codigo: string): Promise<string | null> {
         if (!elegida) return null
@@ -49,40 +60,77 @@ export default function AnaliticaAltasPage() {
     }
 
     function exportar() {
-        if (!esquema.data || !altas) return
-        descargarCsv(nombreArchivoAltas(new Date()), aCsv(filasCsvAltas(esquema.data, altas)))
+        if (!esquema.data || !altas.data) return
+        descargarCsv(nombreArchivoAltas(new Date()), aCsv(filasCsvAltas(esquema.data, altas.data)))
+    }
+
+    const cambiarFecha = (fecha: Date) => {
+        const { desde, hasta } = rangoDePeriodo(modoElegido.current ?? periodo.modo, fecha)
+        modoElegido.current = null
+        setRango(desde, hasta)
     }
 
     return (
-        <div className="min-h-screen bg-slate-50">
-            <header className="flex items-center justify-between gap-4 bg-white px-6 pt-4">
-                <div className="flex-1"><AnaliticaTabs /></div>
-                <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
-            </header>
-
-            <FiltrosAnalitica filtro={filtro} vendedoresDisponibles={opciones}
-                onRango={setRango} onToggleVendedor={toggleVendedor} onLimpiar={limpiarVendedores} />
-
-            <main className="mx-auto max-w-7xl space-y-4 px-6 py-6">
-                <div className="flex items-center justify-between">
-                    <p className="text-sm text-slate-600">
-                        {altas ? `${altas.length} cliente${altas.length === 1 ? '' : 's'} nuevo${altas.length === 1 ? '' : 's'}` : ''}
-                    </p>
-                    <Button variant="outline" onClick={exportar} disabled={!listo || altas.length === 0}>
-                        Exportar CSV
-                    </Button>
-                </div>
-
-                {(isLoading || esquema.isPending) && <p className="text-sm text-slate-500">Cargando…</p>}
-                {(isError || esquema.isError) && <p className="text-sm text-red-600">No se pudieron cargar los clientes nuevos.</p>}
-
-                {listo && altas.length === 0 && (
-                    <div className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600">
-                        Sin clientes nuevos entre {filtro.desde} y {filtro.hasta}.
+        <div className="min-h-screen bg-superficie">
+            <EncabezadoAnalitica
+                filtros={
+                    <div className="ml-auto flex flex-wrap items-center gap-2">
+                        <Selector multiple etiqueta="Vendedores" opciones={opciones} valores={filtro.vendedores ?? []} onCambiar={setVendedores} />
+                        <span className="mx-1 h-5 w-px bg-linea" aria-hidden />
+                        <FiltroPeriodo
+                            modo={periodo.modo}
+                            fecha={periodo.fecha}
+                            onCambiarModo={m => (modoElegido.current = m)}
+                            onCambiarFecha={cambiarFecha}
+                        />
                     </div>
-                )}
+                }
+            />
 
-                {listo && altas.length > 0 && <TablaAltas filas={altas} esquema={esquema.data} onElegir={a => setElegidaId(a.rotacionClienteId)} />}
+            <main className="px-6 py-5">
+                <Panel
+                    titulo="Clientes nuevos"
+                    ayuda={
+                        <div className="space-y-2">
+                            <p>Los clientes nuevos que relevaron los vendedores en el período, con lo que cargaron en "Datos del comercio".</p>
+                            <p>
+                                <b>Visitada</b> (en amarillo): falta darla de alta en Flexxus. <b>En Flexxus</b>: ya está vinculada.
+                                Tocá una fila para ver la ficha y vincularla.
+                            </p>
+                            <p><b>Datos cargados</b>: los campos completos sobre los del formulario.</p>
+                        </div>
+                    }
+                    etiquetaAyuda="Qué muestra Clientes nuevos"
+                    acciones={
+                        <Boton onClick={exportar} disabled={!listo || altas.data.length === 0}>
+                            <Download className="h-3.5 w-3.5" aria-hidden />
+                            Exportar CSV
+                        </Boton>
+                    }
+                >
+                    {(altas.isLoading || esquema.isPending) && <EstadoVista estado="cargando" />}
+                    {(altas.isError || esquema.isError) && (
+                        <EstadoVista
+                            estado="error"
+                            titulo="No se pudieron cargar los clientes nuevos."
+                            texto="Puede ser la conexión. Probá de nuevo."
+                            onReintentar={() => {
+                                if (altas.isError) altas.refetch()
+                                if (esquema.isError) esquema.refetch()
+                            }}
+                        />
+                    )}
+                    {listo && altas.data.length === 0 && (
+                        <EstadoVista
+                            estado="vacio"
+                            titulo={`Sin clientes nuevos entre el ${corto(filtro.desde)} y el ${corto(filtro.hasta)}.`}
+                            texto="Probá con otro período o con todos los vendedores."
+                        />
+                    )}
+                    {listo && altas.data.length > 0 && (
+                        <TablaAltas filas={altas.data} esquema={esquema.data} onElegir={a => setElegidaId(a.rotacionClienteId)} />
+                    )}
+                </Panel>
 
                 {elegida && esquema.data && (
                     <DetalleAltaPanel alta={elegida} esquema={esquema.data} onCerrar={() => setElegidaId(null)} onVincular={onVincular} />

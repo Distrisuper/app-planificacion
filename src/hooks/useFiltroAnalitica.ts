@@ -74,6 +74,8 @@ export function useFiltroAnalitica(porDefectoRecibido?: { desde: string; hasta: 
 
     const limpiarVendedores = useCallback(() => escribir({ vendedores: [] }), [escribir])
 
+    const setVendedores = useCallback((vendedores: string[]) => escribir({ vendedores }), [escribir])
+
     /** Vuelve a "sin rango elegido": saca desde/hasta de la URL y deja los vendedores. */
     const limpiarRango = useCallback(() => {
         const siguiente = new URLSearchParams(params)
@@ -82,5 +84,5 @@ export function useFiltroAnalitica(porDefectoRecibido?: { desde: string; hasta: 
         setParams(siguiente, { replace: true })
     }, [params, setParams])
 
-    return { filtro, hayRango, setRango, toggleVendedor, limpiarVendedores, limpiarRango }
+    return { filtro, hayRango, setRango, toggleVendedor, setVendedores, limpiarVendedores, limpiarRango }
 }

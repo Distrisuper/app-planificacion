@@ -4,11 +4,13 @@ import HelpPopover from '@/components/analitica/HelpPopover'
 import AgregarClienteExtraDialog from '@/components/ruta/AgregarClienteExtraDialog'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
-import SelectorVendedor from '@/components/ruta/SelectorVendedor'
 import { AyudaRuta } from '@/components/ruta/ayudaRuta'
+import EstadoVista from '@/components/ui/EstadoVista'
+import Selector from '@/components/ui/Selector'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
 import { errorCode, errorData } from '@/lib/apiError'
+import { titleCaseNombre } from '@/lib/textFormat'
 import {
     useCancelarRotacion,
     useCrearRotacion,
@@ -26,9 +28,8 @@ import {
 /**
  * Edición de la ruta (rotación) de un vendedor, para gerencia.
  *
- * Mismo shell que las páginas de Analítica (header + tabs + AccountMenu) pero SIN
- * `FiltrosAnalitica`: ese filtro es rango de fechas + multi-vendedor, pensado para
- * reportes. Acá se opera sobre un vendedor y una rotación a la vez.
+ * Mismo encabezado que Métricas y Altas (una línea: tabs, filtros y cuenta), con un solo
+ * filtro: el vendedor. Acá se opera sobre un vendedor y una rotación a la vez, no se compara.
  */
 export default function RutaPage() {
     const { vendedoresVisibles, vendedorDePrueba } = useAuth()
@@ -44,15 +45,15 @@ export default function RutaPage() {
     // El roster del warehouse no conoce a PRUEBA-*: se agrega a mano, al final y separado.
     // Y se acota a lo que el backend va a aceptar (`requireVendedorEnScope`): un TV futuro
     // no tiene que ver vendedores que después le rebotan con 403.
-    const rosterVisible = useMemo(() => {
-        const base = (roster ?? []).filter(
-            v => vendedoresVisibles === null || vendedoresVisibles.some(c => c.toUpperCase() === v.codigoParticularVendedor.toUpperCase()),
-        )
-        return vendedorDePrueba
-            ? [...base, { codigoParticularVendedor: vendedorDePrueba.codigo, nombreVendedor: 'Mi vendedor de prueba' }]
-            : base
+    const opcionesVendedor = useMemo(() => {
+        const base = (roster ?? [])
+            .filter(
+                v => vendedoresVisibles === null || vendedoresVisibles.some(c => c.toUpperCase() === v.codigoParticularVendedor.toUpperCase()),
+            )
+            .map(v => ({ valor: v.codigoParticularVendedor, etiqueta: titleCaseNombre(v.nombreVendedor) }))
+        return vendedorDePrueba ? [...base, { valor: vendedorDePrueba.codigo, etiqueta: 'Mi vendedor de prueba' }] : base
     }, [roster, vendedoresVisibles, vendedorDePrueba])
-    const { data: cola, isLoading, isError } = useRotaciones(vendedor)
+    const { data: cola, isLoading, isError, refetch: refetchCola } = useRotaciones(vendedor)
 
     const crear = useCrearRotacion(vendedor ?? '')
     const cancelar = useCancelarRotacion(vendedor ?? '')
@@ -82,6 +83,7 @@ export default function RutaPage() {
         data: grid,
         isLoading: cargandoGrid,
         isError: errorGrid,
+        refetch: refetchGrid,
     } = useRotacion(vendedor, rotacionElegida)
     const mover = useReacomodarAdmin(vendedor ?? '')
     const renombrarRotacion = useEditarDescripcionRotacion(vendedor ?? '')
@@ -92,42 +94,51 @@ export default function RutaPage() {
     const restaurar = useRestaurarClienteAdmin(vendedor ?? '')
 
     return (
-        <div className="min-h-screen bg-slate-50">
-            <EncabezadoAnalitica>
-                <div className="flex flex-wrap items-end gap-4 border-b border-slate-200 bg-white px-6 py-4">
-                    <SelectorVendedor
-                        vendedores={rosterVisible}
-                        elegido={vendedor}
-                        onElegir={elegirVendedor}
-                    />
-                    {/* Va en la barra y no dentro del grid: lo que explica son las reglas de la
-                        pantalla entera (mover vs. agregar, qué significa cada cartel, qué no se
-                        puede tocar), y adentro del grid competiría con los controles de celda. */}
-                    <div className="flex items-center gap-1 pb-2 text-xs text-slate-500">
-                        <span>Cómo funciona</span>
-                        <HelpPopover label="Cómo funciona la edición de la ruta" align="left">
-                            <AyudaRuta />
-                        </HelpPopover>
+        <div className="min-h-screen bg-superficie">
+            <EncabezadoAnalitica
+                filtros={
+                    <div className="ml-auto flex items-center gap-2">
+                        {/* Va en la línea y no dentro del grid: lo que explica son las reglas de
+                            la pantalla entera (mover vs. agregar, qué significa cada cartel, qué
+                            no se puede tocar), y adentro del grid competiría con los controles. */}
+                        <span className="inline-flex items-center gap-1 text-[13px] text-tinta-2">
+                            Cómo funciona
+                            <HelpPopover label="Cómo funciona la edición de la ruta">
+                                <AyudaRuta />
+                            </HelpPopover>
+                        </span>
+                        <span className="mx-1 h-5 w-px bg-linea" aria-hidden />
+                        {/* Uno solo, a diferencia de los reportes: gerencia opera sobre UNA
+                            rotación a la vez, no compara vendedores. */}
+                        <Selector
+                            etiqueta="Vendedor"
+                            placeholder="Elegí un vendedor"
+                            opciones={opcionesVendedor}
+                            valor={vendedor}
+                            onCambiar={elegirVendedor}
+                        />
                     </div>
-                </div>
-            </EncabezadoAnalitica>
+                }
+            />
 
-            <main className="mx-auto max-w-7xl space-y-6 px-6 py-6">
+            <main className="space-y-4 px-6 py-5">
                 {vendedor === null && (
-                    <p className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600">
-                        Elegí un vendedor para ver y editar su ruta.
-                    </p>
+                    <EstadoVista
+                        estado="vacio"
+                        titulo="Elegí un vendedor para ver y editar su ruta."
+                        texto="Usá el selector de vendedor de arriba a la derecha."
+                    />
                 )}
 
-                {vendedor !== null && isLoading && (
-                    <p className="text-sm text-slate-500">Cargando…</p>
-                )}
+                {vendedor !== null && isLoading && <EstadoVista estado="cargando" />}
 
                 {vendedor !== null && isError && (
-                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                        No se pudo cargar la ruta de este vendedor. Probá de nuevo en un
-                        momento.
-                    </p>
+                    <EstadoVista
+                        estado="error"
+                        titulo="No se pudo cargar la ruta de este vendedor."
+                        texto="Puede ser la conexión. Probá de nuevo."
+                        onReintentar={() => refetchCola()}
+                    />
                 )}
 
                 {vendedor !== null && cola && cola.length > 0 && (
@@ -152,24 +163,25 @@ export default function RutaPage() {
                     dibujaba un contenedor vacío debajo del texto. La rotación la crea el
                     vendedor al abrir su primera zona. */}
                 {vendedor !== null && cola?.length === 0 && (
-                    <p className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center text-sm text-slate-600">
-                        Este vendedor todavía no tiene ninguna rotación. Se crea sola cuando
-                        empieza a recorrer su primera zona.
-                    </p>
+                    <EstadoVista
+                        estado="vacio"
+                        titulo="Este vendedor todavía no tiene ninguna rotación."
+                        texto="Se crea sola cuando empieza a recorrer su primera zona."
+                    />
                 )}
 
-                {rotacionElegida !== null && cargandoGrid && (
-                    <p className="text-sm text-slate-500">Cargando la ruta…</p>
-                )}
+                {rotacionElegida !== null && cargandoGrid && <EstadoVista estado="cargando" />}
 
                 {/* Sin esto el fallo del grid era mudo: `grid` queda undefined y la página
                     mostraba los chips sobre un vacío, indistinguible de una rotación sin
                     semanas. */}
                 {rotacionElegida !== null && errorGrid && (
-                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                        No se pudo cargar el plan de esta rotación. Probá de nuevo en un
-                        momento.
-                    </p>
+                    <EstadoVista
+                        estado="error"
+                        titulo="No se pudo cargar el plan de esta rotación."
+                        texto="Puede ser la conexión. Probá de nuevo."
+                        onReintentar={() => refetchGrid()}
+                    />
                 )}
 
                 {grid && (
@@ -249,21 +261,24 @@ export default function RutaPage() {
                 )}
 
                 {mover.isError && (
-                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                        No se pudo mover ese cliente. Puede que ya lo hayan visitado en esta
-                        vuelta, o que la semana destino no exista en su ruta.
-                    </p>
+                    <EstadoVista
+                        estado="error"
+                        titulo="No se pudo mover ese cliente."
+                        texto="Puede que ya lo hayan visitado en esta vuelta, o que la semana destino no exista en su ruta."
+                    />
                 )}
 
                 {intercambiar.isError && (
-                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                        {(() => {
+                    <EstadoVista
+                        estado="error"
+                        titulo="No se pudo intercambiar los días."
+                        texto={(() => {
                             const data = errorData<{ clientes?: string[] }>(
                                 intercambiar.error,
                             )
                             const codigos = data?.clientes ?? []
                             if (codigos.length === 0) {
-                                return 'No se pudo intercambiar los días. Probá de nuevo en un momento.'
+                                return 'Probá de nuevo en un momento.'
                             }
                             // El backend manda códigos; los nombres salen del grid que ya
                             // tenemos, así ese camino no vuelve a consultar el warehouse.
@@ -277,21 +292,23 @@ export default function RutaPage() {
                                 nombres.length === 1 ? 'fue' : 'fueron'
                             } resuelto${nombres.length === 1 ? '' : 's'} en esta vuelta.`
                         })()}
-                    </p>
+                    />
                 )}
 
                 {quitar.isError && (
-                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                        {errorCode(quitar.error) === 'VISITA_EN_CURSO'
-                            ? 'No se pudo quitar: el vendedor está visitando a ese cliente ahora mismo. Probá de nuevo cuando cierre la visita.'
-                            : 'No se pudo quitar ese cliente. Puede que ya lo hayan visitado en esta vuelta.'}
-                    </p>
+                    <EstadoVista
+                        estado="error"
+                        titulo="No se pudo quitar ese cliente."
+                        texto={
+                            errorCode(quitar.error) === 'VISITA_EN_CURSO'
+                                ? 'El vendedor está visitando a ese cliente ahora mismo. Probá de nuevo cuando cierre la visita.'
+                                : 'Puede que ya lo hayan visitado en esta vuelta.'
+                        }
+                    />
                 )}
 
                 {restaurar.isError && (
-                    <p className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                        No se pudo restaurar ese cliente. Probá de nuevo en un momento.
-                    </p>
+                    <EstadoVista estado="error" titulo="No se pudo restaurar ese cliente." texto="Probá de nuevo en un momento." />
                 )}
 
                 {/* No hay cartel de `omitidos`: el grid de gerencia (`IRotacionAdmin` en
