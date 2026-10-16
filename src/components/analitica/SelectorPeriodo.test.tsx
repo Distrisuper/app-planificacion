@@ -127,6 +127,17 @@ describe('modo día', () => {
         expect(onCambiarFecha).toHaveBeenCalledWith(new Date(2026, 9, 16))
     })
 
+    it('elegir Día un fin de semana arranca en el viernes, no en un día sin objetivo', async () => {
+        vi.useFakeTimers({ now: new Date(2026, 9, 17, 10, 0), toFake: ['Date'] })
+        const onCambiarFecha = vi.fn()
+        render(
+            <SelectorPeriodo modo="mes" fecha={new Date(2026, 9, 17)} onCambiarModo={vi.fn()} onCambiarFecha={onCambiarFecha} />,
+        )
+        await userEvent.click(screen.getByRole('button', { name: 'Día' }))
+        vi.useRealTimers()
+        expect(onCambiarFecha).toHaveBeenCalledWith(new Date(2026, 9, 16))
+    })
+
     it('se elige con el botón Día', async () => {
         const onCambiarModo = vi.fn()
         render(

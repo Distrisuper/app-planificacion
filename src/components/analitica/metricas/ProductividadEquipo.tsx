@@ -16,19 +16,17 @@ function AyudaObjetivo() {
     return (
         <div className="space-y-2">
             <p>
-                <b>Vendedor:</b> su objetivo de visitas válidas del mes. En Semana o Día, la parte que
-                corresponde a esos días hábiles.
+                <b>Vendedor:</b> su objetivo de visitas válidas del mes. En Semana o Día, la parte de esos
+                días hábiles sobre un mes típico de 22 (un día pide 1/22).
             </p>
             <p>
                 <b>TV:</b> en el mes, llamar a los clientes de sus carteras (sin VNA). Si un Farmer y un
                 Hunter comparten una cartera, se la reparten según su meta diaria (15 y 35 llamados): el
-                Hunter se lleva más clientes.
+                Hunter se lleva más clientes. En Semana o Día, la parte de esos días hábiles (lunes a
+                viernes) sobre los del mes: con 21 días hábiles, un día pide 1/21. No cuentan los días
+                anteriores al arranque de Televentas.
             </p>
-            <p>
-                <b>Semana y Día:</b> la parte del mes según los días hábiles, de lunes a viernes. Ej.: con
-                22 días hábiles, un día pide 1/22 del mes.
-            </p>
-            <p>El mes en curso pide el mes entero: el % sube a medida que pasan los días.</p>
+            <p>El mes en curso pide el mes entero, no solo los días que pasaron: el % sube a medida que avanza.</p>
         </div>
     )
 }

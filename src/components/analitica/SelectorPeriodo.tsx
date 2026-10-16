@@ -29,7 +29,10 @@ export default function SelectorPeriodo({
     const cambiarModo = (siguiente: ModoPeriodo) => {
         if (siguiente === modo) return
         onCambiarModo(siguiente)
-        onCambiarFecha(new Date())
+        // Un sábado o domingo no tiene objetivo: el Día arranca en el último día hábil.
+        const hoy = new Date()
+        const finde = hoy.getDay() === 0 || hoy.getDay() === 6
+        onCambiarFecha(siguiente === 'dia' && finde ? diaHabilVecino(hoy, -1) : hoy)
     }
 
     const avanzar = (delta: 1 | -1) => {
