@@ -1,4 +1,4 @@
-import { formatVentas, sumarVendedores, tonoCelda, tonoDelMes, valorColumna } from './facturacion'
+import { formatVentas, sumarVendedores, tonoCelda, tonoDelMes, tonoMesProyectado, valorColumna } from './facturacion'
 import type { IVentasVendedor } from '@/types/metricasEquipo'
 
 const V: IVentasVendedor = {
@@ -71,12 +71,40 @@ describe('tonoCelda (contra P.6M, umbrales de Versus)', () => {
     })
 })
 
-it('tonoDelMes compara la proyección del mes, no lo vendido hasta hoy', () => {
-    // jueves 15/10/2026 14:00 ART: 11 de 24 días hábiles. 50 hoy → 109 al cierre.
+describe('tonoDelMes (el mes en curso siempre lleva color, como Versus de app-vendedores)', () => {
+    // jueves 15/10/2026 14:00 ART: 11 de 24 días hábiles.
     const ahora = new Date('2026-10-15T17:00:00Z')
-    expect(tonoCelda(50, 100)).toBe('bajo')
-    expect(tonoDelMes(50, 100, ahora)).toBe('ok')
-    expect(tonoDelMes(0, 100, ahora)).toBe('sin_valor')
+
+    it('compara la proyección del mes, no lo vendido hasta hoy', () => {
+        // 50 hoy → 109 al cierre.
+        expect(tonoCelda(50, 100)).toBe('bajo')
+        expect(tonoDelMes(50, 100, ahora)).toBe('ok')
+    })
+
+    it.each([
+        // [proyectado al cierre contra P.6M = 100, tono]
+        [120, 'alto'],
+        [110, 'ok'],
+        [90, 'ok'],
+        [89, 'atencion'],
+        [70, 'atencion'],
+        [69, 'bajo'],
+        [20, 'bajo'],
+        [19, 'critico'],
+    ] as const)('proyectado %d contra 100 → %s', (proyectado, tono) => {
+        expect(tonoMesProyectado(proyectado, 100)).toBe(tono)
+    })
+
+    it('sin ventas en el mes es rojo, no queda sin color', () => {
+        expect(tonoDelMes(0, 100, ahora)).toBe('critico')
+        expect(tonoDelMes(-5, 100, ahora)).toBe('critico')
+    })
+
+    it('sin referencia (o con devoluciones en 6M): vender es verde, no vender rojo', () => {
+        expect(tonoMesProyectado(10, 0)).toBe('alto')
+        expect(tonoMesProyectado(10, -50)).toBe('alto')
+        expect(tonoMesProyectado(0, 0)).toBe('critico')
+    })
 })
 
 it('formatVentas: enteros con miles; SR con un decimal', () => {

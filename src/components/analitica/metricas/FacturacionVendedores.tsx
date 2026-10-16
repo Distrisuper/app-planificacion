@@ -4,6 +4,7 @@ import { useTelevendedores, useVendedores } from '@/hooks/useAnalitica'
 import { useVentasVendedores } from '@/hooks/useMetricasEquipo'
 import {
     CLASE_TONO,
+    CLASE_TONO_MES,
     formatVentas,
     sumarVendedores,
     tonoCelda,
@@ -81,12 +82,13 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
         const n = valor(v, c)
         const esRef = c === 'p6m'
         const ref6m = valorColumna(v, 'p6m', vista)
-        // El mes en curso se pinta con su proyección aunque se muestre lo vendido hasta hoy.
-        const tono = esRef
+        // El mes en curso se pinta con su proyección aunque se muestre lo vendido hasta hoy, y
+        // siempre lleva color; los períodos cerrados no se pintan cerca de la referencia.
+        const clase = esRef
             ? null
             : c === 'actual'
-              ? tonoDelMes(valorColumna(v, 'actual', vista), ref6m)
-              : tonoCelda(n, ref6m)
+              ? CLASE_TONO_MES[tonoDelMes(valorColumna(v, 'actual', vista), ref6m)]
+              : CLASE_TONO[tonoCelda(n, ref6m)]
         return (
             <td key={c} className={cn('px-2 py-1.5 text-right', esRef && 'bg-slate-50')}>
                 <span
@@ -94,7 +96,7 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
                         CLASE_NUM,
                         'inline-flex items-baseline gap-0.5 whitespace-nowrap rounded-lg px-2 py-1',
                         fuerte ? 'text-sm font-extrabold text-slate-900' : 'text-[13px]',
-                        !fuerte && (tono ? CLASE_TONO[tono] : 'text-slate-700'),
+                        !fuerte && (clase ?? 'text-slate-700'),
                     )}
                 >
                     {vista === '$' && <span className="text-[10px] font-medium opacity-60">$</span>}

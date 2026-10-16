@@ -69,11 +69,39 @@ export function tonoCelda(valor: number, ref6m: number): TonoCelda {
     return 'critico'
 }
 
+export type TonoMes = 'alto' | 'ok' | 'atencion' | 'bajo' | 'critico'
+
+/**
+ * El tono del mes en curso con la escala de la tabla clásica de app-vendedores
+ * (src/utils/getColorClass.tsx): SIEMPRE lleva color, también cerca de la referencia, donde
+ * las columnas de períodos cerrados no se pintan. Recibe el valor ya proyectado al cierre.
+ * - rojo: sin ventas (≤ 0) o menos del 20% de P.6M;
+ * - naranja: menos del 70%; amarillo: menos del 90%;
+ * - verde suave: entre 90% y 110%; verde fuerte: más del 110%.
+ * Sin referencia (o con devoluciones netas en 6M), vender cualquier cosa ya es verde fuerte.
+ */
+export function tonoMesProyectado(proyectado: number, ref6m: number): TonoMes {
+    if (proyectado <= 0 || proyectado < ref6m * 0.2) return 'critico'
+    if (proyectado < ref6m * 0.7) return 'bajo'
+    if (proyectado < ref6m * 0.9) return 'atencion'
+    if (proyectado <= ref6m * 1.1) return 'ok'
+    return 'alto'
+}
+
 /** El tono del mes en curso: se compara su PROYECCIÓN al cierre contra P.6M, aunque la celda
  *  muestre lo vendido hasta hoy (la misma regla que Versus). Un mes a medias contra el promedio
  *  de meses enteros saldría rojo por construcción. */
-export const tonoDelMes = (vendidoHastaHoy: number, ref6m: number, ahora: Date = new Date()): TonoCelda =>
-    tonoCelda(proyectarMes(vendidoHastaHoy, ahora), ref6m)
+export const tonoDelMes = (vendidoHastaHoy: number, ref6m: number, ahora: Date = new Date()): TonoMes =>
+    tonoMesProyectado(proyectarMes(vendidoHastaHoy, ahora), ref6m)
+
+/** Los mismos fondos que getColorClass de app-vendedores. */
+export const CLASE_TONO_MES: Record<TonoMes, string> = {
+    alto: 'bg-green-400 text-green-950 font-semibold',
+    ok: 'bg-green-300 text-green-950 font-semibold',
+    atencion: 'bg-yellow-200 text-yellow-900 font-semibold',
+    bajo: 'bg-orange-300 text-orange-950 font-semibold',
+    critico: 'bg-red-200 text-red-950 font-semibold',
+}
 
 export const CLASE_TONO: Record<TonoCelda, string> = {
     sin_valor: 'text-slate-400',
