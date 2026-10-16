@@ -22,8 +22,8 @@ const esVista = (v: string | null): v is VistaMetricas => VISTAS.some(x => x.val
 const esTipo = (v: string | null): v is FiltroTipo => OPCIONES_FILTRO_TIPO.some(x => x.valor === v)
 
 /**
- * Métricas del equipo para gerencia: Productividad, Ranking de objeciones y Facturación, con
- * el tipo de persona (VENDEDOR, FARMER, HUNTER) siempre a la vista y filtrable. La vista y el
+ * Métricas del equipo para gerencia: Productividad, Ranking de objeciones y Facturación, de
+ * un tipo de persona por vez (Vendedor por defecto, Farmer o Hunter: no se mezclan). La vista y el
  * tipo viven en la URL (atrás/recargar/compartir los conservan); el período es de la pantalla,
  * como en Efectividad. Facturación no usa el período: trae sus columnas fijas (mes, M.ANT,
  * P.3M, P.6M, P.12M), como Versus.
@@ -31,7 +31,7 @@ const esTipo = (v: string | null): v is FiltroTipo => OPCIONES_FILTRO_TIPO.some(
 export default function AnaliticaMetricasPage() {
     const [params, setParams] = useSearchParams()
     const vista: VistaMetricas = esVista(params.get('vista')) ? (params.get('vista') as VistaMetricas) : 'productividad'
-    const filtroTipo: FiltroTipo = esTipo(params.get('tipo')) ? (params.get('tipo') as FiltroTipo) : 'todos'
+    const filtroTipo: FiltroTipo = esTipo(params.get('tipo')) ? (params.get('tipo') as FiltroTipo) : 'vendedor'
     const [modo, setModo] = useState<ModoPeriodo>('mes')
     const [fecha, setFecha] = useState(() => new Date())
     const { desde, hasta } = modo === 'mes' ? rangoMes(fecha) : rangoSemana(fecha)
@@ -68,7 +68,7 @@ export default function AnaliticaMetricasPage() {
                         etiqueta="Tipo de persona"
                         opciones={OPCIONES_FILTRO_TIPO.map(o => ({ valor: o.valor, etiqueta: o.etiqueta }))}
                         valor={filtroTipo}
-                        onCambiar={t => escribir('tipo', t, 'todos')}
+                        onCambiar={t => escribir('tipo', t, 'vendedor')}
                     />
                     {vista !== 'facturacion' && (
                         <SelectorPeriodo modo={modo} fecha={fecha} onCambiarModo={setModo} onCambiarFecha={setFecha} />

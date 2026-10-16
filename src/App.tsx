@@ -7,7 +7,6 @@ import { puedeOperarComoVendedor, supervisa } from '@/lib/roles'
 import VendedorShell from '@/components/VendedorShell'
 import AnaliticaActividadPage from '@/pages/AnaliticaActividadPage'
 import AnaliticaAltasPage from '@/pages/AnaliticaAltasPage'
-import AnaliticaPage from '@/pages/AnaliticaPage'
 import AnaliticaVendedorPage from '@/pages/AnaliticaVendedorPage'
 import LoginPage from '@/pages/LoginPage'
 import AnaliticaFichasPage from '@/pages/AnaliticaFichasPage'
@@ -37,7 +36,10 @@ export default function App() {
                             </Route>
                         </Route>
                         <Route element={<ProtectedRoute permitir={supervisa} />}>
-                            <Route path="/analitica" element={<AnaliticaPage />} />
+                            {/* Gerencia arranca en Métricas: "Analítica de visitas" ya no es
+                                una tab (rutaInicial, el banner de prueba y los favoritos
+                                apuntan acá). */}
+                            <Route path="/analitica" element={<Navigate to="/analitica/metricas" replace />} />
                             <Route
                                 path="/analitica/actividad"
                                 element={<AnaliticaActividadPage />}

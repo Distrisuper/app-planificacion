@@ -1,8 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CLASE_TIPO, ETIQUETA_TIPO } from '@/lib/tipoPersona'
-import type { TipoPersona } from '@/types/metricasEquipo'
 
 /** Números alineados y del mismo ancho en todas las tablas de la pestaña. */
 export const CLASE_NUM = 'tabular-nums lining-nums slashed-zero'
@@ -64,17 +62,6 @@ export function Segmentado<T extends string>({
                 </button>
             ))}
         </div>
-    )
-}
-
-export function BadgeTipo({ tipo }: { tipo: TipoPersona }) {
-    return (
-        <span
-            data-testid={`tipo-${tipo}`}
-            className={cn('inline-flex rounded-full px-2 py-0.5 text-[10px] font-extrabold tracking-wide', CLASE_TIPO[tipo])}
-        >
-            {ETIQUETA_TIPO[tipo]}
-        </span>
     )
 }
 

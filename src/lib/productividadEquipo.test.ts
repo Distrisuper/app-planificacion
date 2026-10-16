@@ -40,3 +40,21 @@ it('resumenTvs: llamados contra la suma de objetivos, sin contar a los TV sin ob
     expect(r.tasaContacto).toBeCloseTo(0.3)
     expect(r.conVenta).toBe(6)
 })
+
+describe('objetivo del período', () => {
+    it('el del vendedor sale de invertir su cumplimiento de visitas (el back no lo manda)', () => {
+        const v = { ...MOCK_RESUMEN.vendedores[0], visitasValidas: 108, pctCumplimientoVisitas: 67.5 }
+        expect(filaDeVendedor(v).objetivo).toBeCloseTo(160)
+    })
+
+    it('sin visitas válidas o sin objetivo vigente, el del vendedor queda en null (s/d)', () => {
+        const v = MOCK_RESUMEN.vendedores[0]
+        expect(filaDeVendedor({ ...v, visitasValidas: 0, pctCumplimientoVisitas: 0 }).objetivo).toBeNull()
+        expect(filaDeVendedor({ ...v, pctCumplimientoVisitas: null }).objetivo).toBeNull()
+    })
+
+    it('el del TV es su objetivo de llamados del período, tal cual lo manda el back', () => {
+        expect(filaDeTv({ ...TV, objetivo: 75 }).objetivo).toBe(75)
+        expect(filaDeTv({ ...TV, objetivo: null }).objetivo).toBeNull()
+    })
+})

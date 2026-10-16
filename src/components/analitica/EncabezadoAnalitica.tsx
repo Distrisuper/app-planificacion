@@ -5,7 +5,6 @@ import { useAccionesDeCuenta } from '@/hooks/useAccionesDeCuenta'
 import { useAuth } from '@/context/AuthContext'
 
 interface EncabezadoAnaliticaProps {
-    enVivo?: boolean
     /** Lo que va a la izquierda del menú de cuenta. Por defecto las tabs; el detalle del
      *  vendedor pone su "Volver" y su título. */
     izquierda?: ReactNode
@@ -25,7 +24,7 @@ interface EncabezadoAnaliticaProps {
  * `z-20`: por encima del contenido que pasa por debajo, por debajo del panel de detalle de
  * visita (`z-30`) y de popovers/menús (`z-50`), que tienen que taparlo.
  */
-export default function EncabezadoAnalitica({ enVivo, izquierda, children }: EncabezadoAnaliticaProps) {
+export default function EncabezadoAnalitica({ izquierda, children }: EncabezadoAnaliticaProps) {
     const { user, logout } = useAuth()
     const accionesDeCuenta = useAccionesDeCuenta()
 
@@ -36,7 +35,7 @@ export default function EncabezadoAnalitica({ enVivo, izquierda, children }: Enc
                     izquierda ? 'items-start border-b border-slate-200 py-4' : 'items-center pt-4'
                 }`}
             >
-                <div className="min-w-0 flex-1">{izquierda ?? <AnaliticaTabs enVivo={enVivo} />}</div>
+                <div className="min-w-0 flex-1">{izquierda ?? <AnaliticaTabs />}</div>
                 <AccountMenu nombre={user?.name ?? ''} onLogout={logout} acciones={accionesDeCuenta} />
             </header>
             {children}

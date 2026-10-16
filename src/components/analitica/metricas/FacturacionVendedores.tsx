@@ -16,7 +16,7 @@ import { avanceDelMes, proyectarMes } from '@/lib/proyeccionVentas'
 import { clavesDeVendedores, pasaFiltro, tiposDeCartera, type FiltroTipo } from '@/lib/tipoPersona'
 import { cn } from '@/lib/utils'
 import type { IVentasVendedor } from '@/types/metricasEquipo'
-import { BadgeTipo, CLASE_NUM, Cargando, Encabezado, ErrorBloque, Segmentado, Tarjeta, comparar, useOrden } from './ui'
+import { CLASE_NUM, Cargando, Encabezado, ErrorBloque, Segmentado, Tarjeta, comparar, useOrden } from './ui'
 
 type Columna = 'nombre' | ColumnaVentas
 
@@ -66,7 +66,7 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
     const q = buscar.trim().toLowerCase()
     const filas = (data ?? [])
         .map(v => ({ v, tipos: tiposDeCartera(v.code, tvs, deCalle) }))
-        .filter(({ tipos }) => filtroTipo === 'todos' || pasaFiltro(tipos, filtroTipo))
+        .filter(({ tipos }) => pasaFiltro(tipos, filtroTipo))
         .filter(({ v }) => !q || v.name.toLowerCase().includes(q) || v.code.toLowerCase().includes(q))
     filas.sort((a, b) =>
         comparar(
@@ -145,10 +145,10 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
                 <p className="py-8 text-center text-sm text-slate-500">
                     {q
                         ? `Ningún vendedor coincide con «${buscar}».`
-                        : filtroTipo !== 'todos' && televendedores.isLoading
+                        : televendedores.isLoading
                           ? 'Cargando el tipo de cada cartera…'
-                          : filtroTipo !== 'todos' && (data ?? []).every(v => tiposDeCartera(v.code, tvs, deCalle).length === 0)
-                            ? 'El tipo de las carteras todavía no está disponible: probá con "Todos".'
+                          : (data ?? []).every(v => tiposDeCartera(v.code, tvs, deCalle).length === 0)
+                            ? 'El tipo de las carteras todavía no está disponible.'
                             : 'Sin ventas para mostrar.'}
                 </p>
             )}
@@ -188,19 +188,11 @@ export default function FacturacionVendedores({ filtroTipo }: FacturacionVendedo
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filas.map(({ v, tipos }, i) => (
+                            {filas.map(({ v }, i) => (
                                 <tr key={v.code} data-testid={`fila-facturacion-${v.code}`}>
                                     <td className={cn(CLASE_NUM, 'px-3 py-2 text-center text-xs text-slate-400')}>{i + 1}</td>
-                                    <td className="max-w-[260px] px-3 py-2">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="truncate font-semibold text-slate-900">{v.name}</span>
-                                            {tipos.map(t => (
-                                                <BadgeTipo key={t} tipo={t} />
-                                            ))}
-                                            {tipos.length === 0 && (
-                                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">Sin tipo</span>
-                                            )}
-                                        </div>
+                                    <td className="max-w-[300px] px-3 py-2">
+                                        <p title={v.name} className="truncate font-semibold text-slate-900">{v.name}</p>
                                         <p className="text-[11px] text-slate-400">{v.code}</p>
                                     </td>
                                     {celda(v, 'actual')}

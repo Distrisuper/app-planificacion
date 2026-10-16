@@ -1,33 +1,18 @@
 import type { ITelevendedorOpcion } from '@/types/analitica'
 import type { TipoPersona } from '@/types/metricasEquipo'
 
-export const ETIQUETA_TIPO: Record<TipoPersona, string> = {
-    vendedor: 'VENDEDOR',
-    farmer: 'FARMER',
-    hunter: 'HUNTER',
-    sin_perfil: 'TV SIN PERFIL',
-}
-
-export const CLASE_TIPO: Record<TipoPersona, string> = {
-    vendedor: 'bg-sky-100 text-sky-800',
-    farmer: 'bg-emerald-100 text-emerald-800',
-    hunter: 'bg-violet-100 text-violet-800',
-    sin_perfil: 'bg-slate-100 text-slate-600',
-}
-
-/** El filtro de tipo de las tres vistas. 'todos' no filtra. Un TV sin perfil entra solo en
- *  'todos': no es FARMER ni HUNTER, y esconderlo del todo escondería sus llamados. */
-export type FiltroTipo = 'todos' | 'vendedor' | 'farmer' | 'hunter'
+/** El filtro de tipo de las tres vistas: siempre hay uno elegido (Vendedor por defecto).
+ *  Vendedor y TV no se mezclan: miden cosas distintas (visitas contra llamados). Por eso
+ *  no hay "Todos", y un TV sin perfil no entra en ninguno (no es FARMER ni HUNTER). */
+export type FiltroTipo = 'vendedor' | 'farmer' | 'hunter'
 
 export const OPCIONES_FILTRO_TIPO: { valor: FiltroTipo; etiqueta: string }[] = [
-    { valor: 'todos', etiqueta: 'Todos' },
     { valor: 'vendedor', etiqueta: 'Vendedor' },
     { valor: 'farmer', etiqueta: 'Farmer' },
     { valor: 'hunter', etiqueta: 'Hunter' },
 ]
 
-export const pasaFiltro = (tipos: TipoPersona[], filtro: FiltroTipo): boolean =>
-    filtro === 'todos' || tipos.includes(filtro)
+export const pasaFiltro = (tipos: TipoPersona[], filtro: FiltroTipo): boolean => tipos.includes(filtro)
 
 export const tipoDePerfil = (perfil: ITelevendedorOpcion['perfil']): TipoPersona =>
     perfil ?? 'sin_perfil'
@@ -42,7 +27,7 @@ export const tipoDePerfil = (perfil: ITelevendedorOpcion['perfil']): TipoPersona
  * los dos filtros (decisión del usuario). Los TV inactivos no cuentan: ya no la atienden.
  *
  * Con un backend que todavía no manda `carteras`, no se puede saber: devuelve [] y la
- * pantalla muestra "Sin tipo" en vez de decir VENDEDOR sin saberlo.
+ * cartera no entra en ningún filtro (la pantalla avisa) en vez de decir VENDEDOR sin saberlo.
  */
 export function tiposDeCartera(
     codigo: string,

@@ -15,11 +15,11 @@ const DATA: IObjecionesPorPersona = {
     ],
 }
 
-it('con "Todos" respeta los números del backend', () => {
-    const r = recortarObjeciones(DATA, 'todos')
-    expect(r.total).toBe(20)
-    expect(r.motivos.map(m => [m.motivoId, m.cantidad])).toEqual([[1, 10], [2, 7], [3, 3]])
-    expect(r.personas).toHaveLength(3)
+it('con Vendedor quedan solo los vendedores: los TV no se mezclan', () => {
+    const r = recortarObjeciones(DATA, 'vendedor')
+    expect(r.total).toBe(12)
+    expect(r.motivos.map(m => [m.motivoId, m.cantidad])).toEqual([[1, 9], [2, 3]])
+    expect(r.personas.map(p => p.codigo)).toEqual(['V1'])
 })
 
 it('con un tipo, la tarjeta cuenta solo las objeciones de esas personas', () => {
@@ -31,7 +31,7 @@ it('con un tipo, la tarjeta cuenta solo las objeciones de esas personas', () => 
 })
 
 it('motivoPrincipal: el que más registró la persona', () => {
-    const r = recortarObjeciones(DATA, 'todos')
+    const r = recortarObjeciones(DATA, 'farmer')
     expect(motivoPrincipal(DATA.personas[1], r.motivos)?.descripcion).toBe('Pasa pedido')
     expect(motivoPrincipal({ ...DATA.personas[0], motivos: [] }, r.motivos)).toBeNull()
 })
