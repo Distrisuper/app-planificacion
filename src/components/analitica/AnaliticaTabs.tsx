@@ -1,9 +1,5 @@
 import { NavLink } from 'react-router-dom'
 
-interface AnaliticaTabsProps {
-    enVivo?: boolean
-}
-
 const tabClase = (isActive: boolean) =>
     `border-b-2 px-1 pb-3 text-sm transition-colors ${
         isActive
@@ -11,25 +7,13 @@ const tabClase = (isActive: boolean) =>
             : 'border-transparent font-medium text-slate-500 hover:text-slate-700'
     }`
 
-export default function AnaliticaTabs({ enVivo }: AnaliticaTabsProps) {
+/** Analítica de visitas, Actividad y Datos del comercio salieron de las tabs: sus rutas
+ *  siguen andando por URL, pero gerencia trabaja con estas tres. */
+export default function AnaliticaTabs() {
     return (
         <nav className="flex gap-6 border-b border-slate-200">
-            <NavLink to="/analitica" end className={({ isActive }) => tabClase(isActive)}>
-                Analítica de visitas
-            </NavLink>
             <NavLink to="/analitica/metricas" className={({ isActive }) => tabClase(isActive)}>
                 Métricas
-            </NavLink>
-            <NavLink
-                to="/analitica/actividad"
-                className={({ isActive }) => `flex items-center gap-2 ${tabClase(isActive)}`}
-            >
-                Actividad
-                {enVivo && (
-                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                        En vivo
-                    </span>
-                )}
             </NavLink>
             <NavLink
                 to="/analitica/ruta"
@@ -39,12 +23,6 @@ export default function AnaliticaTabs({ enVivo }: AnaliticaTabsProps) {
             </NavLink>
             <NavLink to="/analitica/altas" className={({ isActive }) => tabClase(isActive)}>
                 Altas
-            </NavLink>
-            <NavLink
-                to="/analitica/fichas"
-                className={({ isActive }) => tabClase(isActive)}
-            >
-                Datos del comercio
             </NavLink>
         </nav>
     )

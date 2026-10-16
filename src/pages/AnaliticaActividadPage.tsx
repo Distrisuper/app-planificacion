@@ -104,7 +104,7 @@ export default function AnaliticaActividadPage() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            <EncabezadoAnalitica enVivo={enVivo}>
+            <EncabezadoAnalitica>
                 <FiltrosAnalitica
                     filtro={filtro}
                     vendedoresDisponibles={opciones}
