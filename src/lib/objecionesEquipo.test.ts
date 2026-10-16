@@ -25,17 +25,46 @@ const DATA: IObjecionesPorPersona = {
 
 it('con Vendedor quedan solo los vendedores: los TV no se mezclan', () => {
     const r = recortarObjeciones(DATA, 'vendedor')
-    expect(r.total).toBe(12)
-    expect(r.motivos.map(m => [m.motivoId, m.cantidad])).toEqual([[1, 9], [2, 3]])
+    expect(r.total).toBe(3)
+    expect(r.motivos.map(m => [m.motivoId, m.cantidad])).toEqual([[2, 3]])
     expect(r.personas.map(p => p.codigo)).toEqual(['V1'])
 })
 
 it('con un tipo, la tarjeta cuenta solo las objeciones de esas personas', () => {
     const r = recortarObjeciones(DATA, 'farmer')
-    expect(r.total).toBe(5)
-    expect(r.motivos.map(m => [m.motivoId, m.cantidad])).toEqual([[2, 4], [1, 1]])
-    expect(r.motivos[0].pct).toBeCloseTo(0.8)
+    expect(r.total).toBe(4)
+    expect(r.motivos.map(m => [m.motivoId, m.cantidad])).toEqual([[2, 4]])
+    expect(r.motivos[0].pct).toBeCloseTo(1)
     expect(r.personas.map(p => p.codigo)).toEqual(['9001'])
+})
+
+describe('"No lo ofrecí" no es una objeción', () => {
+    const conSoloNoOfrecido: IObjecionesPorPersona = {
+        ...DATA,
+        personas: [
+            ...DATA.personas,
+            { codigo: 'V2', nombre: 'BENITEZ', tipo: 'vendedor', total: 6, motivos: [{ motivoId: 1, cantidad: 6 }] },
+        ],
+    }
+
+    it('no aparece en los motivos, ni en el catálogo, ni en las personas', () => {
+        const r = recortarObjeciones(DATA, 'vendedor')
+        expect(r.motivos.some(m => m.motivoId === 1)).toBe(false)
+        expect(r.catalogo.map(m => m.motivoId)).toEqual([2, 3])
+        expect(r.personas[0].motivos).toEqual([{ motivoId: 2, cantidad: 3 }])
+    })
+
+    it('el total de cada persona y los % se calculan sin él', () => {
+        const r = recortarObjeciones(DATA, 'vendedor')
+        // V1: 12 registradas, 9 de "No lo ofrecí" → 3 objeciones.
+        expect(r.personas[0].total).toBe(3)
+        expect(r.motivos[0].pct).toBeCloseTo(1)
+    })
+
+    it('quien solo registró "No lo ofrecí" no entra en el ranking', () => {
+        const r = recortarObjeciones(conSoloNoOfrecido, 'vendedor')
+        expect(r.personas.map(p => p.codigo)).toEqual(['V1'])
+    })
 })
 
 it('motivoPrincipal: el que más registró la persona', () => {

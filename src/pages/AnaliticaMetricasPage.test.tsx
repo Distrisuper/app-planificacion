@@ -10,6 +10,7 @@ import {
     MOCK_RUBROS,
     MOCK_VENTAS_VENDEDORES,
 } from '@/mocks/metricasEquipoMock'
+import { cantidadDe } from '@/lib/objecionesEquipo'
 import * as api from '@/api/analitica'
 import * as apiEquipo from '@/api/metricasEquipo'
 
@@ -118,14 +119,22 @@ describe('Productividad (vista por defecto)', () => {
 describe('Ranking de objeciones', () => {
     it('la tarjeta muestra 6 motivos de los vendedores y pliega el resto', async () => {
         montar('/analitica/metricas?vista=objeciones')
-        expect(await screen.findByTestId('motivo-1')).toBeInTheDocument()
+        expect(await screen.findByTestId('motivo-2')).toBeInTheDocument()
         const deVendedores = MOCK_OBJECIONES_POR_PERSONA.personas.filter(p => p.tipo === 'vendedor')
-        const total = deVendedores.reduce((s, p) => s + p.total, 0)
+        // Sin "No lo ofrecí" (motivo 1).
+        const total = deVendedores.reduce((s, p) => s + p.total - cantidadDe(p, 1), 0)
         expect(screen.getByTestId('total-objeciones')).toHaveTextContent(`${total} objeciones · ${deVendedores.length} personas`)
-        // Entre los vendedores, "7" y "8" son los dos menos registrados.
-        expect(screen.queryByTestId('motivo-7')).not.toBeInTheDocument()
-        pulsar('Ver 2 motivos más')
-        expect(screen.getByTestId('motivo-7')).toBeInTheDocument()
+        // Entre los vendedores, "8" es el menos registrado.
+        expect(screen.queryByTestId('motivo-8')).not.toBeInTheDocument()
+        pulsar('Ver 1 motivo más')
+        expect(screen.getByTestId('motivo-8')).toBeInTheDocument()
+    })
+
+    it('"No lo ofrecí" no aparece: ni en la tarjeta, ni en la tabla, ni como principal', async () => {
+        montar('/analitica/metricas?vista=objeciones')
+        await screen.findByTestId('motivo-2')
+        expect(screen.queryByTestId('motivo-1')).not.toBeInTheDocument()
+        expect(screen.queryByText('No lo ofrecí')).not.toBeInTheDocument()
     })
 
     it('sin etiquetas de tipo; tocar un motivo ordena por quién más lo registra', async () => {
@@ -168,13 +177,14 @@ describe('Ranking de objeciones', () => {
     it('con un tipo, la tarjeta recuenta solo las objeciones de ese tipo', async () => {
         montar('/analitica/metricas?vista=objeciones&tipo=farmer')
         const farmer = MOCK_OBJECIONES_POR_PERSONA.personas.find(p => p.tipo === 'farmer')!
-        expect(await screen.findByTestId('total-objeciones')).toHaveTextContent(`${farmer.total} objeciones · 1 persona`)
+        const objeciones = farmer.total - cantidadDe(farmer, 1)
+        expect(await screen.findByTestId('total-objeciones')).toHaveTextContent(`${objeciones} objeciones · 1 persona`)
         expect(screen.queryByTestId('fila-objeciones-V1')).not.toBeInTheDocument()
     })
 
     it('el rubro viaja al backend', async () => {
         montar('/analitica/metricas?vista=objeciones')
-        await screen.findByTestId('motivo-1')
+        await screen.findByTestId('motivo-2')
         await screen.findByRole('option', { name: 'Filtros' })
         fireEvent.change(screen.getByLabelText('Rubro'), { target: { value: '12' } })
         await waitFor(() =>
@@ -261,5 +271,5 @@ it('las sub-pestañas cambian la vista', async () => {
     pulsar('Facturación')
     expect(await screen.findByTestId('fila-facturacion-V1')).toBeInTheDocument()
     pulsar('Ranking de objeciones')
-    expect(await screen.findByTestId('motivo-1')).toBeInTheDocument()
+    expect(await screen.findByTestId('motivo-2')).toBeInTheDocument()
 })

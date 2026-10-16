@@ -56,8 +56,9 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
             : b.total - a.total,
     )
     const maxCelda = Math.max(1, ...personas.flatMap(p => columnas.map(m => cantidadDe(p, m.motivoId))))
-    // Del ranking del backend, no del recorte: cambiar de tipo no repinta los motivos.
-    const colores = coloresDeMotivos(data?.motivos ?? [])
+    // Del catálogo (orden del backend, sin "No lo ofrecí"), no del recorte: cambiar de tipo no
+    // repinta los motivos.
+    const colores = coloresDeMotivos(recorte?.catalogo ?? [])
     const colorDe = (motivoId: number) => colores.get(motivoId) ?? COLOR_MOTIVO_OTRO
 
     const cambiarRubro = (valor: string) => {
@@ -141,7 +142,7 @@ export default function RankingObjeciones({ desde, hasta, filtroTipo }: RankingO
                                     onClick={() => setTodos(t => !t)}
                                     className="h-7 rounded-full px-2 text-xs font-semibold text-dsnavy hover:bg-dsnavy/10"
                                 >
-                                    {todos ? 'Ver menos' : `Ver ${ocultos} motivos más`}
+                                    {todos ? 'Ver menos' : `Ver ${ocultos} ${ocultos === 1 ? 'motivo' : 'motivos'} más`}
                                 </button>
                             )}
                         </div>
