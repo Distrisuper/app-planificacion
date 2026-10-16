@@ -31,6 +31,9 @@ import {
  * Mismo encabezado que Métricas y Altas (una línea: tabs, filtros y cuenta), con un solo
  * filtro: el vendedor. Acá se opera sobre un vendedor y una rotación a la vez, no se compara.
  */
+/** Sobre el fondo de la página, los estados van con borde y fondo de tarjeta. */
+const RECUADRO = 'border border-linea bg-tarjeta'
+
 export default function RutaPage() {
     const { vendedoresVisibles, vendedorDePrueba } = useAuth()
     const [vendedor, setVendedor] = useState<string | null>(null)
@@ -124,6 +127,7 @@ export default function RutaPage() {
             <main className="space-y-4 px-6 py-5">
                 {vendedor === null && (
                     <EstadoVista
+                        className={RECUADRO}
                         estado="vacio"
                         titulo="Elegí un vendedor para ver y editar su ruta."
                         texto="Usá el selector de vendedor de arriba a la derecha."
@@ -134,6 +138,7 @@ export default function RutaPage() {
 
                 {vendedor !== null && isError && (
                     <EstadoVista
+                        className={RECUADRO}
                         estado="error"
                         titulo="No se pudo cargar la ruta de este vendedor."
                         texto="Puede ser la conexión. Probá de nuevo."
@@ -164,6 +169,7 @@ export default function RutaPage() {
                     vendedor al abrir su primera zona. */}
                 {vendedor !== null && cola?.length === 0 && (
                     <EstadoVista
+                        className={RECUADRO}
                         estado="vacio"
                         titulo="Este vendedor todavía no tiene ninguna rotación."
                         texto="Se crea sola cuando empieza a recorrer su primera zona."
@@ -177,6 +183,7 @@ export default function RutaPage() {
                     semanas. */}
                 {rotacionElegida !== null && errorGrid && (
                     <EstadoVista
+                        className={RECUADRO}
                         estado="error"
                         titulo="No se pudo cargar el plan de esta rotación."
                         texto="Puede ser la conexión. Probá de nuevo."
@@ -262,6 +269,7 @@ export default function RutaPage() {
 
                 {mover.isError && (
                     <EstadoVista
+                        className={RECUADRO}
                         estado="error"
                         titulo="No se pudo mover ese cliente."
                         texto="Puede que ya lo hayan visitado en esta vuelta, o que la semana destino no exista en su ruta."
@@ -270,6 +278,7 @@ export default function RutaPage() {
 
                 {intercambiar.isError && (
                     <EstadoVista
+                        className={RECUADRO}
                         estado="error"
                         titulo="No se pudo intercambiar los días."
                         texto={(() => {
@@ -297,6 +306,7 @@ export default function RutaPage() {
 
                 {quitar.isError && (
                     <EstadoVista
+                        className={RECUADRO}
                         estado="error"
                         titulo="No se pudo quitar ese cliente."
                         texto={
@@ -308,7 +318,7 @@ export default function RutaPage() {
                 )}
 
                 {restaurar.isError && (
-                    <EstadoVista estado="error" titulo="No se pudo restaurar ese cliente." texto="Probá de nuevo en un momento." />
+                    <EstadoVista className={RECUADRO} estado="error" titulo="No se pudo restaurar ese cliente." texto="Probá de nuevo en un momento." />
                 )}
 
                 {/* No hay cartel de `omitidos`: el grid de gerencia (`IRotacionAdmin` en

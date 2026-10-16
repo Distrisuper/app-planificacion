@@ -31,6 +31,9 @@ export default function AnaliticaAltasPage() {
     const mesEnCurso = useMemo(() => rangoMes(new Date()), [])
     const { filtro, setRango, setVendedores } = useFiltroAnalitica(mesEnCurso)
     const periodo = periodoDeRango(filtro.desde, filtro.hasta)
+    // Lo que se pide y se exporta es el período que se VE: un link viejo con un rango libre
+    // (del 5 al 20) se lee como su mes, y pide el mes entero, no el rango a medias.
+    const filtroPeriodo = { ...filtro, ...rangoDePeriodo(periodo.modo, periodo.fecha) }
     // FiltroPeriodo avisa el modo y después la fecha: el modo nuevo se guarda acá para que el
     // rango que se escribe sea el del modo elegido y no el anterior.
     const modoElegido = useRef<ModoPeriodo | null>(null)
@@ -42,7 +45,7 @@ export default function AnaliticaAltasPage() {
 
     const { data: roster } = useVendedores()
     const esquema = useEsquemaAlta()
-    const altas = useAltasRelevadas(filtro)
+    const altas = useAltasRelevadas(filtroPeriodo)
 
     const opciones = (roster ?? []).map(v => ({ valor: v.codigoParticularVendedor, etiqueta: titleCaseNombre(v.nombreVendedor) }))
     const listo = esquema.data && altas.data
@@ -123,7 +126,7 @@ export default function AnaliticaAltasPage() {
                     {listo && altas.data.length === 0 && (
                         <EstadoVista
                             estado="vacio"
-                            titulo={`Sin clientes nuevos entre el ${corto(filtro.desde)} y el ${corto(filtro.hasta)}.`}
+                            titulo={`Sin clientes nuevos entre el ${corto(filtroPeriodo.desde)} y el ${corto(filtroPeriodo.hasta)}.`}
                             texto="Probá con otro período o con todos los vendedores."
                         />
                     )}

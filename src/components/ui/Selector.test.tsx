@@ -42,13 +42,41 @@ describe('Selector simple', () => {
         expect(screen.getAllByRole('option').map(o => o.textContent)).toEqual(['Benítez Laura'])
     })
 
-    it('Escape cierra la lista sin elegir', async () => {
+    it('Escape cierra la lista sin elegir y devuelve el foco al botón', async () => {
         const onCambiar = vi.fn()
         render(<Selector etiqueta="Vendedor" opciones={VENDEDORES} valor={null} onCambiar={onCambiar} />)
         await userEvent.click(screen.getByRole('button', { name: 'Vendedor' }))
         await userEvent.keyboard('{Escape}')
         expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
         expect(onCambiar).not.toHaveBeenCalled()
+        expect(screen.getByRole('button', { name: 'Vendedor' })).toHaveFocus()
+    })
+
+    it('con el teclado: Enter elige y el foco vuelve al botón', async () => {
+        const onCambiar = vi.fn()
+        render(<Selector etiqueta="Vendedor" opciones={VENDEDORES} valor={null} onCambiar={onCambiar} />)
+        await userEvent.click(screen.getByRole('button', { name: 'Vendedor' }))
+        screen.getByRole('option', { name: 'Acosta Mariano' }).focus()
+        await userEvent.keyboard('{Enter}')
+        expect(onCambiar).toHaveBeenCalledWith('V1')
+        expect(screen.getByRole('button', { name: 'Vendedor' })).toHaveFocus()
+    })
+
+    it('un clic afuera o salir con Tab cierran la lista', async () => {
+        render(
+            <>
+                <Selector etiqueta="Vendedor" opciones={VENDEDORES} valor={null} onCambiar={vi.fn()} />
+                <button type="button">Afuera</button>
+            </>,
+        )
+        await userEvent.click(screen.getByRole('button', { name: 'Vendedor' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Afuera' }))
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Vendedor' }))
+        screen.getAllByRole('option').at(-1)!.focus()
+        await userEvent.tab()
+        expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
     })
 })
 

@@ -78,6 +78,16 @@ it('el período es Día/Semana/Mes: arranca en la semana de la URL y Mes pide el
     expect(rangoMes(new Date())).toEqual({ desde, hasta })
 })
 
+it('un link viejo con un rango libre muestra y pide el mes entero, no el rango a medias', async () => {
+    vi.mocked(apiAnalitica.getAltas).mockResolvedValue([alta])
+    montar('/analitica/altas?desde=2026-10-05&hasta=2026-10-20')
+    await screen.findByText('Piche')
+    expect(screen.getByText('Octubre 2026')).toBeInTheDocument()
+    expect(apiAnalitica.getAltas).toHaveBeenLastCalledWith(
+        expect.objectContaining({ desde: '2026-10-01', hasta: '2026-10-31' }),
+    )
+})
+
 it('los vendedores se eligen con el selector del estándar y viajan al backend', async () => {
     vi.mocked(apiAnalitica.getAltas).mockResolvedValue([alta])
     montar('/analitica/altas?desde=2026-09-21&hasta=2026-09-25')

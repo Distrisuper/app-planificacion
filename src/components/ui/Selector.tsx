@@ -30,7 +30,15 @@ export default function Selector(props: SelectorProps) {
     const [abierto, setAbierto] = useState(false)
     const [busqueda, setBusqueda] = useState('')
     const raiz = useRef<HTMLDivElement>(null)
+    const boton = useRef<HTMLButtonElement>(null)
     const idLista = useId()
+
+    /** Al cerrar desde adentro (Escape, elegir), el foco vuelve al botón: la lista se desmonta
+     *  con el foco adentro y, sin esto, caería en el `body`. */
+    const cerrarConFoco = () => {
+        setAbierto(false)
+        boton.current?.focus()
+    }
 
     useEffect(() => {
         if (!abierto) return
@@ -38,7 +46,7 @@ export default function Selector(props: SelectorProps) {
             if (raiz.current && !raiz.current.contains(e.target as Node)) setAbierto(false)
         }
         const tecla = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setAbierto(false)
+            if (e.key === 'Escape') cerrarConFoco()
         }
         document.addEventListener('mousedown', fuera)
         document.addEventListener('keydown', tecla)
@@ -70,7 +78,7 @@ export default function Selector(props: SelectorProps) {
             props.onCambiar(props.valores.includes(valor) ? props.valores.filter(v => v !== valor) : [...props.valores, valor])
         } else {
             props.onCambiar(valor)
-            setAbierto(false)
+            cerrarConFoco()
         }
     }
 
@@ -80,8 +88,16 @@ export default function Selector(props: SelectorProps) {
     }
 
     return (
-        <div ref={raiz} className={cn('relative shrink-0', className)}>
+        <div
+            ref={raiz}
+            className={cn('relative shrink-0', className)}
+            // Salir con Tab (el foco se va afuera del selector) también cierra la lista.
+            onBlur={e => {
+                if (abierto && !raiz.current?.contains(e.relatedTarget as Node | null)) setAbierto(false)
+            }}
+        >
             <button
+                ref={boton}
                 type="button"
                 aria-label={etiqueta}
                 aria-haspopup="listbox"
