@@ -7,6 +7,7 @@ import type {
     IResultadoBuscadorGeneral,
     IRotacionCompleta,
     IRotacionResumen,
+    IRutaBase,
 } from '@/types/planificacion'
 
 /**
@@ -33,6 +34,14 @@ export const getRotacion = async (
     rotacionId: number,
 ): Promise<IRotacionCompleta> => {
     const res = await apiClient.get(`${base(codigo)}/${rotacionId}`)
+    return res.data.data
+}
+
+/** La ruta base del vendedor, de solo lectura: lo que se copia al armar cada vuelta. */
+export const getRutaBase = async (codigo: string): Promise<IRutaBase> => {
+    const res = await apiClient.get(
+        `/planificacion/vendedores/${encodeURIComponent(codigo)}/ruta-base`,
+    )
     return res.data.data
 }
 

@@ -43,6 +43,19 @@ describe('GridRotacion', () => {
         expect(screen.getByText(/Semana 3/)).toBeInTheDocument()
     })
 
+    it('marca la semana en curso con su lunes y la ya recorrida como hecha', () => {
+        const semanas: ISemanaRotacionAdmin[] = [
+            { semana: 1, descripcion: 'Zona Norte', estado: 'hecha', fechaLunes: '2026-10-06', dias: vacia() },
+            { semana: 2, descripcion: 'Zárate', estado: 'en_curso', fechaLunes: '2026-10-13', dias: vacia() },
+            { semana: 3, descripcion: null, estado: 'pendiente', fechaLunes: null, dias: vacia() },
+        ]
+        render(<GridRotacion semanas={semanas} onMover={vi.fn()} onRenombrarSemana={vi.fn()} onIntercambiar={vi.fn()} />)
+
+        expect(screen.getByText('En curso · semana del 13/10')).toBeInTheDocument()
+        expect(screen.getByText('Hecha · semana del 06/10')).toBeInTheDocument()
+        expect(screen.queryAllByText(/En curso|Hecha/)).toHaveLength(2)
+    })
+
     it('encabeza las cinco columnas de días', () => {
         render(<GridRotacion semanas={SEMANAS} onMover={vi.fn()} onRenombrarSemana={vi.fn()} onIntercambiar={vi.fn()} />)
         for (const dia of ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']) {

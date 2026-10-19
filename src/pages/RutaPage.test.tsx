@@ -339,6 +339,39 @@ describe('RutaPage', () => {
         )
     })
 
+    it('con "Ruta base" muestra la ruta que se copia en cada vuelta, sin la cola ni el grid editable', async () => {
+        montarRotacion('abierta')
+        vi.mocked(apiAdmin.getRutaBase).mockResolvedValue({
+            semanas: [
+                {
+                    semana: 2,
+                    descripcion: 'Campana',
+                    dias: {
+                        LUN: [],
+                        MAR: [{ codigoParticularCliente: 'P009', nombreCliente: 'KIOSCO NUEVE' }],
+                        MIE: [],
+                        JUE: [],
+                        VIE: [],
+                    },
+                },
+            ],
+            omitidos: ['P404'],
+        })
+        await elegirVendedor()
+        await screen.findByLabelText('Agregar cliente: semana 1, MAR')
+        expect(apiAdmin.getRutaBase).not.toHaveBeenCalled()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Ruta base' }))
+
+        expect(await screen.findByText(/Kiosco Nueve/i)).toBeInTheDocument()
+        expect(apiAdmin.getRutaBase).toHaveBeenCalledWith('V 2')
+        expect(screen.getByText('Campana')).toBeInTheDocument()
+        expect(screen.getByText(/1 cliente de la ruta no está en el padrón/)).toBeInTheDocument()
+        // La ruta base es de solo lectura: ni chips de la cola ni acciones del grid.
+        expect(screen.queryByRole('button', { name: 'Ronda Septiembre' })).not.toBeInTheDocument()
+        expect(screen.queryByLabelText(/^Agregar cliente:/)).not.toBeInTheDocument()
+    })
+
     it('el selector suma "Mi vendedor de prueba" al final, y acota el roster a vendedoresVisibles', async () => {
         authMock.mockReturnValue({
             user: { name: 'Ana' }, logout: vi.fn(),

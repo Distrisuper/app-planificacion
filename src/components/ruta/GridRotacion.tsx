@@ -13,6 +13,8 @@ import {
 } from '@dnd-kit/core'
 import ClienteCardRuta from './ClienteCardRuta'
 import DescripcionInline from './DescripcionInline'
+import Pill from '@/components/ui/Pill'
+import { etiquetaEstadoSemana } from '@/lib/estadoSemana'
 import type { Dia, IAgendaClientAdmin, ISemanaRotacionAdmin } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
@@ -255,6 +257,17 @@ function CardArrastrada({ semanas }: { semanas: ISemanaRotacionAdmin[] }) {
     return null
 }
 
+/** En qué está la semana: "En curso" la del ciclo abierto, "Hecha" las ya recorridas. */
+function EtiquetaSemana({ semana }: { semana: ISemanaRotacionAdmin }) {
+    const etiqueta = etiquetaEstadoSemana(semana.estado, semana.fechaLunes)
+    if (!etiqueta) return null
+    return (
+        <Pill tono={etiqueta.tono} className="mt-1">
+            {etiqueta.texto}
+        </Pill>
+    )
+}
+
 interface GridRotacionProps {
     semanas: ISemanaRotacionAdmin[]
     onMover: (rotacionClienteId: number, semana: number, dia: number) => void
@@ -406,6 +419,7 @@ export default function GridRotacion({
                                             onGuardar={d => onRenombrarSemana(semana.semana, d)}
                                         />
                                     </span>
+                                    <EtiquetaSemana semana={semana} />
                                 </th>
                                 {DIAS.map(dia => (
                                     <Celda
