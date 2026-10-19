@@ -9,6 +9,7 @@ import {
     editarDescripcionSemana,
     getRotacion,
     getRotaciones,
+    getRutaBase,
     intercambiarDias,
     quitarClienteAdmin,
     reacomodarAdmin,
@@ -29,6 +30,7 @@ export const rotacionAdminKeys = {
     cola: (codigo: string) => ['rotacionAdmin', codigo, 'cola'] as const,
     grid: (codigo: string, rotacionId: number) =>
         ['rotacionAdmin', codigo, 'grid', rotacionId] as const,
+    rutaBase: (codigo: string) => ['rotacionAdmin', codigo, 'rutaBase'] as const,
 }
 
 /** `codigo` null = todavía no se eligió vendedor: no se consulta nada. */
@@ -45,6 +47,15 @@ export function useRotacion(codigo: string | null, rotacionId: number | null) {
         queryKey: rotacionAdminKeys.grid(codigo ?? '', rotacionId ?? 0),
         queryFn: () => getRotacion(codigo as string, rotacionId as number),
         enabled: codigo !== null && rotacionId !== null,
+    })
+}
+
+/** La ruta base. `codigo` null = no se consulta (sin vendedor, o con la vista de la vuelta). */
+export function useRutaBase(codigo: string | null) {
+    return useQuery({
+        queryKey: rotacionAdminKeys.rutaBase(codigo ?? ''),
+        queryFn: () => getRutaBase(codigo as string),
+        enabled: codigo !== null,
     })
 }
 

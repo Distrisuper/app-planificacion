@@ -4,8 +4,10 @@ import HelpPopover from '@/components/analitica/HelpPopover'
 import AgregarClienteExtraDialog from '@/components/ruta/AgregarClienteExtraDialog'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
+import GridRutaBase from '@/components/ruta/GridRutaBase'
 import { AyudaRuta } from '@/components/ruta/ayudaRuta'
 import EstadoVista from '@/components/ui/EstadoVista'
+import Segmentado, { type OpcionSegmentado } from '@/components/ui/Segmentado'
 import Selector from '@/components/ui/Selector'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
@@ -23,6 +25,7 @@ import {
     useRestaurarClienteAdmin,
     useRotacion,
     useRotaciones,
+    useRutaBase,
 } from '@/hooks/useRotacionAdmin'
 
 /**
@@ -34,9 +37,19 @@ import {
 /** Sobre el fondo de la página, los estados van con borde y fondo de tarjeta. */
 const RECUADRO = 'border border-linea bg-tarjeta'
 
+type Vista = 'vuelta' | 'base'
+
+/** "Vuelta actual" es la rotación que se edita; "Ruta base" es lo que se copia al armar
+ *  cada vuelta, de solo lectura, para comparar. */
+const OPCIONES_VISTA: OpcionSegmentado<Vista>[] = [
+    { valor: 'vuelta', etiqueta: 'Vuelta actual', titulo: 'La vuelta que está recorriendo, editable' },
+    { valor: 'base', etiqueta: 'Ruta base', titulo: 'La ruta que se copia al armar cada vuelta' },
+]
+
 export default function RutaPage() {
     const { vendedoresVisibles, vendedorDePrueba } = useAuth()
     const [vendedor, setVendedor] = useState<string | null>(null)
+    const [vista, setVista] = useState<Vista>('vuelta')
     const [rotacionActivaId, setRotacionActivaId] = useState<number | null>(null)
     // La celda cuyo "+" se tocó. null = el diálogo está cerrado. Guarda la celda y no un
     // booleano porque la celda ES el destino de lo que se agregue.
@@ -57,6 +70,14 @@ export default function RutaPage() {
         return vendedorDePrueba ? [...base, { valor: vendedorDePrueba.codigo, etiqueta: 'Mi vendedor de prueba' }] : base
     }, [roster, vendedoresVisibles, vendedorDePrueba])
     const { data: cola, isLoading, isError, refetch: refetchCola } = useRotaciones(vendedor)
+    // Solo se pide al mirarla: es una consulta al warehouse que la vista de la vuelta no usa.
+    const {
+        data: rutaBase,
+        isLoading: cargandoBase,
+        isError: errorBase,
+        refetch: refetchBase,
+    } = useRutaBase(vista === 'base' ? vendedor : null)
+    const verVuelta = vista === 'vuelta'
 
     const crear = useCrearRotacion(vendedor ?? '')
     const cancelar = useCancelarRotacion(vendedor ?? '')
@@ -111,6 +132,12 @@ export default function RutaPage() {
                             </HelpPopover>
                         </span>
                         <span className="mx-1 h-5 w-px bg-linea" aria-hidden />
+                        <Segmentado
+                            etiqueta="Qué ruta ver"
+                            opciones={OPCIONES_VISTA}
+                            valor={vista}
+                            onCambiar={setVista}
+                        />
                         {/* Uno solo, a diferencia de los reportes: gerencia opera sobre UNA
                             rotación a la vez, no compara vendedores. */}
                         <Selector
@@ -134,9 +161,48 @@ export default function RutaPage() {
                     />
                 )}
 
-                {vendedor !== null && isLoading && <EstadoVista estado="cargando" />}
+                {!verVuelta && vendedor !== null && cargandoBase && <EstadoVista estado="cargando" />}
 
-                {vendedor !== null && isError && (
+                {!verVuelta && vendedor !== null && errorBase && (
+                    <EstadoVista
+                        className={RECUADRO}
+                        estado="error"
+                        titulo="No se pudo cargar la ruta base de este vendedor."
+                        texto="Puede ser la conexión. Probá de nuevo."
+                        onReintentar={() => refetchBase()}
+                    />
+                )}
+
+                {!verVuelta && vendedor !== null && rutaBase?.semanas.length === 0 && (
+                    <EstadoVista
+                        className={RECUADRO}
+                        estado="vacio"
+                        titulo="Este vendedor no tiene ruta base cargada."
+                        texto="Sin ruta base no se le puede armar una vuelta nueva. El vendedor de prueba no tiene: arranca como copia de un vendedor real."
+                    />
+                )}
+
+                {!verVuelta && rutaBase && rutaBase.semanas.length > 0 && (
+                    <>
+                        {/* Es lo que se copia al armar cada vuelta: los cambios hechos en la
+                            vuelta actual no la modifican. */}
+                        <p className="text-[13px] text-tinta-2">
+                            Solo lectura: es la ruta que se copia al armar cada vuelta. Lo que se
+                            cambia en la vuelta actual no la modifica.
+                            {rutaBase.omitidos.length > 0 &&
+                                ` ${rutaBase.omitidos.length} ${
+                                    rutaBase.omitidos.length === 1
+                                        ? 'cliente de la ruta no está en el padrón'
+                                        : 'clientes de la ruta no están en el padrón'
+                                } y no entra en la vuelta (${rutaBase.omitidos.join(', ')}).`}
+                        </p>
+                        <GridRutaBase semanas={rutaBase.semanas} />
+                    </>
+                )}
+
+                {verVuelta && vendedor !== null && isLoading && <EstadoVista estado="cargando" />}
+
+                {verVuelta && vendedor !== null && isError && (
                     <EstadoVista
                         className={RECUADRO}
                         estado="error"
@@ -146,7 +212,7 @@ export default function RutaPage() {
                     />
                 )}
 
-                {vendedor !== null && cola && cola.length > 0 && (
+                {verVuelta && vendedor !== null && cola && cola.length > 0 && (
                     <ColaRotaciones
                         rotaciones={cola}
                         activaId={rotacionElegida}
@@ -167,7 +233,7 @@ export default function RutaPage() {
                     "Agregar rotación", que hoy está oculto (ver `ColaRotaciones`), así que
                     dibujaba un contenedor vacío debajo del texto. La rotación la crea el
                     vendedor al abrir su primera zona. */}
-                {vendedor !== null && cola?.length === 0 && (
+                {verVuelta && vendedor !== null && cola?.length === 0 && (
                     <EstadoVista
                         className={RECUADRO}
                         estado="vacio"
@@ -176,12 +242,12 @@ export default function RutaPage() {
                     />
                 )}
 
-                {rotacionElegida !== null && cargandoGrid && <EstadoVista estado="cargando" />}
+                {verVuelta && rotacionElegida !== null && cargandoGrid && <EstadoVista estado="cargando" />}
 
                 {/* Sin esto el fallo del grid era mudo: `grid` queda undefined y la página
                     mostraba los chips sobre un vacío, indistinguible de una rotación sin
                     semanas. */}
-                {rotacionElegida !== null && errorGrid && (
+                {verVuelta && rotacionElegida !== null && errorGrid && (
                     <EstadoVista
                         className={RECUADRO}
                         estado="error"
@@ -191,7 +257,7 @@ export default function RutaPage() {
                     />
                 )}
 
-                {grid && (
+                {verVuelta && grid && (
                     <>
                         <GridRotacion
                             // La `key` NO es cosmética: `GridRotacion` guarda en estado la
@@ -267,7 +333,7 @@ export default function RutaPage() {
                     </>
                 )}
 
-                {mover.isError && (
+                {verVuelta && mover.isError && (
                     <EstadoVista
                         className={RECUADRO}
                         estado="error"
@@ -276,7 +342,7 @@ export default function RutaPage() {
                     />
                 )}
 
-                {intercambiar.isError && (
+                {verVuelta && intercambiar.isError && (
                     <EstadoVista
                         className={RECUADRO}
                         estado="error"
@@ -304,7 +370,7 @@ export default function RutaPage() {
                     />
                 )}
 
-                {quitar.isError && (
+                {verVuelta && quitar.isError && (
                     <EstadoVista
                         className={RECUADRO}
                         estado="error"
@@ -317,7 +383,7 @@ export default function RutaPage() {
                     />
                 )}
 
-                {restaurar.isError && (
+                {verVuelta && restaurar.isError && (
                     <EstadoVista className={RECUADRO} estado="error" titulo="No se pudo restaurar ese cliente." texto="Probá de nuevo en un momento." />
                 )}
 

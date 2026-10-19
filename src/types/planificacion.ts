@@ -614,11 +614,38 @@ export interface IAgendaClientAdmin {
     tipo?: TipoFilaPlan
 }
 
+/** En qué está una semana de la rotación, según sus ciclos (lo calcula el backend). */
+export type EstadoSemanaRotacion = 'en_curso' | 'hecha' | 'pendiente'
+
 export interface ISemanaRotacionAdmin {
     semana: number
     /** El nombre de la zona, ej. "Buenos Aires". null = sin nombre todavía. */
     descripcion: string | null
+    /** Opcional: un backend anterior no lo manda, y ahí la fila va sin etiqueta. */
+    estado?: EstadoSemanaRotacion
+    /** 'YYYY-MM-DD'. Lunes del ciclo abierto (en_curso) o del último cerrado (hecha). */
+    fechaLunes?: string | null
     dias: Record<Dia, IAgendaClientAdmin[]>
+}
+
+/** Un cliente de la ruta base: solo lo que dibuja el grid de lectura. */
+export interface IClienteRutaBase {
+    codigoParticularCliente: string
+    nombreCliente: string
+}
+
+export interface ISemanaRutaBase {
+    semana: number
+    /** El nombre de la zona en la última rotación del vendedor. */
+    descripcion: string | null
+    dias: Record<Dia, IClienteRutaBase[]>
+}
+
+/** La ruta base del vendedor (`pl_ruta_cliente`): lo que se copia al armar cada vuelta. */
+export interface IRutaBase {
+    semanas: ISemanaRutaBase[]
+    /** Códigos de la ruta que no están en el padrón: no entran en la vuelta. */
+    omitidos: string[]
 }
 
 /** Una rotación de la cola del vendedor, sin su grid. */

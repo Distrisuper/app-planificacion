@@ -9,6 +9,7 @@ import {
     editarDescripcionSemana,
     getRotacion,
     getRotaciones,
+    getRutaBase,
     intercambiarDias,
     reacomodarAdmin,
     reordenarRotacion,
@@ -54,6 +55,19 @@ describe('getRotacion', () => {
             '/planificacion/vendedores/V%202/rotaciones/7',
         )
         expect(grid).toEqual({ id: 7, semanas: [] })
+    })
+})
+
+describe('getRutaBase', () => {
+    it('pide la ruta base del vendedor con el código encodeado', async () => {
+        vi.mocked(apiClient.get).mockResolvedValue({
+            data: { ok: 1, data: { semanas: [], omitidos: [] } },
+        } as never)
+
+        const ruta = await getRutaBase('V 2')
+
+        expect(apiClient.get).toHaveBeenCalledWith('/planificacion/vendedores/V%202/ruta-base')
+        expect(ruta).toEqual({ semanas: [], omitidos: [] })
     })
 })
 
