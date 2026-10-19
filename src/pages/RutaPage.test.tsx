@@ -339,24 +339,37 @@ describe('RutaPage', () => {
         )
     })
 
-    it('con "Ruta base" muestra la ruta que se copia en cada vuelta, sin la cola ni el grid editable', async () => {
-        montarRotacion('abierta')
+    /** La ruta base con dos semanas: la 2 tiene a Kiosco Nueve el MAR. */
+    function montarRutaBase() {
+        const vacia = { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] }
         vi.mocked(apiAdmin.getRutaBase).mockResolvedValue({
             semanas: [
+                { semana: 1, descripcion: 'Zárate', dias: vacia },
                 {
                     semana: 2,
                     descripcion: 'Campana',
                     dias: {
-                        LUN: [],
-                        MAR: [{ codigoParticularCliente: 'P009', nombreCliente: 'KIOSCO NUEVE' }],
-                        MIE: [],
-                        JUE: [],
-                        VIE: [],
+                        ...vacia,
+                        MAR: [{ id: 41, codigoParticularCliente: 'P009', nombreCliente: 'KIOSCO NUEVE' }],
                     },
                 },
             ],
             omitidos: ['P404'],
         })
+    }
+
+    async function verRutaBase() {
+        await elegirVendedor()
+        await screen.findByLabelText('Agregar cliente: semana 1, MAR')
+        await userEvent.click(screen.getByRole('button', { name: 'Ruta base' }))
+        await screen.findByText(/Kiosco Nueve/i)
+    }
+
+    // Cambió a propósito: la ruta base era de solo lectura y ahora se edita igual que la
+    // vuelta. Sigue sin la cola de rotaciones y sin editor de nombre de semana.
+    it('con "Ruta base" muestra la ruta que se copia en cada vuelta, editable y sin la cola', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
         await elegirVendedor()
         await screen.findByLabelText('Agregar cliente: semana 1, MAR')
         expect(apiAdmin.getRutaBase).not.toHaveBeenCalled()
@@ -367,9 +380,178 @@ describe('RutaPage', () => {
         expect(apiAdmin.getRutaBase).toHaveBeenCalledWith('V 2')
         expect(screen.getByText('Campana')).toBeInTheDocument()
         expect(screen.getByText(/1 cliente de la ruta no está en el padrón/)).toBeInTheDocument()
-        // La ruta base es de solo lectura: ni chips de la cola ni acciones del grid.
+        expect(screen.getByText(/Lo que cambies acá aplica desde la próxima vuelta/)).toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Ronda Septiembre' })).not.toBeInTheDocument()
-        expect(screen.queryByLabelText(/^Agregar cliente:/)).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^Nombrar semana/ })).not.toBeInTheDocument()
+        expect(screen.getByLabelText('Agregar cliente: semana 2, MAR')).toBeInTheDocument()
+    })
+
+    it('en la ruta base, quitar pega al endpoint de la ruta base', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        vi.mocked(apiAdmin.quitarDeRutaBase).mockResolvedValue(undefined)
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Quitar de la ruta base: Kiosco Nueve' }))
+        expect(screen.getByText('No va a estar en las próximas vueltas.')).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Quitar' }))
+
+        await waitFor(() => expect(apiAdmin.quitarDeRutaBase).toHaveBeenCalledWith('V 2', 41))
+        expect(apiAdmin.quitarClienteAdmin).not.toHaveBeenCalled()
+    })
+
+    it('en la ruta base, ⇄ intercambia días de la ruta base sin preguntar el alcance', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        vi.mocked(apiAdmin.intercambiarDiasRutaBase).mockResolvedValue(1)
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar este día: semana 2, MAR' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con este día: semana 1, VIE' }))
+
+        await waitFor(() =>
+            expect(apiAdmin.intercambiarDiasRutaBase).toHaveBeenCalledWith('V 2', {
+                semanaA: 2,
+                diaA: 2,
+                semanaB: 1,
+                diaB: 5,
+            }),
+        )
+        expect(screen.queryByText('¿Dónde aplicar el cambio?')).not.toBeInTheDocument()
+        expect(apiAdmin.intercambiarDias).not.toHaveBeenCalled()
+    })
+
+    it('en la ruta base, ⇅ intercambia semanas de la ruta base', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        vi.mocked(apiAdmin.intercambiarSemanasRutaBase).mockResolvedValue(1)
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar esta semana: semana 1' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con esta semana: semana 2' }))
+
+        await waitFor(() =>
+            expect(apiAdmin.intercambiarSemanasRutaBase).toHaveBeenCalledWith('V 2', {
+                semanaA: 1,
+                semanaB: 2,
+            }),
+        )
+    })
+
+    it('en la ruta base, el "+" abre el buscador de la ruta base', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        await verRutaBase()
+
+        await userEvent.click(screen.getByLabelText('Agregar cliente: semana 1, LUN'))
+
+        expect(await screen.findByText('Agregar a la ruta base')).toBeInTheDocument()
+        expect(screen.getByText(/Va al LUN · Zárate \(Semana 1\)/)).toBeInTheDocument()
+    })
+
+    it('en la ruta base, un rechazo del backend se explica con su código', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        vi.mocked(apiAdmin.intercambiarDiasRutaBase).mockRejectedValue({
+            response: { status: 409, data: { code: 'CLIENTE_EN_AMBAS_CELDAS' } },
+        })
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar este día: semana 2, MAR' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con este día: semana 1, MAR' }))
+
+        expect(await screen.findByText(/Un cliente está en los dos días/)).toBeInTheDocument()
+    })
+
+    /** Una vuelta abierta con la semana 1 en curso y la 2 y la 3 pendientes. */
+    function montarVueltaConEstados() {
+        const rotacion = {
+            id: 7,
+            codigoParticularVendedor: 'V 2',
+            estado: 'abierta' as const,
+            fechaInicio: '2026-09-01T12:00:00.000Z',
+            fechaFin: null,
+            descripcion: 'Ronda Septiembre',
+            orden: null,
+        }
+        const vacia = { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] }
+        vi.mocked(apiAdmin.getRotaciones).mockResolvedValue([rotacion])
+        vi.mocked(apiAdmin.getRotacion).mockResolvedValue({
+            ...rotacion,
+            semanas: [
+                { semana: 1, descripcion: 'Zárate', estado: 'en_curso', fechaLunes: '2026-10-13', dias: vacia },
+                { semana: 2, descripcion: 'Campana', estado: 'pendiente', fechaLunes: null, dias: vacia },
+                { semana: 3, descripcion: null, estado: 'pendiente', fechaLunes: null, dias: vacia },
+            ],
+        })
+    }
+
+    it('en la vuelta, ⇄ pregunta el alcance y manda aplicarARutaBase', async () => {
+        montarVueltaConEstados()
+        vi.mocked(apiAdmin.intercambiarDias).mockResolvedValue(0)
+        await elegirVendedor()
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Intercambiar este día: semana 2, LUN' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con este día: semana 3, JUE' }))
+        expect(apiAdmin.intercambiarDias).not.toHaveBeenCalled()
+        await userEvent.click(await screen.findByRole('button', { name: 'Esta vuelta y la ruta base' }))
+
+        await waitFor(() =>
+            expect(apiAdmin.intercambiarDias).toHaveBeenCalledWith('V 2', 7, {
+                semanaA: 2,
+                diaA: 1,
+                semanaB: 3,
+                diaB: 4,
+                aplicarARutaBase: true,
+            }),
+        )
+    })
+
+    it('en la vuelta, cancelar el diálogo de alcance no intercambia nada', async () => {
+        montarVueltaConEstados()
+        await elegirVendedor()
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Intercambiar este día: semana 2, LUN' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con este día: semana 3, JUE' }))
+        await userEvent.click(await screen.findByRole('button', { name: 'Cancelar' }))
+
+        await waitFor(() => expect(screen.queryByText('¿Dónde aplicar el cambio?')).not.toBeInTheDocument())
+        expect(apiAdmin.intercambiarDias).not.toHaveBeenCalled()
+    })
+
+    it('en la vuelta, ⇅ se ofrece solo en semanas pendientes y pregunta el alcance', async () => {
+        montarVueltaConEstados()
+        vi.mocked(apiAdmin.intercambiarSemanas).mockResolvedValue(0)
+        await elegirVendedor()
+
+        await screen.findByRole('button', { name: 'Intercambiar esta semana: semana 2' })
+        expect(screen.queryByRole('button', { name: 'Intercambiar esta semana: semana 1' })).not.toBeInTheDocument()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar esta semana: semana 2' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con esta semana: semana 3' }))
+        await userEvent.click(await screen.findByRole('button', { name: 'Solo esta vuelta' }))
+
+        await waitFor(() =>
+            expect(apiAdmin.intercambiarSemanas).toHaveBeenCalledWith('V 2', 7, {
+                semanaA: 2,
+                semanaB: 3,
+                aplicarARutaBase: false,
+            }),
+        )
+    })
+
+    it('en la vuelta, un ⇅ rechazado se explica con su código', async () => {
+        montarVueltaConEstados()
+        vi.mocked(apiAdmin.intercambiarSemanas).mockRejectedValue({
+            response: { status: 409, data: { code: 'SEMANA_CON_RESUELTOS' } },
+        })
+        await elegirVendedor()
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Intercambiar esta semana: semana 2' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con esta semana: semana 3' }))
+        await userEvent.click(await screen.findByRole('button', { name: 'Solo esta vuelta' }))
+
+        expect(await screen.findByText(/ya tiene clientes visitados o no visitados/)).toBeInTheDocument()
     })
 
     it('el selector suma "Mi vendedor de prueba" al final, y acota el roster a vendedoresVisibles', async () => {

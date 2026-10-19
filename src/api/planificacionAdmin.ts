@@ -2,9 +2,13 @@ import { apiClient } from './apiClient'
 import type {
     IAgendaClientAdmin,
     IClienteEnRotacion,
+    IClienteAgregadoRutaBase,
     IIntercambiarDiasDTO,
+    IIntercambiarSemanasDTO,
     IReacomodarDTO,
     IResultadoBuscadorGeneral,
+    IResultadoBuscadorRutaBase,
+    IResultadoReacomodar,
     IRotacionCompleta,
     IRotacionResumen,
     IRutaBase,
@@ -37,11 +41,12 @@ export const getRotacion = async (
     return res.data.data
 }
 
-/** La ruta base del vendedor, de solo lectura: lo que se copia al armar cada vuelta. */
+/** La ruta base del vendedor (`pl_ruta_cliente`): lo que se copia al armar cada vuelta. */
+const baseRuta = (codigo: string) =>
+    `/planificacion/vendedores/${encodeURIComponent(codigo)}/ruta-base`
+
 export const getRutaBase = async (codigo: string): Promise<IRutaBase> => {
-    const res = await apiClient.get(
-        `/planificacion/vendedores/${encodeURIComponent(codigo)}/ruta-base`,
-    )
+    const res = await apiClient.get(baseRuta(codigo))
     return res.data.data
 }
 
@@ -51,17 +56,22 @@ export const crearRotacion = async (codigo: string): Promise<number> => {
     return res.data.data.rotacionId
 }
 
-/** Mueve una fila del plan de día y/o semana. Sin `semana`, solo cambia el día. */
+/**
+ * Mueve una fila del plan de día y/o semana. Sin `semana`, solo cambia el día. Con
+ * `aplicarARutaBase`, el backend también lo mueve en la ruta base y dice si pudo.
+ */
 export const reacomodarAdmin = async (
     codigo: string,
     rotacionId: number,
     rotacionClienteId: number,
     dto: IReacomodarDTO,
-): Promise<void> => {
-    await apiClient.patch(
+): Promise<IResultadoReacomodar> => {
+    const res = await apiClient.patch(
         `${base(codigo)}/${rotacionId}/rotacion-cliente/${rotacionClienteId}/reacomodar`,
         dto,
     )
+    // Un backend anterior no devolvía data: equivale a no haber pedido la ruta base.
+    return res.data.data ?? { rutaBase: null }
 }
 
 /** Quita una fila pendiente de la rotación (soft-delete). 409 si ya está resuelta o el
@@ -135,6 +145,67 @@ export const intercambiarDias = async (
         `${base(codigo)}/${rotacionId}/intercambiar-dias`,
         dto,
     )
+    return res.data.data.movidas
+}
+
+/** Permuta dos semanas enteras (clientes y nombre de zona). Solo semanas pendientes. */
+export const intercambiarSemanas = async (
+    codigo: string,
+    rotacionId: number,
+    dto: IIntercambiarSemanasDTO,
+): Promise<number> => {
+    const res = await apiClient.post(
+        `${base(codigo)}/${rotacionId}/intercambiar-semanas`,
+        dto,
+    )
+    return res.data.data.movidas
+}
+
+// ── Edición de la ruta base ──────────────────────────────────────────────────────
+// Lo que cambia acá aplica desde la próxima vuelta: la vuelta en curso no se toca.
+
+export const moverEnRutaBase = async (
+    codigo: string,
+    id: number,
+    dto: { semana: number; dia: number },
+): Promise<void> => {
+    await apiClient.patch(`${baseRuta(codigo)}/${id}`, dto)
+}
+
+export const quitarDeRutaBase = async (codigo: string, id: number): Promise<void> => {
+    await apiClient.delete(`${baseRuta(codigo)}/${id}`)
+}
+
+/** Busca en la cartera del vendedor, con las celdas de la ruta base donde ya está. */
+export const buscarEnRutaBase = async (
+    codigo: string,
+    texto: string,
+): Promise<IResultadoBuscadorRutaBase[]> => {
+    const res = await apiClient.get(`${baseRuta(codigo)}/buscador`, { params: { q: texto } })
+    return res.data.data
+}
+
+export const agregarARutaBase = async (
+    codigo: string,
+    dto: { codigoCliente: string; semana: number; dia: number },
+): Promise<IClienteAgregadoRutaBase> => {
+    const res = await apiClient.post(`${baseRuta(codigo)}/clientes`, dto)
+    return res.data.data
+}
+
+export const intercambiarDiasRutaBase = async (
+    codigo: string,
+    dto: Omit<IIntercambiarDiasDTO, 'aplicarARutaBase'>,
+): Promise<number> => {
+    const res = await apiClient.post(`${baseRuta(codigo)}/intercambiar-dias`, dto)
+    return res.data.data.movidas
+}
+
+export const intercambiarSemanasRutaBase = async (
+    codigo: string,
+    dto: Omit<IIntercambiarSemanasDTO, 'aplicarARutaBase'>,
+): Promise<number> => {
+    const res = await apiClient.post(`${baseRuta(codigo)}/intercambiar-semanas`, dto)
     return res.data.data.movidas
 }
 

@@ -1,4 +1,12 @@
-import type { Dia, IAgendaClientAdmin, IRotacionCompleta } from '@/types/planificacion'
+import type {
+    Dia,
+    IAgendaClientAdmin,
+    IClienteRutaBase,
+    IRotacionCompleta,
+    IRutaBase,
+    ISemanaRotacionAdmin,
+    ISemanaRutaBase,
+} from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 
@@ -23,16 +31,59 @@ export function moverEnGrid(
     semana: number | undefined,
     dia: number,
 ): IRotacionCompleta {
+    const semanas = moverEnSemanas<IAgendaClientAdmin, ISemanaRotacionAdmin>(
+        grid.semanas,
+        c => c.rotacionClienteId === rotacionClienteId,
+        // El `dia` de la card se actualiza junto con su posición: el grid la ubica por la
+        // celda, pero la card lo lleva y quedaría inconsistente con dónde está dibujada.
+        c => ({ ...c, dia }),
+        semana,
+        dia,
+    )
+    return semanas === grid.semanas ? grid : { ...grid, semanas }
+}
+
+/**
+ * Lo mismo para la ruta base (`IRutaBase`), con su `id` de fila. Las cards de la ruta base
+ * no llevan `dia`: lo da la columna donde están.
+ */
+export function moverEnRutaBase(
+    ruta: IRutaBase,
+    id: number,
+    semana: number,
+    dia: number,
+): IRutaBase {
+    const semanas = moverEnSemanas<IClienteRutaBase, ISemanaRutaBase>(
+        ruta.semanas,
+        c => c.id === id,
+        c => c,
+        semana,
+        dia,
+    )
+    return semanas === ruta.semanas ? ruta : { ...ruta, semanas }
+}
+
+/**
+ * El núcleo de los dos: saca la card que cumple `esLaCard` y la pone en (semana, dia).
+ * Devuelve el MISMO array si algo no cierra, para que el caller devuelva el original.
+ */
+function moverEnSemanas<C, S extends { semana: number; dias: Record<Dia, C[]> }>(
+    semanas: S[],
+    esLaCard: (c: C) => boolean,
+    mover: (c: C) => C,
+    semana: number | undefined,
+    dia: number,
+): S[] {
     const diaKey = DIAS[dia - 1]
-    if (!diaKey) return grid
+    if (!diaKey) return semanas
 
     // Dónde está hoy la fila, para saber de dónde sacarla y resolver la semana destino
     // cuando el movimiento es solo de día.
     let semanaOrigen: number | undefined
-    let card: IAgendaClientAdmin | undefined
-    for (const s of grid.semanas) {
+    let card: C | undefined
+    for (const s of semanas) {
         for (const d of DIAS) {
-            const encontrada = s.dias[d].find(c => c.rotacionClienteId === rotacionClienteId)
+            const encontrada = s.dias[d].find(esLaCard)
             if (encontrada) {
                 semanaOrigen = s.semana
                 card = encontrada
@@ -41,33 +92,26 @@ export function moverEnGrid(
         }
         if (card) break
     }
-    if (!card || semanaOrigen === undefined) return grid
+    if (!card || semanaOrigen === undefined) return semanas
 
     const semanaDestino = semana ?? semanaOrigen
-    if (!grid.semanas.some(s => s.semana === semanaDestino)) return grid
+    if (!semanas.some(s => s.semana === semanaDestino)) return semanas
 
-    // El `dia` de la card se actualiza junto con su posición: el grid la ubica por la
-    // celda, pero la card lo lleva y quedaría inconsistente con dónde está dibujada.
-    const movida: IAgendaClientAdmin = { ...card, dia }
+    const movida = mover(card)
 
-    return {
-        ...grid,
-        semanas: grid.semanas.map(s => {
-            const esOrigen = s.semana === semanaOrigen
-            const esDestino = s.semana === semanaDestino
-            if (!esOrigen && !esDestino) return s
+    return semanas.map(s => {
+        const esOrigen = s.semana === semanaOrigen
+        const esDestino = s.semana === semanaDestino
+        if (!esOrigen && !esDestino) return s
 
-            const dias = { ...s.dias }
-            if (esOrigen) {
-                for (const d of DIAS) {
-                    dias[d] = dias[d].filter(
-                        c => c.rotacionClienteId !== rotacionClienteId,
-                    )
-                }
+        const dias = { ...s.dias }
+        if (esOrigen) {
+            for (const d of DIAS) {
+                dias[d] = dias[d].filter(c => !esLaCard(c))
             }
-            if (esDestino) dias[diaKey] = [...dias[diaKey], movida]
+        }
+        if (esDestino) dias[diaKey] = [...dias[diaKey], movida]
 
-            return { ...s, dias }
-        }),
-    }
+        return { ...s, dias }
+    })
 }

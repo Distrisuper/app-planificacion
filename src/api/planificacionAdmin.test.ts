@@ -14,6 +14,13 @@ import {
     reacomodarAdmin,
     reordenarRotacion,
     agregarClienteExtraAdmin,
+    agregarARutaBase,
+    buscarEnRutaBase,
+    intercambiarDiasRutaBase,
+    intercambiarSemanas,
+    intercambiarSemanasRutaBase,
+    moverEnRutaBase,
+    quitarDeRutaBase,
 } from './planificacionAdmin'
 
 vi.mock('./apiClient', () => ({
@@ -233,5 +240,107 @@ describe('agregarClienteExtraAdmin', () => {
             { semana: 2, dia: 3 },
         )
         expect(card.rotacionClienteId).toBe(44)
+    })
+})
+
+describe('reacomodarAdmin con alcance', () => {
+    it('manda aplicarARutaBase y devuelve qué pasó en la ruta base', async () => {
+        vi.mocked(apiClient.patch).mockResolvedValue({
+            data: { ok: 1, data: { rutaBase: 'no_estaba' } },
+        } as never)
+
+        const r = await reacomodarAdmin('V 2', 7, 11, { semana: 3, dia: 4, aplicarARutaBase: true })
+
+        expect(apiClient.patch).toHaveBeenCalledWith(
+            '/planificacion/vendedores/V%202/rotaciones/7/rotacion-cliente/11/reacomodar',
+            { semana: 3, dia: 4, aplicarARutaBase: true },
+        )
+        expect(r).toEqual({ rutaBase: 'no_estaba' })
+    })
+})
+
+describe('intercambiarSemanas (vuelta)', () => {
+    it('manda las dos semanas y el alcance, y devuelve cuántas filas movió', async () => {
+        vi.mocked(apiClient.post).mockResolvedValue({
+            data: { ok: 1, data: { movidas: 9, rutaBase: 'aplicado' } },
+        } as never)
+
+        const movidas = await intercambiarSemanas('V 2', 7, {
+            semanaA: 2,
+            semanaB: 4,
+            aplicarARutaBase: true,
+        })
+
+        expect(apiClient.post).toHaveBeenCalledWith(
+            '/planificacion/vendedores/V%202/rotaciones/7/intercambiar-semanas',
+            { semanaA: 2, semanaB: 4, aplicarARutaBase: true },
+        )
+        expect(movidas).toBe(9)
+    })
+})
+
+describe('ruta base', () => {
+    const BASE = '/planificacion/vendedores/V%202/ruta-base'
+
+    it('mover pega al PATCH de la fila con semana y día', async () => {
+        vi.mocked(apiClient.patch).mockResolvedValue({ data: { ok: 1, data: null } } as never)
+
+        await moverEnRutaBase('V 2', 41, { semana: 2, dia: 3 })
+
+        expect(apiClient.patch).toHaveBeenCalledWith(`${BASE}/41`, { semana: 2, dia: 3 })
+    })
+
+    it('quitar pega al DELETE de la fila', async () => {
+        vi.mocked(apiClient.delete).mockResolvedValue({ data: { ok: 1, data: null } } as never)
+
+        await quitarDeRutaBase('V 2', 41)
+
+        expect(apiClient.delete).toHaveBeenCalledWith(`${BASE}/41`)
+    })
+
+    it('el buscador manda el texto como q y desenvuelve los resultados', async () => {
+        const resultados = [{ codigoParticularCliente: 'P1', nombreCliente: 'UNO', celdas: [] }]
+        vi.mocked(apiClient.get).mockResolvedValue({ data: { ok: 1, data: resultados } } as never)
+
+        await expect(buscarEnRutaBase('V 2', 'uno')).resolves.toEqual(resultados)
+        expect(apiClient.get).toHaveBeenCalledWith(`${BASE}/buscador`, { params: { q: 'uno' } })
+    })
+
+    it('agregar manda cliente y celda, y devuelve la fila creada', async () => {
+        const fila = { id: 50, codigoParticularCliente: 'P1', nombreCliente: 'UNO', semana: 1, dia: 2 }
+        vi.mocked(apiClient.post).mockResolvedValue({ data: { ok: 1, data: fila } } as never)
+
+        await expect(
+            agregarARutaBase('V 2', { codigoCliente: 'P1', semana: 1, dia: 2 }),
+        ).resolves.toEqual(fila)
+        expect(apiClient.post).toHaveBeenCalledWith(`${BASE}/clientes`, {
+            codigoCliente: 'P1',
+            semana: 1,
+            dia: 2,
+        })
+    })
+
+    it('intercambiar días manda las dos celdas y devuelve cuántas filas movió', async () => {
+        vi.mocked(apiClient.post).mockResolvedValue({ data: { ok: 1, data: { movidas: 5 } } } as never)
+
+        await expect(
+            intercambiarDiasRutaBase('V 2', { semanaA: 1, diaA: 1, semanaB: 2, diaB: 3 }),
+        ).resolves.toBe(5)
+        expect(apiClient.post).toHaveBeenCalledWith(`${BASE}/intercambiar-dias`, {
+            semanaA: 1,
+            diaA: 1,
+            semanaB: 2,
+            diaB: 3,
+        })
+    })
+
+    it('intercambiar semanas manda las dos semanas y devuelve cuántas filas movió', async () => {
+        vi.mocked(apiClient.post).mockResolvedValue({ data: { ok: 1, data: { movidas: 12 } } } as never)
+
+        await expect(intercambiarSemanasRutaBase('V 2', { semanaA: 1, semanaB: 3 })).resolves.toBe(12)
+        expect(apiClient.post).toHaveBeenCalledWith(`${BASE}/intercambiar-semanas`, {
+            semanaA: 1,
+            semanaB: 3,
+        })
     })
 })

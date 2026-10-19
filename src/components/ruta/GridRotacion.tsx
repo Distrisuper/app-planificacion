@@ -11,7 +11,7 @@ import {
     useSensors,
     type DragEndEvent,
 } from '@dnd-kit/core'
-import ClienteCardRuta from './ClienteCardRuta'
+import ClienteCardRuta, { type TextoQuitar } from './ClienteCardRuta'
 import DescripcionInline from './DescripcionInline'
 import Pill from '@/components/ui/Pill'
 import { etiquetaEstadoSemana } from '@/lib/estadoSemana'
@@ -121,6 +121,7 @@ interface CeldaProps {
     conVariasVisitas: Set<string>
     /** Ausente = no se ofrece agregar un cliente en esta celda. */
     onAgregar?: (celda: { semana: number; dia: number }) => void
+    textoQuitar?: TextoQuitar
 }
 
 function Celda({
@@ -136,6 +137,7 @@ function Celda({
     onRestaurar,
     onAgregar,
     conVariasVisitas,
+    textoQuitar,
 }: CeldaProps) {
     const { setNodeRef, isOver } = useDroppable({ id: `celda-${semana}-${dia}` })
 
@@ -227,6 +229,7 @@ function Celda({
                     arrastrable={arrastrable}
                     onQuitar={arrastrable ? onQuitar : undefined}
                     onRestaurar={arrastrable ? onRestaurar : undefined}
+                    textoQuitar={textoQuitar}
                 />
             ))}
         </td>
@@ -268,11 +271,66 @@ function EtiquetaSemana({ semana }: { semana: ISemanaRotacionAdmin }) {
     )
 }
 
+/**
+ * El ⇅ del encabezado de una semana: mismo modo de dos toques que el ⇄ de los días, pero
+ * permuta las dos filas enteras (clientes y nombre de zona).
+ */
+function BotonIntercambioSemana({
+    semana,
+    esOrigen,
+    esDestinoPosible,
+    onTocar,
+}: {
+    semana: number
+    esOrigen: boolean
+    esDestinoPosible: boolean
+    onTocar: (semana: number) => void
+}) {
+    // Nombres distintos de los del ⇄ de días ("…este día…", "Cancelar intercambio: …"):
+    // conviven en la misma pantalla y no se pueden confundir.
+    const etiqueta = esOrigen
+        ? 'Cancelar intercambio de semanas'
+        : esDestinoPosible
+          ? 'Intercambiar con esta semana'
+          : 'Intercambiar esta semana'
+    const explicacion = esOrigen
+        ? 'Cancelar el intercambio. También sale con Escape.'
+        : esDestinoPosible
+          ? 'Permutar esta semana con la que quedó marcada: todos los clientes y el nombre de zona de una pasan a la otra, y al revés.'
+          : 'Intercambiar esta semana completa con otra: tocá esta y después la otra, y se permutan sus clientes y su nombre de zona.'
+    return (
+        <button
+            type="button"
+            aria-label={`${etiqueta}: semana ${semana}`}
+            title={explicacion}
+            onClick={() => onTocar(semana)}
+            className={`mt-1 block rounded border border-dashed px-1 py-0.5 text-[10px] font-medium ${
+                esOrigen
+                    ? 'border-slate-900 bg-slate-900 text-white'
+                    : esDestinoPosible
+                      ? 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                      : 'border-slate-200 text-slate-400 hover:border-slate-400 hover:text-slate-600'
+            }`}
+        >
+            {esOrigen ? 'Cancelar' : esDestinoPosible ? 'Intercambiar acá' : '⇅ Intercambiar'}
+        </button>
+    )
+}
+
 interface GridRotacionProps {
     semanas: ISemanaRotacionAdmin[]
     onMover: (rotacionClienteId: number, semana: number, dia: number) => void
-    onRenombrarSemana: (semana: number, descripcion: string | null) => void
+    /** Ausente = el nombre de la semana se muestra pero no se edita (la ruta base no tiene
+     *  nombres propios: los toma de la última vuelta). */
+    onRenombrarSemana?: (semana: number, descripcion: string | null) => void
     onIntercambiar: (a: Celda, b: Celda) => void
+    /** Ausente = no se ofrece intercambiar semanas. */
+    onIntercambiarSemanas?: (semanaA: number, semanaB: number) => void
+    /** Qué semanas ofrecen el ⇅. Ausente = todas. En la vuelta, solo las pendientes: el
+     *  backend rechaza las que están en curso o hechas. */
+    semanaIntercambiable?: (semana: ISemanaRotacionAdmin) => boolean
+    /** El texto del ✕ y su confirmación. Ausente = el de la vuelta. */
+    textoQuitar?: TextoQuitar
     /** Ausente = no se ofrece quitar (rotación no editable). */
     onQuitar?: (rotacionClienteId: number) => void
     /** Ausente = no se ofrece restaurar (rotación no editable). */
@@ -296,6 +354,9 @@ export default function GridRotacion({
     onMover,
     onRenombrarSemana,
     onIntercambiar,
+    onIntercambiarSemanas,
+    semanaIntercambiable,
+    textoQuitar,
     onQuitar,
     onRestaurar,
     onAgregar,
@@ -312,7 +373,9 @@ export default function GridRotacion({
 
     // Celda origen del intercambio en curso. null = no hay intercambio empezado.
     const [origen, setOrigen] = useState<Celda | null>(null)
-
+    // Semana origen del ⇅ en curso. Un solo modo a la vez: armar uno desarma el otro, así
+    // un toque nunca se lee como destino del intercambio equivocado.
+    const [origenSemana, setOrigenSemana] = useState<number | null>(null)
 
     /**
      * Sin `sensors`, dnd-kit usa el PointerSensor sin `activationConstraint`: el arrastre
@@ -340,16 +403,31 @@ export default function GridRotacion({
 
     // Escape cancela: es la salida que el usuario espera de un modo, y sin ella la única
     // forma de salir era acertarle de nuevo al botón de origen.
+    const hayModo = origen !== null || origenSemana !== null
     useEffect(() => {
-        if (!origen) return
+        if (!hayModo) return
         const alTecla = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setOrigen(null)
+            if (e.key === 'Escape') {
+                setOrigen(null)
+                setOrigenSemana(null)
+            }
         }
         window.addEventListener('keydown', alTecla)
         return () => window.removeEventListener('keydown', alTecla)
-    }, [origen])
+    }, [hayModo])
+
+    const tocarSemana = (semana: number) => {
+        setOrigen(null)
+        if (origenSemana === null) {
+            setOrigenSemana(semana)
+            return
+        }
+        if (origenSemana !== semana) onIntercambiarSemanas?.(origenSemana, semana)
+        setOrigenSemana(null) // tocar el origen de nuevo cancela
+    }
 
     const tocarCelda = (celda: Celda) => {
+        setOrigenSemana(null)
         if (!origen) {
             setOrigen(celda)
             return
@@ -411,15 +489,34 @@ export default function GridRotacion({
                                     <span className="block text-sm font-semibold text-slate-900">
                                         Semana {semana.semana}
                                     </span>
-                                    <span className="block text-xs font-normal">
-                                        <DescripcionInline
-                                            valor={semana.descripcion}
-                                            placeholder="Sin zona"
-                                            etiquetaAccesible={`Nombrar semana ${semana.semana}`}
-                                            onGuardar={d => onRenombrarSemana(semana.semana, d)}
-                                        />
-                                    </span>
+                                    {onRenombrarSemana ? (
+                                        <span className="block text-xs font-normal">
+                                            <DescripcionInline
+                                                valor={semana.descripcion}
+                                                placeholder="Sin zona"
+                                                etiquetaAccesible={`Nombrar semana ${semana.semana}`}
+                                                onGuardar={d => onRenombrarSemana(semana.semana, d)}
+                                            />
+                                        </span>
+                                    ) : (
+                                        <span className="block text-xs font-normal text-slate-500">
+                                            {semana.descripcion ?? 'Sin zona'}
+                                        </span>
+                                    )}
                                     <EtiquetaSemana semana={semana} />
+                                    {seEdita &&
+                                        onIntercambiarSemanas &&
+                                        (semanaIntercambiable?.(semana) ?? true) && (
+                                            <BotonIntercambioSemana
+                                                semana={semana.semana}
+                                                esOrigen={origenSemana === semana.semana}
+                                                esDestinoPosible={
+                                                    origenSemana !== null &&
+                                                    origenSemana !== semana.semana
+                                                }
+                                                onTocar={tocarSemana}
+                                            />
+                                        )}
                                 </th>
                                 {DIAS.map(dia => (
                                     <Celda
@@ -443,6 +540,7 @@ export default function GridRotacion({
                                         onTocarIntercambio={tocarCelda}
                                         onQuitar={onQuitar}
                                         onRestaurar={onRestaurar}
+                                        textoQuitar={textoQuitar}
                                         conVariasVisitas={conVariasVisitas}
                                         onAgregar={
                                             seEdita && onAgregar

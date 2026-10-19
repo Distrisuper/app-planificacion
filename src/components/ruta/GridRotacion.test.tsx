@@ -340,3 +340,132 @@ describe('tooltips de los botones de la celda', () => {
         )
     })
 })
+
+describe('intercambiar semanas', () => {
+    const vaciaS = (semana: number, estado?: 'pendiente' | 'en_curso' | 'hecha') => ({
+        semana,
+        descripcion: null,
+        estado,
+        dias: vacia(),
+    })
+    const props = () => ({
+        semanas: [vaciaS(1), vaciaS(2), vaciaS(3)],
+        onMover: vi.fn(),
+        onRenombrarSemana: vi.fn(),
+        onIntercambiar: vi.fn(),
+        onIntercambiarSemanas: vi.fn(),
+    })
+
+    it('el primer toque marca el origen y el segundo avisa las dos semanas', async () => {
+        const p = props()
+        render(<GridRotacion {...p} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar esta semana: semana 1' }))
+        expect(
+            screen.getByRole('button', { name: 'Cancelar intercambio de semanas: semana 1' }),
+        ).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con esta semana: semana 3' }))
+
+        expect(p.onIntercambiarSemanas).toHaveBeenCalledWith(1, 3)
+        expect(screen.getAllByRole('button', { name: /^Intercambiar esta semana/ })).toHaveLength(3)
+    })
+
+    it('tocar el origen de nuevo cancela', async () => {
+        const p = props()
+        render(<GridRotacion {...p} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar esta semana: semana 2' }))
+        await userEvent.click(
+            screen.getByRole('button', { name: 'Cancelar intercambio de semanas: semana 2' }),
+        )
+
+        expect(p.onIntercambiarSemanas).not.toHaveBeenCalled()
+        expect(screen.getAllByRole('button', { name: /^Intercambiar esta semana/ })).toHaveLength(3)
+    })
+
+    it('Escape cancela', async () => {
+        const p = props()
+        render(<GridRotacion {...p} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar esta semana: semana 2' }))
+        await userEvent.keyboard('{Escape}')
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar esta semana: semana 3' }))
+
+        // Después de Escape, el toque en la semana 3 arma un origen nuevo: no intercambia.
+        expect(p.onIntercambiarSemanas).not.toHaveBeenCalled()
+    })
+
+    it('solo se ofrece en las semanas que el caller habilita', () => {
+        const p = props()
+        p.semanas = [vaciaS(1, 'hecha'), vaciaS(2, 'en_curso'), vaciaS(3, 'pendiente'), vaciaS(4, 'pendiente')]
+        render(<GridRotacion {...p} semanaIntercambiable={s => s.estado === 'pendiente'} />)
+
+        expect(
+            screen.getAllByRole('button', { name: /^Intercambiar esta semana/ }).map(b => b.getAttribute('aria-label')),
+        ).toEqual(['Intercambiar esta semana: semana 3', 'Intercambiar esta semana: semana 4'])
+    })
+
+    it('sin onIntercambiarSemanas o sin editable no se ofrece', () => {
+        const { onIntercambiarSemanas: _, ...sinCallback } = props()
+        const { unmount } = render(<GridRotacion {...sinCallback} />)
+        expect(screen.queryByRole('button', { name: /semana: semana/ })).not.toBeInTheDocument()
+        unmount()
+
+        render(<GridRotacion {...props()} editable={false} />)
+        expect(screen.queryByRole('button', { name: /semana: semana/ })).not.toBeInTheDocument()
+    })
+})
+
+describe('nombre de la semana', () => {
+    it('sin onRenombrarSemana muestra la zona como texto, sin editor', () => {
+        render(<GridRotacion semanas={SEMANAS} onMover={vi.fn()} onIntercambiar={vi.fn()} />)
+
+        expect(screen.getByText('Zona Norte')).toBeInTheDocument()
+        expect(screen.getByText('Sin zona')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^Nombrar semana/ })).not.toBeInTheDocument()
+    })
+})
+
+describe('texto de quitar', () => {
+    const conPendiente: ISemanaRotacionAdmin[] = [
+        {
+            semana: 1,
+            descripcion: null,
+            dias: {
+                ...vacia(),
+                LUN: [
+                    {
+                        rotacionClienteId: 41,
+                        codigoParticularCliente: 'P1',
+                        nombreCliente: 'KIOSCO UNO',
+                        dia: 1,
+                        estado: 'pendiente',
+                        esExtra: false,
+                        eliminado: false,
+                        ultimoMovimiento: null,
+                    },
+                ],
+            },
+        },
+    ]
+
+    it('el caller puede decir de dónde se quita y qué pasa después', async () => {
+        const onQuitar = vi.fn()
+        render(
+            <GridRotacion
+                semanas={conPendiente}
+                onMover={vi.fn()}
+                onIntercambiar={vi.fn()}
+                onQuitar={onQuitar}
+                textoQuitar={{ donde: 'de la ruta base', aviso: 'No va a estar en las próximas vueltas.' }}
+            />,
+        )
+
+        await userEvent.click(screen.getByRole('button', { name: 'Quitar de la ruta base: Kiosco Uno' }))
+        expect(screen.getByText('¿Quitar a Kiosco Uno de la ruta base?')).toBeInTheDocument()
+        expect(screen.getByText('No va a estar en las próximas vueltas.')).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Quitar' }))
+
+        expect(onQuitar).toHaveBeenCalledWith(41)
+    })
+})
