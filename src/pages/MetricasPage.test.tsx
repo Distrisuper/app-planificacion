@@ -134,3 +134,70 @@ it('si falla, ofrece reintentar', async () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Volver a intentar' }))
     expect(await screen.findByTestId('tile-visitados')).toHaveTextContent('119 / 145')
 })
+
+const objetivoVentas = (over: Partial<NonNullable<IMisMetricas['objetivoVentas']>> = {}) => ({
+    mes: '2026-08',
+    std: 100_000_000,
+    oro: 120_000_000,
+    platino: 150_000_000,
+    real: 132_000_000,
+    avance: 1.32,
+    premio: { nivel: 'oro' as const, siguiente: 'platino' as const, falta: 18_000_000 },
+    tvs: [
+        { codigo: 'TV01', nombre: 'BELEN GOMEZ' },
+        { codigo: 'TV02', nombre: 'JONATAN DIAZ' },
+    ],
+    ...over,
+})
+
+it('con objetivo de venta muestra real vs STD/Oro/Platino, el nivel, lo que falta y el equipo', async () => {
+    getMisMetricas.mockResolvedValue(base({ objetivoVentas: objetivoVentas() }))
+    renderPage()
+    const tarjeta = await screen.findByTestId('objetivo-ventas')
+    expect(tarjeta).toHaveTextContent('Objetivo de venta del mes')
+    expect(tarjeta).toHaveTextContent('$ 132 M')
+    expect(screen.getByTestId('umbral-std')).toHaveTextContent('$ 100 M')
+    expect(screen.getByTestId('umbral-oro')).toHaveTextContent('$ 120 M')
+    expect(screen.getByTestId('umbral-platino')).toHaveTextContent('$ 150 M')
+    expect(screen.getByTestId('nivel-objetivo')).toHaveTextContent('Oro')
+    expect(tarjeta).toHaveTextContent('Faltan $ 18 M para Platino')
+    expect(tarjeta).toHaveTextContent('Tu equipo: Belen Gomez, Jonatan Diaz')
+    expect(tarjeta).toHaveTextContent(/compartido/)
+})
+
+it('en platino no dice cuánto falta', async () => {
+    getMisMetricas.mockResolvedValue(
+        base({
+            objetivoVentas: objetivoVentas({
+                real: 160_000_000,
+                avance: 1.6,
+                premio: { nivel: 'platino', siguiente: null, falta: null },
+            }),
+        }),
+    )
+    renderPage()
+    const tarjeta = await screen.findByTestId('objetivo-ventas')
+    expect(screen.getByTestId('nivel-objetivo')).toHaveTextContent('Platino')
+    expect(tarjeta).not.toHaveTextContent(/Faltan/)
+})
+
+it('sin objetivo de venta (null o back viejo) no muestra la tarjeta', async () => {
+    getMisMetricas.mockResolvedValueOnce(base({ objetivoVentas: null }))
+    const { unmount } = renderPage()
+    await screen.findByTestId('anillo-facturacion')
+    expect(screen.queryByTestId('objetivo-ventas')).not.toBeInTheDocument()
+    unmount()
+
+    getMisMetricas.mockResolvedValueOnce(base())
+    renderPage()
+    await screen.findByTestId('anillo-facturacion')
+    expect(screen.queryByTestId('objetivo-ventas')).not.toBeInTheDocument()
+})
+
+it('sin TV en la cartera muestra el objetivo pero no la línea del equipo', async () => {
+    getMisMetricas.mockResolvedValue(base({ objetivoVentas: objetivoVentas({ tvs: [] }) }))
+    renderPage()
+    const tarjeta = await screen.findByTestId('objetivo-ventas')
+    expect(screen.getByTestId('nivel-objetivo')).toHaveTextContent('Oro')
+    expect(tarjeta).not.toHaveTextContent(/Tu equipo/)
+})
