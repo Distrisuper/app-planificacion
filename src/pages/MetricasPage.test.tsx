@@ -201,3 +201,10 @@ it('sin TV en la cartera muestra el objetivo pero no la línea del equipo', asyn
     expect(screen.getByTestId('nivel-objetivo')).toHaveTextContent('Oro')
     expect(tarjeta).not.toHaveTextContent(/Tu equipo/)
 })
+
+it('no muestra un objetivo de otro mes que el que se está mirando', async () => {
+    getMisMetricas.mockResolvedValue(base({ objetivoVentas: objetivoVentas({ mes: '2026-07' }) }))
+    renderPage()
+    await screen.findByTestId('anillo-facturacion')
+    expect(screen.queryByTestId('objetivo-ventas')).not.toBeInTheDocument()
+})

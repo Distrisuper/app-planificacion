@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import AccountMenu from '@/components/AccountMenu'
 import BannerPrueba, { ALTO_BANNER_PRUEBA } from '@/components/prueba/BannerPrueba'
-import Pill, { TONO_PILL } from '@/components/ui/Pill'
+import Pill from '@/components/ui/Pill'
 import { useAuth } from '@/context/AuthContext'
 import { useMisMetricas } from '@/hooks/useMisMetricas'
 import { nombreMes } from '@/lib/fechas'
@@ -239,7 +239,10 @@ function Contenido({ m }: { m: IMisMetricas }) {
                         />
                     </div>
                 )}
-                {!m.sinVentas && m.objetivoVentas && <TarjetaObjetivoVentas o={m.objetivoVentas} />}
+                {/* Solo el objetivo del mes que se está mirando: otro mes mezclaría su objetivo con esta venta. */}
+                {!m.sinVentas && m.objetivoVentas?.mes === m.desde.slice(0, 7) && (
+                    <TarjetaObjetivoVentas o={m.objetivoVentas} />
+                )}
             </Seccion>
         </div>
     )
@@ -408,7 +411,7 @@ const pesosMillones = (n: number) => `$ ${formatMillones(n)} M`
  *  Si la cartera llega a un nivel comisionan él y los TV de `tvs`, sin repartirlo. */
 function TarjetaObjetivoVentas({ o }: { o: IObjetivoVentas }) {
     const { nivel, siguiente, falta } = o.premio
-    const tono = nivel === 'ninguno' ? TONO_PILL[tonoCumplimiento(o.avance)] : 'ok'
+    const tono = nivel === 'ninguno' ? 'neutro' : 'ok'
     return (
         <div data-testid="objetivo-ventas" className={`${TILE} mt-2`}>
             <div className="flex items-center justify-between gap-2">
