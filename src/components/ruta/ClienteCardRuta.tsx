@@ -38,6 +38,8 @@ interface ClienteCardRutaProps {
      * no arrastra (la original ya lo está haciendo) y no ofrece acciones.
      */
     overlay?: boolean
+    /** Una sola línea con el nombre, sin código ni chips: la vista compacta del grid. */
+    compacta?: boolean
 }
 
 /**
@@ -67,6 +69,47 @@ interface CuerpoProps {
     puedeRestaurarse: boolean
     abrirQuitar: () => void
     restaurar: () => void
+    compacta: boolean
+}
+
+/** El ✕ o el "Restaurar" de la esquina: iguales en la card normal y en la compacta. */
+function Acciones({
+    cliente,
+    textoQuitar,
+    puedeQuitarse,
+    puedeRestaurarse,
+    abrirQuitar,
+    restaurar,
+}: Omit<CuerpoProps, 'visitaAdicional' | 'compacta'>) {
+    return (
+        <>
+            {puedeQuitarse && (
+                <button
+                    type="button"
+                    aria-label={`Quitar ${textoQuitar.donde}: ${titleCaseNombre(cliente.nombreCliente)}`}
+                    // Lo que hace falta explicar no es "quitar" —el ✕ se entiende— sino
+                    // hasta dónde llega: es solo esta vuelta, vuelve sola en la próxima y
+                    // se puede deshacer. Sin eso se lee como un borrado definitivo.
+                    title={textoQuitar.explicacion ?? textoQuitar.aviso}
+                    onClick={abrirQuitar}
+                    className="absolute right-1 top-1 rounded px-1 text-[11px] font-bold leading-none text-slate-400 hover:bg-red-50 hover:text-red-600"
+                >
+                    ✕
+                </button>
+            )}
+            {puedeRestaurarse && (
+                <button
+                    type="button"
+                    aria-label={`Restaurar: ${titleCaseNombre(cliente.nombreCliente)}`}
+                    title="Volver a poner esta visita en la vuelta, en el mismo día."
+                    onClick={restaurar}
+                    className="absolute right-1 top-1 rounded px-1 text-[11px] font-medium text-slate-500 hover:bg-emerald-50 hover:text-emerald-700"
+                >
+                    Restaurar
+                </button>
+            )}
+        </>
+    )
 }
 
 /**
@@ -95,10 +138,36 @@ const Cuerpo = memo(function Cuerpo({
     abrirQuitar,
     restaurar,
     textoQuitar,
+    compacta,
 }: CuerpoProps) {
     const autoria = cliente.ultimoMovimiento
         ? `Movió ${cliente.ultimoMovimiento.origen} (${cliente.ultimoMovimiento.usuario}) el ${fechaHoraNegocio(cliente.ultimoMovimiento.fecha)}`
         : null
+
+    // Compacta: solo el nombre en una línea. El estado igual se lee por el fondo gris de
+    // la card (resuelta o quitada), que no agrega alto.
+    if (compacta) {
+        return (
+            <>
+                <p
+                    className={`pointer-events-none relative truncate font-medium leading-tight ${
+                        puedeRestaurarse ? 'pr-16' : 'pr-4'
+                    }`}
+                    title={titleCaseNombre(cliente.nombreCliente)}
+                >
+                    {titleCaseNombre(cliente.nombreCliente)}
+                </p>
+                <Acciones
+                    cliente={cliente}
+                    textoQuitar={textoQuitar}
+                    puedeQuitarse={puedeQuitarse}
+                    puedeRestaurarse={puedeRestaurarse}
+                    abrirQuitar={abrirQuitar}
+                    restaurar={restaurar}
+                />
+            </>
+        )
+    }
 
     return (
         <>
@@ -157,31 +226,14 @@ const Cuerpo = memo(function Cuerpo({
                 </div>
             </div>
 
-            {puedeQuitarse && (
-                <button
-                    type="button"
-                    aria-label={`Quitar ${textoQuitar.donde}: ${titleCaseNombre(cliente.nombreCliente)}`}
-                    // Lo que hace falta explicar no es "quitar" —el ✕ se entiende— sino
-                    // hasta dónde llega: es solo esta vuelta, vuelve sola en la próxima y
-                    // se puede deshacer. Sin eso se lee como un borrado definitivo.
-                    title={textoQuitar.explicacion ?? textoQuitar.aviso}
-                    onClick={abrirQuitar}
-                    className="absolute right-1 top-1 rounded px-1 text-[11px] font-bold leading-none text-slate-400 hover:bg-red-50 hover:text-red-600"
-                >
-                    ✕
-                </button>
-            )}
-            {puedeRestaurarse && (
-                <button
-                    type="button"
-                    aria-label={`Restaurar: ${titleCaseNombre(cliente.nombreCliente)}`}
-                    title="Volver a poner esta visita en la vuelta, en el mismo día."
-                    onClick={restaurar}
-                    className="absolute right-1 top-1 rounded px-1 text-[11px] font-medium text-slate-500 hover:bg-emerald-50 hover:text-emerald-700"
-                >
-                    Restaurar
-                </button>
-            )}
+            <Acciones
+                cliente={cliente}
+                textoQuitar={textoQuitar}
+                puedeQuitarse={puedeQuitarse}
+                puedeRestaurarse={puedeRestaurarse}
+                abrirQuitar={abrirQuitar}
+                restaurar={restaurar}
+            />
         </>
     )
 })
@@ -203,6 +255,7 @@ export default function ClienteCardRuta({
     visitaAdicional = false,
     overlay,
     textoQuitar = TEXTO_QUITAR_VUELTA,
+    compacta = false,
 }: ClienteCardRutaProps) {
     const resuelto = estaResuelto(cliente.estado)
 
@@ -261,7 +314,9 @@ export default function ClienteCardRuta({
             data-eliminado={cliente.eliminado ? 'true' : 'false'}
             // `select-none`: sin él, arrastrar desde el nombre del cliente pinta la
             // selección de texto de la fila entera.
-            className={`relative select-none rounded-md border px-2 py-1.5 text-xs ${
+            className={`relative select-none rounded-md border px-2 text-xs ${
+                compacta ? 'py-1' : 'py-1.5'
+            } ${
                 resuelto || cliente.eliminado
                     ? 'border-slate-200 bg-slate-100 text-slate-500'
                     : 'border-slate-300 bg-white text-slate-800'
@@ -313,6 +368,7 @@ export default function ClienteCardRuta({
                 abrirQuitar={abrirQuitar}
                 restaurar={restaurar}
                 textoQuitar={textoQuitar}
+                compacta={compacta}
             />
 
             {/* Se monta recién al abrirse, no junto con la card: son ~150 cards en la

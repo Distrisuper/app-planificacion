@@ -9,6 +9,7 @@ import type {
     IResultadoBuscadorGeneral,
     IResultadoBuscadorRutaBase,
     IResultadoReacomodar,
+    IResultadoReiniciarRotacion,
     IRotacionCompleta,
     IRotacionResumen,
     IRutaBase,
@@ -54,6 +55,17 @@ export const getRutaBase = async (codigo: string): Promise<IRutaBase> => {
 export const crearRotacion = async (codigo: string): Promise<number> => {
     const res = await apiClient.post(base(codigo))
     return res.data.data.rotacionId
+}
+
+/**
+ * Cierra la vuelta actual del vendedor y arranca una nueva copiada de la ruta base. 409
+ * VISITA_EN_CURSO si está visitando a alguien, 422 ROTACION_SIN_CLIENTES sin ruta base.
+ */
+export const reiniciarRotacion = async (
+    codigo: string,
+): Promise<IResultadoReiniciarRotacion> => {
+    const res = await apiClient.post(`${base(codigo)}/reiniciar`)
+    return res.data.data
 }
 
 /**

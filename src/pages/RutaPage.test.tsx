@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -486,10 +486,26 @@ describe('RutaPage', () => {
         })
     }
 
+    it('la vuelta arranca con solo la semana en curso desplegada; la ruta base, toda desplegada', async () => {
+        montarVueltaConEstados()
+        montarRutaBase()
+        await elegirVendedor()
+
+        expect(await screen.findByRole('button', { name: 'Plegar semana 1' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Desplegar semana 2' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Desplegar semana 3' })).toBeInTheDocument()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Ruta base' }))
+        await screen.findByText(/Kiosco Nueve/i)
+        expect(screen.queryByRole('button', { name: /^Desplegar semana/ })).not.toBeInTheDocument()
+    })
+
     it('en la vuelta, ⇄ pregunta el alcance y manda aplicarARutaBase', async () => {
         montarVueltaConEstados()
         vi.mocked(apiAdmin.intercambiarDias).mockResolvedValue(0)
         await elegirVendedor()
+        // Las semanas que no están en curso arrancan plegadas: sin celdas no hay ⇄.
+        await userEvent.click(await screen.findByRole('button', { name: 'Desplegar todas' }))
 
         await userEvent.click(await screen.findByRole('button', { name: 'Intercambiar este día: semana 2, LUN' }))
         await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con este día: semana 3, JUE' }))
@@ -510,6 +526,7 @@ describe('RutaPage', () => {
     it('en la vuelta, cancelar el diálogo de alcance no intercambia nada', async () => {
         montarVueltaConEstados()
         await elegirVendedor()
+        await userEvent.click(await screen.findByRole('button', { name: 'Desplegar todas' }))
 
         await userEvent.click(await screen.findByRole('button', { name: 'Intercambiar este día: semana 2, LUN' }))
         await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con este día: semana 3, JUE' }))
@@ -552,6 +569,148 @@ describe('RutaPage', () => {
         await userEvent.click(await screen.findByRole('button', { name: 'Solo esta vuelta' }))
 
         expect(await screen.findByText(/ya tiene clientes visitados o no visitados/)).toBeInTheDocument()
+    })
+
+    describe('reiniciar la vuelta', () => {
+        const vigente = {
+            id: 7,
+            codigoParticularVendedor: 'V 2',
+            estado: 'abierta' as const,
+            fechaInicio: '2026-09-01T12:00:00.000Z',
+            fechaFin: null,
+            descripcion: 'Ronda Septiembre',
+            orden: null,
+        }
+        const programada = {
+            id: 30,
+            codigoParticularVendedor: 'V 2',
+            estado: 'programada' as const,
+            fechaInicio: null,
+            fechaFin: null,
+            descripcion: 'Ronda Octubre',
+            orden: 1,
+        }
+        const nueva = { ...vigente, id: 31, descripcion: 'Ronda Nueva' }
+
+        function montarCola() {
+            vi.mocked(apiAdmin.getRotaciones).mockResolvedValue([vigente, programada])
+            vi.mocked(apiAdmin.getRotacion).mockImplementation(async (_codigo, rotacionId) => ({
+                ...vigente,
+                id: rotacionId,
+                semanas: [
+                    { semana: 1, descripcion: 'Zárate', dias: { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] } },
+                ],
+            }))
+        }
+
+        async function confirmarReinicio() {
+            await userEvent.click(await screen.findByRole('button', { name: 'Reiniciar vuelta' }))
+            await userEvent.click(
+                within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Reiniciar vuelta' }),
+            )
+        }
+
+        it('pide confirmación, reinicia y deja elegida la vuelta nueva', async () => {
+            montarCola()
+            vi.mocked(apiAdmin.reiniciarRotacion).mockImplementation(async () => {
+                // Lo que deja el backend: la vieja cerrada (fuera de la cola) y la nueva abierta.
+                vi.mocked(apiAdmin.getRotaciones).mockResolvedValue([nueva, programada])
+                return { rotacionId: 31, cerrada: 7, sinVisitar: [] }
+            })
+            await elegirVendedor()
+            // Se mira la programada: al reiniciar, la elegida tiene que pasar a la nueva.
+            await userEvent.click(await screen.findByRole('button', { name: 'Ronda Octubre' }))
+            await waitFor(() => expect(apiAdmin.getRotacion).toHaveBeenCalledWith('V 2', 30))
+
+            await userEvent.click(screen.getByRole('button', { name: 'Reiniciar vuelta' }))
+            const dialogo = await screen.findByRole('alertdialog')
+            expect(within(dialogo).getByText('¿Reiniciar la vuelta de Juan Pérez?')).toBeInTheDocument()
+            expect(within(dialogo).getByText(/empieza una nueva copiada de la ruta base/)).toBeInTheDocument()
+            expect(apiAdmin.reiniciarRotacion).not.toHaveBeenCalled()
+            await userEvent.click(within(dialogo).getByRole('button', { name: 'Reiniciar vuelta' }))
+
+            await waitFor(() => expect(apiAdmin.reiniciarRotacion).toHaveBeenCalledWith('V 2'))
+            await waitFor(() => expect(apiAdmin.getRotacion).toHaveBeenCalledWith('V 2', 31))
+            // El chip activo es el que lleva el anillo.
+            expect((await screen.findByRole('button', { name: 'Ronda Nueva' })).parentElement).toHaveClass(
+                'ring-primario',
+            )
+        })
+
+        it('con una visita en curso explica a quién está visitando', async () => {
+            montarCola()
+            vi.mocked(apiAdmin.reiniciarRotacion).mockRejectedValue({
+                response: {
+                    status: 409,
+                    data: {
+                        code: 'VISITA_EN_CURSO',
+                        codigoParticularCliente: 'P001',
+                        nombreCliente: 'ALMACEN ZARATE',
+                    },
+                },
+            })
+            await elegirVendedor()
+            await confirmarReinicio()
+
+            expect(
+                await screen.findByText(
+                    'Juan Pérez está visitando a Almacen Zarate. Probá de nuevo cuando cierre la visita.',
+                ),
+            ).toBeInTheDocument()
+        })
+
+        it('sin ruta base explica que no se puede armar una vuelta', async () => {
+            montarCola()
+            vi.mocked(apiAdmin.reiniciarRotacion).mockRejectedValue({
+                response: { status: 422, data: { code: 'ROTACION_SIN_CLIENTES' } },
+            })
+            await elegirVendedor()
+            await confirmarReinicio()
+
+            expect(
+                await screen.findByText(
+                    'Este vendedor no tiene ruta base cargada: no se puede armar una vuelta.',
+                ),
+            ).toBeInTheDocument()
+        })
+
+        it('cualquier otro error pide probar de nuevo', async () => {
+            montarCola()
+            vi.mocked(apiAdmin.reiniciarRotacion).mockRejectedValue(new Error('500'))
+            await elegirVendedor()
+            await confirmarReinicio()
+
+            expect(
+                await screen.findByText('No se pudo reiniciar la vuelta. Probá de nuevo.'),
+            ).toBeInTheDocument()
+        })
+
+        it('no se ofrece en la vista Ruta base', async () => {
+            montarCola()
+            montarRutaBase()
+            await elegirVendedor()
+            await screen.findByRole('button', { name: 'Reiniciar vuelta' })
+
+            await userEvent.click(screen.getByRole('button', { name: 'Ruta base' }))
+            await screen.findByText(/Kiosco Nueve/i)
+            expect(screen.queryByRole('button', { name: 'Reiniciar vuelta' })).not.toBeInTheDocument()
+        })
+
+        it('no se ofrece con el vendedor de prueba (tiene su propio "Reiniciar")', async () => {
+            authMock.mockReturnValue({
+                user: { name: 'Ana' }, logout: vi.fn(),
+                capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: true },
+                vendedoresVisibles: null,
+                vendedorDePrueba: { codigo: 'PRUEBA-42', descripcion: 'Cartera de V 2', origenesDisponibles: [] },
+            })
+            montarCola()
+            renderPage()
+            await elegirEnSelector('Mi vendedor de prueba')
+
+            await screen.findByRole('button', { name: 'Ronda Septiembre' })
+            expect(apiAdmin.getRotaciones).toHaveBeenCalledWith('PRUEBA-42')
+            expect(screen.queryByRole('button', { name: 'Reiniciar vuelta' })).not.toBeInTheDocument()
+        })
     })
 
     it('el selector suma "Mi vendedor de prueba" al final, y acota el roster a vendedoresVisibles', async () => {

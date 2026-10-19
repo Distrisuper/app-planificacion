@@ -703,6 +703,16 @@ export interface IRotacionResumen {
 }
 
 /** El grid completo de una rotación, en un solo payload. */
+/** Lo que devuelve reiniciar la vuelta de un vendedor. */
+export interface IResultadoReiniciarRotacion {
+    /** La vuelta nueva, copiada de la ruta base. */
+    rotacionId: number
+    /** La vuelta que se cerró. null = no había ninguna abierta. */
+    cerrada: number | null
+    /** Códigos de los clientes que quedaron sin visitar en la vuelta cerrada. */
+    sinVisitar: string[]
+}
+
 export interface IRotacionCompleta extends IRotacionResumen {
     semanas: ISemanaRotacionAdmin[]
 }

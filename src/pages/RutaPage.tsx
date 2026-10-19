@@ -4,6 +4,7 @@ import HelpPopover from '@/components/analitica/HelpPopover'
 import AgregarClienteExtraDialog from '@/components/ruta/AgregarClienteExtraDialog'
 import AgregarClienteRutaBaseDialog from '@/components/ruta/AgregarClienteRutaBaseDialog'
 import AlcanceCambioDialog from '@/components/ruta/AlcanceCambioDialog'
+import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import type { TextoQuitar } from '@/components/ruta/ClienteCardRuta'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
@@ -30,6 +31,7 @@ import {
     useQuitarClienteAdmin,
     useQuitarDeRutaBase,
     useReacomodarAdmin,
+    useReiniciarRotacion,
     useReordenarRotacion,
     useRestaurarClienteAdmin,
     useRotacion,
@@ -74,6 +76,21 @@ type CambioVuelta = { rotacionId: number; accion: string } & (
     | { tipo: 'semanas'; semanaA: number; semanaB: number }
 )
 
+/** El cartel de un reinicio rechazado, según el código del backend. */
+function mensajeErrorReinicio(err: unknown, nombreVendedor: string): string {
+    const code = errorCode(err)
+    if (code === 'VISITA_EN_CURSO') {
+        const cliente = errorData<{ nombreCliente?: string }>(err)?.nombreCliente
+        if (cliente) {
+            return `${nombreVendedor} está visitando a ${titleCaseNombre(cliente)}. Probá de nuevo cuando cierre la visita.`
+        }
+    }
+    if (code === 'ROTACION_SIN_CLIENTES') {
+        return 'Este vendedor no tiene ruta base cargada: no se puede armar una vuelta.'
+    }
+    return 'No se pudo reiniciar la vuelta. Probá de nuevo.'
+}
+
 export default function RutaPage() {
     const { vendedoresVisibles, vendedorDePrueba } = useAuth()
     const [vendedor, setVendedor] = useState<string | null>(null)
@@ -85,6 +102,8 @@ export default function RutaPage() {
         null,
     )
     const [cambioPendiente, setCambioPendiente] = useState<CambioVuelta | null>(null)
+    const [confirmandoReinicio, setConfirmandoReinicio] = useState(false)
+    const reiniciar = useReiniciarRotacion(vendedor ?? '')
 
     // La celda del "+" y el cambio pendiente son de la vista donde se tocaron: sin esto, el
     // "+" de la vuelta abriría el buscador de la ruta base al cambiar de vista.
@@ -92,6 +111,7 @@ export default function RutaPage() {
         setVista(v)
         setCeldaAgregar(null)
         setCambioPendiente(null)
+        reiniciar.reset()
     }
 
     const { data: roster } = useVendedores()
@@ -128,7 +148,15 @@ export default function RutaPage() {
         // La rotación activa era del vendedor anterior: sin esto, el grid pediría un id
         // que no le pertenece y el backend contestaría 404.
         setRotacionActivaId(null)
+        // El cartel de un reinicio fallido nombra al vendedor anterior.
+        reiniciar.reset()
     }
+
+    const nombreVendedor =
+        opcionesVendedor.find(o => o.valor === vendedor)?.etiqueta ?? vendedor ?? ''
+    // El vendedor de prueba tiene su propio "Reiniciar" (y el backend rebota este con
+    // PRUEBA_USA_REINICIAR).
+    const puedeReiniciar = vendedor !== null && vendedor !== vendedorDePrueba?.codigo
 
     // La elección solo vale si sigue estando en la cola. Cancelar la rotación elegida la
     // saca del payload pero no del estado local, y sin este chequeo el grid seguía pidiendo
@@ -356,19 +384,58 @@ export default function RutaPage() {
                 )}
 
                 {verVuelta && vendedor !== null && cola && cola.length > 0 && (
-                    <ColaRotaciones
-                        rotaciones={cola}
-                        activaId={rotacionElegida}
-                        onElegir={setRotacionActivaId}
-                        onCrear={() => crear.mutate()}
-                        onCancelar={id => cancelar.mutate(id)}
-                        onRenombrarRotacion={(rotacionId, descripcion) =>
-                            renombrarRotacion.mutate({ rotacionId, descripcion })
+                    <div className="flex flex-wrap items-center gap-2">
+                        <ColaRotaciones
+                            rotaciones={cola}
+                            activaId={rotacionElegida}
+                            onElegir={setRotacionActivaId}
+                            onCrear={() => crear.mutate()}
+                            onCancelar={id => cancelar.mutate(id)}
+                            onRenombrarRotacion={(rotacionId, descripcion) =>
+                                renombrarRotacion.mutate({ rotacionId, descripcion })
+                            }
+                            onReordenar={(rotacionId, orden) =>
+                                reordenar.mutate({ rotacionId, orden })
+                            }
+                            creando={crear.isPending}
+                        />
+                        {puedeReiniciar && (
+                            <button
+                                type="button"
+                                onClick={() => setConfirmandoReinicio(true)}
+                                disabled={reiniciar.isPending}
+                                title="Cerrar la vuelta actual y empezar una nueva copiada de la ruta base"
+                                className="ml-auto h-8 rounded-lg border border-linea bg-tarjeta px-2.5 text-[13px] text-tinta-2 hover:text-tinta disabled:opacity-40"
+                            >
+                                {reiniciar.isPending ? 'Reiniciando…' : 'Reiniciar vuelta'}
+                            </button>
+                        )}
+                    </div>
+                )}
+
+                {verVuelta && puedeReiniciar && (
+                    <ConfirmDialog
+                        open={confirmandoReinicio}
+                        onOpenChange={setConfirmandoReinicio}
+                        title={`¿Reiniciar la vuelta de ${nombreVendedor}?`}
+                        description="Se cierra la vuelta actual y empieza una nueva copiada de la ruta base. Las visitas hechas no se tocan; los clientes que quedaron sin visitar cuentan como pendientes de esta vuelta."
+                        confirmLabel="Reiniciar vuelta"
+                        cancelLabel="Volver"
+                        destructivo
+                        onConfirm={() =>
+                            reiniciar.mutate(undefined, {
+                                onSuccess: r => setRotacionActivaId(r.rotacionId),
+                            })
                         }
-                        onReordenar={(rotacionId, orden) =>
-                            reordenar.mutate({ rotacionId, orden })
-                        }
-                        creando={crear.isPending}
+                    />
+                )}
+
+                {verVuelta && reiniciar.isError && (
+                    <EstadoVista
+                        className={RECUADRO}
+                        estado="error"
+                        titulo="No se pudo reiniciar la vuelta."
+                        texto={mensajeErrorReinicio(reiniciar.error, nombreVendedor)}
                     />
                 )}
 
@@ -411,6 +478,8 @@ export default function RutaPage() {
                             // de por medio.
                             key={grid.id}
                             semanas={grid.semanas}
+                            // Desplegada la semana en curso; el resto, plegado.
+                            plegarPorEstado
                             // Una rotación cerrada se ve pero no se edita: el backend
                             // contesta 409 ROTACION_CERRADA.
                             editable={

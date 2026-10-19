@@ -11,13 +11,66 @@ import {
     useSensors,
     type DragEndEvent,
 } from '@dnd-kit/core'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import ClienteCardRuta, { type TextoQuitar } from './ClienteCardRuta'
 import DescripcionInline from './DescripcionInline'
 import Pill from '@/components/ui/Pill'
+import Segmentado, { type OpcionSegmentado } from '@/components/ui/Segmentado'
 import { etiquetaEstadoSemana } from '@/lib/estadoSemana'
 import type { Dia, IAgendaClientAdmin, ISemanaRotacionAdmin } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
+
+type Tamano = 'normal' | 'compacta'
+
+const OPCIONES_TAMANO: OpcionSegmentado<Tamano>[] = [
+    { valor: 'normal', etiqueta: 'Normal', titulo: 'Cada card con su código y sus marcas' },
+    { valor: 'compacta', etiqueta: 'Compacta', titulo: 'Cada card en una línea, solo el nombre' },
+]
+
+/** Preferencia de UI, no de la sesión: por eso no lleva el prefijo `visita-`. */
+const CLAVE_COMPACTA = 'ruta-vista-compacta'
+
+/** El storage puede tirar (modo privado, bloqueado): ahí se arranca con la vista normal. */
+function leerCompacta(): boolean {
+    try {
+        return window.localStorage.getItem(CLAVE_COMPACTA) === '1'
+    } catch {
+        return false
+    }
+}
+
+function guardarCompacta(compacta: boolean) {
+    try {
+        window.localStorage.setItem(CLAVE_COMPACTA, compacta ? '1' : '0')
+    } catch {
+        // Sin storage, la vista vale hasta recargar.
+    }
+}
+
+/**
+ * Qué semanas arrancan plegadas. En la vuelta se deja abierta la que importa —la en curso
+ * o, si no hay, la primera pendiente— y se pliega el resto. Sin ninguna de las dos (una
+ * vuelta cerrada, o un backend que no manda `estado`) no hay a cuál mirar primero, y se
+ * despliega todo, como antes del plegado.
+ */
+export function semanasPlegadasIniciales(
+    semanas: ISemanaRotacionAdmin[],
+    plegarPorEstado: boolean,
+): Set<number> {
+    if (!plegarPorEstado) return new Set()
+    const abierta =
+        semanas.find(s => s.estado === 'en_curso') ?? semanas.find(s => s.estado === 'pendiente')
+    if (!abierta) return new Set()
+    return new Set(semanas.filter(s => s !== abierta).map(s => s.semana))
+}
+
+/** "LUN 6 · MAR 5 · …": los clientes vivos de cada día. Los quitados no se visitan. */
+export function resumenPorDia(semana: ISemanaRotacionAdmin): string {
+    return DIAS.map(dia => `${dia} ${semana.dias[dia].filter(c => !c.eliminado).length}`).join(
+        ' · ',
+    )
+}
 
 /**
  * Las opciones viven a nivel módulo, NO como objeto literal dentro del `useSensor`:
@@ -122,6 +175,7 @@ interface CeldaProps {
     /** Ausente = no se ofrece agregar un cliente en esta celda. */
     onAgregar?: (celda: { semana: number; dia: number }) => void
     textoQuitar?: TextoQuitar
+    compacta: boolean
 }
 
 function Celda({
@@ -138,6 +192,7 @@ function Celda({
     onAgregar,
     conVariasVisitas,
     textoQuitar,
+    compacta,
 }: CeldaProps) {
     const { setNodeRef, isOver } = useDroppable({ id: `celda-${semana}-${dia}` })
 
@@ -230,6 +285,7 @@ function Celda({
                     onQuitar={arrastrable ? onQuitar : undefined}
                     onRestaurar={arrastrable ? onRestaurar : undefined}
                     textoQuitar={textoQuitar}
+                    compacta={compacta}
                 />
             ))}
         </td>
@@ -246,7 +302,13 @@ function Celda({
  *
  * `DragOverlay` no monta a sus hijos si no hay arrastre, así que esto solo existe en vuelo.
  */
-function CardArrastrada({ semanas }: { semanas: ISemanaRotacionAdmin[] }) {
+function CardArrastrada({
+    semanas,
+    compacta,
+}: {
+    semanas: ISemanaRotacionAdmin[]
+    compacta: boolean
+}) {
     const { active } = useDndContext()
     const id = active ? parsearCard(String(active.id)) : null
     if (id === null) return null
@@ -254,20 +316,53 @@ function CardArrastrada({ semanas }: { semanas: ISemanaRotacionAdmin[] }) {
     for (const semana of semanas) {
         for (const dia of DIAS) {
             const cliente = semana.dias[dia].find(c => c.rotacionClienteId === id)
-            if (cliente) return <ClienteCardRuta cliente={cliente} overlay />
+            if (cliente) return <ClienteCardRuta cliente={cliente} overlay compacta={compacta} />
         }
     }
     return null
 }
 
 /** En qué está la semana: "En curso" la del ciclo abierto, "Hecha" las ya recorridas. */
-function EtiquetaSemana({ semana }: { semana: ISemanaRotacionAdmin }) {
+function EtiquetaSemana({
+    semana,
+    className = 'mt-1',
+}: {
+    semana: ISemanaRotacionAdmin
+    className?: string
+}) {
     const etiqueta = etiquetaEstadoSemana(semana.estado, semana.fechaLunes)
     if (!etiqueta) return null
     return (
-        <Pill tono={etiqueta.tono} className="mt-1">
+        <Pill tono={etiqueta.tono} className={className}>
             {etiqueta.texto}
         </Pill>
+    )
+}
+
+/** El chevron que pliega o despliega una fila de semana. */
+function BotonPlegar({
+    semana,
+    plegada,
+    onTocar,
+}: {
+    semana: number
+    plegada: boolean
+    onTocar: (semana: number) => void
+}) {
+    return (
+        <button
+            type="button"
+            aria-label={`${plegada ? 'Desplegar' : 'Plegar'} semana ${semana}`}
+            aria-expanded={!plegada}
+            onClick={() => onTocar(semana)}
+            className="shrink-0 rounded p-0.5 text-tinta-2 hover:bg-superficie hover:text-tinta"
+        >
+            {plegada ? (
+                <ChevronRight className="h-4 w-4" aria-hidden />
+            ) : (
+                <ChevronDown className="h-4 w-4" aria-hidden />
+            )}
+        </button>
     )
 }
 
@@ -340,6 +435,9 @@ interface GridRotacionProps {
     onAgregar?: (semana: number, dia: number) => void
     /** false = rotación cerrada: se ve pero no se toca. */
     editable?: boolean
+    /** true = arranca desplegada solo la semana en curso (o la primera pendiente), como en
+     *  la vuelta. Ausente = todas desplegadas, como en la ruta base. */
+    plegarPorEstado?: boolean
 }
 
 /**
@@ -361,6 +459,7 @@ export default function GridRotacion({
     onRestaurar,
     onAgregar,
     editable,
+    plegarPorEstado = false,
 }: GridRotacionProps) {
     // `editable` ausente = editable, por compatibilidad con los callers viejos. Se resuelve
     // UNA vez: las tres acciones de celda (arrastrar, intercambiar, agregar) tienen que
@@ -376,6 +475,37 @@ export default function GridRotacion({
     // Semana origen del ⇅ en curso. Un solo modo a la vez: armar uno desarma el otro, así
     // un toque nunca se lee como destino del intercambio equivocado.
     const [origenSemana, setOrigenSemana] = useState<number | null>(null)
+
+    // Se calcula al montar y no se recalcula con cada refetch: un refetch no tiene que
+    // desplegar lo que el usuario plegó. Cambiar de vendedor o de rotación remonta el grid
+    // (la `key` de RutaPage), y ahí sí vuelve al default.
+    const [plegadas, setPlegadas] = useState<Set<number>>(() =>
+        semanasPlegadasIniciales(semanas, plegarPorEstado),
+    )
+    const [compacta, setCompacta] = useState(leerCompacta)
+
+    const elegirTamano = (t: Tamano) => {
+        setCompacta(t === 'compacta')
+        guardarCompacta(t === 'compacta')
+    }
+
+    const tocarPlegar = (semana: number) => {
+        const plegar = !plegadas.has(semana)
+        // Una fila plegada no ofrece el ⇄: si el origen armado quedara adentro, el próximo
+        // toque permutaría contra una celda que no se ve.
+        if (plegar && origen?.semana === semana) setOrigen(null)
+        setPlegadas(prev => {
+            const nuevas = new Set(prev)
+            if (plegar) nuevas.add(semana)
+            else nuevas.delete(semana)
+            return nuevas
+        })
+    }
+
+    const plegarTodas = () => {
+        setOrigen(null)
+        setPlegadas(new Set(semanas.map(s => s.semana)))
+    }
 
     /**
      * Sin `sensors`, dnd-kit usa el PointerSensor sin `activationConstraint`: el arrastre
@@ -465,6 +595,30 @@ export default function GridRotacion({
 
     return (
         <DndContext sensors={sensores} onDragEnd={alSoltar}>
+            {/* La barra del grid: menos scroll plegando semanas o achicando las cards. */}
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+                <button
+                    type="button"
+                    onClick={plegarTodas}
+                    className="h-8 rounded-lg border border-linea bg-tarjeta px-2.5 text-[13px] text-tinta-2 hover:text-tinta"
+                >
+                    Plegar todas
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setPlegadas(new Set())}
+                    className="h-8 rounded-lg border border-linea bg-tarjeta px-2.5 text-[13px] text-tinta-2 hover:text-tinta"
+                >
+                    Desplegar todas
+                </button>
+                <span className="mx-1 h-5 w-px bg-linea" aria-hidden />
+                <Segmentado
+                    etiqueta="Tamaño de las cards"
+                    opciones={OPCIONES_TAMANO}
+                    valor={compacta ? 'compacta' : 'normal'}
+                    onCambiar={elegirTamano}
+                />
+            </div>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-4xl border-separate border-spacing-1">
                     <thead>
@@ -483,74 +637,119 @@ export default function GridRotacion({
                         </tr>
                     </thead>
                     <tbody>
-                        {semanas.map(semana => (
-                            <tr key={semana.semana}>
-                                <th className="align-top text-left">
-                                    <span className="block text-sm font-semibold text-slate-900">
-                                        Semana {semana.semana}
-                                    </span>
-                                    {onRenombrarSemana ? (
-                                        <span className="block text-xs font-normal">
-                                            <DescripcionInline
-                                                valor={semana.descripcion}
-                                                placeholder="Sin zona"
-                                                etiquetaAccesible={`Nombrar semana ${semana.semana}`}
-                                                onGuardar={d => onRenombrarSemana(semana.semana, d)}
-                                            />
-                                        </span>
-                                    ) : (
-                                        <span className="block text-xs font-normal text-slate-500">
-                                            {semana.descripcion ?? 'Sin zona'}
-                                        </span>
-                                    )}
-                                    <EtiquetaSemana semana={semana} />
-                                    {seEdita &&
-                                        onIntercambiarSemanas &&
-                                        (semanaIntercambiable?.(semana) ?? true) && (
-                                            <BotonIntercambioSemana
+                        {semanas.map(semana => {
+                            const ofreceIntercambioSemana =
+                                seEdita &&
+                                onIntercambiarSemanas !== undefined &&
+                                (semanaIntercambiable?.(semana) ?? true)
+                            const botonIntercambioSemana = ofreceIntercambioSemana && (
+                                <BotonIntercambioSemana
+                                    semana={semana.semana}
+                                    esOrigen={origenSemana === semana.semana}
+                                    esDestinoPosible={
+                                        origenSemana !== null && origenSemana !== semana.semana
+                                    }
+                                    onTocar={tocarSemana}
+                                />
+                            )
+
+                            // Plegada: una línea, sin celdas. Sin celdas no hay drop, ni ⇄,
+                            // ni "+ cliente"; el ⇅ sí, porque mueve la fila entera y no
+                            // necesita ver sus clientes.
+                            if (plegadas.has(semana.semana)) {
+                                return (
+                                    <tr key={semana.semana}>
+                                        <td colSpan={DIAS.length + 1} className="rounded-md bg-white px-1.5 py-1">
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                <BotonPlegar
+                                                    semana={semana.semana}
+                                                    plegada
+                                                    onTocar={tocarPlegar}
+                                                />
+                                                <span className="text-sm font-semibold text-slate-900">
+                                                    Semana {semana.semana}
+                                                </span>
+                                                <span className="text-xs text-slate-500">
+                                                    {semana.descripcion ?? 'Sin zona'}
+                                                </span>
+                                                <EtiquetaSemana semana={semana} className="" />
+                                                <span className="text-xs tabular-nums text-slate-600">
+                                                    {resumenPorDia(semana)}
+                                                </span>
+                                                {botonIntercambioSemana && (
+                                                    <span className="ml-auto [&>button]:mt-0">
+                                                        {botonIntercambioSemana}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            }
+
+                            return (
+                                <tr key={semana.semana}>
+                                    <th className="align-top text-left">
+                                        <span className="flex items-center gap-1 text-sm font-semibold text-slate-900">
+                                            <BotonPlegar
                                                 semana={semana.semana}
-                                                esOrigen={origenSemana === semana.semana}
-                                                esDestinoPosible={
-                                                    origenSemana !== null &&
-                                                    origenSemana !== semana.semana
-                                                }
-                                                onTocar={tocarSemana}
+                                                plegada={false}
+                                                onTocar={tocarPlegar}
                                             />
+                                            Semana {semana.semana}
+                                        </span>
+                                        {onRenombrarSemana ? (
+                                            <span className="block text-xs font-normal">
+                                                <DescripcionInline
+                                                    valor={semana.descripcion}
+                                                    placeholder="Sin zona"
+                                                    etiquetaAccesible={`Nombrar semana ${semana.semana}`}
+                                                    onGuardar={d => onRenombrarSemana(semana.semana, d)}
+                                                />
+                                            </span>
+                                        ) : (
+                                            <span className="block text-xs font-normal text-slate-500">
+                                                {semana.descripcion ?? 'Sin zona'}
+                                            </span>
                                         )}
-                                </th>
-                                {DIAS.map(dia => (
-                                    <Celda
-                                        key={dia}
-                                        semana={semana.semana}
-                                        dia={dia}
-                                        clientes={semana.dias[dia]}
-                                        arrastrable={seEdita}
-                                        intercambiable={seEdita}
-                                        esOrigen={
-                                            origen?.semana === semana.semana &&
-                                            origen?.dia === DIAS.indexOf(dia) + 1
-                                        }
-                                        esDestinoPosible={
-                                            origen !== null &&
-                                            !(
-                                                origen.semana === semana.semana &&
-                                                origen.dia === DIAS.indexOf(dia) + 1
-                                            )
-                                        }
-                                        onTocarIntercambio={tocarCelda}
-                                        onQuitar={onQuitar}
-                                        onRestaurar={onRestaurar}
-                                        textoQuitar={textoQuitar}
-                                        conVariasVisitas={conVariasVisitas}
-                                        onAgregar={
-                                            seEdita && onAgregar
-                                                ? celda => onAgregar(celda.semana, celda.dia)
-                                                : undefined
-                                        }
-                                    />
-                                ))}
-                            </tr>
-                        ))}
+                                        <EtiquetaSemana semana={semana} />
+                                        {botonIntercambioSemana}
+                                    </th>
+                                    {DIAS.map(dia => (
+                                        <Celda
+                                            key={dia}
+                                            semana={semana.semana}
+                                            dia={dia}
+                                            clientes={semana.dias[dia]}
+                                            arrastrable={seEdita}
+                                            intercambiable={seEdita}
+                                            esOrigen={
+                                                origen?.semana === semana.semana &&
+                                                origen?.dia === DIAS.indexOf(dia) + 1
+                                            }
+                                            esDestinoPosible={
+                                                origen !== null &&
+                                                !(
+                                                    origen.semana === semana.semana &&
+                                                    origen.dia === DIAS.indexOf(dia) + 1
+                                                )
+                                            }
+                                            onTocarIntercambio={tocarCelda}
+                                            onQuitar={onQuitar}
+                                            onRestaurar={onRestaurar}
+                                            textoQuitar={textoQuitar}
+                                            compacta={compacta}
+                                            conVariasVisitas={conVariasVisitas}
+                                            onAgregar={
+                                                seEdita && onAgregar
+                                                    ? celda => onAgregar(celda.semana, celda.dia)
+                                                    : undefined
+                                            }
+                                        />
+                                    ))}
+                                </tr>
+                            )
+                        })}
                     </tbody>
                 </table>
             </div>
@@ -558,7 +757,7 @@ export default function GridRotacion({
             {/* Va FUERA del div con `overflow-x-auto`: el overlay es `position: fixed`,
                 pero un ancestro que recorta igual lo cortaría al arrastrar hacia el borde. */}
             <DragOverlay>
-                <CardArrastrada semanas={semanas} />
+                <CardArrastrada semanas={semanas} compacta={compacta} />
             </DragOverlay>
         </DndContext>
     )
