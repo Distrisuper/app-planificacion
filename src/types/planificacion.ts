@@ -702,7 +702,6 @@ export interface IRotacionResumen {
     orden: number | null
 }
 
-/** El grid completo de una rotación, en un solo payload. */
 /** Lo que devuelve reiniciar la vuelta de un vendedor. */
 export interface IResultadoReiniciarRotacion {
     /** La vuelta nueva, copiada de la ruta base. */
@@ -713,6 +712,7 @@ export interface IResultadoReiniciarRotacion {
     sinVisitar: string[]
 }
 
+/** El grid completo de una rotación, en un solo payload. */
 export interface IRotacionCompleta extends IRotacionResumen {
     semanas: ISemanaRotacionAdmin[]
 }
