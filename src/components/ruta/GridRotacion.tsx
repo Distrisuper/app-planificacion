@@ -65,11 +65,15 @@ export function semanasPlegadasIniciales(
     return new Set(semanas.filter(s => s !== abierta).map(s => s.semana))
 }
 
-/** "LUN 6 · MAR 5 · …": los clientes vivos de cada día. Los quitados no se visitan. */
-export function resumenPorDia(semana: ISemanaRotacionAdmin): string {
-    return DIAS.map(dia => `${dia} ${semana.dias[dia].filter(c => !c.eliminado).length}`).join(
-        ' · ',
-    )
+/** Los clientes vivos de un día. Los quitados no se visitan. */
+function clientesVivos(clientes: IAgendaClientAdmin[]): number {
+    return clientes.filter(c => !c.eliminado).length
+}
+
+/** Lo que dice la celda de un día en una semana plegada: "8 clientes", "1 cliente" o "—". */
+function textoCantidad(n: number): string {
+    if (n === 0) return '—'
+    return n === 1 ? '1 cliente' : `${n} clientes`
 }
 
 /**
@@ -623,7 +627,9 @@ export default function GridRotacion({
                 <table className="w-full min-w-4xl border-separate border-spacing-1">
                     <thead>
                         <tr>
-                            <th className="w-40 text-left text-xs font-medium text-slate-500">
+                            {/* w-52 y no w-40: la etiqueta "En curso · semana del 19/10" de una
+                                semana plegada no entraba en 160px. */}
+                            <th className="w-52 text-left text-xs font-medium text-slate-500">
                                 Semana
                             </th>
                             {DIAS.map(dia => (
@@ -653,14 +659,15 @@ export default function GridRotacion({
                                 />
                             )
 
-                            // Plegada: una línea, sin celdas. Sin celdas no hay drop, ni ⇄,
-                            // ni "+ cliente"; el ⇅ sí, porque mueve la fila entera y no
-                            // necesita ver sus clientes.
+                            // Plegada: la misma estructura de columnas, de una línea de alto.
+                            // Las celdas de día solo cuentan: no son droppables, así que no
+                            // hay drop, ni ⇄, ni "+ cliente"; el ⇅ sí, porque mueve la fila
+                            // entera y no necesita ver sus clientes.
                             if (plegadas.has(semana.semana)) {
                                 return (
                                     <tr key={semana.semana}>
-                                        <td colSpan={DIAS.length + 1} className="rounded-md bg-white px-1.5 py-1">
-                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                        <th className="text-left align-middle font-normal">
+                                            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
                                                 <BotonPlegar
                                                     semana={semana.semana}
                                                     plegada
@@ -673,16 +680,21 @@ export default function GridRotacion({
                                                     {semana.descripcion ?? 'Sin zona'}
                                                 </span>
                                                 <EtiquetaSemana semana={semana} className="" />
-                                                <span className="text-xs tabular-nums text-slate-600">
-                                                    {resumenPorDia(semana)}
-                                                </span>
                                                 {botonIntercambioSemana && (
-                                                    <span className="ml-auto [&>button]:mt-0">
+                                                    <span className="[&>button]:mt-0">
                                                         {botonIntercambioSemana}
                                                     </span>
                                                 )}
                                             </div>
-                                        </td>
+                                        </th>
+                                        {DIAS.map(dia => (
+                                            <td
+                                                key={dia}
+                                                className="rounded-md bg-white px-1.5 py-1 align-middle text-xs tabular-nums text-slate-600"
+                                            >
+                                                {textoCantidad(clientesVivos(semana.dias[dia]))}
+                                            </td>
+                                        ))}
                                     </tr>
                                 )
                             }
