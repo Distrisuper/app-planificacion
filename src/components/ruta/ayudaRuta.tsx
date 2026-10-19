@@ -34,7 +34,9 @@ export function AyudaRuta() {
                         planificado en otra, la de allá <b>sigue pendiente</b>: quedan dos.
                     </li>
                     <li>
-                        <b>⇄</b> permuta dos días completos.
+                        <b>⇄</b> permuta dos días completos, y <b>⇅</b> dos semanas completas
+                        (clientes y nombre de zona). En la vuelta, el ⇅ solo está en las semanas
+                        que todavía no empezaron.
                     </li>
                     <li>
                         <b>✕</b> quita una visita de esta vuelta. La próxima rotación la trae
@@ -42,6 +44,16 @@ export function AyudaRuta() {
                         <b> Restaurar</b> mientras la vuelta siga abierta.
                     </li>
                 </ul>
+            </div>
+
+            <div>
+                <p className="font-semibold text-tinta">Vuelta actual y ruta base</p>
+                <p className="mt-0.5">
+                    La <b>ruta base</b> es la que se copia al armar cada vuelta, y se edita igual:
+                    lo que cambies ahí aplica desde la próxima vuelta. Al mover o intercambiar en
+                    la <b>vuelta actual</b> se pregunta si es solo para esta vuelta o también
+                    para la ruta base. Quitar y agregar en la vuelta son solo de la vuelta.
+                </p>
             </div>
 
             <div>

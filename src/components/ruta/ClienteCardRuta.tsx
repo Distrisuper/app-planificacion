@@ -15,6 +15,8 @@ interface ClienteCardRutaProps {
     onQuitar?: (rotacionClienteId: number) => void
     /** Ausente = no se ofrece restaurar. Solo tiene efecto si `cliente.eliminado` es true. */
     onRestaurar?: (rotacionClienteId: number) => void
+    /** De dónde se quita y qué pasa después. Ausente = la vuelta (ver `TEXTO_QUITAR_VUELTA`). */
+    textoQuitar?: TextoQuitar
     /**
      * true = el cliente tiene OTRA visita viva en esta rotacion, en otra celda.
      *
@@ -38,8 +40,28 @@ interface ClienteCardRutaProps {
     overlay?: boolean
 }
 
+/**
+ * Cómo se nombra el ✕ y su confirmación. `donde` completa "Quitar … : nombre" y
+ * "¿Quitar a nombre …?"; `aviso` es lo que pasa después, y en la vuelta no es lo mismo que
+ * en la ruta base: de la vuelta vuelve sola en la próxima, de la ruta base no vuelve.
+ */
+export interface TextoQuitar {
+    donde: string
+    aviso: string
+    /** El tooltip del ✕. Ausente = el `aviso`. */
+    explicacion?: string
+}
+
+const TEXTO_QUITAR_VUELTA: TextoQuitar = {
+    donde: 'de esta vuelta',
+    aviso: 'Vuelve a aparecer en la próxima rotación.',
+    explicacion:
+        'Quitar esta visita de la vuelta actual. Vuelve sola en la próxima rotación, y mientras esta siga abierta se puede deshacer con Restaurar.',
+}
+
 interface CuerpoProps {
     cliente: IAgendaClientAdmin
+    textoQuitar: TextoQuitar
     visitaAdicional: boolean
     puedeQuitarse: boolean
     puedeRestaurarse: boolean
@@ -72,6 +94,7 @@ const Cuerpo = memo(function Cuerpo({
     puedeRestaurarse,
     abrirQuitar,
     restaurar,
+    textoQuitar,
 }: CuerpoProps) {
     const autoria = cliente.ultimoMovimiento
         ? `Movió ${cliente.ultimoMovimiento.origen} (${cliente.ultimoMovimiento.usuario}) el ${fechaHoraNegocio(cliente.ultimoMovimiento.fecha)}`
@@ -137,11 +160,11 @@ const Cuerpo = memo(function Cuerpo({
             {puedeQuitarse && (
                 <button
                     type="button"
-                    aria-label={`Quitar de esta vuelta: ${titleCaseNombre(cliente.nombreCliente)}`}
+                    aria-label={`Quitar ${textoQuitar.donde}: ${titleCaseNombre(cliente.nombreCliente)}`}
                     // Lo que hace falta explicar no es "quitar" —el ✕ se entiende— sino
                     // hasta dónde llega: es solo esta vuelta, vuelve sola en la próxima y
                     // se puede deshacer. Sin eso se lee como un borrado definitivo.
-                    title="Quitar esta visita de la vuelta actual. Vuelve sola en la próxima rotación, y mientras esta siga abierta se puede deshacer con Restaurar."
+                    title={textoQuitar.explicacion ?? textoQuitar.aviso}
                     onClick={abrirQuitar}
                     className="absolute right-1 top-1 rounded px-1 text-[11px] font-bold leading-none text-slate-400 hover:bg-red-50 hover:text-red-600"
                 >
@@ -179,6 +202,7 @@ export default function ClienteCardRuta({
     onRestaurar,
     visitaAdicional = false,
     overlay,
+    textoQuitar = TEXTO_QUITAR_VUELTA,
 }: ClienteCardRutaProps) {
     const resuelto = estaResuelto(cliente.estado)
 
@@ -288,6 +312,7 @@ export default function ClienteCardRuta({
                 puedeRestaurarse={puedeRestaurarse}
                 abrirQuitar={abrirQuitar}
                 restaurar={restaurar}
+                textoQuitar={textoQuitar}
             />
 
             {/* Se monta recién al abrirse, no junto con la card: son ~150 cards en la
@@ -297,8 +322,8 @@ export default function ClienteCardRuta({
                 <ConfirmDialog
                     open
                     onOpenChange={setConfirmandoQuitar}
-                    title={`¿Quitar a ${titleCaseNombre(cliente.nombreCliente)} de esta vuelta?`}
-                    description="Vuelve a aparecer en la próxima rotación."
+                    title={`¿Quitar a ${titleCaseNombre(cliente.nombreCliente)} ${textoQuitar.donde}?`}
+                    description={textoQuitar.aviso}
                     confirmLabel="Quitar"
                     destructivo
                     onConfirm={() => onQuitar!(cliente.rotacionClienteId)}

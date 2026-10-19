@@ -106,7 +106,7 @@ describe('AgregarClienteExtraDialog', () => {
                 { rotacionClienteId: 12, semana: 4, dia: 1, eliminado: false, resuelto: false },
             ],
         })
-        vi.mocked(api.reacomodarAdmin).mockResolvedValue(undefined)
+        vi.mocked(api.reacomodarAdmin).mockResolvedValue({ rutaBase: null })
         const onClose = vi.fn()
 
         renderDialog({ onClose })

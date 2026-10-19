@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+    agregarARutaBase,
     agregarClienteExtraAdmin,
     buscarEnCarteraAdmin,
+    buscarEnRutaBase,
     cancelarRotacion,
     consultarClienteAdmin,
     crearRotacion,
@@ -11,16 +13,23 @@ import {
     getRotaciones,
     getRutaBase,
     intercambiarDias,
+    intercambiarDiasRutaBase,
+    intercambiarSemanas,
+    intercambiarSemanasRutaBase,
+    moverEnRutaBase,
     quitarClienteAdmin,
+    quitarDeRutaBase,
     reacomodarAdmin,
     reordenarRotacion,
     restaurarClienteAdmin,
 } from '@/api/planificacionAdmin'
-import { moverEnGrid } from '@/lib/moverEnGrid'
+import { moverEnGrid, moverEnRutaBase as moverEnCacheRutaBase } from '@/lib/moverEnGrid'
 import type {
     IIntercambiarDiasDTO,
+    IIntercambiarSemanasDTO,
     IReacomodarDTO,
     IRotacionCompleta,
+    IRutaBase,
 } from '@/types/planificacion'
 import { useTextoDebounced } from './useTextoDebounced'
 
@@ -83,6 +92,7 @@ export function useReacomodarAdmin(codigo: string) {
             reacomodarAdmin(codigo, args.rotacionId, args.rotacionClienteId, {
                 semana: args.semana,
                 dia: args.dia,
+                aplicarARutaBase: args.aplicarARutaBase,
             }),
         /**
          * Update optimista: la card se mueve en la caché antes de que el backend conteste,
@@ -118,6 +128,9 @@ export function useReacomodarAdmin(codigo: string) {
             qc.invalidateQueries({
                 queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
             })
+            if (args.aplicarARutaBase) {
+                qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+            }
         },
     })
 }
@@ -219,11 +232,112 @@ export function useIntercambiarDias(codigo: string) {
                 diaA: args.diaA,
                 semanaB: args.semanaB,
                 diaB: args.diaB,
+                aplicarARutaBase: args.aplicarARutaBase,
             }),
         onSuccess: (_data, args) => {
             qc.invalidateQueries({
                 queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
             })
+            if (args.aplicarARutaBase) {
+                qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+            }
+        },
+    })
+}
+
+/** Permutar dos semanas enteras. Sin update optimista, mismo criterio que `useIntercambiarDias`. */
+export function useIntercambiarSemanas(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: { rotacionId: number } & IIntercambiarSemanasDTO) =>
+            intercambiarSemanas(codigo, args.rotacionId, {
+                semanaA: args.semanaA,
+                semanaB: args.semanaB,
+                aplicarARutaBase: args.aplicarARutaBase,
+            }),
+        onSuccess: (_data, args) => {
+            qc.invalidateQueries({
+                queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
+            })
+            if (args.aplicarARutaBase) {
+                qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+            }
+        },
+    })
+}
+
+// ── Edición de la ruta base ──────────────────────────────────────────────────────
+// Todas releen la ruta base y nada más: la vuelta en curso no cambia por editar la base.
+
+/** Mover una card de la ruta base. Optimista con rollback, igual que `useReacomodarAdmin`. */
+export function useMoverEnRutaBase(codigo: string) {
+    const qc = useQueryClient()
+    const key = rotacionAdminKeys.rutaBase(codigo)
+    return useMutation({
+        mutationFn: (args: { id: number; semana: number; dia: number }) =>
+            moverEnRutaBase(codigo, args.id, { semana: args.semana, dia: args.dia }),
+        onMutate: async args => {
+            await qc.cancelQueries({ queryKey: key })
+            const previo = qc.getQueryData<IRutaBase>(key)
+            if (previo) {
+                qc.setQueryData(key, moverEnCacheRutaBase(previo, args.id, args.semana, args.dia))
+            }
+            return { previo }
+        },
+        onError: (_err, _args, context) => {
+            if (context?.previo) qc.setQueryData(key, context.previo)
+        },
+        onSettled: () => {
+            qc.invalidateQueries({ queryKey: key })
+        },
+    })
+}
+
+/** Sin optimista, como `useQuitarClienteAdmin`: quitar de la ruta base no tiene deshacer. */
+export function useQuitarDeRutaBase(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (id: number) => quitarDeRutaBase(codigo, id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+        },
+    })
+}
+
+export function useAgregarARutaBase(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: { codigoCliente: string; semana: number; dia: number }) =>
+            agregarARutaBase(codigo, args),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+        },
+    })
+}
+
+export function useIntercambiarDiasRutaBase(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: Omit<IIntercambiarDiasDTO, 'aplicarARutaBase'>) =>
+            intercambiarDiasRutaBase(codigo, {
+                semanaA: args.semanaA,
+                diaA: args.diaA,
+                semanaB: args.semanaB,
+                diaB: args.diaB,
+            }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+        },
+    })
+}
+
+export function useIntercambiarSemanasRutaBase(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: Omit<IIntercambiarSemanasDTO, 'aplicarARutaBase'>) =>
+            intercambiarSemanasRutaBase(codigo, { semanaA: args.semanaA, semanaB: args.semanaB }),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
         },
     })
 }
@@ -261,6 +375,23 @@ export function useBuscarEnCarteraAdmin(
         // buscado.
         buscando: query.isFetching || (listo && debounced !== texto),
     }
+}
+
+/**
+ * Busca en la cartera del vendedor para sumar a la ruta base. Cada resultado trae las
+ * celdas de la ruta base donde ya está. Mismo debounce y mínimo que `useBuscarEnCarteraAdmin`.
+ */
+export function useBuscarEnRutaBase(codigo: string, texto: string) {
+    const debounced = useTextoDebounced(texto)
+    const listo = debounced.trim().length >= MIN_CARACTERES
+
+    const query = useQuery({
+        queryKey: [...rotacionAdminKeys.rutaBase(codigo), 'buscador', debounced],
+        queryFn: () => buscarEnRutaBase(codigo, debounced),
+        enabled: listo,
+    })
+
+    return { ...query, buscando: query.isFetching || (listo && debounced !== texto) }
 }
 
 /** Solo lectura: no invalida nada. Es la consulta previa a confirmar. */

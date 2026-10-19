@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { moverEnGrid } from './moverEnGrid'
-import type { IAgendaClientAdmin, IRotacionCompleta } from '@/types/planificacion'
+import { moverEnGrid, moverEnRutaBase } from './moverEnGrid'
+import type { IAgendaClientAdmin, IRotacionCompleta, IRutaBase } from '@/types/planificacion'
 
 const card = (id: number, dia: number): IAgendaClientAdmin => ({
     rotacionClienteId: id,
@@ -71,5 +71,44 @@ describe('moverEnGrid', () => {
     it('deja el grid igual si el día está fuera de 1..5', () => {
         expect(moverEnGrid(GRID, 11, undefined, 0)).toEqual(GRID)
         expect(moverEnGrid(GRID, 11, undefined, 6)).toEqual(GRID)
+    })
+})
+
+describe('moverEnRutaBase', () => {
+    const fila = (id: number) => ({
+        id,
+        codigoParticularCliente: `C${id}`,
+        nombreCliente: `Cliente ${id}`,
+    })
+    const RUTA: IRutaBase = {
+        semanas: [
+            { semana: 1, descripcion: 'Zona Norte', dias: { ...vacia(), LUN: [fila(5), fila(6)] } },
+            { semana: 2, descripcion: null, dias: vacia() },
+        ],
+        omitidos: ['P404'],
+    }
+
+    it('mueve la fila a otra semana y día, sin tocar los omitidos', () => {
+        const r = moverEnRutaBase(RUTA, 5, 2, 3)
+
+        expect(r.semanas[0].dias.LUN.map(c => c.id)).toEqual([6])
+        expect(r.semanas[1].dias.MIE.map(c => c.id)).toEqual([5])
+        expect(r.omitidos).toEqual(['P404'])
+    })
+
+    it('no muta la ruta original', () => {
+        const antes = JSON.stringify(RUTA)
+        moverEnRutaBase(RUTA, 5, 2, 3)
+        expect(JSON.stringify(RUTA)).toBe(antes)
+    })
+
+    it('deja la ruta igual si la semana destino no está dibujada', () => {
+        // La siguiente a la última es válida para el backend, pero acá no hay fila donde
+        // ponerla: el optimista no inventa una semana, la trae la relectura.
+        expect(moverEnRutaBase(RUTA, 5, 3, 1)).toEqual(RUTA)
+    })
+
+    it('deja la ruta igual si la fila no está', () => {
+        expect(moverEnRutaBase(RUTA, 999, 2, 1)).toEqual(RUTA)
     })
 })

@@ -2,9 +2,11 @@ import { useMemo, useState } from 'react'
 import EncabezadoAnalitica from '@/components/analitica/EncabezadoAnalitica'
 import HelpPopover from '@/components/analitica/HelpPopover'
 import AgregarClienteExtraDialog from '@/components/ruta/AgregarClienteExtraDialog'
+import AgregarClienteRutaBaseDialog from '@/components/ruta/AgregarClienteRutaBaseDialog'
+import AlcanceCambioDialog from '@/components/ruta/AlcanceCambioDialog'
+import type { TextoQuitar } from '@/components/ruta/ClienteCardRuta'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
-import GridRutaBase from '@/components/ruta/GridRutaBase'
 import { AyudaRuta } from '@/components/ruta/ayudaRuta'
 import EstadoVista from '@/components/ui/EstadoVista'
 import Segmentado, { type OpcionSegmentado } from '@/components/ui/Segmentado'
@@ -12,6 +14,8 @@ import Selector from '@/components/ui/Selector'
 import { useAuth } from '@/context/AuthContext'
 import { useVendedores } from '@/hooks/useAnalitica'
 import { errorCode, errorData } from '@/lib/apiError'
+import { mensajeErrorRuta } from '@/lib/mensajesRuta'
+import { rutaBaseComoGrid } from '@/lib/rutaBase'
 import { titleCaseNombre } from '@/lib/textFormat'
 import {
     useCancelarRotacion,
@@ -19,7 +23,12 @@ import {
     useEditarDescripcionRotacion,
     useEditarDescripcionSemana,
     useIntercambiarDias,
+    useIntercambiarDiasRutaBase,
+    useIntercambiarSemanas,
+    useIntercambiarSemanasRutaBase,
+    useMoverEnRutaBase,
     useQuitarClienteAdmin,
+    useQuitarDeRutaBase,
     useReacomodarAdmin,
     useReordenarRotacion,
     useRestaurarClienteAdmin,
@@ -39,12 +48,31 @@ const RECUADRO = 'border border-linea bg-tarjeta'
 
 type Vista = 'vuelta' | 'base'
 
-/** "Vuelta actual" es la rotación que se edita; "Ruta base" es lo que se copia al armar
- *  cada vuelta, de solo lectura, para comparar. */
+/** "Vuelta actual" es la rotación que se está recorriendo; "Ruta base" es lo que se copia
+ *  al armar cada vuelta. Las dos se editan: lo de la ruta base aplica desde la próxima. */
 const OPCIONES_VISTA: OpcionSegmentado<Vista>[] = [
     { valor: 'vuelta', etiqueta: 'Vuelta actual', titulo: 'La vuelta que está recorriendo, editable' },
-    { valor: 'base', etiqueta: 'Ruta base', titulo: 'La ruta que se copia al armar cada vuelta' },
+    { valor: 'base', etiqueta: 'Ruta base', titulo: 'La ruta que se copia al armar cada vuelta, editable desde la próxima' },
 ]
+
+const DIAS = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
+
+/** Quitar de la ruta base no tiene "Restaurar" ni vuelve solo: el aviso tiene que decirlo. */
+const TEXTO_QUITAR_BASE: TextoQuitar = {
+    donde: 'de la ruta base',
+    aviso: 'No va a estar en las próximas vueltas.',
+    explicacion: 'Quitar este cliente de la ruta base. No va a estar en las próximas vueltas.',
+}
+
+/**
+ * Un reacomodo de la vuelta que espera la respuesta del diálogo de alcance. Se guarda el
+ * cambio y no se manda: recién al elegir se sabe si va con `aplicarARutaBase`.
+ */
+type CambioVuelta = { rotacionId: number; accion: string } & (
+    | { tipo: 'mover'; rotacionClienteId: number; semana: number; dia: number }
+    | { tipo: 'dias'; semanaA: number; diaA: number; semanaB: number; diaB: number }
+    | { tipo: 'semanas'; semanaA: number; semanaB: number }
+)
 
 export default function RutaPage() {
     const { vendedoresVisibles, vendedorDePrueba } = useAuth()
@@ -56,6 +84,15 @@ export default function RutaPage() {
     const [celdaAgregar, setCeldaAgregar] = useState<{ semana: number; dia: number } | null>(
         null,
     )
+    const [cambioPendiente, setCambioPendiente] = useState<CambioVuelta | null>(null)
+
+    // La celda del "+" y el cambio pendiente son de la vista donde se tocaron: sin esto, el
+    // "+" de la vuelta abriría el buscador de la ruta base al cambiar de vista.
+    const elegirVista = (v: Vista) => {
+        setVista(v)
+        setCeldaAgregar(null)
+        setCambioPendiente(null)
+    }
 
     const { data: roster } = useVendedores()
     // El roster del warehouse no conoce a PRUEBA-*: se agrega a mano, al final y separado.
@@ -78,6 +115,10 @@ export default function RutaPage() {
         refetch: refetchBase,
     } = useRutaBase(vista === 'base' ? vendedor : null)
     const verVuelta = vista === 'vuelta'
+    const semanasBase = useMemo(
+        () => (rutaBase ? rutaBaseComoGrid(rutaBase.semanas) : []),
+        [rutaBase],
+    )
 
     const crear = useCrearRotacion(vendedor ?? '')
     const cancelar = useCancelarRotacion(vendedor ?? '')
@@ -114,8 +155,64 @@ export default function RutaPage() {
     const renombrarSemana = useEditarDescripcionSemana(vendedor ?? '')
     const reordenar = useReordenarRotacion(vendedor ?? '')
     const intercambiar = useIntercambiarDias(vendedor ?? '')
+    const intercambiarSemanas = useIntercambiarSemanas(vendedor ?? '')
     const quitar = useQuitarClienteAdmin(vendedor ?? '')
     const restaurar = useRestaurarClienteAdmin(vendedor ?? '')
+
+    const moverBase = useMoverEnRutaBase(vendedor ?? '')
+    const quitarBase = useQuitarDeRutaBase(vendedor ?? '')
+    const intercambiarDiasBase = useIntercambiarDiasRutaBase(vendedor ?? '')
+    const intercambiarSemanasBase = useIntercambiarSemanasRutaBase(vendedor ?? '')
+
+    /** "LUN · Semana 2": cómo se nombra una celda en el diálogo de alcance. */
+    const celda = (semana: number, dia: number) => `${DIAS[dia - 1] ?? dia} · Semana ${semana}`
+
+    const nombreDe = (rotacionClienteId: number) => {
+        for (const s of grid?.semanas ?? []) {
+            for (const clientes of Object.values(s.dias)) {
+                const c = clientes.find(x => x.rotacionClienteId === rotacionClienteId)
+                if (c) return titleCaseNombre(c.nombreCliente)
+            }
+        }
+        return 'el cliente'
+    }
+
+    const aplicarCambio = (aplicarARutaBase: boolean) => {
+        const c = cambioPendiente
+        setCambioPendiente(null)
+        if (!c) return
+        if (c.tipo === 'mover') {
+            mover.mutate({
+                rotacionId: c.rotacionId,
+                rotacionClienteId: c.rotacionClienteId,
+                semana: c.semana,
+                dia: c.dia,
+                aplicarARutaBase,
+            })
+        } else if (c.tipo === 'dias') {
+            intercambiar.mutate({
+                rotacionId: c.rotacionId,
+                semanaA: c.semanaA,
+                diaA: c.diaA,
+                semanaB: c.semanaB,
+                diaB: c.diaB,
+                aplicarARutaBase,
+            })
+        } else {
+            intercambiarSemanas.mutate({
+                rotacionId: c.rotacionId,
+                semanaA: c.semanaA,
+                semanaB: c.semanaB,
+                aplicarARutaBase,
+            })
+        }
+    }
+
+    // El último error de la ruta base. Uno solo a la vez: son cuatro acciones sobre la misma
+    // grilla, y un cartel por acción apilaría avisos viejos.
+    const errorEdicionBase = [moverBase, quitarBase, intercambiarDiasBase, intercambiarSemanasBase]
+        .filter(m => m.isError)
+        .sort((a, b) => b.submittedAt - a.submittedAt)[0]
 
     return (
         <div className="min-h-screen bg-superficie">
@@ -136,7 +233,7 @@ export default function RutaPage() {
                             etiqueta="Qué ruta ver"
                             opciones={OPCIONES_VISTA}
                             valor={vista}
-                            onCambiar={setVista}
+                            onCambiar={elegirVista}
                         />
                         {/* Uno solo, a diferencia de los reportes: gerencia opera sobre UNA
                             rotación a la vez, no compara vendedores. */}
@@ -182,13 +279,11 @@ export default function RutaPage() {
                     />
                 )}
 
-                {!verVuelta && rutaBase && rutaBase.semanas.length > 0 && (
+                {!verVuelta && rutaBase && rutaBase.semanas.length > 0 && vendedor && (
                     <>
-                        {/* Es lo que se copia al armar cada vuelta: los cambios hechos en la
-                            vuelta actual no la modifican. */}
                         <p className="text-[13px] text-tinta-2">
-                            Solo lectura: es la ruta que se copia al armar cada vuelta. Lo que se
-                            cambia en la vuelta actual no la modifica.
+                            Esta es la ruta que se copia al armar cada vuelta. Lo que cambies acá
+                            aplica desde la próxima vuelta.
                             {rutaBase.omitidos.length > 0 &&
                                 ` ${rutaBase.omitidos.length} ${
                                     rutaBase.omitidos.length === 1
@@ -196,7 +291,55 @@ export default function RutaPage() {
                                         : 'clientes de la ruta no están en el padrón'
                                 } y no entra en la vuelta (${rutaBase.omitidos.join(', ')}).`}
                         </p>
-                        <GridRutaBase semanas={rutaBase.semanas} />
+                        {/* El mismo grid que la vuelta, con la ruta base mapeada a su forma
+                            (ver `rutaBaseComoGrid`). Sin renombrar semanas: la ruta base no
+                            tiene nombres propios, los toma de la última vuelta. Sin restaurar:
+                            quitar de la ruta base es un DELETE. Y sin diálogo de alcance:
+                            acá todo es de la ruta base. */}
+                        <GridRotacion
+                            // Misma razón que la `key` del grid de la vuelta: el origen de un
+                            // intercambio armado no puede sobrevivir a un cambio de vendedor.
+                            key={`base-${vendedor}`}
+                            semanas={semanasBase}
+                            onMover={(id, semana, dia) => moverBase.mutate({ id, semana, dia })}
+                            onIntercambiar={(a, b) =>
+                                intercambiarDiasBase.mutate({
+                                    semanaA: a.semana,
+                                    diaA: a.dia,
+                                    semanaB: b.semana,
+                                    diaB: b.dia,
+                                })
+                            }
+                            onIntercambiarSemanas={(semanaA, semanaB) =>
+                                intercambiarSemanasBase.mutate({ semanaA, semanaB })
+                            }
+                            onQuitar={id => quitarBase.mutate(id)}
+                            textoQuitar={TEXTO_QUITAR_BASE}
+                            onAgregar={(semana, dia) => setCeldaAgregar({ semana, dia })}
+                        />
+
+                        {celdaAgregar && (
+                            <AgregarClienteRutaBaseDialog
+                                open
+                                onClose={() => setCeldaAgregar(null)}
+                                codigoVendedor={vendedor}
+                                semana={celdaAgregar.semana}
+                                dia={celdaAgregar.dia}
+                                zonas={rutaBase.semanas}
+                            />
+                        )}
+
+                        {errorEdicionBase && (
+                            <EstadoVista
+                                className={RECUADRO}
+                                estado="error"
+                                titulo="No se pudo cambiar la ruta base."
+                                texto={mensajeErrorRuta(
+                                    errorEdicionBase.error,
+                                    'Probá de nuevo en un momento.',
+                                )}
+                            />
+                        )}
                     </>
                 )}
 
@@ -273,12 +416,17 @@ export default function RutaPage() {
                             editable={
                                 grid.estado === 'abierta' || grid.estado === 'programada'
                             }
+                            // Mover e intercambiar preguntan el alcance (solo la vuelta, o
+                            // también la ruta base) antes de mandar nada. Quitar y agregar
+                            // siguen siendo solo de la vuelta.
                             onMover={(rotacionClienteId, semana, dia) =>
-                                mover.mutate({
+                                setCambioPendiente({
+                                    tipo: 'mover',
                                     rotacionId: grid.id,
                                     rotacionClienteId,
                                     semana,
                                     dia,
+                                    accion: `Mover a ${nombreDe(rotacionClienteId)} al ${celda(semana, dia)}`,
                                 })
                             }
                             onRenombrarSemana={(semana, descripcion) =>
@@ -289,14 +437,28 @@ export default function RutaPage() {
                                 })
                             }
                             onIntercambiar={(a, b) =>
-                                intercambiar.mutate({
+                                setCambioPendiente({
+                                    tipo: 'dias',
                                     rotacionId: grid.id,
                                     semanaA: a.semana,
                                     diaA: a.dia,
                                     semanaB: b.semana,
                                     diaB: b.dia,
+                                    accion: `Intercambiar el ${celda(a.semana, a.dia)} con el ${celda(b.semana, b.dia)}`,
                                 })
                             }
+                            onIntercambiarSemanas={(semanaA, semanaB) =>
+                                setCambioPendiente({
+                                    tipo: 'semanas',
+                                    rotacionId: grid.id,
+                                    semanaA,
+                                    semanaB,
+                                    accion: `Intercambiar la semana ${semanaA} con la semana ${semanaB}`,
+                                })
+                            }
+                            // El backend rechaza las semanas en curso o hechas
+                            // (SEMANA_NO_PENDIENTE): no se ofrece el ⇅ ahí.
+                            semanaIntercambiable={s => s.estado === 'pendiente'}
                             onQuitar={rotacionClienteId =>
                                 quitar.mutate({ rotacionId: grid.id, rotacionClienteId })
                             }
@@ -331,6 +493,34 @@ export default function RutaPage() {
                             />
                         )}
                     </>
+                )}
+
+                {cambioPendiente && (
+                    <AlcanceCambioDialog
+                        open
+                        accion={cambioPendiente.accion}
+                        onElegir={aplicarCambio}
+                        onCancelar={() => setCambioPendiente(null)}
+                    />
+                )}
+
+                {verVuelta && mover.data?.rutaBase === 'no_estaba' && (
+                    <p className={`${RECUADRO} rounded-md px-3 py-2 text-[13px] text-tinta`}>
+                        En la ruta base ese cliente no estaba en esa celda: se movió solo en esta
+                        vuelta.
+                    </p>
+                )}
+
+                {verVuelta && intercambiarSemanas.isError && (
+                    <EstadoVista
+                        className={RECUADRO}
+                        estado="error"
+                        titulo="No se pudo intercambiar las semanas."
+                        texto={mensajeErrorRuta(
+                            intercambiarSemanas.error,
+                            'Probá de nuevo en un momento.',
+                        )}
+                    />
                 )}
 
                 {verVuelta && mover.isError && (

@@ -298,6 +298,19 @@ export interface ISincronizarResult {
 export interface IReacomodarDTO {
     semana?: number
     dia: number
+    /** true = el mismo movimiento también se aplica en la ruta base (desde la próxima vuelta). */
+    aplicarARutaBase?: boolean
+}
+
+/**
+ * Qué pasó en la ruta base al reacomodar en la vuelta. `no_estaba` = se pidió aplicarlo,
+ * pero en la ruta base ese cliente no estaba en la celda de origen: se movió solo en la
+ * vuelta. null = no se pidió.
+ */
+export type ResultadoRutaBase = 'aplicado' | 'no_estaba' | null
+
+export interface IResultadoReacomodar {
+    rutaBase: ResultadoRutaBase
 }
 
 /** Permutar todos los clientes de una celda (semana, día) por los de otra. */
@@ -306,6 +319,15 @@ export interface IIntercambiarDiasDTO {
     diaA: number
     semanaB: number
     diaB: number
+    /** Ver `IReacomodarDTO.aplicarARutaBase`. La ruta base no lo acepta: ahí se edita directo. */
+    aplicarARutaBase?: boolean
+}
+
+/** Permutar dos semanas enteras: clientes y nombre de zona. */
+export interface IIntercambiarSemanasDTO {
+    semanaA: number
+    semanaB: number
+    aplicarARutaBase?: boolean
 }
 
 export type TipoOfrecimiento = 'rubro' | 'marca' | 'linea' | 'articulo' | 'accion'
@@ -628,8 +650,10 @@ export interface ISemanaRotacionAdmin {
     dias: Record<Dia, IAgendaClientAdmin[]>
 }
 
-/** Un cliente de la ruta base: solo lo que dibuja el grid de lectura. */
+/** Un cliente de la ruta base, en una celda. */
 export interface IClienteRutaBase {
+    /** La fila de la ruta base (`pl_ruta_cliente`): lo que se mueve o se quita. */
+    id: number
     codigoParticularCliente: string
     nombreCliente: string
 }
@@ -646,6 +670,23 @@ export interface IRutaBase {
     semanas: ISemanaRutaBase[]
     /** Códigos de la ruta que no están en el padrón: no entran en la vuelta. */
     omitidos: string[]
+}
+
+/** Un resultado del buscador de la ruta base: un cliente de la cartera y dónde ya está. */
+export interface IResultadoBuscadorRutaBase {
+    codigoParticularCliente: string
+    nombreCliente: string
+    /** Las celdas de la ruta base donde ya está. Vacío = no está en la ruta base. */
+    celdas: Array<{ id: number; semana: number; dia: number }>
+}
+
+/** La fila creada al agregar un cliente a la ruta base. */
+export interface IClienteAgregadoRutaBase {
+    id: number
+    codigoParticularCliente: string
+    nombreCliente: string
+    semana: number
+    dia: number
 }
 
 /** Una rotación de la cola del vendedor, sin su grid. */
