@@ -547,21 +547,42 @@ describe('semanas plegables', () => {
         expect(screen.queryByRole('button', { name: /^Desplegar semana/ })).not.toBeInTheDocument()
     })
 
-    it('plegada, la semana muestra zona y clientes por día sin contar los quitados, y oculta las cards', async () => {
+    /** Lo que dicen las celdas de día de la fila de una semana plegada, en orden LUN..VIE. */
+    const celdasDeDia = (semana: number) => {
+        const fila = screen.getByRole('button', { name: `Desplegar semana ${semana}` }).closest('tr')!
+        return [...fila.querySelectorAll('td')].map(td => td.textContent)
+    }
+
+    it('plegada, la semana tiene una celda por día con su cantidad, sin contar los quitados', async () => {
         renderVuelta()
 
-        expect(screen.getByText('LUN 2 · MAR 0 · MIE 0 · JUE 1 · VIE 0')).toBeInTheDocument()
+        // Cinco celdas, una bajo cada encabezado de día; nada de un resumen en una sola celda.
+        expect(celdasDeDia(3)).toEqual(['2 clientes', '—', '—', '1 cliente', '—'])
         expect(screen.getByText('Campana')).toBeInTheDocument()
+    })
+
+    it('plegar oculta las cards y deja la zona y la etiqueta de estado en la primera columna', async () => {
+        renderVuelta()
 
         await userEvent.click(screen.getByRole('button', { name: 'Plegar semana 2' }))
         expect(screen.queryByTestId('card-cliente-21')).not.toBeInTheDocument()
-        expect(screen.getByText('LUN 0 · MAR 1 · MIE 0 · JUE 0 · VIE 0')).toBeInTheDocument()
-        // La etiqueta de estado sigue a la vista con la fila plegada.
-        expect(screen.getByText('En curso · semana del 13/10')).toBeInTheDocument()
+        expect(celdasDeDia(2)).toEqual(['—', '1 cliente', '—', '—', '—'])
+        const encabezado = screen.getByRole('button', { name: 'Desplegar semana 2' }).closest('th')!
+        expect(encabezado).toHaveTextContent('Zárate')
+        expect(encabezado).toHaveTextContent('En curso · semana del 13/10')
 
         await userEvent.click(screen.getByRole('button', { name: 'Desplegar semana 3' }))
         expect(screen.getByTestId('card-cliente-31')).toBeInTheDocument()
-        expect(screen.queryByText('LUN 2 · MAR 0 · MIE 0 · JUE 1 · VIE 0')).not.toBeInTheDocument()
+        expect(screen.queryByText('2 clientes')).not.toBeInTheDocument()
+    })
+
+    it('el ⇅ de una semana plegada va en la primera columna', () => {
+        renderVuelta()
+
+        const boton = screen.getByRole('button', { name: 'Intercambiar esta semana: semana 3' })
+        expect(boton.closest('th')).toContainElement(
+            screen.getByRole('button', { name: 'Desplegar semana 3' }),
+        )
     })
 
     it('"Desplegar todas" y "Plegar todas" afectan a todas las semanas', async () => {
