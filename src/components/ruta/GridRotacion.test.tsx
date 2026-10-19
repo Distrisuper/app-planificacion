@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import GridRotacion, { movimientoDeDrop, parsearCelda } from './GridRotacion'
@@ -467,5 +467,175 @@ describe('texto de quitar', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Quitar' }))
 
         expect(onQuitar).toHaveBeenCalledWith(41)
+    })
+})
+
+/** Una card mínima del grid, para contar clientes por día. */
+const cliente = (id: number, nombre: string, extra: Record<string, unknown> = {}) => ({
+    rotacionClienteId: id,
+    codigoParticularCliente: `P${id}`,
+    nombreCliente: nombre,
+    dia: 1,
+    estado: 'pendiente',
+    visitaId: null,
+    ofrecimientosPendientes: 0,
+    ultimoMovimiento: null,
+    ...extra,
+})
+
+/** Una vuelta: la 1 hecha, la 2 en curso (con un cliente) y la 3 pendiente (con tres vivos). */
+const VUELTA: ISemanaRotacionAdmin[] = [
+    { semana: 1, descripcion: 'Zona Norte', estado: 'hecha', fechaLunes: '2026-10-06', dias: vacia() },
+    {
+        semana: 2,
+        descripcion: 'Zárate',
+        estado: 'en_curso',
+        fechaLunes: '2026-10-13',
+        dias: { ...vacia(), MAR: [cliente(21, 'Kiosco Dos')] as never },
+    },
+    {
+        semana: 3,
+        descripcion: 'Campana',
+        estado: 'pendiente',
+        fechaLunes: null,
+        dias: {
+            ...vacia(),
+            LUN: [cliente(31, 'Almacén Tres'), cliente(32, 'Almacén Cuatro')] as never,
+            JUE: [cliente(33, 'Almacén Cinco'), cliente(34, 'Quitado Seis', { eliminado: true })] as never,
+        },
+    },
+]
+
+function renderVuelta(props: Partial<Parameters<typeof GridRotacion>[0]> = {}) {
+    return render(
+        <GridRotacion
+            semanas={VUELTA}
+            onMover={vi.fn()}
+            onIntercambiar={vi.fn()}
+            onAgregar={vi.fn()}
+            onIntercambiarSemanas={vi.fn()}
+            plegarPorEstado
+            {...props}
+        />,
+    )
+}
+
+describe('semanas plegables', () => {
+    it('en la vuelta arranca desplegada solo la semana en curso', () => {
+        renderVuelta()
+
+        expect(screen.getByTestId('card-cliente-21')).toBeInTheDocument()
+        expect(screen.queryByTestId('card-cliente-31')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Plegar semana 2' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Desplegar semana 1' })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Desplegar semana 3' })).toBeInTheDocument()
+    })
+
+    it('sin semana en curso arranca desplegada la primera pendiente', () => {
+        const sinEnCurso = VUELTA.map(s => (s.semana === 2 ? { ...s, estado: 'hecha' as const } : s))
+        renderVuelta({ semanas: sinEnCurso })
+
+        expect(screen.getByTestId('card-cliente-31')).toBeInTheDocument()
+        expect(screen.queryByTestId('card-cliente-21')).not.toBeInTheDocument()
+    })
+
+    it('en la ruta base (sin plegarPorEstado) arranca todo desplegado', () => {
+        renderVuelta({ plegarPorEstado: undefined })
+
+        expect(screen.getByTestId('card-cliente-21')).toBeInTheDocument()
+        expect(screen.getByTestId('card-cliente-31')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^Desplegar semana/ })).not.toBeInTheDocument()
+    })
+
+    it('plegada, la semana muestra zona y clientes por día sin contar los quitados, y oculta las cards', async () => {
+        renderVuelta()
+
+        expect(screen.getByText('LUN 2 · MAR 0 · MIE 0 · JUE 1 · VIE 0')).toBeInTheDocument()
+        expect(screen.getByText('Campana')).toBeInTheDocument()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Plegar semana 2' }))
+        expect(screen.queryByTestId('card-cliente-21')).not.toBeInTheDocument()
+        expect(screen.getByText('LUN 0 · MAR 1 · MIE 0 · JUE 0 · VIE 0')).toBeInTheDocument()
+        // La etiqueta de estado sigue a la vista con la fila plegada.
+        expect(screen.getByText('En curso · semana del 13/10')).toBeInTheDocument()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Desplegar semana 3' }))
+        expect(screen.getByTestId('card-cliente-31')).toBeInTheDocument()
+        expect(screen.queryByText('LUN 2 · MAR 0 · MIE 0 · JUE 1 · VIE 0')).not.toBeInTheDocument()
+    })
+
+    it('"Desplegar todas" y "Plegar todas" afectan a todas las semanas', async () => {
+        renderVuelta()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Desplegar todas' }))
+        expect(screen.getByTestId('card-cliente-21')).toBeInTheDocument()
+        expect(screen.getByTestId('card-cliente-31')).toBeInTheDocument()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Plegar todas' }))
+        expect(screen.queryByTestId('card-cliente-21')).not.toBeInTheDocument()
+        expect(screen.queryByTestId('card-cliente-31')).not.toBeInTheDocument()
+        expect(screen.getAllByRole('button', { name: /^Desplegar semana/ })).toHaveLength(3)
+    })
+
+    it('una semana plegada no ofrece "+ cliente" ni ⇄, pero sí el ⇅', () => {
+        renderVuelta()
+
+        expect(screen.getByLabelText('Agregar cliente: semana 2, MAR')).toBeInTheDocument()
+        expect(screen.queryByLabelText(/^Agregar cliente: semana 3/)).not.toBeInTheDocument()
+        expect(screen.queryByLabelText(/^Intercambiar este día: semana 3/)).not.toBeInTheDocument()
+        expect(screen.queryByTestId('celda-3-LUN')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Intercambiar esta semana: semana 3' })).toBeInTheDocument()
+    })
+
+    it('plegar la semana del ⇄ armado lo cancela', async () => {
+        const onIntercambiar = vi.fn()
+        renderVuelta({ onIntercambiar })
+
+        await userEvent.click(screen.getByRole('button', { name: 'Desplegar todas' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar este día: semana 3, LUN' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Plegar semana 3' }))
+
+        expect(screen.queryByRole('button', { name: /^Cancelar intercambio/ })).not.toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Intercambiar este día: semana 2, MAR' }))
+        expect(onIntercambiar).not.toHaveBeenCalled()
+    })
+})
+
+describe('vista compacta', () => {
+    beforeEach(() => localStorage.clear())
+    afterEach(() => vi.restoreAllMocks())
+
+    it('arranca normal: la card muestra el código del cliente', () => {
+        renderVuelta({ plegarPorEstado: undefined })
+        expect(screen.getByTestId('card-cliente-21')).toHaveTextContent('P21')
+    })
+
+    it('el toggle pasa las cards a una línea con solo el nombre y lo recuerda', async () => {
+        const { unmount } = renderVuelta({ plegarPorEstado: undefined })
+
+        await userEvent.click(screen.getByRole('button', { name: 'Compacta' }))
+        const card = screen.getByTestId('card-cliente-21')
+        expect(card).toHaveTextContent('Kiosco Dos')
+        expect(card).not.toHaveTextContent('P21')
+        expect(localStorage.getItem('ruta-vista-compacta')).toBe('1')
+
+        unmount()
+        renderVuelta({ plegarPorEstado: undefined })
+        expect(screen.getByTestId('card-cliente-21')).not.toHaveTextContent('P21')
+        expect(screen.getByRole('button', { name: 'Compacta' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('si el storage tira, arranca normal y el toggle igual funciona', async () => {
+        vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+            throw new Error('storage bloqueado')
+        })
+        vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+            throw new Error('storage bloqueado')
+        })
+        renderVuelta({ plegarPorEstado: undefined })
+
+        expect(screen.getByTestId('card-cliente-21')).toHaveTextContent('P21')
+        await userEvent.click(screen.getByRole('button', { name: 'Compacta' }))
+        expect(screen.getByTestId('card-cliente-21')).not.toHaveTextContent('P21')
     })
 })

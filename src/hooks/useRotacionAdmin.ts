@@ -21,6 +21,7 @@ import {
     quitarDeRutaBase,
     reacomodarAdmin,
     reordenarRotacion,
+    reiniciarRotacion,
     restaurarClienteAdmin,
 } from '@/api/planificacionAdmin'
 import { moverEnGrid, moverEnRutaBase as moverEnCacheRutaBase } from '@/lib/moverEnGrid'
@@ -75,6 +76,20 @@ export function useCrearRotacion(codigo: string) {
         mutationFn: () => crearRotacion(codigo),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: rotacionAdminKeys.cola(codigo) })
+        },
+    })
+}
+
+/**
+ * Reinicia la vuelta: cierra la actual y arranca otra. Cambia todo lo del vendedor (la cola,
+ * el grid de la que se cerró y el de la nueva), así que se invalida entero.
+ */
+export function useReiniciarRotacion(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: () => reiniciarRotacion(codigo),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: rotacionAdminKeys.vendedor(codigo) })
         },
     })
 }

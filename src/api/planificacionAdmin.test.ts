@@ -13,6 +13,7 @@ import {
     intercambiarDias,
     reacomodarAdmin,
     reordenarRotacion,
+    reiniciarRotacion,
     agregarClienteExtraAdmin,
     agregarARutaBase,
     buscarEnRutaBase,
@@ -87,6 +88,23 @@ describe('crearRotacion', () => {
         await expect(crearRotacion('V 2')).resolves.toBe(30)
         expect(apiClient.post).toHaveBeenCalledWith(
             '/planificacion/vendedores/V%202/rotaciones',
+        )
+    })
+})
+
+describe('reiniciarRotacion', () => {
+    it('postea al endpoint de reinicio con el código encodeado y devuelve la vuelta nueva', async () => {
+        vi.mocked(apiClient.post).mockResolvedValue({
+            data: { ok: 1, data: { rotacionId: 31, cerrada: 7, sinVisitar: ['P001'] } },
+        } as never)
+
+        await expect(reiniciarRotacion('V 2')).resolves.toEqual({
+            rotacionId: 31,
+            cerrada: 7,
+            sinVisitar: ['P001'],
+        })
+        expect(apiClient.post).toHaveBeenCalledWith(
+            '/planificacion/vendedores/V%202/rotaciones/reiniciar',
         )
     })
 })

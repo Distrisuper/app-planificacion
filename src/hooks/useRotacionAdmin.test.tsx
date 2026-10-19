@@ -24,6 +24,7 @@ import {
     useIntercambiarDias,
     useQuitarClienteAdmin,
     useReacomodarAdmin,
+    useReiniciarRotacion,
     useRestaurarClienteAdmin,
     useRotacion,
     useRotaciones,
@@ -604,5 +605,25 @@ describe('edición de la ruta base', () => {
 
         await waitFor(() => expect(result.current.data).toBeDefined())
         expect(api.buscarEnRutaBase).toHaveBeenCalledWith('V 2', 'uno')
+    })
+})
+
+describe('useReiniciarRotacion', () => {
+    it('reinicia la vuelta del vendedor y relee todo lo suyo (cola, grids y ruta base)', async () => {
+        vi.mocked(api.reiniciarRotacion).mockResolvedValue({
+            rotacionId: 31,
+            cerrada: 7,
+            sinVisitar: [],
+        })
+        const { invalidateSpy, wrapper: w } = conEspia()
+
+        const { result } = renderHook(() => useReiniciarRotacion('V 2'), { wrapper: w })
+        const r = await result.current.mutateAsync()
+
+        expect(api.reiniciarRotacion).toHaveBeenCalledWith('V 2')
+        expect(r.rotacionId).toBe(31)
+        await waitFor(() =>
+            expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['rotacionAdmin', 'V 2'] }),
+        )
     })
 })
