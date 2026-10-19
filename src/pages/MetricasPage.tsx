@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import AccountMenu from '@/components/AccountMenu'
 import BannerPrueba, { ALTO_BANNER_PRUEBA } from '@/components/prueba/BannerPrueba'
+import Pill from '@/components/ui/Pill'
 import { useAuth } from '@/context/AuthContext'
 import { useMisMetricas } from '@/hooks/useMisMetricas'
 import { nombreMes } from '@/lib/fechas'
@@ -18,7 +19,8 @@ import {
     type Tono,
 } from '@/lib/misMetricas'
 import { estaProbando } from '@/lib/roles'
-import type { IMisMetricas } from '@/types/misMetricas'
+import { titleCaseNombre } from '@/lib/textFormat'
+import type { IMisMetricas, IObjetivoVentas, NivelPremio } from '@/types/misMetricas'
 
 /** Hasta dónde se puede ir para atrás con ‹. Más de un año no tiene MMAA contra qué
  *  compararse de forma útil, y el vendedor no lo necesita para su trabajo diario. */
@@ -237,6 +239,10 @@ function Contenido({ m }: { m: IMisMetricas }) {
                         />
                     </div>
                 )}
+                {/* Solo el objetivo del mes que se está mirando: otro mes mezclaría su objetivo con esta venta. */}
+                {!m.sinVentas && m.objetivoVentas?.mes === m.desde.slice(0, 7) && (
+                    <TarjetaObjetivoVentas o={m.objetivoVentas} />
+                )}
             </Seccion>
         </div>
     )
@@ -388,6 +394,61 @@ function Anillo({ testId, titulo, valor, unidad, actual, anterior }: AnilloProps
             <p className={`text-[10px] font-extrabold leading-tight tabular-nums ${claseVariacion(v)}`}>
                 {v === null ? 'sin dato año pasado' : `${formatVariacion(v)} vs MMAA`}
             </p>
+        </div>
+    )
+}
+
+const NOMBRE_NIVEL: Record<NivelPremio, string> = {
+    ninguno: 'Sin nivel todavía',
+    std: 'Estándar',
+    oro: 'Oro',
+    platino: 'Platino',
+}
+const UMBRALES = ['std', 'oro', 'platino'] as const
+const pesosMillones = (n: number) => `$ ${formatMillones(n)} M`
+
+/** Objetivo de venta de la cartera (STD / Oro / Platino): es del equipo, no del vendedor solo.
+ *  Si la cartera llega a un nivel comisionan él y los TV de `tvs`, sin repartirlo. */
+function TarjetaObjetivoVentas({ o }: { o: IObjetivoVentas }) {
+    const { nivel, siguiente, falta } = o.premio
+    const tono = nivel === 'ninguno' ? 'neutro' : 'ok'
+    return (
+        <div data-testid="objetivo-ventas" className={`${TILE} mt-2`}>
+            <div className="flex items-center justify-between gap-2">
+                <p className={TITULO_TILE}>Objetivo de venta del mes</p>
+                <span data-testid="nivel-objetivo">
+                    <Pill tono={tono}>{NOMBRE_NIVEL[nivel]}</Pill>
+                </span>
+            </div>
+            <p className="mt-1.5 whitespace-nowrap text-[18px] font-black leading-none tabular-nums text-tinta">
+                {pesosMillones(o.real)}
+                <span className="text-[10.5px] font-bold text-tinta-2"> vendido</span>
+            </p>
+            <div className="mt-2 grid grid-cols-3 gap-1.5">
+                {UMBRALES.map(u => (
+                    <div
+                        key={u}
+                        data-testid={`umbral-${u}`}
+                        className={`rounded-lg border px-2 py-1 text-right ${o.real >= o[u] ? 'border-estado-ok-texto/40 bg-estado-ok-fondo' : 'border-linea bg-tarjeta'}`}
+                    >
+                        <p className="text-[10px] font-bold text-tinta-2">{u === 'std' ? 'STD' : NOMBRE_NIVEL[u]}</p>
+                        <p className="whitespace-nowrap text-[12.5px] font-extrabold tabular-nums text-tinta">{pesosMillones(o[u])}</p>
+                    </div>
+                ))}
+            </div>
+            {siguiente && falta !== null && falta > 0 && (
+                <p className="mt-1.5 text-[11px] font-bold text-tinta">
+                    Faltan {pesosMillones(falta)} para {NOMBRE_NIVEL[siguiente]}
+                </p>
+            )}
+            {o.tvs.length > 0 && (
+                <p className="mt-1.5 text-[10.5px] font-semibold leading-snug text-tinta-2">
+                    <span className="font-bold text-tinta">
+                        Tu equipo: {o.tvs.map(t => titleCaseNombre(t.nombre)).join(', ')}
+                    </span>
+                    . El objetivo es compartido: si la cartera llega a un nivel, comisionan todos.
+                </p>
+            )}
         </div>
     )
 }

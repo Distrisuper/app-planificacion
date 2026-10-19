@@ -42,4 +42,30 @@ export interface IMisMetricas {
     objetivoVisitas: number | null
     objetivoClientes: number | null
     objetivoMinutos: number | null
+
+    /** null: sin objetivo publicado para su cartera, vendedor de prueba o error al leerlo.
+     *  Opcional porque un back viejo no lo manda: en los dos casos no se muestra la tarjeta. */
+    objetivoVentas?: IObjetivoVentas | null
+}
+
+export type NivelPremio = 'ninguno' | 'std' | 'oro' | 'platino'
+
+/**
+ * Objetivo de venta del mes de la cartera del vendedor (`pl_obj_valor`). Es del EQUIPO: el
+ * vendedor y los TV de su cartera (`tvs`) comisionan juntos si la cartera llega a un nivel.
+ * Montos nominales (sin ajuste por inflación).
+ */
+export interface IObjetivoVentas {
+    /** 'YYYY-MM' */
+    mes: string
+    std: number
+    oro: number
+    platino: number
+    /** La misma facturación del mes que `facturacion`. */
+    real: number
+    /** real / std */
+    avance: number | null
+    premio: { nivel: NivelPremio; siguiente: Exclude<NivelPremio, 'ninguno'> | null; falta: number | null }
+    /** TV activos de su cartera; [] si no tiene. */
+    tvs: { codigo: string; nombre: string }[]
 }
