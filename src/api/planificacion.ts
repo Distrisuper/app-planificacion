@@ -149,6 +149,20 @@ export const noVisitaSobreVisitaAbierta = async (
     return res.data.data
 }
 
+/** "Volver más tarde": descarta la visita abierta sin registrar ningún hecho. El backend
+ *  borra la resolución (y su propuesta congelada), guarda el intento aparte y deja la fila
+ *  `pendiente`, lista para iniciar otra visita. Rebota con 409 VISITA_CON_RUBROS_RESUELTOS
+ *  si la visita ya tiene rubros resueltos. */
+export const volverMasTarde = async (
+    visitaId: number,
+    coordCancelacion: string,
+): Promise<{ rotacionClienteId: number; estado: 'pendiente' }> => {
+    const res = await apiClient.post(`/planificacion/visitas/${visitaId}/volver-mas-tarde`, {
+        coordCancelacion,
+    })
+    return res.data.data
+}
+
 /** Reintento manual del aviso a Cromo. `resolucionId` es `IAgendaClient.visitaId` — el
  *  mismo endpoint ya trae todos sus guards del lado del backend (pertenencia, 409 si ya
  *  se envió, resolución completa); acá no se valida nada más. */

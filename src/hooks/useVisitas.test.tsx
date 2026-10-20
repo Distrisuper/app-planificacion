@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
 import {
@@ -7,7 +7,10 @@ import {
     useNoVisita,
     useNoVisitaSobreVisitaAbierta,
     useReintentarSeguimiento,
+    useVolverMasTarde,
 } from './useVisitas'
+import { agendaKeys } from './useAgenda'
+import { cicloKeys } from './useCiclo'
 import * as api from '@/api/planificacion'
 
 vi.mock('@/api/planificacion')
@@ -92,5 +95,46 @@ it('useReintentarSeguimiento calls reintentarSeguimiento with the resolucionId a
         enviado: false,
         motivo: 'CRM_ERROR',
         mensaje: 'No pudimos conectar con el CRM. Probá de nuevo.',
+    })
+})
+
+describe('useVolverMasTarde', () => {
+    const card = (rotacionClienteId: number, over: any = {}) => ({
+        codigoCliente: 'C1', codigoParticularCliente: '10034', nombreCliente: 'ALMACEN',
+        rotacionClienteId, dia: 1, estado: 'en_curso', visitaId: 7, ofrecimientosPendientes: 3,
+        seguimiento: { estado: 'no_corresponde', motivo: null, mensaje: null }, esExtra: false,
+        observaciones: null, ...over,
+    })
+
+    function setup() {
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+        qc.setQueryData(agendaKeys.semana, {
+            LUN: [card(42), card(43, { estado: 'pendiente', visitaId: null, ofrecimientosPendientes: 0 })],
+            MAR: [], MIE: [], JUE: [], VIE: [],
+        })
+        // Sin ciclo abierto la agenda sale del preview: la card también tiene que pasar ahí.
+        qc.setQueryData(cicloKeys.preview(1), {
+            semana: 1, clientes: 1, omitidos: [],
+            dias: { LUN: [card(42)], MAR: [], MIE: [], JUE: [], VIE: [] },
+        })
+        const w = ({ children }: { children: React.ReactNode }) => (
+            <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+        )
+        return { qc, ...renderHook(() => useVolverMasTarde(), { wrapper: w }) }
+    }
+
+    it('manda la coordenada y deja la card pendiente y sin visita en la agenda y en el preview', async () => {
+        ;(api.volverMasTarde as any).mockResolvedValue({ rotacionClienteId: 42, estado: 'pendiente' })
+        const { qc, result } = setup()
+
+        await act(() => result.current.mutateAsync({ visitaId: 7, coordCancelacion: '-34.6,-58.4' }))
+
+        expect(api.volverMasTarde).toHaveBeenCalledWith(7, '-34.6,-58.4')
+        const semana = qc.getQueryData<any>(agendaKeys.semana)
+        expect(semana.LUN[0]).toMatchObject({ estado: 'pendiente', visitaId: null, ofrecimientosPendientes: 0 })
+        expect(qc.getQueryData<any>(cicloKeys.preview(1)).dias.LUN[0]).toMatchObject({
+            estado: 'pendiente',
+            visitaId: null,
+        })
     })
 })

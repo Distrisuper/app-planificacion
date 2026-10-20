@@ -6,10 +6,18 @@ import {
     noVisitaSobreVisitaAbierta,
     registrarNoVisita,
     reintentarSeguimiento,
+    volverMasTarde,
 } from '@/api/planificacion'
 import { agendaKeys } from './useAgenda'
 import { cicloKeys } from './useCiclo'
-import type { ICerrarVisitaDTO, IIniciarVisitaDTO, INoVisitaDTO } from '@/types/planificacion'
+import type {
+    IAgendaClient,
+    ICerrarVisitaDTO,
+    IIniciarVisitaDTO,
+    INoVisitaDTO,
+    IPreviewCiclo,
+    SemanaAgenda,
+} from '@/types/planificacion'
 
 /**
  * La visita abierta según el servidor. La key lleva el `visitaId`: una visita nueva no
@@ -69,6 +77,43 @@ export function useNoVisitaSobreVisitaAbierta() {
     return useMutacionDeVisita((args: { visitaId: number; motivoIds: number[] }) =>
         noVisitaSobreVisitaAbierta(args.visitaId, args.motivoIds),
     )
+}
+
+/**
+ * "Volver más tarde": la visita abierta se descarta y la fila vuelve a `pendiente`. Además
+ * de invalidar, la card se pasa a pendiente DIRECTO en la caché (mismo patrón y mismas dos
+ * queries que useActualizarFicha): hasta que llegue el refetch seguiría diciendo `en_curso`
+ * con el `visitaId` de una resolución que ya no existe, y tocarla reabriría los rubros de
+ * esa visita (404) en vez de ofrecer "Iniciar visita".
+ */
+export function useVolverMasTarde() {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: { visitaId: number; coordCancelacion: string }) =>
+            volverMasTarde(args.visitaId, args.coordCancelacion),
+        onSuccess: ({ rotacionClienteId }) => {
+            const aPendiente = (c: IAgendaClient): IAgendaClient =>
+                c.rotacionClienteId === rotacionClienteId
+                    ? { ...c, estado: 'pendiente', visitaId: null, ofrecimientosPendientes: 0 }
+                    : c
+            const porDia = <T extends Record<string, IAgendaClient[]>>(dias: T): T => {
+                const out: Record<string, IAgendaClient[]> = { ...dias }
+                for (const dia of Object.keys(dias)) out[dia] = dias[dia].map(aPendiente)
+                return out as T
+            }
+            qc.setQueryData<SemanaAgenda>(agendaKeys.semana, semana => (semana ? porDia(semana) : semana))
+            qc.setQueriesData<IPreviewCiclo>({ queryKey: cicloKeys.previewTodos }, prev =>
+                prev ? { ...prev, dias: porDia(prev.dias) } : prev,
+            )
+        },
+        // También ante un error: un 409 VISITA_NO_EN_CURSO dice que la agenda que se tiene
+        // en mano está vieja.
+        onSettled: () => {
+            qc.invalidateQueries({ queryKey: agendaKeys.semana })
+            qc.invalidateQueries({ queryKey: cicloKeys.previewTodos })
+            qc.invalidateQueries({ queryKey: cicloKeys.actual })
+        },
+    })
 }
 
 /** Reintento manual del aviso a Cromo desde la agenda (botón "Reintentar sincronización",

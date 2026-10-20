@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, WifiOff, X } from 'lucide-react'
+import { Clock, Loader2, WifiOff, X } from 'lucide-react'
 import TarjetaDatosAlta from '@/components/relevamiento/TarjetaDatosAlta'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
@@ -112,6 +112,10 @@ interface VisitaSheetProps {
      *  visité". Recibe cuántos rubros llevaba completos, para que el llamador pueda
      *  avisarle al vendedor que esos no van a contar. */
     onNoVisita?: (rubrosCargados: number) => void
+    /** Si se pasa y la visita está abierta, el pie ofrece "Volver más tarde" mientras no haya
+     *  ningún rubro completo: el dueño no estaba y la visita se descarta sin registrar nada.
+     *  Con un rubro resuelto ya no aparece — esa visita se cierra normalmente. */
+    onVolverMasTarde?: () => void
     /** Sólo `esAlta` con la visita abierta: el renglón "Datos para el alta" de la tarjeta
      *  "Datos del comercio" (TarjetaDatosAlta). Con la visita cerrada no se muestra: el
      *  backend rebota FILA_RESUELTA y no hay nada que editar. */
@@ -154,6 +158,7 @@ export default function VisitaSheet({
     onAbrirAppExterna,
     onVerPosicion,
     onNoVisita,
+    onVolverMasTarde,
     onDatosComercio,
     contactoSugerido = null,
     fichaPendiente = false,
@@ -830,6 +835,23 @@ export default function VisitaSheet({
                                 : `Cargá ${faltanParaMinimo} ${faltanParaMinimo === 1 ? 'rubro' : 'rubros'} más`
                             : 'Cerrar visita'}
                 </Button>
+            )}
+            {/* En el pie y no en el header junto a "No visité": la línea de identidad ya
+             *  puede llevar Descuentos y Datos del comercio, y un cuarto chip la desborda a
+             *  375px. Como link y no como botón: no compite con el CTA de cierre, y sólo
+             *  existe mientras ese CTA todavía pide rubros (`completos === 0`).
+             *  `ofrecimientosCargados` por lo mismo que el gate de cierre: con el GET en
+             *  vuelo `completos` es 0 aunque la visita tenga rubros resueltos. */}
+            {!visitaCerrada && ofrecimientosCargados && completos === 0 && onVolverMasTarde && (
+                <button
+                    type="button"
+                    onClick={onVolverMasTarde}
+                    disabled={cerrando || guardandoBorrador}
+                    className="mt-2.5 flex w-full items-center justify-center gap-1.5 text-[13px] font-semibold text-dsmuted underline disabled:opacity-50"
+                >
+                    <Clock className="h-[13px] w-[13px]" strokeWidth={2.4} />
+                    Volver más tarde
+                </button>
             )}
         </>
     )
