@@ -7,13 +7,24 @@ import MapaVisita from './MapaVisita'
 import PerfilComercioSheet from './relevamiento/PerfilComercioSheet'
 import { camposPendientes, relevamientoPendiente } from '@/lib/relevamientos'
 import ResolucionSheet from './ResolucionSheet'
-import { useCerrarVisita, useIniciarVisita, useNoVisitaSobreVisitaAbierta } from '@/hooks/useVisitas'
+import {
+    useCerrarVisita,
+    useIniciarVisita,
+    useNoVisitaSobreVisitaAbierta,
+    useVolverMasTarde,
+} from '@/hooks/useVisitas'
 import { useActualizarFicha } from '@/hooks/useFicha'
 import { usePropuesta } from '@/hooks/usePropuesta'
 import { useMotivos } from '@/hooks/useMotivos'
 import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geolocation'
 import { distanciaMetros, estaFueraDeRango } from '@/lib/distancia'
-import { errorCode } from '@/lib/apiError'
+import { errorCode, errorData } from '@/lib/apiError'
+import {
+    limpiarBorrador,
+    limpiarDetalles,
+    limpiarMarcasOfrecidas,
+    limpiarObservaciones,
+} from '@/lib/resolucionDraft'
 import { identidadCliente } from '@/lib/textFormat'
 import { limpiarInicioVisita, marcarInicioVisita } from '@/lib/visitaTimer'
 import { guardarVisitaEnCurso, limpiarVisitaEnCurso } from '@/lib/visitaEnCurso'
@@ -97,9 +108,14 @@ export default function VisitaFlow({
     const actualizarFicha = useActualizarFicha()
     const cerrar = useCerrarVisita()
     const noVisitaAbierta = useNoVisitaSobreVisitaAbierta()
+    const volverMasTarde = useVolverMasTarde()
     const { data: motivosVisita = [] } = useMotivos('visita')
     // Cuántos rubros llevaba cargados cuando pidió "No visité". null = sheet cerrado.
     const [noVisitaRubros, setNoVisitaRubros] = useState<number | null>(null)
+    // Diálogo de "Volver más tarde" abierto, y el handler en curso (cubre la captura de GPS,
+    // igual que `cerrandoFlujo`).
+    const [confirmarVolver, setConfirmarVolver] = useState(false)
+    const [volviendoFlujo, setVolviendoFlujo] = useState(false)
 
     // Coordenadas del cliente de LA VISITA EN CURSO, no del `cliente` que esté abierto en
     // pantalla — el vendedor puede estar mirando la propuesta de otro cliente mientras la
@@ -219,6 +235,7 @@ export default function VisitaFlow({
         setErrorIniciar(null)
         setClienteOverride(null)
         setNoVisitaRubros(null)
+        setConfirmarVolver(false)
         setAltaYaIniciada(false)
         setPerfilPendiente(null)
         setFichaLista(false)
@@ -601,6 +618,63 @@ export default function VisitaFlow({
         }
     }
 
+    /**
+     * "Volver más tarde": el vendedor inició en la vereda y el dueño no estaba. La visita se
+     * descarta (el backend borra la resolución y la fila vuelve a `pendiente`), así que más
+     * tarde se inicia una nueva como siempre, con el gate de 100 m. A diferencia de "No
+     * visité" sí captura ubicación: la coordenada queda en el intento que guarda el backend.
+     */
+    async function onConfirmarVolverMasTarde() {
+        if (visitaId === null || volviendoFlujo) return
+        const id = visitaId
+        // Todo lo local de la visita descartada: las anclas (como un cierre) y además el
+        // borrador de rubros, que de otro modo quedaría huérfano en storage — esa visita no
+        // se va a cerrar nunca, y `cerrarConBorrador` es el único otro que lo limpia.
+        function soltarVisita() {
+            limpiarInicioVisita(id)
+            limpiarVisitaEnCurso()
+            limpiarBorrador(id)
+            limpiarDetalles(id)
+            limpiarMarcasOfrecidas(id)
+            limpiarObservaciones(id)
+            onVisitaCerrada()
+            cerrarFlujo()
+        }
+        setVolviendoFlujo(true)
+        try {
+            await conUbicacion(async geo => {
+                try {
+                    await volverMasTarde.mutateAsync({ visitaId: id, coordCancelacion: geo.coord })
+                    onAviso?.('exito', 'El cliente quedó pendiente para volver más tarde')
+                    soltarVisita()
+                } catch (err) {
+                    const code = errorCode(err)
+                    const mensaje = errorData<{ error?: string }>(err)?.error
+                    if (code === 'VISITA_CON_RUBROS_RESUELTOS') {
+                        // Sigue en la visita: lo que corresponde es cerrarla normalmente.
+                        onAviso?.('error', mensaje ?? 'Ya cargaste rubros en esta visita. Cerrala normalmente.')
+                        return
+                    }
+                    const status = (err as { response?: { status?: number } })?.response?.status
+                    // El 404 cuenta solo con `code` (la visita no existe): uno pelado es la
+                    // ruta que no existe —un back sin este endpoint— y ahí la visita sigue
+                    // abierta en el servidor.
+                    if (code === 'VISITA_NO_EN_CURSO' || (status === 404 && code !== null)) {
+                        // La visita ya no está abierta (se cerró o se descartó por otro lado):
+                        // quedarse en ella no tiene sentido.
+                        onAviso?.('info', mensaje ?? 'Esta visita ya no está abierta. Actualizamos tu agenda.')
+                        soltarVisita()
+                        return
+                    }
+                    onAviso?.('error', 'No se pudo descartar la visita. Volvé a intentar.')
+                }
+            })
+        } finally {
+            setVolviendoFlujo(false)
+            setConfirmarVolver(false)
+        }
+    }
+
     // Cierra (o minimiza) el SHEET, no la visita: si `cliente` es el de la visita en curso,
     // `visitaEnCurso` la sigue sosteniendo en el padre y la barra flotante aparece sola.
     function cerrarFlujo() {
@@ -673,6 +747,7 @@ export default function VisitaFlow({
                     alejado={alejado && esClienteEnCurso}
                     onVerPosicion={() => setVerPosicion(true)}
                     onNoVisita={rubros => setNoVisitaRubros(rubros)}
+                    onVolverMasTarde={enCurso ? () => setConfirmarVolver(true) : undefined}
                     onDatosComercio={
                         clienteEsAlta && onDatosComercio
                             ? () => onDatosComercio(cliente)
@@ -829,6 +904,22 @@ export default function VisitaFlow({
                 // No `destructivo`: el rojo está reservado para lo que descarta trabajo, y
                 // esto registra un hecho legítimo. Que sea irreversible lo dice el texto.
                 onConfirm={onConfirmarCierreEnMapa}
+            />
+            {/* `visitaId !== null` por lo mismo que `cierrePendiente` arriba: si la visita
+                se suelta mientras el diálogo está abierto, no queda flotando sobre la agenda
+                preguntando por una visita que ya no está. */}
+            <ConfirmDialog
+                open={confirmarVolver && visitaId !== null}
+                onOpenChange={abierto => {
+                    if (!volviendoFlujo) setConfirmarVolver(abierto)
+                }}
+                title="¿Volver más tarde?"
+                description="Vas a salir sin registrar la visita. El cliente queda pendiente para volver más tarde."
+                confirmLabel="Volver más tarde"
+                cancelLabel="Seguir en la visita"
+                // Rojo: descarta la visita abierta (y su cronómetro) sin dejar ningún hecho.
+                destructivo
+                onConfirm={onConfirmarVolverMasTarde}
             />
             {cargandoDirecto &&
                 !propuestaDirecta &&

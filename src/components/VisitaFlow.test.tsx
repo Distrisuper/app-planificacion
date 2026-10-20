@@ -1141,6 +1141,124 @@ describe('No visité con la visita ya abierta', () => {
     })
 })
 
+describe('Volver más tarde con la visita abierta', () => {
+    const enCurso = { ...cliente, estado: 'en_curso' as const, visitaId: 7 }
+    const rubro = (over: any = {}) => ({
+        id: 8, resolucionId: 7, tipo: 'rubro', codigo: 'FILT', descripcion: 'Filtros',
+        gapUnits: null, esPropuesto: true, resuelto: false, motivos: [], alcance: [], ...over,
+    })
+
+    function confirmarEnDialogo() {
+        const dialogo = screen.getByRole('alertdialog')
+        expect(dialogo).toHaveTextContent(
+            'Vas a salir sin registrar la visita. El cliente queda pendiente para volver más tarde.',
+        )
+        fireEvent.click(within(dialogo).getByRole('button', { name: 'Volver más tarde' }))
+    }
+
+    it('sin rubros resueltos ofrece "Volver más tarde"', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([rubro()])
+        renderFlow({ cliente: enCurso })
+
+        await screen.findByText('Filtros')
+        expect(screen.getByRole('button', { name: 'Volver más tarde' })).toBeInTheDocument()
+    })
+
+    it('con un rubro resuelto ya no lo ofrece: la visita se cierra normalmente', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([
+            rubro({ resuelto: true, motivos: [{ motivoId: 10, valores: {} }] }),
+        ])
+        renderFlow({ cliente: enCurso })
+
+        await screen.findByText('Filtros')
+        expect(screen.queryByRole('button', { name: 'Volver más tarde' })).toBeNull()
+    })
+
+    it('con los rubros todavía cargando no lo ofrece', async () => {
+        ;(api.getOfrecimientos as any).mockReturnValue(new Promise(() => {}))
+        renderFlow({ cliente: enCurso })
+
+        await screen.findByText('No visité')
+        expect(screen.queryByRole('button', { name: 'Volver más tarde' })).toBeNull()
+    })
+
+    it('al confirmar manda la coordenada, suelta la visita y limpia lo guardado de ella', async () => {
+        ;(api.volverMasTarde as any).mockResolvedValue({ rotacionClienteId: 42, estado: 'pendiente' })
+        const { onVisitaCerrada, onClose } = renderFlow({ cliente: enCurso })
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
+        // Sin confirmar no sale nada.
+        expect(api.volverMasTarde).not.toHaveBeenCalled()
+        confirmarEnDialogo()
+
+        await waitFor(() => expect(api.volverMasTarde).toHaveBeenCalledWith(7, '-34.6,-58.4'))
+        await waitFor(() => expect(onVisitaCerrada).toHaveBeenCalled())
+        expect(onClose).toHaveBeenCalled()
+        expect(leerVisitaEnCurso()).toBeNull()
+        expect(localStorage.getItem('visita-borrador-7')).toBeNull()
+        await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    })
+
+    it('con la ubicación bloqueada no descarta la visita', async () => {
+        ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: false, motivo: 'denegado' })
+        const { onGeoBloqueada, onVisitaCerrada } = renderFlow({ cliente: enCurso })
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
+        confirmarEnDialogo()
+
+        await waitFor(() => expect(onGeoBloqueada).toHaveBeenCalledWith('denegado'))
+        expect(api.volverMasTarde).not.toHaveBeenCalled()
+        expect(onVisitaCerrada).not.toHaveBeenCalled()
+    })
+
+    it('si el back dice que ya hay rubros resueltos, muestra su mensaje y sigue en la visita', async () => {
+        ;(api.volverMasTarde as any).mockRejectedValue({
+            response: {
+                data: {
+                    code: 'VISITA_CON_RUBROS_RESUELTOS',
+                    error: 'Ya cargaste rubros en esta visita. Cerrala normalmente.',
+                },
+            },
+        })
+        const { onAviso, onVisitaCerrada, onClose } = renderFlow({ cliente: enCurso })
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
+        confirmarEnDialogo()
+
+        await waitFor(() =>
+            expect(onAviso).toHaveBeenCalledWith('error', 'Ya cargaste rubros en esta visita. Cerrala normalmente.'),
+        )
+        expect(onVisitaCerrada).not.toHaveBeenCalled()
+        expect(onClose).not.toHaveBeenCalled()
+        expect(screen.getByText('No visité')).toBeInTheDocument()
+    })
+
+    it('si la visita ya no está en curso, muestra el mensaje del back y sale del flujo', async () => {
+        ;(api.volverMasTarde as any).mockRejectedValue({
+            response: { data: { code: 'VISITA_NO_EN_CURSO', error: 'La visita ya no está en curso.' } },
+        })
+        const { onAviso, onVisitaCerrada } = renderFlow({ cliente: enCurso })
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
+        confirmarEnDialogo()
+
+        await waitFor(() => expect(onAviso).toHaveBeenCalledWith('info', 'La visita ya no está en curso.'))
+        expect(onVisitaCerrada).toHaveBeenCalled()
+    })
+
+    it('un 404 sin código (back sin el endpoint) no suelta la visita', async () => {
+        ;(api.volverMasTarde as any).mockRejectedValue({ response: { status: 404, data: {} } })
+        const { onAviso, onVisitaCerrada } = renderFlow({ cliente: enCurso })
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
+        confirmarEnDialogo()
+
+        await waitFor(() => expect(onAviso).toHaveBeenCalledWith('error', expect.stringMatching(/volvé a intentar/i)))
+        expect(onVisitaCerrada).not.toHaveBeenCalled()
+        expect(screen.getByText('No visité')).toBeInTheDocument()
+    })
+})
+
 describe('identidad del cliente en el header', () => {
     it('muestra código y razón social bajo el cartel', async () => {
         renderFlow({

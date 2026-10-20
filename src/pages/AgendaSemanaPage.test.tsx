@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
@@ -810,6 +810,52 @@ it('cerrar una SEGUNDA visita no destapa el veto de la primera (un refetch viejo
     })
 
     expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument()
+    expect(leerVisitaEnCurso()).toBeNull()
+})
+
+it('tras "Volver más tarde", un refetch viejo no revive la visita descartada pero una visita nueva del mismo cliente sí se adopta', async () => {
+    fijarLunes()
+    ;(api.getCicloActual as any).mockResolvedValue(CICLO_ACTUAL_ABIERTO)
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteLunes, estado: 'en_curso', visitaId: 7 }],
+    })
+    ;(api.volverMasTarde as any).mockResolvedValue({ rotacionClienteId: clienteLunes.rotacionClienteId, estado: 'pendiente' })
+    ;(api.getOfrecimientos as any).mockResolvedValue([])
+    vi.stubGlobal('navigator', {
+        geolocation: {
+            getCurrentPosition: vi.fn((ok: any) => ok({ coords: { latitude: -34.6, longitude: -58.4, accuracy: 10 } })),
+            watchPosition: vi.fn(() => 1),
+            clearWatch: vi.fn(),
+        },
+    })
+    const { qc } = renderPage()
+
+    fireEvent.click(await screen.findByTestId('visita-en-curso-bar'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
+    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Volver más tarde' }))
+    await waitFor(() => expect(api.volverMasTarde).toHaveBeenCalledWith(7, expect.any(String)))
+    await waitFor(() => expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument())
+
+    // Refetch viejo, en vuelo desde antes del descarte: la visita 7 sigue 'en_curso' ahí.
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteLunes, estado: 'en_curso', visitaId: 7 }],
+    })
+    await act(async () => {
+        await qc.invalidateQueries({ queryKey: ['agenda', 'semana'] })
+    })
+    expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument()
+
+    // Más tarde, una visita NUEVA sobre la misma fila: esa sí es la visita en curso.
+    ;(api.getAgendaSemana as any).mockResolvedValue({
+        ...semanaVacia,
+        LUN: [{ ...clienteLunes, estado: 'en_curso', visitaId: 9 }],
+    })
+    await act(async () => {
+        await qc.invalidateQueries({ queryKey: ['agenda', 'semana'] })
+    })
+    expect(await screen.findByTestId('visita-en-curso-bar')).toBeInTheDocument()
     expect(leerVisitaEnCurso()).toBeNull()
 })
 
