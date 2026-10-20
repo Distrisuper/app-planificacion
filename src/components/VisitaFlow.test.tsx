@@ -1148,63 +1148,102 @@ describe('Volver más tarde con la visita abierta', () => {
         gapUnits: null, esPropuesto: true, resuelto: false, motivos: [], alcance: [], ...over,
     })
 
-    function confirmarEnDialogo() {
-        const dialogo = screen.getByRole('alertdialog')
-        expect(dialogo).toHaveTextContent(
-            'Vas a salir sin registrar la visita. El cliente queda pendiente para volver más tarde.',
-        )
-        fireEvent.click(within(dialogo).getByRole('button', { name: 'Volver más tarde' }))
+    const OPCION = /volver más tarde.*pendiente para volver hoy/i
+
+    /** Abre "No visité" desde el header, elige la opción y la confirma con el botón del pie
+     *  del sheet, que pasa a decir "Volver más tarde". */
+    async function elegirVolverMasTarde() {
+        // El pie de la visita existe recién con los rubros cargados: antes, la opción no se ofrece.
+        await screen.findByRole('button', { name: 'Cerrar visita' })
+        fireEvent.click(screen.getByText('No visité'))
+        fireEvent.click(await screen.findByRole('button', { name: OPCION }))
+        fireEvent.click(screen.getByRole('button', { name: 'Volver más tarde' }))
     }
 
-    it('sin rubros resueltos ofrece "Volver más tarde"', async () => {
+    it('el pie de la visita ya no ofrece "Volver más tarde"', async () => {
         ;(api.getOfrecimientos as any).mockResolvedValue([rubro()])
         renderFlow({ cliente: enCurso })
 
         await screen.findByText('Filtros')
-        expect(screen.getByRole('button', { name: 'Volver más tarde' })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /volver más tarde/i })).toBeNull()
     })
 
-    it('con un rubro resuelto ya no lo ofrece: la visita se cierra normalmente', async () => {
+    it('sin rubros resueltos, "No visité" la ofrece separada de los motivos', async () => {
+        ;(api.getOfrecimientos as any).mockResolvedValue([rubro()])
+        renderFlow({ cliente: enCurso })
+
+        await screen.findByText('Filtros')
+        fireEvent.click(screen.getByText('No visité'))
+        expect(await screen.findByRole('button', { name: OPCION })).toBeInTheDocument()
+    })
+
+    it('con un rubro resuelto, "No visité" queda como estaba', async () => {
         ;(api.getOfrecimientos as any).mockResolvedValue([
             rubro({ resuelto: true, motivos: [{ motivoId: 10, valores: {} }] }),
         ])
         renderFlow({ cliente: enCurso })
 
         await screen.findByText('Filtros')
-        expect(screen.queryByRole('button', { name: 'Volver más tarde' })).toBeNull()
+        fireEvent.click(screen.getByText('No visité'))
+        expect(await screen.findByText(/Cargaste 1 rubro/)).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /volver más tarde/i })).toBeNull()
     })
 
-    it('con los rubros todavía cargando no lo ofrece', async () => {
+    it('con los rubros todavía cargando no la ofrece', async () => {
         ;(api.getOfrecimientos as any).mockReturnValue(new Promise(() => {}))
         renderFlow({ cliente: enCurso })
 
-        await screen.findByText('No visité')
-        expect(screen.queryByRole('button', { name: 'Volver más tarde' })).toBeNull()
+        fireEvent.click(await screen.findByText('No visité'))
+        await screen.findByRole('button', { name: 'Cerrar visita' })
+        expect(screen.queryByRole('button', { name: /volver más tarde/i })).toBeNull()
     })
 
-    it('al confirmar manda la coordenada, suelta la visita y limpia lo guardado de ella', async () => {
+    it('elegirla manda la coordenada, suelta la visita y limpia lo guardado de ella, sin otra confirmación', async () => {
         ;(api.volverMasTarde as any).mockResolvedValue({ rotacionClienteId: 42, estado: 'pendiente' })
         const { onVisitaCerrada, onClose } = renderFlow({ cliente: enCurso })
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
-        // Sin confirmar no sale nada.
+        await screen.findByRole('button', { name: 'Cerrar visita' })
+        fireEvent.click(screen.getByText('No visité'))
+        fireEvent.click(await screen.findByRole('button', { name: OPCION }))
+        // Elegir la opción no llama: el botón del pie es la confirmación, como con los motivos.
         expect(api.volverMasTarde).not.toHaveBeenCalled()
-        confirmarEnDialogo()
+        fireEvent.click(screen.getByRole('button', { name: 'Volver más tarde' }))
 
         await waitFor(() => expect(api.volverMasTarde).toHaveBeenCalledWith(7, '-34.6,-58.4'))
         await waitFor(() => expect(onVisitaCerrada).toHaveBeenCalled())
         expect(onClose).toHaveBeenCalled()
         expect(leerVisitaEnCurso()).toBeNull()
         expect(localStorage.getItem('visita-borrador-7')).toBeNull()
-        await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+        expect(api.noVisitaSobreVisitaAbierta).not.toHaveBeenCalled()
+        expect(screen.queryByRole('alertdialog')).toBeNull()
+    })
+
+    it('elegir un motivo después de la opción vuelve a registrar "No visité"', async () => {
+        ;(api.noVisitaSobreVisitaAbierta as any).mockResolvedValue({ rotacionClienteId: 42 })
+        ;(api.getMotivos as any).mockImplementation((nivel: string) =>
+            Promise.resolve(
+                nivel === 'visita'
+                    ? [{ motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] }]
+                    : [],
+            ),
+        )
+        renderFlow({ cliente: enCurso })
+
+        await screen.findByRole('button', { name: 'Cerrar visita' })
+        fireEvent.click(screen.getByText('No visité'))
+        fireEvent.click(await screen.findByRole('button', { name: OPCION }))
+        fireEvent.click(screen.getByText('Cerrado'))
+        fireEvent.click(screen.getAllByRole('button', { name: 'Cerrar visita' }).at(-1)!)
+
+        await waitFor(() => expect(api.noVisitaSobreVisitaAbierta).toHaveBeenCalledWith(7, [1]))
+        expect(api.volverMasTarde).not.toHaveBeenCalled()
     })
 
     it('con la ubicación bloqueada no descarta la visita', async () => {
         ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: false, motivo: 'denegado' })
         const { onGeoBloqueada, onVisitaCerrada } = renderFlow({ cliente: enCurso })
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
-        confirmarEnDialogo()
+        await elegirVolverMasTarde()
 
         await waitFor(() => expect(onGeoBloqueada).toHaveBeenCalledWith('denegado'))
         expect(api.volverMasTarde).not.toHaveBeenCalled()
@@ -1222,14 +1261,15 @@ describe('Volver más tarde con la visita abierta', () => {
         })
         const { onAviso, onVisitaCerrada, onClose } = renderFlow({ cliente: enCurso })
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
-        confirmarEnDialogo()
+        await elegirVolverMasTarde()
 
         await waitFor(() =>
             expect(onAviso).toHaveBeenCalledWith('error', 'Ya cargaste rubros en esta visita. Cerrala normalmente.'),
         )
         expect(onVisitaCerrada).not.toHaveBeenCalled()
         expect(onClose).not.toHaveBeenCalled()
+        // Vuelve a la visita: el sheet de "No visité" se cierra y queda el de los rubros.
+        await waitFor(() => expect(screen.queryByRole('button', { name: OPCION })).toBeNull())
         expect(screen.getByText('No visité')).toBeInTheDocument()
     })
 
@@ -1239,8 +1279,7 @@ describe('Volver más tarde con la visita abierta', () => {
         })
         const { onAviso, onVisitaCerrada } = renderFlow({ cliente: enCurso })
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
-        confirmarEnDialogo()
+        await elegirVolverMasTarde()
 
         await waitFor(() => expect(onAviso).toHaveBeenCalledWith('info', 'La visita ya no está en curso.'))
         expect(onVisitaCerrada).toHaveBeenCalled()
@@ -1250,12 +1289,12 @@ describe('Volver más tarde con la visita abierta', () => {
         ;(api.volverMasTarde as any).mockRejectedValue({ response: { status: 404, data: {} } })
         const { onAviso, onVisitaCerrada } = renderFlow({ cliente: enCurso })
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
-        confirmarEnDialogo()
+        await elegirVolverMasTarde()
 
         await waitFor(() => expect(onAviso).toHaveBeenCalledWith('error', expect.stringMatching(/volvé a intentar/i)))
         expect(onVisitaCerrada).not.toHaveBeenCalled()
-        expect(screen.getByText('No visité')).toBeInTheDocument()
+        // Queda en el sheet de "No visité" para reintentar, como un error de "No visité".
+        expect(screen.getByRole('button', { name: OPCION })).toBeInTheDocument()
     })
 })
 

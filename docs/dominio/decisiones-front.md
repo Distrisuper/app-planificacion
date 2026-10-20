@@ -96,10 +96,13 @@ estado actual.
   `VisitaSheet` y "Reagendar → No visité" de la card. Los dos llaman a
   `POST /planificacion/visitas/:id/no-visita`, que **convierte** la resolución abierta (crear otra
   rebota con `VISITA_ACTIVA_EXISTENTE`). No captura ubicación y no borra los rubros cargados.
-- **"Volver más tarde" descarta la visita abierta sin registrar un hecho.** Link en el pie de
-  `VisitaSheet`, solo con `ofrecimientosCargados` y ningún rubro completo (`completos === 0`); con
-  uno resuelto la visita se cierra normalmente. Pide confirmación, captura la coordenada como el
-  cierre y llama a `POST /planificacion/visitas/:id/volver-mas-tarde`: el backend borra la
+- **"Volver más tarde" descarta la visita abierta sin registrar un hecho.** Es una opción dentro
+  de "No visité" (`ResolucionSheet`, arriba y separada de los motivos), no un link en el pie: ahí
+  empujaba la lista de rubros. Se ofrece solo si la visita está en curso, la lista de rubros ya
+  cargó y ninguno está completo (`completos === 0`); con uno resuelto, "No visité" queda como
+  estaba. Se elige como un motivo y el botón del pie del sheet la confirma (no hay un segundo
+  diálogo). Captura la coordenada como el cierre y llama a
+  `POST /planificacion/visitas/:id/volver-mas-tarde`: el backend borra la
   resolución y la fila vuelve a `pendiente` (no hay estado nuevo ni segunda visita el mismo día).
   El front pasa la card a pendiente en la caché (agenda y preview), limpia anclas y borrador, y
   el veto de re-adopción de `AgendaSemanaPage` es por `visitaId`, no por fila: la visita nueva

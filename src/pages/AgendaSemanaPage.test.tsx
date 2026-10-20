@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi } from 'vitest'
@@ -832,8 +832,11 @@ it('tras "Volver más tarde", un refetch viejo no revive la visita descartada pe
     const { qc } = renderPage()
 
     fireEvent.click(await screen.findByTestId('visita-en-curso-bar'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Volver más tarde' }))
-    fireEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Volver más tarde' }))
+    // La opción se ofrece recién con los rubros cargados (el pie de la visita ya está).
+    await screen.findByRole('button', { name: 'Cerrar visita' })
+    fireEvent.click(screen.getByText('No visité'))
+    fireEvent.click(await screen.findByRole('button', { name: /volver más tarde.*pendiente/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Volver más tarde' }))
     await waitFor(() => expect(api.volverMasTarde).toHaveBeenCalledWith(7, expect.any(String)))
     await waitFor(() => expect(screen.queryByTestId('visita-en-curso-bar')).not.toBeInTheDocument())
 

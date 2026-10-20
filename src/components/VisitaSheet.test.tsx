@@ -1063,7 +1063,8 @@ describe('No visité (chip de la visita abierta)', () => {
 
         fireEvent.click(screen.getByText('No visité'))
 
-        expect(onNoVisita).toHaveBeenCalledWith(1)
+        // El segundo argumento dice que la lista ya había cargado (gate de "Volver más tarde").
+        expect(onNoVisita).toHaveBeenCalledWith(1, true)
     })
 })
 

@@ -112,9 +112,10 @@ export default function VisitaFlow({
     const { data: motivosVisita = [] } = useMotivos('visita')
     // Cuántos rubros llevaba cargados cuando pidió "No visité". null = sheet cerrado.
     const [noVisitaRubros, setNoVisitaRubros] = useState<number | null>(null)
-    // Diálogo de "Volver más tarde" abierto, y el handler en curso (cubre la captura de GPS,
-    // igual que `cerrandoFlujo`).
-    const [confirmarVolver, setConfirmarVolver] = useState(false)
+    // Si al pedir "No visité" la lista de rubros ya había cargado: sin eso, `noVisitaRubros`
+    // vale 0 aunque haya resueltos, y "Volver más tarde" no se puede ofrecer.
+    const [noVisitaRubrosListos, setNoVisitaRubrosListos] = useState(false)
+    // "Volver más tarde" en curso: cubre la captura de GPS, igual que `cerrandoFlujo`.
     const [volviendoFlujo, setVolviendoFlujo] = useState(false)
 
     // Coordenadas del cliente de LA VISITA EN CURSO, no del `cliente` que esté abierto en
@@ -235,7 +236,6 @@ export default function VisitaFlow({
         setErrorIniciar(null)
         setClienteOverride(null)
         setNoVisitaRubros(null)
-        setConfirmarVolver(false)
         setAltaYaIniciada(false)
         setPerfilPendiente(null)
         setFichaLista(false)
@@ -621,8 +621,10 @@ export default function VisitaFlow({
     /**
      * "Volver más tarde": el vendedor inició en la vereda y el dueño no estaba. La visita se
      * descarta (el backend borra la resolución y la fila vuelve a `pendiente`), así que más
-     * tarde se inicia una nueva como siempre, con el gate de 100 m. A diferencia de "No
-     * visité" sí captura ubicación: la coordenada queda en el intento que guarda el backend.
+     * tarde se inicia una nueva como siempre, con el gate de 100 m. Es una opción del sheet
+     * de "No visité" y su botón del pie es la confirmación, así que acá no se pregunta de
+     * nuevo. A diferencia de "No visité" sí captura ubicación: la coordenada queda en el
+     * intento que guarda el backend.
      */
     async function onConfirmarVolverMasTarde() {
         if (visitaId === null || volviendoFlujo) return
@@ -637,6 +639,7 @@ export default function VisitaFlow({
             limpiarDetalles(id)
             limpiarMarcasOfrecidas(id)
             limpiarObservaciones(id)
+            setNoVisitaRubros(null)
             onVisitaCerrada()
             cerrarFlujo()
         }
@@ -651,8 +654,9 @@ export default function VisitaFlow({
                     const code = errorCode(err)
                     const mensaje = errorData<{ error?: string }>(err)?.error
                     if (code === 'VISITA_CON_RUBROS_RESUELTOS') {
-                        // Sigue en la visita: lo que corresponde es cerrarla normalmente.
+                        // Vuelve a la visita: lo que corresponde es cerrarla normalmente.
                         onAviso?.('error', mensaje ?? 'Ya cargaste rubros en esta visita. Cerrala normalmente.')
+                        setNoVisitaRubros(null)
                         return
                     }
                     const status = (err as { response?: { status?: number } })?.response?.status
@@ -671,7 +675,6 @@ export default function VisitaFlow({
             })
         } finally {
             setVolviendoFlujo(false)
-            setConfirmarVolver(false)
         }
     }
 
@@ -746,8 +749,10 @@ export default function VisitaFlow({
                     // local que no es el que está mirando.
                     alejado={alejado && esClienteEnCurso}
                     onVerPosicion={() => setVerPosicion(true)}
-                    onNoVisita={rubros => setNoVisitaRubros(rubros)}
-                    onVolverMasTarde={enCurso ? () => setConfirmarVolver(true) : undefined}
+                    onNoVisita={(rubros, listos) => {
+                        setNoVisitaRubros(rubros)
+                        setNoVisitaRubrosListos(listos)
+                    }}
                     onDatosComercio={
                         clienteEsAlta && onDatosComercio
                             ? () => onDatosComercio(cliente)
@@ -781,7 +786,14 @@ export default function VisitaFlow({
                 confirmLabel="Cerrar visita"
                 eyebrow="No visité"
                 title={nombre}
-                submitting={noVisitaAbierta.isPending}
+                submitting={noVisitaAbierta.isPending || volviendoFlujo}
+                // Sólo con la visita en curso y la lista de rubros cargada sin ninguno
+                // resuelto; con uno resuelto, "No visité" queda como estaba.
+                onVolverMasTarde={
+                    enCurso && noVisitaRubrosListos && noVisitaRubros === 0
+                        ? () => void onConfirmarVolverMasTarde()
+                        : undefined
+                }
                 aviso={
                     noVisitaRubros && noVisitaRubros > 0
                         ? `Cargaste ${noVisitaRubros} ${noVisitaRubros === 1 ? 'rubro' : 'rubros'}. Al registrar «No visité» esta visita no cuenta como hecha.`
@@ -904,22 +916,6 @@ export default function VisitaFlow({
                 // No `destructivo`: el rojo está reservado para lo que descarta trabajo, y
                 // esto registra un hecho legítimo. Que sea irreversible lo dice el texto.
                 onConfirm={onConfirmarCierreEnMapa}
-            />
-            {/* `visitaId !== null` por lo mismo que `cierrePendiente` arriba: si la visita
-                se suelta mientras el diálogo está abierto, no queda flotando sobre la agenda
-                preguntando por una visita que ya no está. */}
-            <ConfirmDialog
-                open={confirmarVolver && visitaId !== null}
-                onOpenChange={abierto => {
-                    if (!volviendoFlujo) setConfirmarVolver(abierto)
-                }}
-                title="¿Volver más tarde?"
-                description="Vas a salir sin registrar la visita. El cliente queda pendiente para volver más tarde."
-                confirmLabel="Volver más tarde"
-                cancelLabel="Seguir en la visita"
-                // Rojo: descarta la visita abierta (y su cronómetro) sin dejar ningún hecho.
-                destructivo
-                onConfirm={onConfirmarVolverMasTarde}
             />
             {cargandoDirecto &&
                 !propuestaDirecta &&
