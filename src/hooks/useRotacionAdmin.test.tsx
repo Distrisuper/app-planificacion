@@ -16,6 +16,10 @@ import {
     useIntercambiarSemanasRutaBase,
     useMoverEnRutaBase,
     useQuitarDeRutaBase,
+    useRestaurarEnRutaBase,
+    useAgregarSemanaRutaBase,
+    useMoverSemanaRutaBase,
+    useSincronizarRutaBase,
     useAgregarClienteExtraAdmin,
     useBuscarEnCarteraAdmin,
     useCancelarRotacion,
@@ -494,7 +498,9 @@ describe('edición de la ruta base', () => {
                 descripcion: null,
                 dias: {
                     ...vacia(),
-                    LUN: [{ id: 41, codigoParticularCliente: 'P1', nombreCliente: 'UNO' }],
+                    LUN: [
+                        { id: 41, codigoParticularCliente: 'P1', nombreCliente: 'UNO', orden: 0, eliminado: false },
+                    ],
                 },
             },
         ],
@@ -531,6 +537,57 @@ describe('edición de la ruta base', () => {
 
         await waitFor(() => expect(celda('LUN')).toEqual([41]))
         expect(celda('JUE')).toEqual([])
+    })
+
+    it('mover con posición la manda al back', async () => {
+        const { wrapper: w } = conRuta()
+        vi.mocked(api.moverEnRutaBase).mockResolvedValue(undefined)
+
+        const { result } = renderHook(() => useMoverEnRutaBase('V 2'), { wrapper: w })
+        await result.current.mutateAsync({ id: 41, semana: 1, dia: 2, posicion: 0 })
+
+        expect(api.moverEnRutaBase).toHaveBeenCalledWith('V 2', 41, { semana: 1, dia: 2, posicion: 0 })
+    })
+
+    it('la vista previa de "Pegar códigos" no relee la ruta; aplicar sí', async () => {
+        vi.mocked(api.sincronizarRutaBase).mockResolvedValue({
+            entran: [],
+            salen: [],
+            quedan: 0,
+            noEncontrados: [],
+            repetidos: [],
+            aplicado: false,
+        })
+        const { invalidateSpy, wrapper: w } = conEspia()
+        const { result } = renderHook(() => useSincronizarRutaBase('V 2'), { wrapper: w })
+        const dto = { semana: 4, dias: { '1': ['P1'] } }
+
+        await result.current.mutateAsync({ ...dto, aplicar: false })
+        expect(invalidateSpy).not.toHaveBeenCalled()
+
+        await result.current.mutateAsync({ ...dto, aplicar: true })
+        expect(api.sincronizarRutaBase).toHaveBeenLastCalledWith('V 2', { ...dto, aplicar: true })
+        expect(invalidateSpy).toHaveBeenCalledWith(KEY_RUTA_BASE)
+    })
+
+    it('restaurar, agregar semana y mover semana pegan a la ruta base y la releen', async () => {
+        vi.mocked(api.restaurarEnRutaBase).mockResolvedValue(undefined)
+        vi.mocked(api.agregarSemanaRutaBase).mockResolvedValue(5)
+        vi.mocked(api.moverSemanaRutaBase).mockResolvedValue(undefined)
+        const { invalidateSpy, wrapper: w } = conEspia()
+
+        const { result: restaurar } = renderHook(() => useRestaurarEnRutaBase('V 2'), { wrapper: w })
+        await restaurar.current.mutateAsync(41)
+        const { result: agregar } = renderHook(() => useAgregarSemanaRutaBase('V 2'), { wrapper: w })
+        await agregar.current.mutateAsync()
+        const { result: mover } = renderHook(() => useMoverSemanaRutaBase('V 2'), { wrapper: w })
+        await mover.current.mutateAsync({ semana: 4, posicion: 1 })
+
+        expect(api.restaurarEnRutaBase).toHaveBeenCalledWith('V 2', 41)
+        expect(api.agregarSemanaRutaBase).toHaveBeenCalledWith('V 2')
+        expect(api.moverSemanaRutaBase).toHaveBeenCalledWith('V 2', { semana: 4, posicion: 1 })
+        expect(invalidateSpy).toHaveBeenCalledTimes(3)
+        expect(invalidateSpy).toHaveBeenCalledWith(KEY_RUTA_BASE)
     })
 
     it('quitar pega a la fila y relee la ruta base', async () => {

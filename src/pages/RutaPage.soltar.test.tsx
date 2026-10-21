@@ -13,10 +13,20 @@ import RutaPage from './RutaPage'
  * probar lo que hace la PÁGINA con ese movimiento: preguntar el alcance y mandarlo.
  */
 vi.mock('@/components/ruta/GridRotacion', () => ({
-    default: ({ onMover }: { onMover: (id: number, semana: number, dia: number) => void }) => (
-        <button type="button" onClick={() => onMover(11, 2, 4)}>
-            Soltar la card
-        </button>
+    default: ({
+        onMover,
+    }: {
+        onMover: (id: number, semana: number, dia: number, posicion?: number) => void
+    }) => (
+        <>
+            <button type="button" onClick={() => onMover(11, 2, 4)}>
+                Soltar la card
+            </button>
+            {/* Soltar sobre otra card: el grid que ordena manda también el lugar. */}
+            <button type="button" onClick={() => onMover(11, 2, 4, 0)}>
+                Soltar sobre otra card
+            </button>
+        </>
     ),
 }))
 vi.mock('@/api/planificacionAdmin')
@@ -114,5 +124,39 @@ describe('RutaPage — soltar una card en la vuelta', () => {
                 'En la ruta base ese cliente no estaba en esa celda: se movió solo en esta vuelta.',
             ),
         ).toBeInTheDocument()
+    })
+})
+
+describe('RutaPage — soltar una card en la ruta base', () => {
+    it('manda el lugar dentro del día, sin preguntar el alcance', async () => {
+        vi.mocked(apiAdmin.getRutaBase).mockResolvedValue({
+            semanas: [
+                { semana: 1, descripcion: null, dias: { LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] } },
+            ],
+            omitidos: [],
+        })
+        vi.mocked(apiAdmin.moverEnRutaBase).mockResolvedValue(undefined)
+        const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        render(
+            <QueryClientProvider client={qc}>
+                <MemoryRouter>
+                    <RutaPage />
+                </MemoryRouter>
+            </QueryClientProvider>,
+        )
+        await userEvent.click(screen.getByRole('button', { name: 'Vendedor' }))
+        await userEvent.click(await screen.findByRole('option', { name: 'Juan Pérez' }))
+        await userEvent.click(screen.getByRole('button', { name: 'Ruta base' }))
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Soltar sobre otra card' }))
+
+        await waitFor(() =>
+            expect(apiAdmin.moverEnRutaBase).toHaveBeenCalledWith('V 2', 11, {
+                semana: 2,
+                dia: 4,
+                posicion: 0,
+            }),
+        )
+        expect(screen.queryByRole('button', { name: 'Solo esta vuelta' })).not.toBeInTheDocument()
     })
 })

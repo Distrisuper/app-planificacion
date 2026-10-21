@@ -10,6 +10,7 @@ import type {
     IResultadoBuscadorRutaBase,
     IResultadoReacomodar,
     IResultadoReiniciarRotacion,
+    IResultadoSincronizarRutaBase,
     IRotacionCompleta,
     IRotacionResumen,
     IRutaBase,
@@ -176,16 +177,49 @@ export const intercambiarSemanas = async (
 // ── Edición de la ruta base ──────────────────────────────────────────────────────
 // Lo que cambia acá aplica desde la próxima vuelta: la vuelta en curso no se toca.
 
+/** `posicion`: índice 0-based entre los activos del día destino. Ausente = al final. */
 export const moverEnRutaBase = async (
     codigo: string,
     id: number,
-    dto: { semana: number; dia: number },
+    dto: { semana: number; dia: number; posicion?: number },
 ): Promise<void> => {
     await apiClient.patch(`${baseRuta(codigo)}/${id}`, dto)
 }
 
+/** Borrado lógico: la card queda con `eliminado` y se puede restaurar. */
 export const quitarDeRutaBase = async (codigo: string, id: number): Promise<void> => {
     await apiClient.delete(`${baseRuta(codigo)}/${id}`)
+}
+
+/** Deshace un "quitar". 409 si el cliente ya volvió a estar en esa celda. */
+export const restaurarEnRutaBase = async (codigo: string, id: number): Promise<void> => {
+    await apiClient.post(`${baseRuta(codigo)}/${id}/restaurar`)
+}
+
+/** Agrega una semana vacía al final (la N+1). Devuelve su número. */
+export const agregarSemanaRutaBase = async (codigo: string): Promise<number> => {
+    const res = await apiClient.post(`${baseRuta(codigo)}/semanas`)
+    return res.data.data.semana
+}
+
+/** Lleva la semana a la posición 1..N; el back renumera las demás. */
+export const moverSemanaRutaBase = async (
+    codigo: string,
+    dto: { semana: number; posicion: number },
+): Promise<void> => {
+    await apiClient.post(`${baseRuta(codigo)}/semanas/mover`, dto)
+}
+
+/**
+ * Reemplaza los días de una semana con los códigos pegados. `dias` va con clave "1".."5";
+ * los días que no vienen no se tocan. `aplicar: false` es la vista previa y no cambia nada.
+ */
+export const sincronizarRutaBase = async (
+    codigo: string,
+    dto: { semana: number; dias: Record<string, string[]>; aplicar: boolean },
+): Promise<IResultadoSincronizarRutaBase> => {
+    const res = await apiClient.post(`${baseRuta(codigo)}/sincronizar`, dto)
+    return res.data.data
 }
 
 /** Busca en la cartera del vendedor, con las celdas de la ruta base donde ya está. */

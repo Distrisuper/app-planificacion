@@ -5,8 +5,8 @@ const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 /**
  * La ruta base con la forma del grid de la vuelta, para editarla con el mismo
  * `GridRotacion`. El id de la card es el de la fila de la ruta base: es lo que viaja al
- * mover o quitar. Todo queda pendiente y sin extras ni quitados, porque en la ruta base no
- * hay hechos: es solo plan.
+ * mover o quitar. Todo queda pendiente y sin extras, porque en la ruta base no hay hechos:
+ * es solo plan. Los quitados sí pasan: quitar es un borrado lógico y se ofrece Restaurar.
  */
 export function rutaBaseComoGrid(semanas: ISemanaRutaBase[]): ISemanaRotacionAdmin[] {
     return semanas.map(s => ({
@@ -23,7 +23,7 @@ export function rutaBaseComoGrid(semanas: ISemanaRutaBase[]): ISemanaRotacionAdm
                     dia: i + 1,
                     estado: 'pendiente' as const,
                     esExtra: false,
-                    eliminado: false,
+                    eliminado: c.eliminado,
                     ultimoMovimiento: null,
                 })),
             ]),

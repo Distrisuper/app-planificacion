@@ -7,13 +7,17 @@ import {
     TouchSensor,
     useDndContext,
     useDroppable,
+    pointerWithin,
+    rectIntersection,
     useSensor,
     useSensors,
+    type CollisionDetection,
     type DragEndEvent,
 } from '@dnd-kit/core'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import ClienteCardRuta, { type TextoQuitar } from './ClienteCardRuta'
 import DescripcionInline from './DescripcionInline'
+import MenuAcciones, { type AccionMenu } from '@/components/ui/MenuAcciones'
 import Pill from '@/components/ui/Pill'
 import Segmentado, { type OpcionSegmentado } from '@/components/ui/Segmentado'
 import { etiquetaEstadoSemana } from '@/lib/estadoSemana'
@@ -128,6 +132,84 @@ export function movimientoDeDrop(
     return { rotacionClienteId, ...destino }
 }
 
+/** `antes-11` → 11: la card sobre la que se soltó, en un grid que ordena. */
+function parsearAntes(id: string): number | null {
+    const m = /^antes-(\d+)$/.exec(id)
+    return m ? Number(m[1]) : null
+}
+
+/** Dónde está una card: su celda y la lista entera de esa celda. */
+function ubicar(semanas: ISemanaRotacionAdmin[], id: number) {
+    for (const s of semanas) {
+        for (const [i, dia] of DIAS.entries()) {
+            const lista = s.dias[dia]
+            const indice = lista.findIndex(c => c.rotacionClienteId === id)
+            if (indice >= 0) return { semana: s.semana, dia: i + 1, lista, indice }
+        }
+    }
+    return undefined
+}
+
+/**
+ * El drop de un grid que ordena (la ruta base): además de la celda, el lugar dentro del día.
+ *
+ * Soltar sobre una card la deja en el lugar de esa card: antes si se sube o viene de otro
+ * día, después si se baja dentro del mismo día (lo que espera quien arrastra hacia abajo).
+ * Soltar en el hueco de otra celda la manda al final, sin `posicion`.
+ *
+ * `posicion` es la del PATCH: el lugar final entre los activos del día, sin contar la card
+ * movida. Los quitados no cuentan porque no se visitan y el back los deja al final.
+ */
+export function movimientoOrdenado(
+    activeId: string,
+    overId: string | null,
+    semanas: ISemanaRotacionAdmin[],
+): { rotacionClienteId: number; semana: number; dia: number; posicion?: number } | null {
+    if (!overId) return null
+    const id = parsearCard(activeId)
+    if (id === null) return null
+    const origen = ubicar(semanas, id)
+    if (!origen) return null
+
+    const destinoCard = parsearAntes(overId)
+    if (destinoCard === null) {
+        const celda = parsearCelda(overId)
+        if (!celda) return null
+        if (celda.semana === origen.semana && celda.dia === origen.dia) return null
+        return { rotacionClienteId: id, ...celda }
+    }
+
+    if (destinoCard === id) return null
+    const destino = ubicar(semanas, destinoCard)
+    if (!destino) return null
+
+    const mismaCelda = destino.semana === origen.semana && destino.dia === origen.dia
+    const esOtroActivo = (c: IAgendaClientAdmin) => !c.eliminado && c.rotacionClienteId !== id
+    const activosAntes = destino.lista.slice(0, destino.indice).filter(esOtroActivo).length
+    const posicion = Math.min(
+        mismaCelda && origen.indice < destino.indice ? activosAntes + 1 : activosAntes,
+        destino.lista.filter(esOtroActivo).length,
+    )
+
+    if (mismaCelda) {
+        const actual = origen.lista.slice(0, origen.indice).filter(c => !c.eliminado).length
+        if (posicion === actual) return null
+    }
+    return { rotacionClienteId: id, semana: destino.semana, dia: destino.dia, posicion }
+}
+
+/**
+ * Con cards soltables adentro de celdas soltables, gana la card que está bajo el puntero:
+ * el `rectIntersection` por defecto elige por superposición y a veces prefiere la celda.
+ * Sin puntero (arrastre por teclado) se vuelve al de siempre.
+ */
+const deteccionOrdenada: CollisionDetection = args => {
+    const bajoPuntero = pointerWithin(args)
+    if (bajoPuntero.length === 0) return rectIntersection(args)
+    const card = bajoPuntero.find(c => String(c.id).startsWith('antes-'))
+    return card ? [card] : bajoPuntero
+}
+
 interface Celda {
     semana: number
     dia: number
@@ -180,6 +262,8 @@ interface CeldaProps {
     onAgregar?: (celda: { semana: number; dia: number }) => void
     textoQuitar?: TextoQuitar
     compacta: boolean
+    /** true = cada card es también destino, para ordenar dentro del día. */
+    ordenable: boolean
 }
 
 function Celda({
@@ -197,6 +281,7 @@ function Celda({
     conVariasVisitas,
     textoQuitar,
     compacta,
+    ordenable,
 }: CeldaProps) {
     const { setNodeRef, isOver } = useDroppable({ id: `celda-${semana}-${dia}` })
 
@@ -290,6 +375,7 @@ function Celda({
                     onRestaurar={arrastrable ? onRestaurar : undefined}
                     textoQuitar={textoQuitar}
                     compacta={compacta}
+                    soltable={arrastrable && ordenable}
                 />
             ))}
         </td>
@@ -418,7 +504,19 @@ function BotonIntercambioSemana({
 
 interface GridRotacionProps {
     semanas: ISemanaRotacionAdmin[]
-    onMover: (rotacionClienteId: number, semana: number, dia: number) => void
+    /** `posicion` solo llega con `ordenable`: el lugar dentro del día (ver `movimientoOrdenado`). */
+    onMover: (rotacionClienteId: number, semana: number, dia: number, posicion?: number) => void
+    /** true = se ordena dentro del día soltando sobre otra card. Solo la ruta base: el
+     *  reacomodo de la vuelta no tiene posición. */
+    ordenable?: boolean
+    /** Ausente = no se ofrece "Agregar semana" al final. */
+    onAgregarSemana?: () => void
+    /** true = hay una semana agregándose: el botón espera, así un doble clic no crea dos. */
+    agregandoSemana?: boolean
+    /** Ausente = el ⋯ de la semana no ofrece pegar códigos. */
+    onPegarCodigos?: (semana: number) => void
+    /** Lleva la semana a la posición 1..N. Ausente = el ⋯ no ofrece moverla. */
+    onMoverSemana?: (semana: number, posicion: number) => void
     /** Ausente = el nombre de la semana se muestra pero no se edita (la ruta base no tiene
      *  nombres propios: los toma de la última vuelta). */
     onRenombrarSemana?: (semana: number, descripcion: string | null) => void
@@ -464,6 +562,11 @@ export default function GridRotacion({
     onAgregar,
     editable,
     plegarPorEstado = false,
+    ordenable = false,
+    onAgregarSemana,
+    agregandoSemana = false,
+    onPegarCodigos,
+    onMoverSemana,
 }: GridRotacionProps) {
     // `editable` ausente = editable, por compatibilidad con los callers viejos. Se resuelve
     // UNA vez: las tres acciones de celda (arrastrar, intercambiar, agregar) tienen que
@@ -589,16 +692,53 @@ export default function GridRotacion({
     }
 
     const alSoltar = (evento: DragEndEvent) => {
-        const mov = movimientoDeDrop(
-            String(evento.active.id),
-            evento.over ? String(evento.over.id) : null,
-            origenDe,
-        )
+        const activeId = String(evento.active.id)
+        const overId = evento.over ? String(evento.over.id) : null
+        if (ordenable) {
+            const mov = movimientoOrdenado(activeId, overId, semanas)
+            if (mov) onMover(mov.rotacionClienteId, mov.semana, mov.dia, mov.posicion)
+            return
+        }
+        const mov = movimientoDeDrop(activeId, overId, origenDe)
         if (mov) onMover(mov.rotacionClienteId, mov.semana, mov.dia)
     }
 
+    /** El ⋯ de una semana: lo poco frecuente, para no sumar más botones a cada fila. */
+    const menuSemana = (semana: number) => {
+        if (!seEdita) return null
+        const acciones: AccionMenu[] = []
+        if (onPegarCodigos) {
+            acciones.push({
+                etiqueta: 'Pegar códigos',
+                titulo: 'Cargar los clientes de la semana pegando sus códigos (de Excel o uno por renglón).',
+                onElegir: () => onPegarCodigos(semana),
+            })
+        }
+        if (onMoverSemana) {
+            const lugar = semanas.findIndex(s => s.semana === semana) + 1
+            semanas.forEach((_, i) => {
+                const posicion = i + 1
+                if (posicion === lugar) return
+                acciones.push({
+                    etiqueta: `Mover a semana ${posicion}`,
+                    grupo: acciones.some(a => a.etiqueta.startsWith('Mover'))
+                        ? undefined
+                        : 'Mover la semana',
+                    titulo: 'Las demás semanas se corren un lugar.',
+                    onElegir: () => onMoverSemana(semana, posicion),
+                })
+            })
+        }
+        if (acciones.length === 0) return null
+        return <MenuAcciones etiqueta={`Más acciones: semana ${semana}`} acciones={acciones} />
+    }
+
     return (
-        <DndContext sensors={sensores} onDragEnd={alSoltar}>
+        <DndContext
+            sensors={sensores}
+            onDragEnd={alSoltar}
+            collisionDetection={ordenable ? deteccionOrdenada : undefined}
+        >
             {/* La barra del grid: menos scroll plegando semanas o achicando las cards. */}
             <div className="mb-2 flex flex-wrap items-center gap-2">
                 <button
@@ -685,6 +825,7 @@ export default function GridRotacion({
                                                         {botonIntercambioSemana}
                                                     </span>
                                                 )}
+                                                {menuSemana(semana.semana)}
                                             </div>
                                         </th>
                                         {DIAS.map(dia => (
@@ -709,6 +850,7 @@ export default function GridRotacion({
                                                 onTocar={tocarPlegar}
                                             />
                                             Semana {semana.semana}
+                                            {menuSemana(semana.semana)}
                                         </span>
                                         {onRenombrarSemana ? (
                                             <span className="block text-xs font-normal">
@@ -751,6 +893,7 @@ export default function GridRotacion({
                                             onRestaurar={onRestaurar}
                                             textoQuitar={textoQuitar}
                                             compacta={compacta}
+                                            ordenable={ordenable}
                                             conVariasVisitas={conVariasVisitas}
                                             onAgregar={
                                                 seEdita && onAgregar
@@ -765,6 +908,19 @@ export default function GridRotacion({
                     </tbody>
                 </table>
             </div>
+
+            {seEdita && onAgregarSemana && (
+                <button
+                    type="button"
+                    onClick={onAgregarSemana}
+                    disabled={agregandoSemana}
+                    aria-label="Agregar semana"
+                    title="Sumar una semana vacía al final, para cargarle clientes."
+                    className="mt-2 h-8 rounded-lg border border-dashed border-linea bg-tarjeta px-2.5 text-[13px] text-tinta-2 hover:text-tinta disabled:opacity-40"
+                >
+                    + Agregar semana
+                </button>
+            )}
 
             {/* Va FUERA del div con `overflow-x-auto`: el overlay es `position: fixed`,
                 pero un ancestro que recorta igual lo cortaría al arrastrar hacia el borde. */}

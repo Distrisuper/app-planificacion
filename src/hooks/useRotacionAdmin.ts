@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     agregarARutaBase,
     agregarClienteExtraAdmin,
+    agregarSemanaRutaBase,
     buscarEnCarteraAdmin,
     buscarEnRutaBase,
     cancelarRotacion,
@@ -17,12 +18,15 @@ import {
     intercambiarSemanas,
     intercambiarSemanasRutaBase,
     moverEnRutaBase,
+    moverSemanaRutaBase,
     quitarClienteAdmin,
     quitarDeRutaBase,
     reacomodarAdmin,
     reordenarRotacion,
     reiniciarRotacion,
     restaurarClienteAdmin,
+    restaurarEnRutaBase,
+    sincronizarRutaBase,
 } from '@/api/planificacionAdmin'
 import { moverEnGrid, moverEnRutaBase as moverEnCacheRutaBase } from '@/lib/moverEnGrid'
 import type {
@@ -284,18 +288,29 @@ export function useIntercambiarSemanas(codigo: string) {
 // ── Edición de la ruta base ──────────────────────────────────────────────────────
 // Todas releen la ruta base y nada más: la vuelta en curso no cambia por editar la base.
 
-/** Mover una card de la ruta base. Optimista con rollback, igual que `useReacomodarAdmin`. */
+/**
+ * Mover una card de la ruta base, también dentro del mismo día (`posicion`). Optimista con
+ * rollback, igual que `useReacomodarAdmin`.
+ */
 export function useMoverEnRutaBase(codigo: string) {
     const qc = useQueryClient()
     const key = rotacionAdminKeys.rutaBase(codigo)
     return useMutation({
-        mutationFn: (args: { id: number; semana: number; dia: number }) =>
-            moverEnRutaBase(codigo, args.id, { semana: args.semana, dia: args.dia }),
+        mutationFn: (args: { id: number; semana: number; dia: number; posicion?: number }) =>
+            moverEnRutaBase(codigo, args.id, {
+                semana: args.semana,
+                dia: args.dia,
+                // Sin la clave cuando no hay posición: el back la manda al final.
+                ...(args.posicion !== undefined && { posicion: args.posicion }),
+            }),
         onMutate: async args => {
             await qc.cancelQueries({ queryKey: key })
             const previo = qc.getQueryData<IRutaBase>(key)
             if (previo) {
-                qc.setQueryData(key, moverEnCacheRutaBase(previo, args.id, args.semana, args.dia))
+                qc.setQueryData(
+                    key,
+                    moverEnCacheRutaBase(previo, args.id, args.semana, args.dia, args.posicion),
+                )
             }
             return { previo }
         },
@@ -308,13 +323,62 @@ export function useMoverEnRutaBase(codigo: string) {
     })
 }
 
-/** Sin optimista, como `useQuitarClienteAdmin`: quitar de la ruta base no tiene deshacer. */
+/** Borrado lógico: la card queda quitada, con Restaurar. Sin optimista, como `useQuitarClienteAdmin`. */
 export function useQuitarDeRutaBase(codigo: string) {
     const qc = useQueryClient()
     return useMutation({
         mutationFn: (id: number) => quitarDeRutaBase(codigo, id),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+        },
+    })
+}
+
+/** Deshace un "quitar". El 409 (el cliente ya volvió a esa celda) es esperado: sin optimista. */
+export function useRestaurarEnRutaBase(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (id: number) => restaurarEnRutaBase(codigo, id),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+        },
+    })
+}
+
+export function useAgregarSemanaRutaBase(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: () => agregarSemanaRutaBase(codigo),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+        },
+    })
+}
+
+/** Renumera todas las semanas: se relee la ruta entera, sin optimista. */
+export function useMoverSemanaRutaBase(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: { semana: number; posicion: number }) => moverSemanaRutaBase(codigo, args),
+        onSuccess: () => {
+            qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+        },
+    })
+}
+
+/**
+ * "Pegar códigos": con `aplicar: false` es la vista previa y no cambia nada, así que solo
+ * se relee la ruta cuando se aplicó.
+ */
+export function useSincronizarRutaBase(codigo: string) {
+    const qc = useQueryClient()
+    return useMutation({
+        mutationFn: (args: { semana: number; dias: Record<string, string[]>; aplicar: boolean }) =>
+            sincronizarRutaBase(codigo, args),
+        onSuccess: (_data, args) => {
+            if (args.aplicar) {
+                qc.invalidateQueries({ queryKey: rotacionAdminKeys.rutaBase(codigo) })
+            }
         },
     })
 }

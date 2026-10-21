@@ -75,10 +75,12 @@ describe('moverEnGrid', () => {
 })
 
 describe('moverEnRutaBase', () => {
-    const fila = (id: number) => ({
+    const fila = (id: number, eliminado = false) => ({
         id,
         codigoParticularCliente: `C${id}`,
         nombreCliente: `Cliente ${id}`,
+        orden: 0,
+        eliminado,
     })
     const RUTA: IRutaBase = {
         semanas: [
@@ -110,5 +112,33 @@ describe('moverEnRutaBase', () => {
 
     it('deja la ruta igual si la fila no está', () => {
         expect(moverEnRutaBase(RUTA, 999, 2, 1)).toEqual(RUTA)
+    })
+
+    describe('con posición', () => {
+        const DIA: IRutaBase = {
+            semanas: [
+                {
+                    semana: 1,
+                    descripcion: null,
+                    dias: { ...vacia(), LUN: [fila(1), fila(2), fila(3), fila(9, true)], MAR: [fila(4)] },
+                },
+            ],
+            omitidos: [],
+        }
+        const lun = (r: IRutaBase) => r.semanas[0].dias.LUN.map(c => c.id)
+
+        it('reordena dentro del día: la posición es el lugar final entre los activos', () => {
+            expect(lun(moverEnRutaBase(DIA, 1, 1, 1, 2))).toEqual([2, 3, 1, 9])
+            expect(lun(moverEnRutaBase(DIA, 3, 1, 1, 0))).toEqual([3, 1, 2, 9])
+        })
+
+        it('desde otro día entra en esa posición, antes de los quitados', () => {
+            expect(lun(moverEnRutaBase(DIA, 4, 1, 1, 1))).toEqual([1, 4, 2, 3, 9])
+            expect(lun(moverEnRutaBase(DIA, 4, 1, 1, 3))).toEqual([1, 2, 3, 4, 9])
+        })
+
+        it('sin posición va al final de los activos', () => {
+            expect(lun(moverEnRutaBase(DIA, 4, 1, 1))).toEqual([1, 2, 3, 4, 9])
+        })
     })
 })

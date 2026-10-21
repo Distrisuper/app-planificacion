@@ -17,6 +17,10 @@ const MENSAJES: Record<string, string> = {
     CLIENTE_FUERA_DE_CARTERA: 'Ese cliente no es de la cartera de este vendedor.',
     RUTA_FILA_NOT_FOUND: 'Ese cliente ya no está en la ruta base: alguien la cambió. Recargá la página.',
     PRUEBA_SIN_RUTA_BASE: 'El vendedor de prueba no tiene ruta base: no se puede editar.',
+    POSICION_INVALIDA: 'Ese lugar no existe en la ruta base. Recargá la página y probá de nuevo.',
+    DEMASIADAS_SEMANAS: 'La ruta base ya tiene el máximo de semanas (60): no se pueden agregar más.',
+    SEMANA_YA_EXISTE: 'Esa semana ya se agregó recién. Recargá la página para verla.',
+    DIAS_INVALIDOS: 'Los códigos pegados no se pudieron leer por día. Revisá que sean de LUN a VIE.',
     // Vuelta: intercambiar semanas
     SEMANA_NO_PENDIENTE: 'Solo se pueden intercambiar semanas que todavía no empezaron.',
     SEMANA_CON_RESUELTOS:

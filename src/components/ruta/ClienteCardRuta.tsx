@@ -1,4 +1,4 @@
-import { useDraggable } from '@dnd-kit/core'
+import { useDraggable, useDroppable } from '@dnd-kit/core'
 import { memo, useCallback, useState } from 'react'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import { titleCaseNombre } from '@/lib/textFormat'
@@ -40,6 +40,8 @@ interface ClienteCardRutaProps {
     overlay?: boolean
     /** Una sola línea con el nombre, sin código ni chips: la vista compacta del grid. */
     compacta?: boolean
+    /** true = se puede soltar otra card sobre esta, para ordenar el día (ruta base). */
+    soltable?: boolean
 }
 
 /**
@@ -52,7 +54,11 @@ export interface TextoQuitar {
     aviso: string
     /** El tooltip del ✕. Ausente = el `aviso`. */
     explicacion?: string
+    /** El tooltip de "Restaurar". Ausente = el de la vuelta. */
+    restaurar?: string
 }
+
+const RESTAURAR_VUELTA = 'Volver a poner esta visita en la vuelta, en el mismo día.'
 
 const TEXTO_QUITAR_VUELTA: TextoQuitar = {
     donde: 'de esta vuelta',
@@ -101,7 +107,7 @@ function Acciones({
                 <button
                     type="button"
                     aria-label={`Restaurar: ${titleCaseNombre(cliente.nombreCliente)}`}
-                    title="Volver a poner esta visita en la vuelta, en el mismo día."
+                    title={textoQuitar.restaurar ?? RESTAURAR_VUELTA}
                     onClick={restaurar}
                     className="absolute right-1 top-1 rounded px-1 text-[11px] font-medium text-slate-500 hover:bg-emerald-50 hover:text-emerald-700"
                 >
@@ -256,6 +262,7 @@ export default function ClienteCardRuta({
     overlay,
     textoQuitar = TEXTO_QUITAR_VUELTA,
     compacta = false,
+    soltable = false,
 }: ClienteCardRutaProps) {
     const resuelto = estaResuelto(cliente.estado)
 
@@ -298,8 +305,17 @@ export default function ClienteCardRuta({
         disabled: overlay || !puedeMoverse,
     })
 
+    // El destino para ordenar va en la card entera, con otro id que el arrastre (`antes-` y
+    // no `card-`): soltar acá es "en el lugar de esta card" (ver `movimientoOrdenado`). Las
+    // quitadas también reciben, así se puede soltar al final de un día que las tiene.
+    const { setNodeRef: setSoltarRef, isOver } = useDroppable({
+        id: `antes-${cliente.rotacionClienteId}`,
+        disabled: overlay || !soltable,
+    })
+
     return (
         <div
+            ref={setSoltarRef}
             // La copia del overlay lleva otro testid: dos nodos con el mismo dejarían las
             // consultas ambiguas justo durante el arrastre.
             data-testid={
@@ -320,7 +336,7 @@ export default function ClienteCardRuta({
                 resuelto || cliente.eliminado
                     ? 'border-slate-200 bg-slate-100 text-slate-500'
                     : 'border-slate-300 bg-white text-slate-800'
-            } ${isDragging ? 'opacity-40' : ''} ${
+            } ${isDragging ? 'opacity-40' : ''} ${isOver ? 'ring-2 ring-slate-400' : ''} ${
                 overlay ? 'cursor-grabbing shadow-lg ring-1 ring-slate-400' : ''
             } ${
                 // El `active:` es CSS puro, así que responde en el mismo instante en que

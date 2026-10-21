@@ -656,6 +656,23 @@ export interface IClienteRutaBase {
     id: number
     codigoParticularCliente: string
     nombreCliente: string
+    /** Su lugar dentro del día. El GET ya los manda ordenados: primero los activos. */
+    orden: number
+    /** true = quitado de la ruta base (borrado lógico): se ve con "Restaurar". */
+    eliminado: boolean
+}
+
+/** Respuesta de `sincronizar`: qué pasa (vista previa) o qué pasó (aplicado) en la semana. */
+export interface IResultadoSincronizarRutaBase {
+    entran: Array<{ codigoParticularCliente: string; nombreCliente: string; dia: number }>
+    salen: Array<{ id: number; codigoParticularCliente: string; nombreCliente: string; dia: number }>
+    /** Clientes que ya estaban en su día y siguen. */
+    quedan: number
+    /** Códigos pegados que no son de la cartera del vendedor: no entran. */
+    noEncontrados: string[]
+    /** Códigos pegados más de una vez en el mismo día: entran una sola vez. */
+    repetidos: Array<{ codigo: string; dia: number }>
+    aplicado: boolean
 }
 
 export interface ISemanaRutaBase {
