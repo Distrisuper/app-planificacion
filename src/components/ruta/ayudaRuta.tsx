@@ -54,6 +54,12 @@ export function AyudaRuta() {
                     la <b>vuelta actual</b> se pregunta si es solo para esta vuelta o también
                     para la ruta base. Quitar y agregar en la vuelta son solo de la vuelta.
                 </p>
+                <p className="mt-1">
+                    En la ruta base también se ordenan los clientes del día soltando una card
+                    sobre otra, se agregan semanas al final, y desde el <b>⋯</b> de cada semana se
+                    la mueve de lugar o se le pegan los códigos de sus clientes (de Excel o uno
+                    por renglón). Lo quitado se puede volver a poner con <b>Restaurar</b>.
+                </p>
             </div>
 
             <div>

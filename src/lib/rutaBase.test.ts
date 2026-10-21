@@ -11,7 +11,10 @@ describe('rutaBaseComoGrid', () => {
             descripcion: 'Campana',
             dias: {
                 ...vacia(),
-                JUE: [{ id: 41, codigoParticularCliente: 'P009', nombreCliente: 'KIOSCO NUEVE' }],
+                JUE: [
+                    { id: 41, codigoParticularCliente: 'P009', nombreCliente: 'KIOSCO NUEVE', orden: 0, eliminado: false },
+                    { id: 42, codigoParticularCliente: 'P010', nombreCliente: 'KIOSCO DIEZ', orden: 1, eliminado: true },
+                ],
             },
         },
     ]
@@ -29,6 +32,15 @@ describe('rutaBaseComoGrid', () => {
             eliminado: false,
             ultimoMovimiento: null,
         })
+    })
+
+    it('una card quitada de la ruta base llega quitada, para ofrecer Restaurar', () => {
+        const [semana] = rutaBaseComoGrid(SEMANAS)
+
+        expect(semana.dias.JUE.map(c => [c.rotacionClienteId, c.eliminado])).toEqual([
+            [41, false],
+            [42, true],
+        ])
     })
 
     it('conserva la semana y su zona, y la deja pendiente', () => {

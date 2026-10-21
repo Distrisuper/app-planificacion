@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import GridRotacion, { movimientoDeDrop, parsearCelda } from './GridRotacion'
+import GridRotacion, { movimientoDeDrop, movimientoOrdenado, parsearCelda } from './GridRotacion'
 import type { ISemanaRotacionAdmin } from '@/types/planificacion'
 
 const vacia = () => ({ LUN: [], MAR: [], MIE: [], JUE: [], VIE: [] })
@@ -128,6 +128,112 @@ describe('movimientoDeDrop', () => {
     it('ignora ids que no son de una card o de una celda', () => {
         expect(movimientoDeDrop('otra-cosa', 'celda-3-JUE', origenDe)).toBeNull()
         expect(movimientoDeDrop('card-11', 'header-LUN', origenDe)).toBeNull()
+    })
+})
+
+describe('movimientoOrdenado', () => {
+    const c = (id: number, eliminado = false) =>
+        ({
+            rotacionClienteId: id,
+            codigoParticularCliente: `P${id}`,
+            nombreCliente: `Cliente ${id}`,
+            dia: 1,
+            estado: 'pendiente',
+            esExtra: false,
+            eliminado,
+            ultimoMovimiento: null,
+        }) as const
+    // LUN de la semana 1: 1, 2, 3 y el 9 quitado. MAR: el 4.
+    const RUTA: ISemanaRotacionAdmin[] = [
+        { semana: 1, descripcion: null, dias: { ...vacia(), LUN: [c(1), c(2), c(3), c(9, true)], MAR: [c(4)] } },
+        { semana: 2, descripcion: null, dias: vacia() },
+    ]
+
+    it('soltar sobre una card de abajo del mismo día la deja después de esa', () => {
+        expect(movimientoOrdenado('card-1', 'antes-2', RUTA)).toEqual({
+            rotacionClienteId: 1,
+            semana: 1,
+            dia: 1,
+            posicion: 1,
+        })
+        expect(movimientoOrdenado('card-1', 'antes-3', RUTA)?.posicion).toBe(2)
+    })
+
+    it('soltar sobre una card de arriba del mismo día la deja antes de esa', () => {
+        expect(movimientoOrdenado('card-3', 'antes-1', RUTA)?.posicion).toBe(0)
+    })
+
+    it('desde otro día entra antes de la card donde se suelta', () => {
+        expect(movimientoOrdenado('card-4', 'antes-2', RUTA)).toEqual({
+            rotacionClienteId: 4,
+            semana: 1,
+            dia: 1,
+            posicion: 1,
+        })
+    })
+
+    it('los quitados no cuentan para la posición', () => {
+        expect(movimientoOrdenado('card-4', 'antes-9', RUTA)?.posicion).toBe(3)
+    })
+
+    it('soltar sobre la celda de otro día la manda al final, sin posición', () => {
+        expect(movimientoOrdenado('card-1', 'celda-2-MIE', RUTA)).toEqual({
+            rotacionClienteId: 1,
+            semana: 2,
+            dia: 3,
+        })
+    })
+
+    it('soltarla en su mismo lugar no es un movimiento', () => {
+        expect(movimientoOrdenado('card-2', 'antes-2', RUTA)).toBeNull()
+        expect(movimientoOrdenado('card-2', 'celda-1-LUN', RUTA)).toBeNull()
+        // La 3 es la última activa: soltarla sobre el quitado de abajo la deja donde está.
+        expect(movimientoOrdenado('card-3', 'antes-9', RUTA)).toBeNull()
+        expect(movimientoOrdenado('card-2', null, RUTA)).toBeNull()
+    })
+})
+
+describe('acciones de semana de la ruta base', () => {
+    const props = () => ({
+        semanas: SEMANAS,
+        onMover: vi.fn(),
+        onIntercambiar: vi.fn(),
+    })
+
+    it('"Agregar semana" va al final de las semanas', async () => {
+        const onAgregarSemana = vi.fn()
+        render(<GridRotacion {...props()} onAgregarSemana={onAgregarSemana} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Agregar semana' }))
+
+        expect(onAgregarSemana).toHaveBeenCalled()
+    })
+
+    it('sin onAgregarSemana no se ofrece', () => {
+        render(<GridRotacion {...props()} />)
+        expect(screen.queryByRole('button', { name: 'Agregar semana' })).not.toBeInTheDocument()
+    })
+
+    it('el ⋯ de la semana ofrece pegar códigos y moverla a otro lugar', async () => {
+        const onPegarCodigos = vi.fn()
+        const onMoverSemana = vi.fn()
+        render(<GridRotacion {...props()} onPegarCodigos={onPegarCodigos} onMoverSemana={onMoverSemana} />)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Más acciones: semana 3' }))
+        // Solo a los otros lugares: la semana 3 es la 2.ª de la lista.
+        expect(screen.getByRole('menuitem', { name: 'Mover a semana 1' })).toBeInTheDocument()
+        expect(screen.queryByRole('menuitem', { name: 'Mover a semana 2' })).not.toBeInTheDocument()
+        await userEvent.click(screen.getByRole('menuitem', { name: 'Mover a semana 1' }))
+        expect(onMoverSemana).toHaveBeenCalledWith(3, 1)
+
+        await userEvent.click(screen.getByRole('button', { name: 'Más acciones: semana 1' }))
+        await userEvent.click(screen.getByRole('menuitem', { name: 'Pegar códigos' }))
+        expect(onPegarCodigos).toHaveBeenCalledWith(1)
+    })
+
+    it('sin acciones de semana no hay ⋯', () => {
+        render(<GridRotacion {...props()} />)
+        expect(screen.queryByRole('button', { name: /^Más acciones/ })).not.toBeInTheDocument()
     })
 })
 

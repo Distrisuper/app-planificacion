@@ -46,12 +46,17 @@ export function moverEnGrid(
 /**
  * Lo mismo para la ruta base (`IRutaBase`), con su `id` de fila. Las cards de la ruta base
  * no llevan `dia`: lo da la columna donde están.
+ *
+ * `posicion` es la del PATCH: el lugar final entre los activos del día destino, sin contar
+ * la card movida. Ausente = al final de los activos. Los quitados quedan siempre después,
+ * que es como los manda el GET: sin esto la card se dibujaba debajo de ellos hasta el refetch.
  */
 export function moverEnRutaBase(
     ruta: IRutaBase,
     id: number,
     semana: number,
     dia: number,
+    posicion?: number,
 ): IRutaBase {
     const semanas = moverEnSemanas<IClienteRutaBase, ISemanaRutaBase>(
         ruta.semanas,
@@ -59,13 +64,20 @@ export function moverEnRutaBase(
         c => c,
         semana,
         dia,
+        (lista, movida) => {
+            const activos = lista.filter(c => !c.eliminado)
+            const quitados = lista.filter(c => c.eliminado)
+            const lugar = Math.min(posicion ?? activos.length, activos.length)
+            return [...activos.slice(0, lugar), movida, ...activos.slice(lugar), ...quitados]
+        },
     )
     return semanas === ruta.semanas ? ruta : { ...ruta, semanas }
 }
 
 /**
  * El núcleo de los dos: saca la card que cumple `esLaCard` y la pone en (semana, dia).
- * Devuelve el MISMO array si algo no cierra, para que el caller devuelva el original.
+ * `insertar` decide dónde entra en la lista del día destino (ya sin la card); ausente, al
+ * final. Devuelve el MISMO array si algo no cierra, para que el caller devuelva el original.
  */
 function moverEnSemanas<C, S extends { semana: number; dias: Record<Dia, C[]> }>(
     semanas: S[],
@@ -73,6 +85,7 @@ function moverEnSemanas<C, S extends { semana: number; dias: Record<Dia, C[]> }>
     mover: (c: C) => C,
     semana: number | undefined,
     dia: number,
+    insertar: (lista: C[], movida: C) => C[] = (lista, movida) => [...lista, movida],
 ): S[] {
     const diaKey = DIAS[dia - 1]
     if (!diaKey) return semanas
@@ -110,7 +123,7 @@ function moverEnSemanas<C, S extends { semana: number; dias: Record<Dia, C[]> }>
                 dias[d] = dias[d].filter(c => !esLaCard(c))
             }
         }
-        if (esDestino) dias[diaKey] = [...dias[diaKey], movida]
+        if (esDestino) dias[diaKey] = insertar(dias[diaKey], movida)
 
         return { ...s, dias }
     })

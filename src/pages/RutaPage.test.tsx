@@ -350,7 +350,10 @@ describe('RutaPage', () => {
                     descripcion: 'Campana',
                     dias: {
                         ...vacia,
-                        MAR: [{ id: 41, codigoParticularCliente: 'P009', nombreCliente: 'KIOSCO NUEVE' }],
+                        MAR: [
+                            { id: 41, codigoParticularCliente: 'P009', nombreCliente: 'KIOSCO NUEVE', orden: 0, eliminado: false },
+                            { id: 42, codigoParticularCliente: 'P010', nombreCliente: 'ALMACEN VIEJO', orden: 1, eliminado: true },
+                        ],
                     },
                 },
             ],
@@ -461,6 +464,90 @@ describe('RutaPage', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Intercambiar con este día: semana 1, MAR' }))
 
         expect(await screen.findByText(/Un cliente está en los dos días/)).toBeInTheDocument()
+    })
+
+    it('en la ruta base, "Agregar semana" pega al endpoint de la ruta base', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        vi.mocked(apiAdmin.agregarSemanaRutaBase).mockResolvedValue(3)
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Agregar semana' }))
+
+        await waitFor(() => expect(apiAdmin.agregarSemanaRutaBase).toHaveBeenCalledWith('V 2'))
+    })
+
+    it('en la ruta base, un cliente quitado se ve con Restaurar y vuelve con el endpoint de la ruta base', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        vi.mocked(apiAdmin.restaurarEnRutaBase).mockResolvedValue(undefined)
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Restaurar: Almacen Viejo' }))
+
+        await waitFor(() => expect(apiAdmin.restaurarEnRutaBase).toHaveBeenCalledWith('V 2', 42))
+        expect(apiAdmin.restaurarClienteAdmin).not.toHaveBeenCalled()
+    })
+
+    it('en la ruta base, restaurar a un cliente que ya volvió a ese día se explica', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        vi.mocked(apiAdmin.restaurarEnRutaBase).mockRejectedValue({
+            response: { status: 409, data: { code: 'CELDA_OCUPADA_POR_EL_MISMO_CLIENTE' } },
+        })
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Restaurar: Almacen Viejo' }))
+
+        expect(await screen.findByText('Ese cliente ya está en ese día de la ruta base.')).toBeInTheDocument()
+    })
+
+    it('en la ruta base, el ⋯ de la semana la mueve a otro lugar', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        vi.mocked(apiAdmin.moverSemanaRutaBase).mockResolvedValue(undefined)
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Más acciones: semana 2' }))
+        await userEvent.click(screen.getByRole('menuitem', { name: 'Mover a semana 1' }))
+
+        await waitFor(() =>
+            expect(apiAdmin.moverSemanaRutaBase).toHaveBeenCalledWith('V 2', { semana: 2, posicion: 1 }),
+        )
+    })
+
+    it('en la ruta base, el ⋯ de la semana abre "Pegar códigos" para esa semana', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Más acciones: semana 2' }))
+        await userEvent.click(screen.getByRole('menuitem', { name: 'Pegar códigos' }))
+
+        expect(await screen.findByText('Pegar códigos · Semana 2 (Campana)')).toBeInTheDocument()
+    })
+
+    it('sin ruta base, se puede empezar agregando una semana', async () => {
+        montarRotacion('abierta')
+        vi.mocked(apiAdmin.getRutaBase).mockResolvedValue({ semanas: [], omitidos: [] })
+        vi.mocked(apiAdmin.agregarSemanaRutaBase).mockResolvedValue(1)
+        await elegirVendedor()
+        await screen.findByLabelText('Agregar cliente: semana 1, MAR')
+        await userEvent.click(screen.getByRole('button', { name: 'Ruta base' }))
+
+        expect(await screen.findByText('Este vendedor no tiene ruta base cargada.')).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Agregar semana' }))
+
+        await waitFor(() => expect(apiAdmin.agregarSemanaRutaBase).toHaveBeenCalledWith('V 2'))
+    })
+
+    it('en la vuelta no se ofrecen las acciones de semana de la ruta base', async () => {
+        montarRotacion('abierta')
+        await elegirVendedor()
+        await screen.findByLabelText('Agregar cliente: semana 1, MAR')
+
+        expect(screen.queryByRole('button', { name: 'Agregar semana' })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^Más acciones/ })).not.toBeInTheDocument()
     })
 
     /** Una vuelta abierta con la semana 1 en curso y la 2 y la 3 pendientes. */

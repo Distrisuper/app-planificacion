@@ -8,6 +8,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import type { TextoQuitar } from '@/components/ruta/ClienteCardRuta'
 import ColaRotaciones from '@/components/ruta/ColaRotaciones'
 import GridRotacion from '@/components/ruta/GridRotacion'
+import PegarCodigosRutaBaseDialog from '@/components/ruta/PegarCodigosRutaBaseDialog'
 import { AyudaRuta } from '@/components/ruta/ayudaRuta'
 import EstadoVista from '@/components/ui/EstadoVista'
 import Segmentado, { type OpcionSegmentado } from '@/components/ui/Segmentado'
@@ -34,6 +35,9 @@ import {
     useReiniciarRotacion,
     useReordenarRotacion,
     useRestaurarClienteAdmin,
+    useRestaurarEnRutaBase,
+    useAgregarSemanaRutaBase,
+    useMoverSemanaRutaBase,
     useRotacion,
     useRotaciones,
     useRutaBase,
@@ -59,12 +63,18 @@ const OPCIONES_VISTA: OpcionSegmentado<Vista>[] = [
 
 const DIAS = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 
-/** Quitar de la ruta base no tiene "Restaurar" ni vuelve solo: el aviso tiene que decirlo. */
+/** Quitar de la ruta base no vuelve solo como en la vuelta: el aviso tiene que decirlo. */
 const TEXTO_QUITAR_BASE: TextoQuitar = {
     donde: 'de la ruta base',
     aviso: 'No va a estar en las próximas vueltas.',
-    explicacion: 'Quitar este cliente de la ruta base. No va a estar en las próximas vueltas.',
+    explicacion:
+        'Quitar este cliente de la ruta base. No va a estar en las próximas vueltas; se puede deshacer con Restaurar.',
+    restaurar: 'Volver a poner este cliente en la ruta base, en el mismo día.',
 }
+
+/** Así se ofrece "Agregar semana" también cuando no hay ninguna: es como se empieza. */
+const CLASE_AGREGAR_SEMANA =
+    'h-8 rounded-lg border border-dashed border-linea bg-tarjeta px-2.5 text-[13px] text-tinta-2 hover:text-tinta disabled:opacity-40'
 
 /**
  * Un reacomodo de la vuelta que espera la respuesta del diálogo de alcance. Se guarda el
@@ -103,6 +113,8 @@ export default function RutaPage() {
     )
     const [cambioPendiente, setCambioPendiente] = useState<CambioVuelta | null>(null)
     const [confirmandoReinicio, setConfirmandoReinicio] = useState(false)
+    // La semana de la ruta base cuyo "Pegar códigos" está abierto. null = cerrado.
+    const [semanaPegar, setSemanaPegar] = useState<number | null>(null)
     const reiniciar = useReiniciarRotacion(vendedor ?? '')
 
     // La celda del "+" y el cambio pendiente son de la vista donde se tocaron: sin esto, el
@@ -111,6 +123,7 @@ export default function RutaPage() {
         setVista(v)
         setCeldaAgregar(null)
         setCambioPendiente(null)
+        setSemanaPegar(null)
         reiniciar.reset()
     }
 
@@ -148,6 +161,8 @@ export default function RutaPage() {
         // La rotación activa era del vendedor anterior: sin esto, el grid pediría un id
         // que no le pertenece y el backend contestaría 404.
         setRotacionActivaId(null)
+        // La semana a pegar era de la ruta base del vendedor anterior.
+        setSemanaPegar(null)
         // El cartel de un reinicio fallido nombra al vendedor anterior.
         reiniciar.reset()
     }
@@ -191,6 +206,9 @@ export default function RutaPage() {
     const quitarBase = useQuitarDeRutaBase(vendedor ?? '')
     const intercambiarDiasBase = useIntercambiarDiasRutaBase(vendedor ?? '')
     const intercambiarSemanasBase = useIntercambiarSemanasRutaBase(vendedor ?? '')
+    const restaurarBase = useRestaurarEnRutaBase(vendedor ?? '')
+    const agregarSemanaBase = useAgregarSemanaRutaBase(vendedor ?? '')
+    const moverSemanaBase = useMoverSemanaRutaBase(vendedor ?? '')
 
     /** "LUN · Semana 2": cómo se nombra una celda en el diálogo de alcance. */
     const celda = (semana: number, dia: number) => `${DIAS[dia - 1] ?? dia} · Semana ${semana}`
@@ -236,9 +254,18 @@ export default function RutaPage() {
         }
     }
 
-    // El último error de la ruta base. Uno solo a la vez: son cuatro acciones sobre la misma
-    // grilla, y un cartel por acción apilaría avisos viejos.
-    const errorEdicionBase = [moverBase, quitarBase, intercambiarDiasBase, intercambiarSemanasBase]
+    // El último error de la ruta base. Uno solo a la vez: son varias acciones sobre la misma
+    // grilla, y un cartel por acción apilaría avisos viejos. "Pegar códigos" no está: muestra
+    // sus errores en su diálogo.
+    const errorEdicionBase = [
+        moverBase,
+        quitarBase,
+        intercambiarDiasBase,
+        intercambiarSemanasBase,
+        restaurarBase,
+        agregarSemanaBase,
+        moverSemanaBase,
+    ]
         .filter(m => m.isError)
         .sort((a, b) => b.submittedAt - a.submittedAt)[0]
 
@@ -299,12 +326,23 @@ export default function RutaPage() {
                 )}
 
                 {!verVuelta && vendedor !== null && rutaBase?.semanas.length === 0 && (
-                    <EstadoVista
-                        className={RECUADRO}
-                        estado="vacio"
-                        titulo="Este vendedor no tiene ruta base cargada."
-                        texto="Sin ruta base no se le puede armar una vuelta nueva. El vendedor de prueba no tiene: arranca como copia de un vendedor real."
-                    />
+                    <>
+                        <EstadoVista
+                            className={RECUADRO}
+                            estado="vacio"
+                            titulo="Este vendedor no tiene ruta base cargada."
+                            texto="Sin ruta base no se le puede armar una vuelta nueva. Se empieza agregando una semana y cargándole clientes. El vendedor de prueba no tiene: arranca como copia de un vendedor real."
+                        />
+                        <button
+                            type="button"
+                            aria-label="Agregar semana"
+                            onClick={() => agregarSemanaBase.mutate()}
+                            disabled={agregarSemanaBase.isPending}
+                            className={CLASE_AGREGAR_SEMANA}
+                        >
+                            + Agregar semana
+                        </button>
+                    </>
                 )}
 
                 {!verVuelta && rutaBase && rutaBase.semanas.length > 0 && vendedor && (
@@ -321,15 +359,25 @@ export default function RutaPage() {
                         </p>
                         {/* El mismo grid que la vuelta, con la ruta base mapeada a su forma
                             (ver `rutaBaseComoGrid`). Sin renombrar semanas: la ruta base no
-                            tiene nombres propios, los toma de la última vuelta. Sin restaurar:
-                            quitar de la ruta base es un DELETE. Y sin diálogo de alcance:
-                            acá todo es de la ruta base. */}
+                            tiene nombres propios, los toma de la última vuelta. Sin diálogo de
+                            alcance: acá todo es de la ruta base. Y con lo que solo tiene la
+                            ruta base: ordenar dentro del día, agregar y mover semanas, y pegar
+                            códigos. */}
                         <GridRotacion
                             // Misma razón que la `key` del grid de la vuelta: el origen de un
                             // intercambio armado no puede sobrevivir a un cambio de vendedor.
                             key={`base-${vendedor}`}
                             semanas={semanasBase}
-                            onMover={(id, semana, dia) => moverBase.mutate({ id, semana, dia })}
+                            ordenable
+                            onMover={(id, semana, dia, posicion) =>
+                                moverBase.mutate({ id, semana, dia, posicion })
+                            }
+                            onRestaurar={id => restaurarBase.mutate(id)}
+                            onAgregarSemana={() => agregarSemanaBase.mutate()}
+                            onMoverSemana={(semana, posicion) =>
+                                moverSemanaBase.mutate({ semana, posicion })
+                            }
+                            onPegarCodigos={setSemanaPegar}
                             onIntercambiar={(a, b) =>
                                 intercambiarDiasBase.mutate({
                                     semanaA: a.semana,
@@ -357,18 +405,35 @@ export default function RutaPage() {
                             />
                         )}
 
-                        {errorEdicionBase && (
-                            <EstadoVista
-                                className={RECUADRO}
-                                estado="error"
-                                titulo="No se pudo cambiar la ruta base."
-                                texto={mensajeErrorRuta(
-                                    errorEdicionBase.error,
-                                    'Probá de nuevo en un momento.',
-                                )}
+                        {semanaPegar !== null && (
+                            <PegarCodigosRutaBaseDialog
+                                // Un diálogo por semana: lo pegado en otra no tiene que quedar.
+                                key={semanaPegar}
+                                open
+                                onClose={() => setSemanaPegar(null)}
+                                codigoVendedor={vendedor}
+                                semana={semanaPegar}
+                                zona={
+                                    rutaBase.semanas.find(s => s.semana === semanaPegar)
+                                        ?.descripcion ?? null
+                                }
                             />
                         )}
                     </>
+                )}
+
+                {/* Afuera del bloque del grid: "Agregar semana" también se ofrece sin semanas,
+                    y su error tiene que verse ahí. */}
+                {!verVuelta && rutaBase && errorEdicionBase && (
+                    <EstadoVista
+                        className={RECUADRO}
+                        estado="error"
+                        titulo="No se pudo cambiar la ruta base."
+                        texto={mensajeErrorRuta(
+                            errorEdicionBase.error,
+                            'Probá de nuevo en un momento.',
+                        )}
+                    />
                 )}
 
                 {verVuelta && vendedor !== null && isLoading && <EstadoVista estado="cargando" />}

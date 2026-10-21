@@ -230,6 +230,16 @@ del front y es solo de gerencia: el vendedor sigue viendo solo sus números en `
   PROY con la misma regla de Versus (`src/lib/facturacion.ts`, `src/lib/proyeccionVentas.ts`,
   copiados de app-vendedores: si cambian allá, se cambian acá). No usa el período de la pantalla.
 
+**Ruta base editable (`/analitica/ruta`, vista "Ruta base").** Edita `pl_ruta_cliente`, lo que se
+copia al armar cada vuelta. Quitar es borrado lógico: la card queda con "Restaurar", como en la
+vuelta. Solo acá se ordena dentro del día: soltar sobre una card manda `posicion`, el lugar final
+entre los activos del día sin contar la card movida (los quitados no cuentan y van al final); en la
+vuelta el reacomodo no tiene posición. Las acciones poco frecuentes van en el ⋯ de la semana: mover
+la semana (el back renumera) y "Pegar códigos". Pegar siempre es Revisar (vista previa) y después
+Aplicar, porque lo que no está en la lista sale de los días incluidos. Una grilla de Excel incluye
+los días que entraron en lo copiado (una columna vacía del rango es un día que queda vacío); una
+sola columna va al día que se elige.
+
 Fuera de alcance salvo pedido explícito: novedades para el vendedor, link de
 WhatsApp al cliente, recorrido continuo de la visita o del día (requiere app nativa), control
 minuto a minuto de un vendedor.
