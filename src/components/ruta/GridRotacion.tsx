@@ -511,6 +511,8 @@ interface GridRotacionProps {
     ordenable?: boolean
     /** Ausente = no se ofrece "Agregar semana" al final. */
     onAgregarSemana?: () => void
+    /** true = hay una semana agregándose: el botón espera, así un doble clic no crea dos. */
+    agregandoSemana?: boolean
     /** Ausente = el ⋯ de la semana no ofrece pegar códigos. */
     onPegarCodigos?: (semana: number) => void
     /** Lleva la semana a la posición 1..N. Ausente = el ⋯ no ofrece moverla. */
@@ -562,6 +564,7 @@ export default function GridRotacion({
     plegarPorEstado = false,
     ordenable = false,
     onAgregarSemana,
+    agregandoSemana = false,
     onPegarCodigos,
     onMoverSemana,
 }: GridRotacionProps) {
@@ -910,9 +913,10 @@ export default function GridRotacion({
                 <button
                     type="button"
                     onClick={onAgregarSemana}
+                    disabled={agregandoSemana}
                     aria-label="Agregar semana"
                     title="Sumar una semana vacía al final, para cargarle clientes."
-                    className="mt-2 h-8 rounded-lg border border-dashed border-linea bg-tarjeta px-2.5 text-[13px] text-tinta-2 hover:text-tinta"
+                    className="mt-2 h-8 rounded-lg border border-dashed border-linea bg-tarjeta px-2.5 text-[13px] text-tinta-2 hover:text-tinta disabled:opacity-40"
                 >
                     + Agregar semana
                 </button>

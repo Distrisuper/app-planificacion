@@ -374,6 +374,7 @@ export default function RutaPage() {
                             }
                             onRestaurar={id => restaurarBase.mutate(id)}
                             onAgregarSemana={() => agregarSemanaBase.mutate()}
+                            agregandoSemana={agregarSemanaBase.isPending}
                             onMoverSemana={(semana, posicion) =>
                                 moverSemanaBase.mutate({ semana, posicion })
                             }

@@ -48,14 +48,20 @@ export default function MenuAcciones({ etiqueta, acciones }: MenuAccionesProps) 
         const cerrarConEscape = (e: KeyboardEvent) => {
             if (e.key === 'Escape') cerrar()
         }
+        // Scrollear la lista larga del propio menú no lo cierra: sin esto, las últimas
+        // opciones quedaban fuera de alcance.
+        const cerrarAlScrollearAfuera = (e: Event) => {
+            if (menuRef.current?.contains(e.target as Node)) return
+            cerrar()
+        }
         document.addEventListener('mousedown', cerrarSiEsAfuera)
         document.addEventListener('keydown', cerrarConEscape)
-        window.addEventListener('scroll', cerrar, true)
+        window.addEventListener('scroll', cerrarAlScrollearAfuera, true)
         window.addEventListener('resize', cerrar)
         return () => {
             document.removeEventListener('mousedown', cerrarSiEsAfuera)
             document.removeEventListener('keydown', cerrarConEscape)
-            window.removeEventListener('scroll', cerrar, true)
+            window.removeEventListener('scroll', cerrarAlScrollearAfuera, true)
             window.removeEventListener('resize', cerrar)
         }
     }, [abierto])
