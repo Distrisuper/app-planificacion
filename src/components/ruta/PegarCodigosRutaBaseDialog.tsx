@@ -99,12 +99,13 @@ export default function PegarCodigosRutaBaseDialog({
                         {titulo}
                     </Dialog.Title>
                     <Dialog.Description className="mt-1 text-[13px] text-slate-500">
-                        Pegá la grilla copiada de Excel (columnas LUN a VIE) o un código por
-                        renglón. Aplica desde la próxima vuelta.
+                        Pegá la grilla copiada de Excel, con una columna por día. Aplica desde la
+                        próxima vuelta.
                     </Dialog.Description>
 
                     {!previa && (
                         <div className="mt-4 flex min-h-0 flex-col gap-3">
+                            <EjemploGrilla />
                             <textarea
                                 aria-label="Códigos"
                                 value={texto}
@@ -112,7 +113,7 @@ export default function PegarCodigosRutaBaseDialog({
                                 rows={8}
                                 autoFocus
                                 spellCheck={false}
-                                placeholder={'P001\tP014\tP020\tP031\tP040\nP002\t\tP021\t\tP041'}
+                                placeholder="Pegá acá…"
                                 className="w-full resize-y rounded-lg border-[1.5px] border-slate-200 px-3 py-2 font-mono text-[13px] text-slate-900 outline-none placeholder:text-slate-300 focus:border-slate-400"
                             />
                             {pegado.modo === 'columna' && (
@@ -219,6 +220,52 @@ export default function PegarCodigosRutaBaseDialog({
                 </Dialog.Content>
             </Dialog.Portal>
         </Dialog.Root>
+    )
+}
+
+/** Códigos inventados con forma de código real: el ejemplo no puede nombrar clientes. */
+const EJEMPLO: string[][] = [
+    ['00123', '00456', '00789', '01012', '01345'],
+    ['00124', '', '00790', '01013', ''],
+    ['00125', '', '00791', '', ''],
+]
+
+/**
+ * Cómo se ve lo que hay que pegar: una grilla de verdad, con LUN..VIE arriba de cada
+ * columna. Antes era el placeholder del textarea con tabs, y los huecos de los días con
+ * menos clientes corrían las columnas: no se entendía qué columna era cada día.
+ */
+function EjemploGrilla() {
+    return (
+        <div className="text-[12px] text-slate-400">
+            {/* Ilustración: los códigos son inventados, no hay nada que leer. */}
+            <table aria-hidden className="table-fixed border-collapse font-mono">
+                <thead>
+                    <tr>
+                        {DIAS.map(d => (
+                            <th key={d} className="w-16 pb-0.5 text-left font-semibold text-slate-500">
+                                {d}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {EJEMPLO.map((fila, i) => (
+                        <tr key={i}>
+                            {fila.map((codigo, j) => (
+                                <td key={j} className="w-16 border border-slate-100 px-1 leading-5">
+                                    {codigo}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+            <p className="mt-1.5 font-sans">
+                Un día puede tener menos clientes que otro. O pegá un código por renglón,
+                eligiendo el día.
+            </p>
+        </div>
     )
 }
 
