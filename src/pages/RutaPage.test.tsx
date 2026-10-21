@@ -477,6 +477,19 @@ describe('RutaPage', () => {
         await waitFor(() => expect(apiAdmin.agregarSemanaRutaBase).toHaveBeenCalledWith('V 2'))
     })
 
+    it('en la ruta base, si ya hay demasiadas semanas se explica', async () => {
+        montarRotacion('abierta')
+        montarRutaBase()
+        vi.mocked(apiAdmin.agregarSemanaRutaBase).mockRejectedValue({
+            response: { status: 422, data: { code: 'DEMASIADAS_SEMANAS' } },
+        })
+        await verRutaBase()
+
+        await userEvent.click(screen.getByRole('button', { name: 'Agregar semana' }))
+
+        expect(await screen.findByText(/La ruta base ya tiene el máximo de semanas/)).toBeInTheDocument()
+    })
+
     it('en la ruta base, un cliente quitado se ve con Restaurar y vuelve con el endpoint de la ruta base', async () => {
         montarRotacion('abierta')
         montarRutaBase()
