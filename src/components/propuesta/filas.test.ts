@@ -1,5 +1,5 @@
-import { construirFilasPropuesta, construirFilasVisita, separarSegmentos, totalesDe } from './filas'
-import type { IOfrecimiento, IRubroEstado, IRubroPropuesta } from '@/types/planificacion'
+import { construirFilasPropuesta, construirFilasVisita, rubrosElegibles, separarSegmentos, totalesDe } from './filas'
+import type { ICatalogoItem, IOfrecimiento, IRubroEstado, IRubroPropuesta } from '@/types/planificacion'
 
 function propuesta(over: Partial<IRubroPropuesta> = {}): IRubroPropuesta {
     return {
@@ -342,6 +342,80 @@ describe('construirFilasVisita', () => {
             true,
         )
         expect(filas.map(f => f.codigo)).toEqual(['322'])
+    })
+})
+
+// El universo de "otros rubros" es el catálogo del back (`GET /sale/rubro/catalog`). Un
+// super-rubro nuevo (387 REFRIGERACION) no está en la lista fija del 80/20 ni en el
+// historial de un cliente que nunca lo compró, y antes no aparecía para ofrecerlo.
+describe('otros rubros con el catálogo del back', () => {
+    const catalogo: ICatalogoItem[] = [
+        { code: '322', description: 'AMORTIGUADORES' },
+        { code: '363', description: 'KIT DISTRIBUCION' },
+        { code: '387', description: 'REFRIGERACION' },
+    ]
+
+    it('un rubro del catálogo que no está en el 80/20 ni en el historial aparece al final de la visita', () => {
+        const filas = construirFilasVisita(
+            [ofrecimiento({ id: 7, codigo: '322' })],
+            [],
+            { 7: { motivosCargados: 0, completo: false } },
+            true,
+            true,
+            catalogo,
+        )
+        expect(filas[filas.length - 1]).toMatchObject({
+            codigo: '387',
+            nombre: 'REFRIGERACION',
+            actual: null,
+            destacada: false,
+            agregable: true,
+            tipo: 'rubro',
+        })
+    })
+
+    it('un rubro del catálogo que no está en el 80/20 ni en el historial aparece al final de la propuesta', () => {
+        const filas = construirFilasPropuesta([propuesta({ rubroCode: '322' })], [], true, catalogo)
+        expect(filas[filas.length - 1]).toMatchObject({ codigo: '387', nombre: 'REFRIGERACION', destacada: false })
+    })
+
+    it('el buscador de "Agregar ofrecimiento" ofrece el rubro del catálogo, al final del 80/20', () => {
+        expect(rubrosElegibles([], catalogo)).toEqual([
+            { code: '322', description: 'AMORTIGUADORES' },
+            { code: '363', description: 'KIT DISTRIBUCION' },
+            { code: '387', description: 'REFRIGERACION' },
+        ])
+    })
+
+    it('con catálogo, un código de la lista fija que el catálogo no trae no se ofrece', () => {
+        const codigos = rubrosElegibles([], catalogo).map(r => r.code)
+        // 367 (ROD RUEDA) está en ORDER_RUBROS pero no en este catálogo: el back lo
+        // rechazaría al agregarlo.
+        expect(codigos).not.toContain('367')
+    })
+
+    it('el historial del cliente se suma al catálogo y manda el nombre', () => {
+        const elegibles = rubrosElegibles(
+            [estado({ rubroCode: '363', nombre: 'Kit distribución' }), estado({ rubroCode: 'ZZZ', nombre: 'Rubro viejo' })],
+            catalogo,
+        )
+        expect(elegibles).toEqual([
+            { code: '322', description: 'AMORTIGUADORES' },
+            { code: '363', description: 'Kit distribución' },
+            { code: '387', description: 'REFRIGERACION' },
+            { code: 'ZZZ', description: 'Rubro viejo' },
+        ])
+    })
+
+    it('sin catálogo (cargando o con error) cae a la lista fija del 80/20', () => {
+        const codigos = rubrosElegibles([], undefined).map(r => r.code)
+        expect(codigos).toContain('367')
+        expect(codigos).not.toContain('387')
+    })
+
+    it('un catálogo vacío se trata como sin catálogo: cae a la lista fija', () => {
+        const codigos = rubrosElegibles([], []).map(r => r.code)
+        expect(codigos.slice(0, 2)).toEqual(['322', '363'])
     })
 })
 

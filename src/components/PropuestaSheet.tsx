@@ -9,6 +9,7 @@ import { conDescuentos, hayDescuentosParaMostrar } from '@/lib/descuentosMarca'
 import DescuentosMarcaSheet, { ChipDescuentos } from './DescuentosMarcaSheet'
 import { usePropuesta } from '@/hooks/usePropuesta'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
+import { useRubroCatalog } from '@/hooks/useCatalogos'
 import type { AppExterna } from '@/lib/appsExternas'
 import type { IPropuestaRubroDTO, IRubroPropuesta, IVisitClientCard } from '@/types/planificacion'
 
@@ -72,11 +73,19 @@ export default function PropuestaSheet({
         open ? codigoCliente : null,
     )
 
+    // No entra en `cargando`: mientras llega, las filas usan la lista fija del 80/20.
+    const { data: catalogoRubros } = useRubroCatalog(open)
+
     const cargando = isLoading || rubroStatusLoading
     // Siempre expandida: el sheet ocupa casi toda la pantalla, así que los "otros
     // rubros del cliente" entran sin esconderlos detrás de un "Ver más" que obligaba
     // a un toque extra (y a esperar) para ver algo que ya estaba cargado.
-    const filas = construirFilasPropuesta(rubros, conDescuentos(rubroStatus, cliente), true)
+    const filas = construirFilasPropuesta(
+        rubros,
+        conDescuentos(rubroStatus, cliente),
+        true,
+        catalogoRubros,
+    )
 
     return (
         <>

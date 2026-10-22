@@ -265,6 +265,14 @@ export const getBrandCatalog = async (): Promise<ICatalogoItem[]> => {
     return res.data.data
 }
 
+/** Super-rubros de `staging.stg_rubros`, vendan o no (un rubro nuevo sin ventas tiene que
+ *  poder ofrecerse). Mismos códigos que client-context y la misma lista contra la que el
+ *  back valida al agregar un ofrecimiento. Ordenados por descripción del lado del server. */
+export const getRubroCatalog = async (): Promise<ICatalogoItem[]> => {
+    const res = await apiClient.get('/sale/rubro/catalog')
+    return res.data.data
+}
+
 /** Acciones comerciales del catálogo propio (pl_accion): plan cupo, descuento, promo. */
 export const getAcciones = async (): Promise<IAccion[]> => {
     const res = await apiClient.get('/planificacion/acciones')

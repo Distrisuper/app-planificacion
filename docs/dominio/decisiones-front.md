@@ -165,6 +165,10 @@ estado actual.
   rubros y naranja cuando se puede cerrar; dice `Cargá N rubros más`.
 - Las marcas del cliente son contexto vivo (`getRubroStatus` → `POST /sale/rubro/client-context`);
   lo que se congela es la marca ofrecida, en `pl_ofrecimiento_alcance` `tipo='marca'`.
+- "Otros rubros" y el buscador de "Agregar ofrecimiento" usan como universo el catálogo del back
+  (`GET /sale/rubro/catalog`, `staging.stg_rubros`) más el historial del cliente. `ORDER_RUBROS`
+  (`src/lib/ordenRubros.ts`) solo ordena: lo que no está ahí va al final. Mientras el catálogo carga,
+  si falla o si viene vacío, el universo es esa lista fija.
 
 ## Descuentos por marca
 

@@ -18,7 +18,7 @@ import {
     useAgregarOfrecimiento,
     useEliminarOfrecimiento,
 } from '@/hooks/useOfrecimientos'
-import { useBrandCatalog } from '@/hooks/useCatalogos'
+import { useBrandCatalog, useRubroCatalog } from '@/hooks/useCatalogos'
 import { useRubroStatus } from '@/hooks/useRubroStatus'
 import { useVisitaTimer } from '@/hooks/useVisitaTimer'
 import { formatearDuracion } from '@/lib/visitaTimer'
@@ -238,10 +238,15 @@ export default function VisitaSheet({
     // los números en las dos pantallas y en los dos estados (colapsada/expandida).
     const { data: rubroStatus = [] } = useRubroStatus(open ? (codigoParticularCliente ?? null) : null)
     const { data: marcas = [], isLoading: marcasLoading } = useBrandCatalog(open)
-    // El mismo universo que las filas de la tabla (el 80/20 mezclado con el historial),
+    // Sin default: `undefined` (cargando o con error) hace caer las filas a la lista fija.
+    const { data: catalogoRubros } = useRubroCatalog(open)
+    // El mismo universo que las filas de la tabla (el catálogo mezclado con el historial),
     // y no `rubroStatus`: un cliente sin movimientos no tiene historial, y derivar de ahí
     // los rubros elegibles dejaba el buscador vacío justo donde más importa ofrecer algo.
-    const rubrosCatalogo = useMemo(() => rubrosElegibles(rubroStatus), [rubroStatus])
+    const rubrosCatalogo = useMemo(
+        () => rubrosElegibles(rubroStatus, catalogoRubros),
+        [rubroStatus, catalogoRubros],
+    )
 
     useEffect(() => {
         if (!open) {
@@ -601,6 +606,7 @@ export default function VisitaSheet({
         estadosResolucion,
         true,
         !visitaCerrada,
+        catalogoRubros,
     )
     // Por código de rubro, para precargar los chips de "¿Qué marca ofreciste?" en el
     // wizard con el mismo desglose que ya muestra la tabla.

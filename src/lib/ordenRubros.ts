@@ -1,10 +1,14 @@
-/** Orden 80/20 de rubros: catálogo fijo por peso de venta, de mayor a menor.
+/** Orden 80/20 de rubros: lista fija por peso de venta, de mayor a menor.
  *  Copiado de `ORDER_RUBROS` en api-vendedores (src/business/orderRubros.ts) y de
  *  su equivalente en app-vendedores (src/utils/orderRubros.tsx) — ninguno de los
  *  endpoints que consume esta app aplica este orden server-side, así que se
  *  replica acá para usarlo solo en la sección "otros rubros del cliente" (ver
  *  `filas.ts`): la propuesta y la visita ya tienen su propio orden intencional
- *  (caída/pesos perdidos, o "no reordenar al resolver") y no se tocan. */
+ *  (caída/pesos perdidos, o "no reordenar al resolver") y no se tocan.
+ *
+ *  Sirve para ordenar, no es el catálogo: qué rubros se ofrecen sale de
+ *  `GET /sale/rubro/catalog`, y esta lista es el universo solo mientras ese catálogo
+ *  carga o si falla. */
 
 export interface IOrderRubro {
     code: string
@@ -70,8 +74,8 @@ export const ORDER_RUBROS: IOrderRubro[] = [
     { code: '-1', name: 'SIN SUPERRUBRO' },
 ]
 
-/** rubroCode -> posición en el orden 80/20. Un código ausente (no debería pasar,
- *  salvo catálogo desactualizado) cae al final vía `?? ORDER_RUBROS.length`. */
+/** rubroCode -> posición en el orden 80/20. Un código ausente (un super-rubro nuevo del
+ *  catálogo, como 387 REFRIGERACION) cae al final vía `?? ORDER_RUBROS.length`. */
 export const RUBRO_ORDER_BY_CODE: Map<string, number> = new Map(
     ORDER_RUBROS.map((r, i) => [r.code, i]),
 )

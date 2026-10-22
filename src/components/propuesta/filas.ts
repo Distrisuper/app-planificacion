@@ -54,23 +54,31 @@ const NO_ES_RUBRO = new Set(['TOTALES', 'OTROS', '-1'])
 
 const NOMBRE_80_20 = new Map(ORDER_RUBROS.map(r => [r.code, r.name]))
 
-/** La lista de rubros del 80/20 mezclada con el historial del cliente, en orden 80/20 y
+const UNIVERSO_FIJO: ICatalogoItem[] = ORDER_RUBROS.map(r => ({ code: r.code, description: r.name }))
+
+/** El catálogo de rubros del back mezclado con el historial del cliente, en orden 80/20 y
  *  sin los códigos que el llamador ya está mostrando arriba (la propuesta, o los
  *  ofrecimientos de la visita).
  *
- *  El 80/20 es el universo y el historial son los datos: por eso se mezclan en vez de
+ *  El catálogo es el universo y el historial son los datos: por eso se mezclan en vez de
  *  derivar uno del otro. Un cliente sin movimientos tiene historial vacío —
  *  client-context devuelve `rubros: []`, y es correcto— y antes eso dejaba la lista en
- *  cero: sin una sola fila para ofrecer, que es justo el cliente donde más importa. Los
- *  rubros que el cliente compra y no están en el 80/20 no se pierden: `ordenar80_20` los
- *  manda al final. */
+ *  cero: sin una sola fila para ofrecer, que es justo el cliente donde más importa.
+ *
+ *  `catalogo` es `GET /sale/rubro/catalog`: trae los super-rubros nuevos (que la lista fija
+ *  del 80/20 no conoce) y deja afuera los que el back ya no acepta. Mientras carga, si
+ *  falla o si viene vacío, el universo es la lista fija, como antes de usar el catálogo.
+ *  Los rubros que no están en el 80/20 no se pierden: `ordenar80_20` los manda al final. */
 function otrosRubros(
     rubroStatus: IRubroEstado[],
     yaVisibles: Set<string>,
+    catalogo?: ICatalogoItem[],
 ): { codigo: string; nombre: string; status?: IRubroEstado }[] {
     const status = porCode(rubroStatus)
+    const universo = catalogo?.length ? catalogo : UNIVERSO_FIJO
+    const nombreCatalogo = new Map(universo.map(r => [r.code, r.description]))
     const codigos = new Set<string>()
-    for (const r of ORDER_RUBROS) if (!NO_ES_RUBRO.has(r.code)) codigos.add(r.code)
+    for (const r of universo) if (!NO_ES_RUBRO.has(r.code)) codigos.add(r.code)
     for (const s of rubroStatus) codigos.add(s.rubroCode)
 
     return ordenar80_20(
@@ -78,14 +86,18 @@ function otrosRubros(
         c => c,
     ).map(codigo => {
         const s = status.get(codigo)
-        return { codigo, nombre: s?.nombre ?? NOMBRE_80_20.get(codigo) ?? codigo, status: s }
+        return {
+            codigo,
+            nombre: s?.nombre ?? nombreCatalogo.get(codigo) ?? NOMBRE_80_20.get(codigo) ?? codigo,
+            status: s,
+        }
     })
 }
 
 /** Los rubros elegibles para el buscador de "Agregar ofrecimiento": el mismo universo que
  *  la tabla, en el mismo orden. No sale de `rubroStatus` por la razón de arriba. */
-export function rubrosElegibles(rubroStatus: IRubroEstado[]): ICatalogoItem[] {
-    return otrosRubros(rubroStatus, new Set()).map(r => ({
+export function rubrosElegibles(rubroStatus: IRubroEstado[], catalogo?: ICatalogoItem[]): ICatalogoItem[] {
+    return otrosRubros(rubroStatus, new Set(), catalogo).map(r => ({
         code: r.codigo,
         description: r.nombre,
     }))
@@ -116,6 +128,7 @@ export function construirFilasPropuesta(
     rubrosPropuesta: IRubroPropuesta[],
     rubroStatus: IRubroEstado[],
     expandido: boolean,
+    catalogo?: ICatalogoItem[],
 ): IOfrecimientoFila[] {
     const status = porCode(rubroStatus)
     const codesPropuesta = new Set(rubrosPropuesta.map(r => r.rubroCode))
@@ -143,7 +156,7 @@ export function construirFilasPropuesta(
     // Orden 80/20 (ver ordenRubros.ts): ninguno de los endpoints lo aplica, y acá
     // es donde corresponde — la propuesta arriba ya tiene su propio orden por
     // caída/pesos perdidos y no se toca.
-    const bloqueAbajo: IOfrecimientoFila[] = otrosRubros(rubroStatus, codesPropuesta).map(
+    const bloqueAbajo: IOfrecimientoFila[] = otrosRubros(rubroStatus, codesPropuesta, catalogo).map(
         ({ codigo, nombre, status: s }) => ({
             codigo,
             nombre,
@@ -171,7 +184,7 @@ export interface IEstadoResolucionOfrecimiento {
 /** Colapsada: los ofrecimientos de la visita, en el orden que los devuelve el backend —
  *  no se reordena al resolver (ver spec: reordenar dejando pendientes arriba haría
  *  saltar la fila que el vendedor acaba de tocar). Expandida: agrega los otros rubros
- *  (`otrosRubros`: el 80/20 mezclado con el historial del cliente), marcados `agregable`
+ *  (`otrosRubros`: el catálogo mezclado con el historial del cliente), marcados `agregable`
  *  cuando la visita es editable. */
 export function construirFilasVisita(
     ofrecimientosVisita: IOfrecimiento[],
@@ -179,6 +192,7 @@ export function construirFilasVisita(
     estados: Record<number, IEstadoResolucionOfrecimiento>,
     expandido: boolean,
     editable: boolean,
+    catalogo?: ICatalogoItem[],
 ): IOfrecimientoFila[] {
     const status = porCode(rubroStatus)
     const codesVisita = new Set(ofrecimientosVisita.map(r => r.codigo))
@@ -216,7 +230,7 @@ export function construirFilasVisita(
 
     // Orden 80/20 (ver ordenRubros.ts): igual que en construirFilasPropuesta,
     // solo acá — la visita arriba preserva el orden del backend a propósito.
-    const bloqueAbajo: IOfrecimientoFila[] = otrosRubros(rubroStatus, codesVisita).map(
+    const bloqueAbajo: IOfrecimientoFila[] = otrosRubros(rubroStatus, codesVisita, catalogo).map(
         ({ codigo, nombre, status: s }) => ({
             codigo,
             nombre,
