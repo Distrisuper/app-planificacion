@@ -19,6 +19,7 @@ import {
     getPropuesta,
     getRubroStatus,
     getBrandCatalog,
+    getRubroCatalog,
     getAcciones,
     crearAlta,
     editarAlta,
@@ -424,6 +425,12 @@ describe('catálogos', () => {
         ;(apiClient.get as any).mockResolvedValue(ok([{ code: 'FR', description: 'Fric-Rot' }]))
         await expect(getBrandCatalog()).resolves.toEqual([{ code: 'FR', description: 'Fric-Rot' }])
         expect(apiClient.get).toHaveBeenCalledWith('/sale/brand/catalog')
+    })
+
+    it('getRubroCatalog apunta a /sale/rubro/catalog', async () => {
+        ;(apiClient.get as any).mockResolvedValue(ok([{ code: '387', description: 'REFRIGERACION' }]))
+        await expect(getRubroCatalog()).resolves.toEqual([{ code: '387', description: 'REFRIGERACION' }])
+        expect(apiClient.get).toHaveBeenCalledWith('/sale/rubro/catalog')
     })
 
     it('getAcciones pega al catálogo', async () => {

@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query'
-import { getBrandCatalog } from '@/api/planificacion'
+import { getBrandCatalog, getRubroCatalog } from '@/api/planificacion'
 
 export const catalogoKeys = {
     marcas: ['catalogo', 'marcas'] as const,
+    rubros: ['catalogo', 'rubros'] as const,
 }
 
-/** Es un catálogo: sale de `dim_brand_lines` y cambia solo cuando corre dbt. Del lado
+/** Es un catálogo: sale de `dim_brand_lines` (o de `stg_rubros`) y cambia solo cuando corre dbt. Del lado
  *  del server ya viene cacheado en Redis, así que refetchear cada 5 minutos (el default de
  *  queryClient) sería puro ruido. */
 const CATALOGO_STALE_MS = 30 * 60 * 1000
@@ -40,6 +41,18 @@ export function useBrandCatalog(enabled = true) {
         queryKey: catalogoKeys.marcas,
         queryFn: getBrandCatalog,
         select: marcas => marcas.filter(m => !MARCAS_EXCLUIDAS.has(m.description)),
+        staleTime: CATALOGO_STALE_MS,
+        enabled,
+    })
+}
+
+/** Universo de "otros rubros" de la propuesta y la visita (ver `otrosRubros` en
+ *  `filas.ts`). Mientras carga o si falla, `data` queda en `undefined` y las filas caen a
+ *  la lista fija del 80/20. */
+export function useRubroCatalog(enabled = true) {
+    return useQuery({
+        queryKey: catalogoKeys.rubros,
+        queryFn: getRubroCatalog,
         staleTime: CATALOGO_STALE_MS,
         enabled,
     })
