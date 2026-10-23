@@ -7,7 +7,7 @@ import VisitaEnCursoBar from './VisitaEnCursoBar'
 import * as api from '@/api/planificacion'
 import * as geo from '@/lib/geolocation'
 import { leerVisitaEnCurso } from '@/lib/visitaEnCurso'
-import type { IAgendaClient } from '@/types/planificacion'
+import type { IAgendaClient, ICupoCliente } from '@/types/planificacion'
 
 vi.mock('@/api/planificacion')
 vi.mock('@/lib/geolocation')
@@ -1884,4 +1884,182 @@ it('si la visita en curso se suelta con el mapa abierto, no queda el diálogo hu
     )
     expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
     expect(api.cerrarVisita).not.toHaveBeenCalled()
+})
+
+describe('Plan CUPO al registrar la visita', () => {
+    const cupoSinAdherir: ICupoCliente = {
+        mes: '2026-10',
+        adherido: false,
+        adhesion: null,
+        base: { prom3: 1_000_000, rentabilidad: 0.2, rama: 'alta' },
+        objetivos: { nc3: 1_500_000, nc5: 2_250_000 },
+        facturadoMes: 400_000,
+        proyectadoMes: 900_000,
+        cumplimiento: { nc3: 0.6, nc5: 0.4 },
+        estado: 'no_llega',
+        tramoProyectado: null,
+        origen: 'visita',
+    }
+    const cupoAdherido: ICupoCliente = {
+        ...cupoSinAdherir,
+        adherido: true,
+        adhesion: { fecha: '2026-10-05T14:00:00Z', tv: 'Televentas 1' },
+        cumplimiento: { nc3: 0.824, nc5: 0.511 },
+        estado: 'llega_nc3',
+        tramoProyectado: 'nc3',
+        origen: 'llamado',
+    }
+    const enCurso: IAgendaClient = { ...cliente, estado: 'en_curso', visitaId: 55 }
+
+    beforeEach(() => {
+        ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+        ;(api.getMotivos as any).mockImplementation((nivel: string) =>
+            Promise.resolve(
+                nivel === 'visita'
+                    ? [{ motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] }]
+                    : [],
+            ),
+        )
+    })
+
+    it('sin adherir muestra CUPO con Acepta y los objetivos propuestos del mes', async () => {
+        ;(api.getCupoCliente as any).mockResolvedValue(cupoSinAdherir)
+        renderFlow({ cliente: enCurso })
+
+        const recuadro = await screen.findByRole('group', { name: 'CUPO' })
+        expect(api.getCupoCliente).toHaveBeenCalledWith('10034')
+        expect(within(recuadro).getByRole('checkbox', { name: 'Acepta' })).not.toBeChecked()
+
+        fireEvent.click(within(recuadro).getByRole('button', { name: 'Objetivos del mes' }))
+        const objetivos = screen.getByRole('region', { name: 'Objetivos del mes' })
+        expect(within(objetivos).getByText('NC 3%:')).toBeInTheDocument()
+        expect(within(objetivos).getByText('$ 1.500.000')).toBeInTheDocument()
+        expect(within(objetivos).getByText('NC 5%:')).toBeInTheDocument()
+        expect(within(objetivos).getByText('$ 2.250.000')).toBeInTheDocument()
+    })
+
+    it('con Acepta tildado el cierre manda cupo: true', async () => {
+        ;(api.getCupoCliente as any).mockResolvedValue(cupoSinAdherir)
+        renderFlow({ cliente: enCurso })
+
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Acepta' }))
+        fireEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
+
+        await waitFor(() =>
+            expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4', cupo: true }),
+        )
+    })
+
+    it('sin tildar Acepta el cierre no manda cupo', async () => {
+        ;(api.getCupoCliente as any).mockResolvedValue(cupoSinAdherir)
+        renderFlow({ cliente: enCurso })
+
+        await screen.findByRole('checkbox', { name: 'Acepta' })
+        fireEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
+
+        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }))
+    })
+
+    it('al cerrar con cupo vuelve a pedir el CUPO del cliente', async () => {
+        ;(api.getCupoCliente as any).mockResolvedValue(cupoSinAdherir)
+        renderFlow({ cliente: enCurso })
+
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Acepta' }))
+        const pedidosAntes = (api.getCupoCliente as any).mock.calls.length
+        fireEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
+
+        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalled())
+        await waitFor(() => expect((api.getCupoCliente as any).mock.calls.length).toBeGreaterThan(pedidosAntes))
+    })
+
+    it('el Acepta tildado sobrevive al cierre lejos del cliente confirmado en el mapa', async () => {
+        mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
+        ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: true, coord: '-34.61,-58.4', precisionM: 10 })
+        ;(api.getCupoCliente as any).mockResolvedValue(cupoSinAdherir)
+        renderFlow({ cliente: clienteConCoords })
+
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Acepta' }))
+        fireEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
+        fireEvent.click(await screen.findByRole('button', { name: /cerrar igual/i }))
+        await screen.findByText('¿Cerrar la visita lejos del cliente?')
+        fireEvent.click(screen.getByRole('button', { name: /^cerrar igual$/i }))
+
+        await waitFor(() =>
+            expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.61,-58.4', cupo: true }),
+        )
+    })
+
+    it('adherido se ve en verde sin Acepta, con el cumplimiento de cada objetivo', async () => {
+        ;(api.getCupoCliente as any).mockResolvedValue(cupoAdherido)
+        renderFlow({ cliente: enCurso })
+
+        const recuadro = await screen.findByRole('group', { name: 'CUPO' })
+        expect(within(recuadro).queryByRole('checkbox')).not.toBeInTheDocument()
+        expect(within(recuadro).getByText('3%: 82% · 5%: 51%')).toBeInTheDocument()
+
+        fireEvent.click(within(recuadro).getByRole('button', { name: 'Objetivos del mes' }))
+        const objetivos = screen.getByRole('region', { name: 'Objetivos del mes' })
+        expect(within(objetivos).getByText('82%')).toBeInTheDocument()
+        expect(within(objetivos).getByText('51%')).toBeInTheDocument()
+        expect(within(objetivos).getByLabelText('Tramo proyectado')).toBeInTheDocument()
+
+        fireEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
+        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }))
+    })
+
+    it('si el CUPO falla no aparece el recuadro y la visita se cierra igual', async () => {
+        ;(api.getCupoCliente as any).mockRejectedValue({ response: { status: 403, data: { code: 'FUERA_DE_ALCANCE' } } })
+        renderFlow({ cliente: enCurso })
+
+        const cerrar = await screen.findByRole('button', { name: /cerrar visita/i })
+        await waitFor(() => expect(api.getCupoCliente).toHaveBeenCalled())
+        expect(screen.queryByRole('group', { name: 'CUPO' })).not.toBeInTheDocument()
+        fireEvent.click(cerrar)
+        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }))
+    })
+
+    it('mientras el CUPO carga no aparece el recuadro', async () => {
+        ;(api.getCupoCliente as any).mockReturnValue(new Promise(() => {}))
+        renderFlow({ cliente: enCurso })
+
+        await screen.findByRole('button', { name: /cerrar visita/i })
+        expect(screen.queryByRole('group', { name: 'CUPO' })).not.toBeInTheDocument()
+    })
+
+    // VisitaSheet sigue montado detrás de "No visité" con su propio recuadro: por eso se
+    // cuentan los recuadros en vez de buscar uno.
+    it('en No visité no aparece el recuadro de un cliente sin adherir, ni viaja el cupo', async () => {
+        ;(api.getCupoCliente as any).mockResolvedValue(cupoSinAdherir)
+        ;(api.noVisitaSobreVisitaAbierta as any).mockResolvedValue({ rotacionClienteId: 42 })
+        renderFlow({ cliente: enCurso })
+
+        fireEvent.click(await screen.findByRole('checkbox', { name: 'Acepta' }))
+        fireEvent.click(screen.getByText('No visité'))
+        fireEvent.click(await screen.findByText('Cerrado'))
+        expect(screen.getAllByRole('group', { name: 'CUPO' })).toHaveLength(1)
+
+        fireEvent.click(screen.getAllByText('Cerrar visita').at(-1)!)
+        await waitFor(() => expect(api.noVisitaSobreVisitaAbierta).toHaveBeenCalledWith(55, [1]))
+        expect(api.cerrarVisita).not.toHaveBeenCalled()
+    })
+
+    it('en No visité el cliente adherido se ve en verde, solo informativo', async () => {
+        ;(api.getCupoCliente as any).mockResolvedValue(cupoAdherido)
+        renderFlow({ cliente: enCurso })
+
+        await screen.findByRole('group', { name: 'CUPO' })
+        fireEvent.click(screen.getByText('No visité'))
+        await screen.findByText('Cerrado')
+
+        const recuadros = screen.getAllByRole('group', { name: 'CUPO' })
+        expect(recuadros).toHaveLength(2)
+        expect(within(recuadros[1]).getByText('3%: 82% · 5%: 51%')).toBeInTheDocument()
+        expect(within(recuadros[1]).queryByRole('checkbox')).not.toBeInTheDocument()
+    })
+
+    it('una visita de alta no pide el CUPO', async () => {
+        renderFlow({ cliente: { ...enCurso, tipo: 'alta', codigoParticularCliente: 'ALTA-000009' } })
+        await waitFor(() => expect(api.getOfrecimientos).toHaveBeenCalledWith(55))
+        expect(api.getCupoCliente).not.toHaveBeenCalled()
+    })
 })

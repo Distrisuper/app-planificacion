@@ -10,6 +10,7 @@ import {
 } from '@/api/planificacion'
 import { agendaKeys } from './useAgenda'
 import { cicloKeys } from './useCiclo'
+import { cupoKeys } from './useCupo'
 import type {
     IAgendaClient,
     ICerrarVisitaDTO,
@@ -34,16 +35,20 @@ export function useVisitaActiva(visitaId: number | null) {
     })
 }
 
-function useMutacionDeVisita<TVars, TData>(fn: (vars: TVars) => Promise<TData>) {
+function useMutacionDeVisita<TVars, TData>(
+    fn: (vars: TVars) => Promise<TData>,
+    alExito?: (vars: TVars) => void,
+) {
     const qc = useQueryClient()
     return useMutation({
         // Envuelta (no pasada directo) para que solo las `variables` reales lleguen a la
         // función: React Query v5 llama a mutationFn con un segundo argumento de contexto,
         // que si no se filtraría en los toHaveBeenCalledWith de los tests.
         mutationFn: fn,
-        onSuccess: () => {
+        onSuccess: (_data, vars) => {
             qc.invalidateQueries({ queryKey: agendaKeys.semana })
             qc.invalidateQueries({ queryKey: cicloKeys.actual })
+            alExito?.(vars)
         },
     })
 }
@@ -54,16 +59,24 @@ export function useIniciarVisita() {
 
 /** Sin motivoIds: el resultado comercial vive en los ofrecimientos. */
 export function useCerrarVisita() {
-    return useMutacionDeVisita((args: { visitaId: number } & ICerrarVisitaDTO) =>
-        cerrarVisita(args.visitaId, {
-            coordFinal: args.coordFinal,
-            // Se OMITE la clave cuando no hay texto, en vez de mandar `null`: el body
-            // queda idéntico al de antes de esta feature para el caso más común, así que
-            // un backend viejo sin la columna sigue recibiendo exactamente lo que espera.
-            ...(args.observaciones ? { observaciones: args.observaciones } : {}),
-            // Solo en visitas de alta: datos de contacto cargados al cerrar.
-            ...(args.detalle ? { detalle: args.detalle } : {}),
-        }),
+    const qc = useQueryClient()
+    return useMutacionDeVisita(
+        (args: { visitaId: number } & ICerrarVisitaDTO) =>
+            cerrarVisita(args.visitaId, {
+                coordFinal: args.coordFinal,
+                // Se OMITE la clave cuando no hay texto, en vez de mandar `null`: el body
+                // queda idéntico al de antes de esta feature para el caso más común, así que
+                // un backend viejo sin la columna sigue recibiendo exactamente lo que espera.
+                ...(args.observaciones ? { observaciones: args.observaciones } : {}),
+                // Solo en visitas de alta: datos de contacto cargados al cerrar.
+                ...(args.detalle ? { detalle: args.detalle } : {}),
+                // Solo si aceptó el plan CUPO; mismo criterio de omitir la clave.
+                ...(args.cupo ? { cupo: true as const } : {}),
+            }),
+        // Con la aceptación guardada el recuadro del cliente pasa a adherido.
+        args => {
+            if (args.cupo) qc.invalidateQueries({ queryKey: cupoKeys.todo })
+        },
     )
 }
 

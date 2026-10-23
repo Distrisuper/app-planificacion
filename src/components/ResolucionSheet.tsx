@@ -19,6 +19,9 @@ interface ResolucionSheetProps {
     /** Si se pasa, arriba de los motivos aparece "Volver más tarde" como una opción aparte:
      *  se elige igual que un motivo (excluyente con ellos) y el botón del pie la confirma. */
     onVolverMasTarde?: () => void
+    /** Recuadro del plan CUPO, arriba de todo. En "No visité" solo se ve el de un cliente
+     *  adherido, como información: ahí no hay nada que aceptar. */
+    cupo?: ReactNode
 }
 
 export default function ResolucionSheet({
@@ -32,6 +35,7 @@ export default function ResolucionSheet({
     eyebrow = 'Propuesta comercial',
     aviso,
     onVolverMasTarde,
+    cupo,
 }: ResolucionSheetProps) {
     const [selected, setSelected] = useState<number[]>([])
     const [volver, setVolver] = useState(false)
@@ -77,6 +81,7 @@ export default function ResolucionSheet({
                 </Button>
             }
         >
+            {cupo}
             {/* Primero y separada de los motivos: no es un motivo de no visita sino otra
                 salida (no registra nada y el cliente queda pendiente). */}
             {onVolverMasTarde && (
