@@ -107,6 +107,13 @@ estado actual.
   El front pasa la card a pendiente en la caché (agenda y preview), limpia anclas y borrador, y
   el veto de re-adopción de `AgendaSemanaPage` es por `visitaId`, no por fila: la visita nueva
   sobre la misma fila se adopta, la descartada no revive.
+- **Plan CUPO a nivel visita, en el pie de `VisitaSheet`** (`RecuadroCupo`, mismo diseño que
+  "Registrar contacto" de televentas). Los objetivos vienen de `GET /planificacion/cupo`; el front
+  no calcula nada. La aceptación viaja con el cierre (`cupo: true`, solo si tildó Acepta y el
+  cliente no estaba adherido; si no, la clave se omite) y sobrevive al desvío por el mapa
+  (`cierrePendiente`). El tilde es por `visitaId`: minimizar no lo pierde. CUPO no cambia el gate
+  de cierre: si el GET carga o falla, el recuadro no aparece. En "No visité" solo se ve el de un
+  cliente adherido, informativo. Al cerrar con `cupo` se invalida la query del cupo.
 - **Reagendar mueve `(semana, dia)` y deja al cliente pendiente.** El estado tiene cuatro valores:
   `pendiente | en_curso | visitada | no_visita`; no hay `reagendada`. Las resoluciones no se editan
   ni se reabren, y una fila resuelta ya no se reacomoda (`FILA_RESUELTA`).

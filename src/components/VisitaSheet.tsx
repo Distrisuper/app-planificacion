@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Loader2, WifiOff, X } from 'lucide-react'
 import TarjetaDatosAlta from '@/components/relevamiento/TarjetaDatosAlta'
 import BottomSheet from './ui/BottomSheet'
@@ -135,6 +135,9 @@ interface VisitaSheetProps {
      *  El llamador decide cuándo pasarlo (VisitaFlow: sólo si no hay pendientes, para no
      *  duplicar la puerta del gate). */
     onEditarDatosComercio?: () => void
+    /** Recuadro del plan CUPO (lo arma VisitaFlow, que es quien manda la aceptación al
+     *  cerrar). Va en el pie, a nivel visita y no por rubro, solo con la visita abierta. */
+    cupo?: ReactNode
 }
 
 export default function VisitaSheet({
@@ -162,6 +165,7 @@ export default function VisitaSheet({
     onAbrirFicha,
     progresoAlta = null,
     onEditarDatosComercio,
+    cupo,
 }: VisitaSheetProps) {
     const segundos = useVisitaTimer(visitaId)
     const estadoVivo = estadoVisitaVivo(segundos, alejado)
@@ -730,6 +734,7 @@ export default function VisitaSheet({
                     </button>
                 </div>
             )}
+            {!visitaCerrada && cupo}
             {/* En el pie FIJO y no al final del cuerpo scrolleable: así el vendedor ve
              *  siempre si dejó observación o no, sin scrollear debajo de un catálogo que
              *  puede tener docenas de filas. Es una decisión tomada sabiendo su costo —

@@ -7,6 +7,7 @@ import AgendaBoard from '@/components/AgendaBoard'
 import VisitaFlow, { type IVisitaEnCurso } from '@/components/VisitaFlow'
 import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
+import RecuadroCupo from '@/components/RecuadroCupo'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import AppExternaSheet from '@/components/AppExternaSheet'
@@ -21,6 +22,8 @@ import { useAgendaSemana } from '@/hooks/useAgenda'
 import { useCicloActual, usePreviewSemana, useSincronizar, useReacomodar } from '@/hooks/useCiclo'
 import { useEliminarFila } from '@/hooks/useEliminarFila'
 import { useMotivos } from '@/hooks/useMotivos'
+import { useCupoCliente } from '@/hooks/useCupo'
+import { esAlta } from '@/lib/alta'
 import {
     useNoVisita,
     useNoVisitaSobreVisitaAbierta,
@@ -280,6 +283,10 @@ export default function AgendaSemanaPage() {
     // salta la propuesta y va derecho al mapa. Ver VisitaFlow.directoAMapa.
     const [directoAMapa, setDirectoAMapa] = useState(false)
     const [noVisitaCliente, setNoVisitaCliente] = useState<IAgendaClient | null>(null)
+    // En "No visité" el CUPO solo se ve si el cliente ya está adherido (informativo).
+    const { data: cupoNoVisita } = useCupoCliente(
+        noVisitaCliente && !esAlta(noVisitaCliente) ? noVisitaCliente.codigoParticularCliente : null,
+    )
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [eliminarCliente, setEliminarCliente] = useState<IAgendaClient | null>(null)
     // El día destino del "+" que se tocó. null = sheet cerrado. Es el día del ENCABEZADO,
@@ -719,6 +726,7 @@ export default function AgendaSemanaPage() {
                 submitting={noVisita.isPending || noVisitaAbierta.isPending}
                 onConfirm={motivoIds => onConfirmNoVisita(motivoIds)}
                 onClose={() => setNoVisitaCliente(null)}
+                cupo={<RecuadroCupo cupo={cupoNoVisita} className="mb-3" />}
             />
             <EstadoVisitaSheet
                 open={!!estadoVisitaCliente}

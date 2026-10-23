@@ -523,6 +523,30 @@ export interface ICerrarVisitaDTO {
     observaciones?: string
     /** Solo para visitas de alta: datos de contacto del prospecto, cargados al cerrar. */
     detalle?: IDetalleContactoAlta
+    /** El cliente acepta el plan CUPO del mes. Va solo si el vendedor tildó Acepta y el
+     *  cliente no estaba adherido; si no, la clave se omite. */
+    cupo?: true
+}
+
+/** Plan CUPO del cliente en el mes en curso (`GET /planificacion/cupo?cliente=`). Los
+ *  objetivos los calcula el back; montos en pesos enteros. Fuera de la cartera del
+ *  vendedor responde 403 FUERA_DE_ALCANCE. */
+export interface ICupoCliente {
+    /** 'YYYY-MM' en curso. */
+    mes: string
+    adherido: boolean
+    /** `tv` = quién lo registró (TV, vendedor o importado). `fecha` en ISO UTC. Sin
+     *  adhesión no hay origen. */
+    adhesion: { fecha: string; tv: string; origen: 'llamado' | 'visita' | 'importado' } | null
+    base: { prom3: number; rentabilidad: number | null; rama: 'alta' | 'baja' }
+    /** Sin adherir: los propuestos; adherido: los guardados. */
+    objetivos: { nc3: number; nc5: number }
+    facturadoMes: number
+    proyectadoMes: number
+    /** Fracción sin redondear. */
+    cumplimiento: { nc3: number; nc5: number }
+    estado: 'no_llega' | 'llega_nc3' | 'llega_nc5'
+    tramoProyectado: 'nc3' | 'nc5' | null
 }
 
 /** "Cliente nuevo": crea la fila de alta en `(zona vista, dia)`. */

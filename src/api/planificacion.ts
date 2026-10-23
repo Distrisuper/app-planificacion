@@ -12,6 +12,7 @@ import type {
     IFichaCampoDef,
     IFichaCliente,
     ICerrarVisitaDTO,
+    ICupoCliente,
     ICerrarVisitaResult,
     ICicloActualResult,
     IConsultaBuscador,
@@ -128,6 +129,13 @@ export const cerrarVisita = async (
     body: ICerrarVisitaDTO,
 ): Promise<ICerrarVisitaResult> => {
     const res = await apiClient.put(`/planificacion/visitas/${visitaId}/cerrar`, body)
+    return res.data.data
+}
+
+/** Plan CUPO del cliente en el mes en curso. La aceptación viaja con el cierre de la
+ *  visita (`cupo: true` en ICerrarVisitaDTO). */
+export const getCupoCliente = async (cliente: string): Promise<ICupoCliente> => {
+    const res = await apiClient.get('/planificacion/cupo', { params: { cliente } })
     return res.data.data
 }
 

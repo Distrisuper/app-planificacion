@@ -7,6 +7,8 @@ import MapaVisita from './MapaVisita'
 import PerfilComercioSheet from './relevamiento/PerfilComercioSheet'
 import { camposPendientes, relevamientoPendiente } from '@/lib/relevamientos'
 import ResolucionSheet from './ResolucionSheet'
+import RecuadroCupo from './RecuadroCupo'
+import { useCupoCliente } from '@/hooks/useCupo'
 import {
     useCerrarVisita,
     useIniciarVisita,
@@ -164,7 +166,12 @@ export default function VisitaFlow({
     const [cierrePendiente, setCierrePendiente] = useState<{
         observaciones: string | null
         detalle: IDetalleContactoAlta | null
+        cupo: boolean
     } | null>(null)
+    // La visita en la que el vendedor tildó Acepta del plan CUPO. Por `visitaId` y no un
+    // booleano: minimizar el sheet o mirar otro cliente no tiene que perder el tilde, y
+    // tampoco arrastrarlo a otra visita.
+    const [cupoAceptadoEn, setCupoAceptadoEn] = useState<number | null>(null)
     // El vendedor tocó "Cerrar igual" con el aviso vigente. Es estado propio y no derivado
     // de `alejado`: si mientras el diálogo está abierto llega un fix que apaga el aviso, la
     // pregunta que el vendedor está leyendo no puede desaparecerle de abajo del dedo.
@@ -314,6 +321,14 @@ export default function VisitaFlow({
     // `isError` es imprescindible, no un extra: el loader de abajo tapa toda la pantalla y
     // no tiene cómo cerrarse, así que mirando solo `data` (que ante un fallo queda
     // undefined para siempre) la app quedaba trabada en el spinner hasta reiniciarla.
+    // Plan CUPO: solo con la visita abierta de un cliente real (el alta no tiene código).
+    // Mientras carga o si falla, el recuadro no aparece y el cierre sigue igual.
+    const { data: cupo } = useCupoCliente(
+        mostrarRubros && !clienteEsAlta && cliente?.estado !== 'visitada'
+            ? (cliente?.codigoParticularCliente ?? null)
+            : null,
+    )
+    const aceptaCupo = visitaId !== null && cupoAceptadoEn === visitaId
     const {
         data: propuestaDirecta,
         isError: fallóPropuestaDirecta,
@@ -461,6 +476,7 @@ export default function VisitaFlow({
         geo: Extract<GeoResult, { ok: true }>,
         observaciones: string | null,
         detalle: IDetalleContactoAlta | null,
+        conCupo: boolean,
     ) {
         // Común a "cerró bien" y a "ya estaba cerrada" (tratado como éxito, ver abajo): las
         // dos anclas locales de la visita se limpian igual, sea cual sea el motivo por el
@@ -478,6 +494,7 @@ export default function VisitaFlow({
                 coordFinal: geo.coord,
                 ...(observaciones ? { observaciones } : {}),
                 ...(detalle ? { detalle } : {}),
+                ...(conCupo ? { cupo: true as const } : {}),
             })
             if (res.ofrecimientosPendientes > 0) {
                 // Resultado normal, no un error: el gate pide un mínimo de 2 rubros,
@@ -523,6 +540,9 @@ export default function VisitaFlow({
         detalle: IDetalleContactoAlta | null,
     ) {
         if (visitaId === null || cerrandoFlujo) return
+        // Solo si el cliente sigue sin adherir: si entre tanto lo aceptó por el llamado, ya
+        // no hay nada que mandar.
+        const conCupo = aceptaCupo && cupo?.adherido === false
         setCerrandoFlujo(true)
         try {
             await conUbicacion(async geo => {
@@ -548,11 +568,11 @@ export default function VisitaFlow({
                         // el motivo por el que se abrió. El criterio de entrada de
                         // `evaluarFix` es el mismo `estaFueraDeRango` que acaba de dar true.
                         evaluarFix(lat, lon, geo.precisionM)
-                        setCierrePendiente({ observaciones, detalle })
+                        setCierrePendiente({ observaciones, detalle, cupo: conCupo })
                         return
                     }
                 }
-                await ejecutarCierre(geo, observaciones, detalle)
+                await ejecutarCierre(geo, observaciones, detalle, conCupo)
             })
         } finally {
             setCerrandoFlujo(false)
@@ -573,10 +593,10 @@ export default function VisitaFlow({
         // dejarlo en null. `ejecutarCierre` lo desreferencia con `!`, que calla al
         // compilador pero no evita el `PUT /visitas/null/cerrar`.
         if (cierrePendiente === null || visitaId === null || cerrandoFlujo) return
-        const { observaciones, detalle } = cierrePendiente
+        const { observaciones, detalle, cupo: conCupo } = cierrePendiente
         setCerrandoFlujo(true)
         try {
-            await conUbicacion(geo => ejecutarCierre(geo, observaciones, detalle))
+            await conUbicacion(geo => ejecutarCierre(geo, observaciones, detalle, conCupo))
         } finally {
             setCerrandoFlujo(false)
             // Tanto si cerró como si falló: el diálogo y el mapa se van, y el vendedor
@@ -775,6 +795,14 @@ export default function VisitaFlow({
                             ? () => setEditandoFicha(true)
                             : undefined
                     }
+                    cupo={
+                        <RecuadroCupo
+                            cupo={cupo}
+                            acepta={aceptaCupo}
+                            onAcepta={acepta => setCupoAceptadoEn(acepta ? visitaId : null)}
+                            className="mb-3.5"
+                        />
+                    }
                 />
             )}
             <ResolucionSheet
@@ -801,6 +829,8 @@ export default function VisitaFlow({
                 }
                 onConfirm={onConfirmarNoVisita}
                 onClose={() => setNoVisitaRubros(null)}
+                // Sin `onAcepta`: con "No visité" solo se ve el de un cliente adherido.
+                cupo={<RecuadroCupo cupo={cupo} className="mb-3" />}
             />
             {tieneCoords && (
                 <MapaVisita
