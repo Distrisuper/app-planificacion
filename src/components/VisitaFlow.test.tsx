@@ -1898,16 +1898,14 @@ describe('Plan CUPO al registrar la visita', () => {
         cumplimiento: { nc3: 0.6, nc5: 0.4 },
         estado: 'no_llega',
         tramoProyectado: null,
-        origen: 'visita',
     }
     const cupoAdherido: ICupoCliente = {
         ...cupoSinAdherir,
         adherido: true,
-        adhesion: { fecha: '2026-10-05T14:00:00Z', tv: 'Televentas 1' },
+        adhesion: { fecha: '2026-10-05T14:00:00Z', tv: 'Televentas 1', origen: 'llamado' },
         cumplimiento: { nc3: 0.824, nc5: 0.511 },
         estado: 'llega_nc3',
         tramoProyectado: 'nc3',
-        origen: 'llamado',
     }
     const enCurso: IAgendaClient = { ...cliente, estado: 'en_curso', visitaId: 55 }
 

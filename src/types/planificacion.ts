@@ -535,8 +535,9 @@ export interface ICupoCliente {
     /** 'YYYY-MM' en curso. */
     mes: string
     adherido: boolean
-    /** `tv` = quién lo registró (TV, vendedor o importado). `fecha` en ISO UTC. */
-    adhesion: { fecha: string; tv: string } | null
+    /** `tv` = quién lo registró (TV, vendedor o importado). `fecha` en ISO UTC. Sin
+     *  adhesión no hay origen. */
+    adhesion: { fecha: string; tv: string; origen: 'llamado' | 'visita' | 'importado' } | null
     base: { prom3: number; rentabilidad: number | null; rama: 'alta' | 'baja' }
     /** Sin adherir: los propuestos; adherido: los guardados. */
     objetivos: { nc3: number; nc5: number }
@@ -546,7 +547,6 @@ export interface ICupoCliente {
     cumplimiento: { nc3: number; nc5: number }
     estado: 'no_llega' | 'llega_nc3' | 'llega_nc5'
     tramoProyectado: 'nc3' | 'nc5' | null
-    origen: 'llamado' | 'visita' | 'importado'
 }
 
 /** "Cliente nuevo": crea la fila de alta en `(zona vista, dia)`. */
