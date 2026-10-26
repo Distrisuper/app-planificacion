@@ -119,6 +119,20 @@ it('vincular un alta de televentas va por su prospecto, nunca por /altas/null', 
     expect(apiAnalitica.vincularAlta).not.toHaveBeenCalled()
 })
 
+it('con dos altas de televentas, tocar la segunda abre y vincula la segunda', async () => {
+    const otraTv: IAltaRelevada = { ...deTv, prospectoId: 12, detalle: { nombre: 'Almacén Luna' } }
+    vi.mocked(apiAnalitica.getAltas).mockResolvedValue([deTv, otraTv])
+    vi.mocked(apiAnalitica.vincularProspecto).mockResolvedValue({
+        codigoParticularCliente: '10036', vinculadoPor: 'admin@x.com', vinculadoEn: '2026-09-23T14:00:00.000Z', fichaMovida: 0,
+    })
+    montar('/analitica/altas?desde=2026-09-21&hasta=2026-09-25')
+    fireEvent.click(await screen.findByText('Almacén Luna'))
+    expect(await screen.findByRole('heading', { name: 'Almacén Luna' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText(/código de cliente en flexxus/i), { target: { value: '10036' } })
+    fireEvent.click(screen.getByRole('button', { name: /^vincular$/i }))
+    await waitFor(() => expect(apiAnalitica.vincularProspecto).toHaveBeenCalledWith(12, '10036'))
+})
+
 it('vincular un alta de planificación sigue yendo por su fila del plan', async () => {
     vi.mocked(apiAnalitica.getAltas).mockResolvedValue([{ ...alta, estado: 'visitada' }, deTv])
     vi.mocked(apiAnalitica.vincularAlta).mockResolvedValue({

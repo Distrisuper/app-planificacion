@@ -81,11 +81,11 @@ it('cambiar de alta vacía el código de Flexxus tipeado: no se vincula a la fil
     expect(screen.getByLabelText(/código de cliente en flexxus/i)).toHaveValue('')
 })
 
-it('pasar a un alta de televentas con el mismo id también vacía el código tipeado', () => {
-    const { rerender } = render(<DetalleAltaPanel alta={alta} esquema={ESQUEMA} onCerrar={() => {}} onVincular={vi.fn()} />)
+it('pasar de un alta de televentas a otra vacía el código tipeado (las dos sin fila del plan)', () => {
+    const deTv: IAltaRelevada = { ...alta, origen: 'televentas', rotacionClienteId: null, prospectoId: 4 }
+    const { rerender } = render(<DetalleAltaPanel alta={deTv} esquema={ESQUEMA} onCerrar={() => {}} onVincular={vi.fn()} />)
     fireEvent.change(screen.getByLabelText(/código de cliente en flexxus/i), { target: { value: 'C123' } })
-    const deTv: IAltaRelevada = { ...alta, origen: 'televentas', rotacionClienteId: null, prospectoId: 9 }
-    rerender(<DetalleAltaPanel alta={deTv} esquema={ESQUEMA} onCerrar={() => {}} onVincular={vi.fn()} />)
+    rerender(<DetalleAltaPanel alta={{ ...deTv, prospectoId: 5 }} esquema={ESQUEMA} onCerrar={() => {}} onVincular={vi.fn()} />)
     expect(screen.getByLabelText(/código de cliente en flexxus/i)).toHaveValue('')
 })
 
