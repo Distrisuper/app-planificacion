@@ -14,7 +14,7 @@ const ESQUEMA: IEsquemaAlta = {
     catalogos: { iva: [{ codigo: 'RI', descripcion: 'Responsable Inscripto', orden: 10, activo: true }] },
 }
 const alta: IAltaRelevada = {
-    rotacionClienteId: 9, vendedor: { codigo: 'V 2', nombre: 'Gómez' }, estado: 'visitada', fechaVisita: '2026-09-21',
+    origen: 'planificacion', rotacionClienteId: 9, prospectoId: null, vendedor: { codigo: 'V 2', nombre: 'Gómez' }, estado: 'visitada', fechaVisita: '2026-09-21',
     detalle: { nombre: 'Piche', condicionIva: 'RI' }, contacto: { contacto: 'Gustavo', fechaNacimiento: null },
     camposCargados: 2, camposTotal: 3,
 }
@@ -79,4 +79,34 @@ it('cambiar de alta vacía el código de Flexxus tipeado: no se vincula a la fil
     fireEvent.change(screen.getByLabelText(/código de cliente en flexxus/i), { target: { value: 'C123' } })
     rerender(<DetalleAltaPanel alta={{ ...alta, rotacionClienteId: 10 }} esquema={ESQUEMA} onCerrar={() => {}} onVincular={vi.fn()} />)
     expect(screen.getByLabelText(/código de cliente en flexxus/i)).toHaveValue('')
+})
+
+it('pasar de un alta de televentas a otra vacía el código tipeado (las dos sin fila del plan)', () => {
+    const deTv: IAltaRelevada = { ...alta, origen: 'televentas', rotacionClienteId: null, prospectoId: 4 }
+    const { rerender } = render(<DetalleAltaPanel alta={deTv} esquema={ESQUEMA} onCerrar={() => {}} onVincular={vi.fn()} />)
+    fireEvent.change(screen.getByLabelText(/código de cliente en flexxus/i), { target: { value: 'C123' } })
+    rerender(<DetalleAltaPanel alta={{ ...deTv, prospectoId: 5 }} esquema={ESQUEMA} onCerrar={() => {}} onVincular={vi.fn()} />)
+    expect(screen.getByLabelText(/código de cliente en flexxus/i)).toHaveValue('')
+})
+
+it('un alta de televentas muestra el origen y la ficha, sin contacto vacío', () => {
+    const deTv: IAltaRelevada = {
+        ...alta, origen: 'televentas', rotacionClienteId: null, prospectoId: 4, vendedor: { codigo: 'TV1', nombre: 'Lucía' },
+        fechaVisita: null, contacto: null,
+    }
+    render(<DetalleAltaPanel alta={deTv} esquema={ESQUEMA} onCerrar={() => {}} />)
+    expect(screen.getByText(/Televentas · Lucía/)).toBeInTheDocument()
+    expect(screen.getByText('Responsable Inscripto')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /copiar con quién habló/i })).not.toBeInTheDocument()
+})
+
+it('en televentas el contacto es el del llamado, no el de una visita', () => {
+    const deTv: IAltaRelevada = {
+        ...alta, origen: 'televentas', rotacionClienteId: null, prospectoId: 4, fechaVisita: null,
+        contacto: { contacto: 'Marta', fechaNacimiento: null },
+    }
+    render(<DetalleAltaPanel alta={deTv} esquema={ESQUEMA} onCerrar={() => {}} />)
+    expect(screen.getByText('Contacto del llamado')).toBeInTheDocument()
+    expect(screen.queryByText('Contacto de la visita')).not.toBeInTheDocument()
+    expect(screen.getByText('Marta')).toBeInTheDocument()
 })

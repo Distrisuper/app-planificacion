@@ -14,9 +14,11 @@ interface VinculoFlexxusProps {
  * "Cliente en Flexxus" (spec api-vendedores 2026-09-23-vincular-alta): administración pega el
  * código del cliente que creó en Flexxus y la API mueve la ficha del alta a ese cliente. Tres
  * estados: vinculada (código, quién, cuándo), visitada sin vincular (input), y el resto (se
- * vincula después de la visita). Sin desvincular: fuera de alcance.
+ * vincula después de la visita). Sin desvincular: fuera de alcance. Un alta de televentas no
+ * tiene visita ni ficha que mover: se vincula en cualquier estado, como lo deja la API.
  */
 export default function VinculoFlexxus({ alta, onVincular }: VinculoFlexxusProps) {
+    const deTeleventas = alta.origen === 'televentas'
     const [codigo, setCodigo] = useState('')
     const [error, setError] = useState<string | null>(null)
     const [vinculando, setVinculando] = useState(false)
@@ -44,12 +46,14 @@ export default function VinculoFlexxus({ alta, onVincular }: VinculoFlexxusProps
                             </p>
                         </div>
                     </div>
-                ) : alta.estado !== 'visitada' ? (
+                ) : !deTeleventas && alta.estado !== 'visitada' ? (
                     <p className="text-tinta-2">Se vincula después de la visita.</p>
                 ) : onVincular ? (
                     <div className="space-y-2">
                         <p className="text-tinta-2">
-                            Cuando lo des de alta en Flexxus, pegá acá su código: la ficha del comercio pasa al cliente.
+                            {deTeleventas
+                                ? 'Cuando lo des de alta en Flexxus, pegá acá su código.'
+                                : 'Cuando lo des de alta en Flexxus, pegá acá su código: la ficha del comercio pasa al cliente.'}
                         </p>
                         <div className="flex gap-2">
                             <label htmlFor="vinculo-codigo" className="sr-only">Código de cliente en Flexxus</label>
