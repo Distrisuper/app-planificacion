@@ -89,7 +89,7 @@ it('pasar de un alta de televentas a otra vacía el código tipeado (las dos sin
     expect(screen.getByLabelText(/código de cliente en flexxus/i)).toHaveValue('')
 })
 
-it('un alta de televentas muestra el origen y la ficha, con el contacto de la visita vacío', () => {
+it('un alta de televentas muestra el origen y la ficha, sin contacto vacío', () => {
     const deTv: IAltaRelevada = {
         ...alta, origen: 'televentas', rotacionClienteId: null, prospectoId: 4, vendedor: { codigo: 'TV1', nombre: 'Lucía' },
         fechaVisita: null, contacto: null,
@@ -97,6 +97,16 @@ it('un alta de televentas muestra el origen y la ficha, con el contacto de la vi
     render(<DetalleAltaPanel alta={deTv} esquema={ESQUEMA} onCerrar={() => {}} />)
     expect(screen.getByText(/Televentas · Lucía/)).toBeInTheDocument()
     expect(screen.getByText('Responsable Inscripto')).toBeInTheDocument()
-    expect(screen.getByText('Contacto de la visita')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /copiar con quién habló/i })).not.toBeInTheDocument()
+})
+
+it('en televentas el contacto es el del llamado, no el de una visita', () => {
+    const deTv: IAltaRelevada = {
+        ...alta, origen: 'televentas', rotacionClienteId: null, prospectoId: 4, fechaVisita: null,
+        contacto: { contacto: 'Marta', fechaNacimiento: null },
+    }
+    render(<DetalleAltaPanel alta={deTv} esquema={ESQUEMA} onCerrar={() => {}} />)
+    expect(screen.getByText('Contacto del llamado')).toBeInTheDocument()
+    expect(screen.queryByText('Contacto de la visita')).not.toBeInTheDocument()
+    expect(screen.getByText('Marta')).toBeInTheDocument()
 })

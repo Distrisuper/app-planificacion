@@ -76,7 +76,8 @@ function ValorCopiable({ etiqueta, valor }: { etiqueta: string; valor: string })
  * Solo lectura: `pl_rotacion_cliente.detalle` se congela al cerrar la visita y gerencia no
  * edita datos del vendedor. Muestra TODOS los campos del esquema, vacíos incluidos, en las
  * mismas secciones que ve el vendedor — es la misma ficha desde el otro lado. Un alta de
- * televentas usa el mismo esquema; no tiene visita, así que su contacto sale vacío.
+ * televentas usa el mismo esquema; no tiene visita: su contacto es el del último llamado
+ * atendido que lo tenga (o vacío).
  */
 export default function DetalleAltaPanel({ alta, esquema, onCerrar, onVincular }: DetalleAltaPanelProps) {
     const titulo = valorVisible(esquema, alta, 'nombre') ?? 'Cliente nuevo'
@@ -115,7 +116,9 @@ export default function DetalleAltaPanel({ alta, esquema, onCerrar, onVincular }
                 ))}
 
                 <section>
-                    <h3 className="mb-2 text-[13px] font-semibold text-tinta-2">Contacto de la visita</h3>
+                    <h3 className="mb-2 text-[13px] font-semibold text-tinta-2">
+                        {alta.origen === 'televentas' ? 'Contacto del llamado' : 'Contacto de la visita'}
+                    </h3>
                     <dl className="divide-y divide-linea rounded-lg border border-linea">
                         <FilaDato etiqueta="Con quién habló" valor={alta.contacto?.contacto} />
                         <FilaDato etiqueta="Cumpleaños" valor={alta.contacto?.fechaNacimiento} />
