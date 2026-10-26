@@ -35,7 +35,12 @@ import { useAppExterna } from '@/hooks/useAppExterna'
 import { abrirAppExternaEnPestana } from '@/lib/appsExternas'
 import { Notification } from '@/components/ui/Notification'
 import { errorCode } from '@/lib/apiError'
-import { mensajeFueraDeCalendario, sePuedeTraer } from '@/lib/semanaCalendario'
+import {
+    MENSAJE_FUERA_DE_CALENDARIO,
+    MENSAJE_VISITA_FUERA_DE_CALENDARIO,
+    mensajeFueraDeCalendario,
+    sePuedeTraer,
+} from '@/lib/semanaCalendario'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
 import {
@@ -242,10 +247,15 @@ export default function AgendaSemanaPage() {
     // Con ciclo abierto, esa es la semana. Sin ciclo (standby), la del calendario; sin
     // calendario, la primera semana PENDIENTE si se conoce — es la que `asegurar` abriría de
     // todas formas ante la primera acción real — y si no, la primera semana conocida.
+    // La del calendario solo si es una zona del vendedor: el back la manda aunque no tenga
+    // rotación, y aterrizar ahí tapaba el cartel de "sin ruta asignada".
+    const semanaEnCursoEnRuta = (semanas ?? []).some(z => z.semana === semanaEnCurso)
+        ? semanaEnCurso
+        : null
     const semanaEfectiva =
         semanaVista ??
         ciclo?.semana ??
-        semanaEnCurso ??
+        semanaEnCursoEnRuta ??
         semanasPendientes?.[0] ??
         semanas?.[0]?.semana ??
         null
@@ -594,7 +604,10 @@ export default function AgendaSemanaPage() {
             }
             mostrar('exito', 'Registrado')
         } catch (err) {
-            const fueraDeCalendario = mensajeFueraDeCalendario(err)
+            const fueraDeCalendario = mensajeFueraDeCalendario(
+                err,
+                enCurso !== null ? MENSAJE_VISITA_FUERA_DE_CALENDARIO : MENSAJE_FUERA_DE_CALENDARIO,
+            )
             if (fueraDeCalendario) {
                 mostrar('error', fueraDeCalendario)
                 return

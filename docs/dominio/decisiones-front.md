@@ -31,7 +31,9 @@ estado actual.
   agendar"; una franja dice que no es la zona de esta semana y lleva de vuelta. Los pendientes de una
   zona que viene tienen "Traer a esta semana" (confirmación + `reacomodar` a `semanaEnCurso`, mismo
   día); los de una zona que ya pasó, no (`sePuedeTraer` en `lib/semanaCalendario.ts`, también en el
-  buscador del "+"). Reagendar solo entre los días de la semana en curso. El 409
+  buscador del "+"). Esa subregla hoy es solo del front: `reacomodar` del back valida la semana
+  destino, no la de origen. Reagendar solo entre los días de la semana en curso. `semanaEnCurso`
+  solo cuenta para aterrizar si es una zona del vendedor: el back la manda aunque no tenga rotación. El 409
   `SEMANA_FUERA_DE_CALENDARIO` se traduce con `mensajeFueraDeCalendario` en cada `catch` de acción.
   No se reusa `modo` para gatear: `'preview'` también es el standby de la semana en curso, que es
   accionable. Con `semanaEnCurso` null (o ausente, back viejo) todo sigue como antes, así que front y

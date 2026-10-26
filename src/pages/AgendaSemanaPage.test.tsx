@@ -1220,6 +1220,29 @@ describe('semana del calendario', () => {
         expect(api.previewSemana).not.toHaveBeenCalledWith(3)
     })
 
+    // El back manda `semanaEnCurso` aunque el vendedor no tenga rotación: sin esto la página
+    // aterrizaba en una zona inexistente y nunca mostraba el cartel.
+    it('sin rotación materializada sigue mostrando el cartel aunque venga semanaEnCurso', async () => {
+        ;(api.getCicloActual as any).mockResolvedValue({ ...CICLO_ACTUAL_SIN_ROTACION, semanaEnCurso: 2 })
+        renderPage()
+
+        expect(await screen.findByText(/no tenés una ruta asignada/i)).toBeInTheDocument()
+        expect(api.previewSemana).not.toHaveBeenCalled()
+    })
+
+    it('el vendedor de prueba sin agenda sigue viendo "Elegir cartera" con semanaEnCurso', async () => {
+        authMock.mockReturnValue({
+            user: { name: 'Tester' },
+            logout: vi.fn(),
+            capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: false },
+            vendedorDePrueba: null,
+        })
+        ;(api.getCicloActual as any).mockResolvedValue({ ...CICLO_ACTUAL_SIN_ROTACION, semanaEnCurso: 2 })
+        renderPage()
+
+        expect(await screen.findByRole('button', { name: /elegir cartera/i })).toBeInTheDocument()
+    })
+
     it('en la semana en curso sin ciclo abierto, las acciones siguen disponibles', async () => {
         fijarLunes()
         ;(api.getCicloActual as any).mockResolvedValue({ ...CICLO_ACTUAL_STANDBY, semanaEnCurso: 3 })

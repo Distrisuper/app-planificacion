@@ -9,6 +9,9 @@ import { errorCode } from './apiError'
 
 export const MENSAJE_FUERA_DE_CALENDARIO = 'Este cliente es de otra semana. Podés traerlo a esta semana.'
 export const MENSAJE_AGREGAR_FUERA_DE_CALENDARIO = 'Solo podés agregar clientes en la zona de esta semana.'
+/** Para una visita ya abierta (quedó del viernes, se mira el lunes): no se puede traer
+ *  —tiene resolución—, pero cerrarla no tiene guard en el back. */
+export const MENSAJE_VISITA_FUERA_DE_CALENDARIO = 'Esta visita es de otra semana: solo se puede cerrar.'
 
 /**
  * El texto del 409 `SEMANA_FUERA_DE_CALENDARIO` (el back rechaza una acción del vendedor
