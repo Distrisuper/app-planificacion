@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Copy, X } from 'lucide-react'
 import { camposPorSeccion } from '@/lib/camposAlta'
-import { ETIQUETA_ESTADO_ALTA, valorVisible } from '@/lib/altasCsv'
+import { ETIQUETA_ESTADO_ALTA, ETIQUETA_ORIGEN_ALTA, claveAlta, valorVisible } from '@/lib/altasCsv'
 import VinculoFlexxus from '@/components/analitica/VinculoFlexxus'
 import type { IAltaRelevada } from '@/types/analitica'
 import type { IEsquemaAlta } from '@/types/planificacion'
@@ -75,7 +75,8 @@ function ValorCopiable({ etiqueta, valor }: { etiqueta: string; valor: string })
 /**
  * Solo lectura: `pl_rotacion_cliente.detalle` se congela al cerrar la visita y gerencia no
  * edita datos del vendedor. Muestra TODOS los campos del esquema, vacíos incluidos, en las
- * mismas secciones que ve el vendedor — es la misma ficha desde el otro lado.
+ * mismas secciones que ve el vendedor — es la misma ficha desde el otro lado. Un alta de
+ * televentas usa el mismo esquema; no tiene visita, así que su contacto sale vacío.
  */
 export default function DetalleAltaPanel({ alta, esquema, onCerrar, onVincular }: DetalleAltaPanelProps) {
     const titulo = valorVisible(esquema, alta, 'nombre') ?? 'Cliente nuevo'
@@ -85,7 +86,7 @@ export default function DetalleAltaPanel({ alta, esquema, onCerrar, onVincular }
                 <div>
                     <h2 className="text-sm font-semibold text-tinta">{titulo}</h2>
                     <p className="text-xs text-tinta-2">
-                        {alta.vendedor.nombre || alta.vendedor.codigo} · {ETIQUETA_ESTADO_ALTA[alta.estado]}
+                        {ETIQUETA_ORIGEN_ALTA[alta.origen]} · {alta.vendedor.nombre || alta.vendedor.codigo} · {ETIQUETA_ESTADO_ALTA[alta.estado]}
                         {alta.fechaVisita ? ` · ${alta.fechaVisita}` : ''} · {alta.camposCargados} de {alta.camposTotal} datos
                     </p>
                 </div>
@@ -101,7 +102,7 @@ export default function DetalleAltaPanel({ alta, esquema, onCerrar, onVincular }
                 {/* key: cambiar de alta tiene que vaciar el código tipeado. Sin esto, el de la
                     fila anterior quedaba en el input y "Vincular" lo pegaba a otro cliente, sin
                     forma de deshacerlo. */}
-                <VinculoFlexxus key={alta.rotacionClienteId} alta={alta} onVincular={onVincular} />
+                <VinculoFlexxus key={claveAlta(alta)} alta={alta} onVincular={onVincular} />
                 {camposPorSeccion(esquema).map(({ seccion, campos }) => (
                     <section key={seccion.clave}>
                         <h3 className="mb-2 text-[13px] font-semibold text-tinta-2">{seccion.titulo}</h3>

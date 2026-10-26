@@ -116,14 +116,15 @@ function numerica<T>(
 
 function constructor<T>() {
     return {
-        /** Nombre y, abajo, una línea chica (el código). La única columna elástica de la tabla. */
+        /** Nombre y, abajo, una línea chica (el código). La única columna elástica de la tabla; con
+         *  `ancho`, una de texto corto y fijo (un rótulo como el origen). */
         texto(
             id: string,
             encabezado: string,
             valor: Valor<T, string>,
-            opciones: { secundaria?: Valor<T, string>; buscable?: boolean } = {},
+            opciones: { secundaria?: Valor<T, string>; buscable?: boolean; ancho?: number } = {},
         ): ColumnDef<T, string | undefined> {
-            const { secundaria, buscable = true } = opciones
+            const { secundaria, buscable = true, ancho } = opciones
             return {
                 id,
                 header: encabezado,
@@ -142,6 +143,7 @@ function constructor<T>() {
                 meta: {
                     tipo: 'texto',
                     alinear: 'izquierda',
+                    ancho,
                     textoBusqueda: buscable ? f => [valor(f), secundaria?.(f)].filter(Boolean).join(' ') : undefined,
                 },
             }

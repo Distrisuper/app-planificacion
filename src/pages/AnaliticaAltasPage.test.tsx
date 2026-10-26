@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { rangoMes } from '@/lib/fechas'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -27,7 +27,7 @@ const ESQUEMA: IEsquemaAlta = {
     catalogos: null,
 }
 const alta: IAltaRelevada = {
-    rotacionClienteId: 9, vendedor: { codigo: 'V 2', nombre: 'Gómez' }, estado: 'no_visita', fechaVisita: '2026-09-21',
+    origen: 'planificacion', rotacionClienteId: 9, prospectoId: null, vendedor: { codigo: 'V 2', nombre: 'Gómez' }, estado: 'no_visita', fechaVisita: '2026-09-21',
     detalle: { nombre: 'Piche', localidad: 'Zárate' }, contacto: null, camposCargados: 2, camposTotal: 15,
 }
 
@@ -99,6 +99,67 @@ it('los vendedores se eligen con el selector del estándar y viajan al backend',
             expect.objectContaining({ vendedores: [MOCK_VENDEDORES[0].codigoParticularVendedor] }),
         ),
     )
+})
+
+const deTv: IAltaRelevada = {
+    origen: 'televentas', rotacionClienteId: null, prospectoId: 9, vendedor: { codigo: 'TV1', nombre: 'Lucía' }, estado: 'visitada',
+    fechaVisita: null, detalle: { nombre: 'Kiosco Sol', localidad: 'Campana' }, contacto: null, camposCargados: 2, camposTotal: 15, vinculo: null,
+}
+
+it('vincular un alta de televentas va por su prospecto, nunca por /altas/null', async () => {
+    vi.mocked(apiAnalitica.getAltas).mockResolvedValue([alta, deTv])
+    vi.mocked(apiAnalitica.vincularProspecto).mockResolvedValue({
+        codigoParticularCliente: '10034', vinculadoPor: 'admin@x.com', vinculadoEn: '2026-09-23T14:00:00.000Z', fichaMovida: 0,
+    })
+    montar('/analitica/altas?desde=2026-09-21&hasta=2026-09-25')
+    fireEvent.click(await screen.findByText('Kiosco Sol'))
+    fireEvent.change(await screen.findByLabelText(/código de cliente en flexxus/i), { target: { value: '10034' } })
+    fireEvent.click(screen.getByRole('button', { name: /^vincular$/i }))
+    await waitFor(() => expect(apiAnalitica.vincularProspecto).toHaveBeenCalledWith(9, '10034'))
+    expect(apiAnalitica.vincularAlta).not.toHaveBeenCalled()
+})
+
+it('vincular un alta de planificación sigue yendo por su fila del plan', async () => {
+    vi.mocked(apiAnalitica.getAltas).mockResolvedValue([{ ...alta, estado: 'visitada' }, deTv])
+    vi.mocked(apiAnalitica.vincularAlta).mockResolvedValue({
+        codigoParticularCliente: '10035', vinculadoPor: 'admin@x.com', vinculadoEn: '2026-09-23T14:00:00.000Z', fichaMovida: 1,
+    })
+    montar('/analitica/altas?desde=2026-09-21&hasta=2026-09-25')
+    fireEvent.click(await screen.findByText('Piche'))
+    fireEvent.change(await screen.findByLabelText(/código de cliente en flexxus/i), { target: { value: '10035' } })
+    fireEvent.click(screen.getByRole('button', { name: /^vincular$/i }))
+    await waitFor(() => expect(apiAnalitica.vincularAlta).toHaveBeenCalledWith(9, '10035'))
+    expect(apiAnalitica.vincularProspecto).not.toHaveBeenCalled()
+})
+
+it('el filtro por origen deja solo las de Televentas y vuelve a Todas', async () => {
+    vi.mocked(apiAnalitica.getAltas).mockResolvedValue([alta, deTv])
+    montar('/analitica/altas?desde=2026-09-21&hasta=2026-09-25')
+    await screen.findByText('Piche')
+    const origen = screen.getByRole('group', { name: 'Origen' })
+    fireEvent.click(within(origen).getByRole('button', { name: 'Televentas' }))
+    expect(screen.queryByText('Piche')).not.toBeInTheDocument()
+    expect(screen.getByText('Kiosco Sol')).toBeInTheDocument()
+    fireEvent.click(within(origen).getByRole('button', { name: 'Todas' }))
+    expect(screen.getByText('Piche')).toBeInTheDocument()
+})
+
+it('Exportar CSV con el filtro de origen exporta solo ese origen, con la columna Origen', async () => {
+    vi.mocked(apiAnalitica.getAltas).mockResolvedValue([alta, deTv])
+    const descargar = vi.spyOn(csv, 'descargarCsv').mockImplementation(() => {})
+    montar('/analitica/altas?desde=2026-09-21&hasta=2026-09-25&origen=televentas')
+    await screen.findByText('Kiosco Sol')
+    fireEvent.click(screen.getByRole('button', { name: /exportar csv/i }))
+    const contenido = descargar.mock.lastCall![1]
+    expect(contenido).toContain('Origen')
+    expect(contenido).toContain('Kiosco Sol')
+    expect(contenido).not.toContain('Piche')
+})
+
+it('sin altas de Televentas con vendedores elegidos explica por qué', async () => {
+    vi.mocked(apiAnalitica.getAltas).mockResolvedValue([alta])
+    montar(`/analitica/altas?desde=2026-09-21&hasta=2026-09-25&origen=televentas&vendedores=${MOCK_VENDEDORES[0].codigoParticularVendedor}`)
+    expect(await screen.findByText(/no se filtran por vendedor/i)).toBeInTheDocument()
 })
 
 it('sin altas en el rango lo dice', async () => {
