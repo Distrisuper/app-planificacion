@@ -1,4 +1,4 @@
-import { Ban, Calendar, Check, ChevronRight, Lock, MapPin, Pencil, Phone, Play, RefreshCw, RotateCcw, UserPlus, Zap } from 'lucide-react'
+import { Ban, Calendar, CalendarPlus, Check, ChevronRight, Lock, MapPin, Pencil, Phone, Play, RefreshCw, RotateCcw, UserPlus, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import AccionesExternas from './AccionesExternas'
 import { titleCaseNombre } from '@/lib/textFormat'
@@ -9,10 +9,15 @@ import type { IAgendaClient, IVisitClientCard } from '@/types/planificacion'
 
 interface ClienteCardProps {
     cliente: IAgendaClient
-    /** Ya no gatea qué se puede tocar (ver docs/superpowers/plans/2026-08-10-frontend-plan-rotacion-editable.md):
-     *  toda semana de la rotación es accionable. Se mantiene por si a futuro hace falta un
-     *  matiz visual entre "semana abierta" y "otra semana de la rotación". */
+    /** No gatea qué se puede tocar: 'preview' también es la semana en curso sin ciclo abierto
+     *  (standby), que es accionable. Lo que gatea es `soloLectura`. */
     modo?: 'operable' | 'preview'
+    /** La zona en pantalla no es la de la semana del calendario (docs/dominio/modelo.md, "El
+     *  tiempo"): sin iniciar, propuesta ni reagendar. Un pendiente solo ofrece `onTraer`. */
+    soloLectura?: boolean
+    /** "Traer a esta semana": mueve la fila a la semana en curso, mismo día. Ausente = esta
+     *  zona no se puede traer (ya pasó) y la card queda solo para mirar. */
+    onTraer?: (cliente: IAgendaClient) => void
     /** El vendedor ya tiene una visita en curso EN OTRO cliente: no puede tener dos
      *  visitas abiertas a la vez, así que acá "Iniciar visita" se muestra bloqueado
      *  en vez de dejar que el vendedor lo intente y recién se entere en el sheet. */
@@ -58,6 +63,8 @@ const TELEFONO_LIMPIO = /^[\d\s()+-]+$/
 
 export default function ClienteCard({
     cliente,
+    soloLectura = false,
+    onTraer,
     otraVisitaEnCurso = false,
     reintentandoId = null,
     onAbrir,
@@ -86,7 +93,7 @@ export default function ClienteCard({
     // iniciada (en_curso) o resuelta, "Iniciar visita" ya no aplica. Tampoco aplica con
     // otra visita ya abierta — el backend la rechazaría igual (VISITA_ACTIVA_EXISTENTE),
     // pero mostrarlo bloqueado acá evita el viaje al servidor para enterarse.
-    const puedeIniciar = cliente.estado === 'pendiente' && !otraVisitaEnCurso
+    const puedeIniciar = !soloLectura && cliente.estado === 'pendiente' && !otraVisitaEnCurso
     // `||` (no `??`): nombreFantasia real puede venir como '' (sin cartel) — en ese
     // caso hay que caer a la razón social, no mostrar un nombre vacío.
     const nombre = titleCaseNombre(cliente.nombreFantasia || cliente.nombreCliente)
@@ -175,14 +182,16 @@ export default function ClienteCard({
                                 Datos
                             </button>
                         )}
-                        <button
-                            type="button"
-                            onClick={() => onEstadoVisita(cliente)}
-                            className={HEADER_WITH_LABEL}
-                        >
-                            <Calendar className="h-[13px] w-[13px]" strokeWidth={2} />
-                            Reagendar
-                        </button>
+                        {!soloLectura && (
+                            <button
+                                type="button"
+                                onClick={() => onEstadoVisita(cliente)}
+                                className={HEADER_WITH_LABEL}
+                            >
+                                <Calendar className="h-[13px] w-[13px]" strokeWidth={2} />
+                                Reagendar
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -275,6 +284,22 @@ export default function ClienteCard({
                         Ver resumen
                     </Button>
                 </div>
+            ) : soloLectura && cliente.estado === 'pendiente' ? (
+                // Zona de otra semana: lo único que se hace con un pendiente es traerlo. La
+                // propuesta tampoco: desde ahí se inicia la visita.
+                onTraer ? (
+                    <div className="mt-2.5 border-t border-linea pt-2.5">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onTraer(cliente)}
+                            className="h-11 w-full border-linea text-[13px] text-tinta"
+                        >
+                            <CalendarPlus className="h-[14px] w-[14px]" strokeWidth={2} />
+                            Traer a esta semana
+                        </Button>
+                    </div>
+                ) : null
             ) : !alta || puedeIniciar || (cliente.estado === 'pendiente' && otraVisitaEnCurso) ? (
                 // Un alta `en_curso` no tiene ni "Propuesta" (suprimido para altas) ni
                 // "Iniciar visita" (`puedeIniciar` es false con la visita ya abierta) ni

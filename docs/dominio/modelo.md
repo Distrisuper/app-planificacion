@@ -59,7 +59,8 @@ después saltan al plan. El ciclo no aparece en ese recorrido.
 
 **Corolario práctico:** si el vendedor visita hoy a un cliente que el plan tenía en otra semana, el
 hecho queda registrado **hoy**, sobre ese cliente, y **el plan no se toca**. No hay que "mover" nada
-para que la visita cuente.
+para que la visita cuente. Desde el 2/11/2026 el vendedor ya no puede operar sobre otra semana (ver
+"El tiempo"): para visitarlo tiene que traerlo a la semana en curso, que sí mueve el plan.
 
 ## Los dos ejes: quién escribe dónde
 
@@ -148,9 +149,18 @@ martes — la divergencia se conserva, que es lo que hace medible la adherencia.
   visitar, que es lo que la cobertura debe reflejar y no compensar.
 - **Los días que ya pasaron no generan lógica.** No hay "día vencido": un cliente sin visitar el lunes
   sigue pendiente y el vendedor decide antes del viernes.
-- **La rotación se completa cuando están todas sus semanas, y NO en orden.** `proponerSemana` propone
-  una de las que **faltan**. Las semanas son **zonas**, y cuál se hace primero es una decisión del
-  mundo real (el clima, un camión, un cliente que solo atiende martes).
+- **La semana de la ruta la marca el calendario, igual para todos (desde el lunes 2/11/2026).** Ese
+  lunes todos los vendedores arrancan en la semana 1 y la semana avanza sola cada lunes, en un ciclo
+  de 5 semanas. `GET /planificacion/ciclo/actual` la manda como `semanaEnCurso`; `null` = antes del
+  2/11 (o un back viejo), y ahí rige el modelo anterior: la rotación se completaba con todas sus
+  semanas en cualquier orden y `proponerSemana` proponía una de las que faltaban. Por qué cambió:
+  "Semanas secuenciales por calendario", más abajo.
+- **El vendedor solo opera sobre la semana en curso.** Iniciar, "No visité", "Volver más tarde",
+  reagendar y agregar fuera de ella → 409 `SEMANA_FUERA_DE_CALENDARIO` (con `semanaEnCurso` en el
+  body). Las otras zonas las mira en vista previa, de solo lectura, y de las que vienen puede **traer**
+  un cliente pendiente a la semana en curso (mismo día).
+- **Una semana sin trabajar se pierde.** El calendario no espera: lo que quedó pendiente de una semana
+  que ya pasó no lo rescata el vendedor, lo rescata gerencia desde el grid.
 - **`fecha_fin` la estampa el servidor, y por eso hoy no se puede cerrar una visita sin conexión.**
   `cerrarVisita` manda únicamente `coordFinal`; el instante lo pone api-vendedores al recibir el
   request. Mientras siga así, encolar el cierre para reintentarlo cuando vuelva la señal —lo natural
@@ -162,17 +172,18 @@ martes — la divergencia se conserva, que es lo que hace medible la adherencia.
 ## Cerrar una zona, y por qué el vendedor no lo ve
 
 **La única transición existente es el cambio de semana laboral.** El lunes, al entrar a la app, el
-ciclo de la zona que pasó **se cierra solo y no se abre nada**: queda en standby. El calendario avanzó
-y el vendedor no eligió nada, así que no se le pregunta; se le avisa cuántas visitas quedaron sin
-hacer. Pasa dentro de `sincronizar`, que es idempotente y se llama al montar y al volver del
-background.
+ciclo de la zona que pasó **se cierra solo**. El calendario avanzó y el vendedor no eligió nada, así
+que no se le pregunta; se le avisa cuántas visitas quedaron sin hacer. Pasa dentro de `sincronizar`,
+que es idempotente y se llama al montar y al volver del background. Desde el 2/11/2026 `sincronizar`
+además **abre el ciclo de `semanaEnCurso`** (y `asegurar` ignora la semana que manda el front); antes
+no abría nada y el vendedor quedaba en standby hasta su primera acción.
 
 **No hay una transición "excepcional" con cartel.** Antes, tocar una acción sobre un cliente de otra
 zona (semana 2 abierta, miércoles, acción sobre un cliente de la 4) exigía confirmar un 409
-`CAMBIO_DE_SEMANA` que cerraba la 2 de una. Ese código **ya no existe**: operar sobre otra zona
-devuelve el ciclo abierto tal cual — no cierra nada, no abre nada, no pregunta. El hecho cuelga de la
-fila del plan (acotada por la semana explícita del objetivo), nunca del ciclo, así que no hace falta
-tocar el ciclo para que la visita cuente. Ver
+`CAMBIO_DE_SEMANA` que cerraba la 2 de una. Ese código **ya no existe**. Sin calendario, operar sobre
+otra zona devuelve el ciclo abierto tal cual — no cierra nada, no abre nada, no pregunta. Con
+calendario, el back la rechaza con 409 `SEMANA_FUERA_DE_CALENDARIO` y el front ni la ofrece: en otra
+zona solo se mira y se trae. El hecho sigue colgando de la fila del plan, nunca del ciclo. Ver
 `docs/superpowers/specs/2026-08-12-semana-hecha-cierre-invisible-design.md`.
 
 **El vendedor no cierra la semana, y tampoco ve que algo se cerró.** No existe una pantalla ni un
@@ -184,19 +195,22 @@ implementación. Por eso "semana N" no aparece en su UI — aparece el nombre de
 **cerrar no crea resoluciones** — los pendientes quedan pendientes y la cobertura los cuenta como no
 cubiertos.
 
-**Límite asumido:** el ciclo abierto pasa a significar "la última zona que el vendedor arrancó", no
-"dónde está ahora mismo". Si se muda de zona a mitad de semana, el registro de esa pasada llega
-recién el lunes siguiente. Los HECHOS —lo que se mide— quedan siempre correctos con su fecha real; lo
-que se corre es solo el registro de cuándo se recorrió la zona. La alternativa exacta (preguntarle al
-vendedor) está descartada por la restricción de arriba.
+**Límite asumido (sin calendario):** el ciclo abierto pasaba a significar "la última zona que el
+vendedor arrancó", no "dónde está ahora mismo". Si se mudaba de zona a mitad de semana, el registro de
+esa pasada llegaba recién el lunes siguiente. Con calendario el límite desaparece: el ciclo abierto es
+siempre el de la semana en curso.
 
 ## Volver a una zona ya recorrida
 
-**Es posible, es un acto explícito del vendedor, y nunca una propuesta del sistema.** No hay
-`UNIQUE (rotacion_id, semana)` en `pl_ciclo_semana`: una zona puede tener más de una pasada,
-cada una con su propio `fecha_lunes`. `proponerSemana` sigue proponiendo únicamente lo que falta —
-nunca sugiere volver—, y la ventana para rescatar pendientes de una zona ya cerrada **termina cuando
-cierra la rotación completa**: ahí el número queda firme y es el que se reporta hacia arriba.
+**Desde el 2/11/2026, el vendedor no vuelve: lo que quedó pendiente de una semana que pasó lo rescata
+gerencia.** La vista previa de una zona pasada es de solo lectura y no ofrece "Traer a esta semana"
+(ni el buscador del "+" ofrece traer de ella); gerencia mueve esos pendientes desde el grid de
+`/analitica/ruta`. La ventana para rescatarlos **termina cuando cierra la rotación completa**: ahí el
+número queda firme y es el que se reporta hacia arriba.
+
+Antes del calendario era posible y era un acto explícito del vendedor, nunca una propuesta del
+sistema. No hay `UNIQUE (rotacion_id, semana)` en `pl_ciclo_semana`: una zona puede tener más de una
+pasada, cada una con su propio `fecha_lunes`.
 
 ## Quién puede mover el plan
 
@@ -208,9 +222,13 @@ tiene que pedir autorización, paga la fricción parado frente al cliente, cada 
 correspondía, gerencia lo ve después y lo corrige.
 
 - **El día, dentro de su semana: del vendedor.** Es táctico, y es información que solo él tiene ("pasá
-  el jueves que hoy no está el encargado de compras").
-- **La semana: puede, pero es lo que gerencia debería revisar.** Cambiar a un cliente de zona es
-  estructural, no táctico. Queda marcado con `origen = 'vendedor'`.
+  el jueves que hoy no está el encargado de compras"). Con calendario, solo dentro de la semana en
+  curso: el sheet de reagendar ya no ofrece otras zonas.
+- **La semana: de gerencia, salvo "Traer a esta semana".** Cambiar a un cliente de zona es
+  estructural, no táctico. Desde el 2/11/2026 el vendedor solo puede traer un cliente pendiente de una
+  zona que viene a la semana en curso (mismo día; `reacomodar` con `semana = semanaEnCurso`); lo demás
+  lo rechaza el back con 409 `SEMANA_FUERA_DE_CALENDARIO`. Queda marcado con `origen = 'vendedor'`.
+  Antes del calendario el vendedor podía mover a cualquier semana.
 
 **Lo que falta para que eso sea gobernable no es un permiso menos, es una superficie de revisión.** Hoy
 `ultimoMovimiento` se muestra como un `✎` con tooltip por card en el grid de gerencia: con 200 clientes
@@ -263,8 +281,9 @@ hace desde `/analitica/ruta`.
 
 ## Lo que NO hay que hacer
 
-Cuatro ideas que aparecen sistemáticamente, son razonables a primera vista, y están descartadas. Se
-escriben acá porque son del tipo que alguien agrega "para mejorar".
+Ideas que aparecen sistemáticamente, son razonables a primera vista, y están descartadas. Se
+escriben acá porque son del tipo que alguien agrega "para mejorar". Las semanas secuenciales
+estaban en esta lista y se revirtieron el 26/10/2026: su sección quedó con la decisión nueva.
 
 ### No auto-resolver los pendientes como `no_visita`
 
@@ -293,12 +312,29 @@ Si alguna vez hace falta trazabilidad de por qué una vuelta perdió N clientes,
 razón por evento de cierre (cambió de zona, licencia, imprevisto), no N razones por cliente — y como
 picklist, no texto libre.
 
-### No volver a semanas secuenciales (1, 2, 3…)
+### Semanas secuenciales por calendario (decisión del 26/10/2026, rige desde el 2/11/2026)
 
-Es el modelo viejo y se sacó a propósito. `proponerSemana` era `(última % 5) + 1`, y esa aritmética
-asume cinco semanas contiguas: saltear una la dejaba una vuelta entera sin visitar, y a un vendedor de
-cuatro semanas le proponía una quinta inexistente. No aporta a la medición, porque la cobertura es a
-nivel rotación y no le importa el orden.
+Esta sección decía "No volver a semanas secuenciales". **Se volvió, a pedido de gerencia, pero
+distinto del modelo viejo:** todos los vendedores van sincronizados en la misma semana de la ruta. El
+lunes 2/11/2026 todos arrancan en la semana 1 y la semana avanza con el calendario, en un ciclo de 5
+semanas igual para todos. El vendedor ya no elige qué zona abrir.
+
+Por qué ahora sí: gerencia quiere que todo el equipo esté en el mismo punto de la ruta a la vez. Las
+objeciones al modelo viejo (`proponerSemana` como `(última % 5) + 1`) eran que saltear una semana la
+dejaba una vuelta entera sin visitar y que a un vendedor de cuatro semanas le proponía una quinta
+inexistente. Con el calendario la segunda no aplica (5 semanas para todos) y la primera se acepta como
+regla: **una semana sin trabajar se pierde**, y sus pendientes los rescata gerencia.
+
+Lo que decidió el usuario, para no reabrirlo:
+
+- 5 semanas para todos.
+- Las otras zonas se ven en vista previa, de solo lectura, con un "Traer a esta semana" por cliente
+  pendiente de las que vienen.
+- Una semana sin trabajar se pierde; los pendientes de semanas pasadas solo los rescata gerencia.
+- La regla vive en api-vendedores (409 `SEMANA_FUERA_DE_CALENDARIO`); el front deja de ofrecer lo que
+  el back rechaza y, con `semanaEnCurso` null, se comporta como antes.
+
+La cobertura sigue siendo a nivel rotación: el orden no cambia cómo se mide.
 
 ### No poner una UI de rescate masivo de pendientes en el cambio de semana
 

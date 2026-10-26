@@ -21,6 +21,7 @@ import { useMotivos } from '@/hooks/useMotivos'
 import { capturarUbicacion, formatearCoord, type GeoResult } from '@/lib/geolocation'
 import { distanciaMetros, estaFueraDeRango } from '@/lib/distancia'
 import { errorCode, errorData } from '@/lib/apiError'
+import { mensajeFueraDeCalendario } from '@/lib/semanaCalendario'
 import {
     limpiarBorrador,
     limpiarDetalles,
@@ -459,7 +460,9 @@ export default function VisitaFlow({
                         cerrarFlujo()
                         return
                     }
-                    setErrorIniciar('No se pudo iniciar la visita. Volvé a intentar.')
+                    setErrorIniciar(
+                        mensajeFueraDeCalendario(err) ?? 'No se pudo iniciar la visita. Volvé a intentar.',
+                    )
                 }
             })
         } finally {
@@ -634,7 +637,7 @@ export default function VisitaFlow({
                 cerrarFlujo()
                 return
             }
-            onAviso?.('error', 'No se pudo registrar. Volvé a intentar.')
+            onAviso?.('error', mensajeFueraDeCalendario(err) ?? 'No se pudo registrar. Volvé a intentar.')
         }
     }
 
@@ -690,7 +693,10 @@ export default function VisitaFlow({
                         soltarVisita()
                         return
                     }
-                    onAviso?.('error', 'No se pudo descartar la visita. Volvé a intentar.')
+                    onAviso?.(
+                        'error',
+                        mensajeFueraDeCalendario(err) ?? 'No se pudo descartar la visita. Volvé a intentar.',
+                    )
                 }
             })
         } finally {

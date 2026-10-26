@@ -1194,3 +1194,216 @@ describe('sacar de la agenda', () => {
         expect(await screen.findByText(/ya se resolvió/i)).toBeInTheDocument()
     })
 })
+
+// ── Semana del calendario ───────────────────────────────────────────────────────
+// Desde el 2/11/2026 todos los vendedores van en la misma semana de la ruta y avanza con
+// el calendario: `GET /ciclo/actual` trae `semanaEnCurso`. Las otras zonas se miran, pero
+// en solo lectura, con un "Traer a esta semana" por cliente pendiente de las que vienen.
+describe('semana del calendario', () => {
+    const CALENDARIO_ABIERTO = { ...CICLO_ACTUAL_ABIERTO, semanaEnCurso: 3 }
+
+    /** Toda zona trae a `clienteLunes` pendiente: la 4 (viene) y la 2 (ya pasó). */
+    function previewConClienteLunes() {
+        ;(api.previewSemana as any).mockImplementation(async (semana: number) => ({
+            semana,
+            clientes: 1,
+            omitidos: [],
+            dias: { ...semanaVacia, LUN: [clienteLunes] },
+        }))
+    }
+
+    it('sin ciclo abierto arranca en la semana en curso, no en la primera pendiente', async () => {
+        ;(api.getCicloActual as any).mockResolvedValue({ ...CICLO_ACTUAL_STANDBY, semanaEnCurso: 2 })
+        renderPage()
+
+        await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(2))
+        expect(api.previewSemana).not.toHaveBeenCalledWith(3)
+    })
+
+    it('en la semana en curso sin ciclo abierto, las acciones siguen disponibles', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue({ ...CICLO_ACTUAL_STANDBY, semanaEnCurso: 3 })
+        previewConClienteLunes()
+        renderPage()
+
+        expect(await screen.findByRole('button', { name: /iniciar visita/i })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /traer a esta semana/i })).not.toBeInTheDocument()
+    })
+
+    it('otra zona que viene se ve en solo lectura: sin iniciar, reagendar ni "+"', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        previewConClienteLunes()
+        renderPage()
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+        fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
+        await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4))
+
+        expect(await screen.findByRole('button', { name: /traer a esta semana/i })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /propuesta/i })).not.toBeInTheDocument()
+        expect(screen.queryByText('Reagendar')).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /agregar cliente al lunes/i })).not.toBeInTheDocument()
+    })
+
+    it('se nota que la zona no es la de esta semana, y se puede volver', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+        fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
+        expect(await screen.findByText(/no es la zona de esta semana/i)).toBeInTheDocument()
+
+        fireEvent.click(screen.getByRole('button', { name: /volver a esta semana/i }))
+        await waitFor(() =>
+            expect(screen.queryByText(/no es la zona de esta semana/i)).not.toBeInTheDocument(),
+        )
+    })
+
+    it('"Traer a esta semana" confirma y mueve la fila a la semana en curso, mismo día', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.reacomodar as any).mockResolvedValue(undefined)
+        previewConClienteLunes()
+        renderPage()
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+        fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
+        fireEvent.click(await screen.findByRole('button', { name: /traer a esta semana/i }))
+
+        // Confirma antes de mover el plan.
+        expect(api.reacomodar).not.toHaveBeenCalled()
+        fireEvent.click(await screen.findByRole('button', { name: 'Traer' }))
+
+        await waitFor(() => expect(api.reacomodar).toHaveBeenCalledWith(42, { semana: 3, dia: 1 }))
+    })
+
+    // Una semana sin trabajar se pierde: los pendientes de las zonas que ya pasaron los
+    // rescata gerencia, no el vendedor.
+    it('una zona que ya pasó no ofrece traer', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        previewConClienteLunes()
+        renderPage()
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+        fireEvent.click(screen.getByRole('button', { name: /zona anterior/i }))
+        await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(2))
+
+        expect(await screen.findByText('Almacen Don Jose')).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /traer a esta semana/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+    })
+
+    it('reagendar solo ofrece los días de la semana en curso, sin elegir zona', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        await screen.findByText('No visité')
+        expect(screen.queryByRole('button', { name: /^semana 4$/i })).not.toBeInTheDocument()
+    })
+
+    it('el 409 de semana fuera del calendario se lee con palabras del vendedor', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+        ;(api.getMotivos as any).mockResolvedValue([
+            { motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] },
+        ])
+        ;(api.registrarNoVisita as any).mockRejectedValue({
+            response: { status: 409, data: { code: 'SEMANA_FUERA_DE_CALENDARIO', semanaEnCurso: 4 } },
+        })
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByText('No visité'))
+        fireEvent.click(screen.getByText('Registrar No visité'))
+        fireEvent.click(await screen.findByText('Cerrado'))
+        fireEvent.click(screen.getByText('Registrar'))
+
+        expect(await screen.findByText(/este cliente es de otra semana/i)).toBeInTheDocument()
+    })
+
+    it('el buscador del "+" no ofrece traer un pendiente de una zona que ya pasó', async () => {
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.buscarEnCartera as any).mockResolvedValue([
+            {
+                codigoParticularCliente: '4412',
+                nombreCliente: 'ALMACEN LOPEZ',
+                estado: 'pendiente',
+                semana: 2,
+                dia: 1,
+                descripcionZona: null,
+                fecha: null,
+                motivo: null,
+            },
+        ])
+        ;(api.consultarBuscador as any).mockResolvedValue({
+            estado: 'pendiente_otra_zona',
+            filaExistente: null,
+            otraZona: { rotacionClienteId: 77, semana: 2, dia: 1, descripcionZona: null },
+        })
+        renderPage()
+
+        fireEvent.click(await screen.findByRole('button', { name: /agregar cliente al lunes/i }))
+        fireEvent.change(screen.getByPlaceholderText(/nombre o código/i), { target: { value: 'lopez' } })
+        fireEvent.click(await screen.findByText('ALMACEN LOPEZ'))
+
+        expect(await screen.findByRole('button', { name: /agregar igual/i })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /traerlo al/i })).not.toBeInTheDocument()
+    })
+
+    it('un 409 al agregar en el "+" se lee con palabras del vendedor', async () => {
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.buscarEnCartera as any).mockResolvedValue([
+            {
+                codigoParticularCliente: '4412',
+                nombreCliente: 'ALMACEN LOPEZ',
+                estado: 'sin_plan',
+                semana: null,
+                dia: null,
+                descripcionZona: null,
+                fecha: null,
+                motivo: null,
+            },
+        ])
+        ;(api.consultarBuscador as any).mockResolvedValue({
+            estado: 'sin_fila_disponible',
+            filaExistente: null,
+            otraZona: null,
+        })
+        ;(api.confirmarExtra as any).mockRejectedValue({
+            response: { status: 409, data: { code: 'SEMANA_FUERA_DE_CALENDARIO', semanaEnCurso: 4 } },
+        })
+        renderPage()
+
+        fireEvent.click(await screen.findByRole('button', { name: /agregar cliente al lunes/i }))
+        fireEvent.change(screen.getByPlaceholderText(/nombre o código/i), { target: { value: 'lopez' } })
+        fireEvent.click(await screen.findByText('ALMACEN LOPEZ'))
+        fireEvent.click(await screen.findByRole('button', { name: 'Agregar' }))
+
+        expect(await screen.findByText(/solo podés agregar clientes en la zona de esta semana/i)).toBeInTheDocument()
+    })
+
+    // Back viejo o antes del 2/11: `semanaEnCurso` null y todo sigue como hasta ahora.
+    it('con semanaEnCurso null, otra zona sigue siendo operable', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue({ ...CICLO_ACTUAL_ABIERTO, semanaEnCurso: null })
+        previewConClienteLunes()
+        renderPage()
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+        fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
+        await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4))
+
+        expect(await screen.findByRole('button', { name: /iniciar visita/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /agregar cliente al lunes/i })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /traer a esta semana/i })).not.toBeInTheDocument()
+        expect(screen.queryByText(/no es la zona de esta semana/i)).not.toBeInTheDocument()
+    })
+})

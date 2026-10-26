@@ -25,6 +25,17 @@ estado actual.
 
 - **La "semana actual" la resuelve el backend** (`GET /planificacion/ciclo/actual`). Se descartó
   calcularla en el front con un ancla local: se desincroniza al reinstalar o cambiar de equipo.
+- **Semana del calendario (`semanaEnCurso`, desde el 2/11/2026).** Con valor, la agenda aterriza en
+  `ciclo.semana ?? semanaEnCurso` y cualquier otra zona es de solo lectura (`soloLectura` en
+  `AgendaSemanaPage`, que llega a `ClienteCard`): sin iniciar, propuesta, reagendar, "+" ni "Volver a
+  agendar"; una franja dice que no es la zona de esta semana y lleva de vuelta. Los pendientes de una
+  zona que viene tienen "Traer a esta semana" (confirmación + `reacomodar` a `semanaEnCurso`, mismo
+  día); los de una zona que ya pasó, no (`sePuedeTraer` en `lib/semanaCalendario.ts`, también en el
+  buscador del "+"). Reagendar solo entre los días de la semana en curso. El 409
+  `SEMANA_FUERA_DE_CALENDARIO` se traduce con `mensajeFueraDeCalendario` en cada `catch` de acción.
+  No se reusa `modo` para gatear: `'preview'` también es el standby de la semana en curso, que es
+  accionable. Con `semanaEnCurso` null (o ausente, back viejo) todo sigue como antes, así que front y
+  back se despliegan en cualquier orden.
 - **Las horas se formatean en TZ de negocio**, con `horaNegocio` de `src/lib/fechas.ts`
   (`America/Argentina/Buenos_Aires` vía `Intl`). Nunca `slice(11, 16)` sobre el ISO (muestra UTC)
   ni `toLocaleTimeString()` pelado (usa la TZ del equipo). El campo `fecha` no se recalcula: es el

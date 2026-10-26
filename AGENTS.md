@@ -58,7 +58,10 @@ agenda, visita, ciclo o resoluciones. Las que más se rompen:
 3. **El denominador son visitas planificadas, no clientes** (un quincenal aporta 2), y
    `resueltos / total` no es cumplimiento: `no_visita` no suma cobertura.
 4. **El vendedor ve zonas, días y clientes, nunca ciclos ni rotaciones.** "Semana N" no es
-   vocabulario suyo; el cierre de semana es automático (backend) e invisible.
+   vocabulario suyo; el cierre de semana es automático (backend) e invisible. Desde el 2/11/2026 la
+   semana la marca el calendario, igual para todos (`semanaEnCurso` de `GET /ciclo/actual`): el
+   vendedor solo opera sobre esa zona, las otras las mira en solo lectura y de las que vienen puede
+   "Traer a esta semana". Con `semanaEnCurso` null todo sigue como antes.
 5. **Iniciar visita exige ≤100 m del cliente; cerrar no tiene gate** (pero puede pedir
    confirmación en el mapa). Los gates del front que cuentan algo esperan a que el dato haya
    cargado: con el GET en vuelo, `min(2, 0)` se auto-satisface.

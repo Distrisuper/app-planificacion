@@ -4,6 +4,11 @@ import BottomSheet from '@/components/ui/BottomSheet'
 import { useConfirmarExtra, useConsultarBuscador, useBuscarEnCartera } from '@/hooks/useBuscador'
 import { useReacomodar } from '@/hooks/useCiclo'
 import { diaLabel, etiquetaEstado, zonaLabel } from './etiquetas'
+import {
+    MENSAJE_AGREGAR_FUERA_DE_CALENDARIO,
+    mensajeFueraDeCalendario,
+    sePuedeTraer,
+} from '@/lib/semanaCalendario'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type {
     IAgendaClient,
@@ -18,6 +23,10 @@ interface BuscadorDiaSheetProps {
      *  destino de todo lo que hace este sheet. */
     semana: number
     dia: number
+    /** La semana del calendario (`GET /ciclo/actual`). Con valor, no se ofrece traer una
+     *  fila de una zona que ya pasó: esos pendientes los rescata gerencia. null o ausente =
+     *  sin calendario, como antes. */
+    semanaEnCurso?: number | null
     /** Se creó una fila `es_extra` nueva en la celda destino. */
     onExtraCreada: (cliente: IAgendaClient) => void
     /** El cliente ya tenía una fila pendiente y se decidió ir a verla en vez de crear. */
@@ -57,6 +66,7 @@ export function BuscadorDiaSheet({
     onClose,
     semana,
     dia,
+    semanaEnCurso = null,
     onExtraCreada,
     onNavegarAExistente,
     onTraido,
@@ -113,8 +123,12 @@ export function BuscadorDiaSheet({
             await reacomodar.mutateAsync({ rotacionClienteId, semana, dia })
             cerrar()
             onTraido()
-        } catch {
-            onAviso('error', 'No se pudo mover el cliente. Volvé a intentar.')
+        } catch (err) {
+            onAviso(
+                'error',
+                mensajeFueraDeCalendario(err, 'Este cliente no se puede traer a esta semana.') ??
+                    'No se pudo mover el cliente. Volvé a intentar.',
+            )
         }
     }
 
@@ -124,12 +138,18 @@ export function BuscadorDiaSheet({
             const creada = await confirmarExtra.mutateAsync({ codigo: consulta.codigo, semana, dia })
             cerrar()
             onExtraCreada(creada)
-        } catch {
-            onAviso('error', 'No se pudo agregar el cliente. Volvé a intentar.')
+        } catch (err) {
+            onAviso(
+                'error',
+                mensajeFueraDeCalendario(err, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO) ??
+                    'No se pudo agregar el cliente. Volvé a intentar.',
+            )
         }
     }
 
     const fila = consulta?.resultado.filaExistente
+    const otraZona = consulta?.resultado.otraZona
+    const otraZonaTraible = otraZona != null && sePuedeTraer(otraZona.semana, semanaEnCurso)
     // Ya está pendiente en esta zona pero en OTRO día: traerlo acá es reagendar dentro
     // de la zona, que es una decisión táctica del vendedor. Si ya está en este mismo
     // día no hay nada que mover — solo queda verlo.
@@ -261,14 +281,16 @@ export function BuscadorDiaSheet({
                             .
                         </p>
                         <div className="flex flex-col gap-2">
-                            <button
-                                type="button"
-                                disabled={trabajando}
-                                className="h-11 w-full rounded-lg bg-dsnavy text-sm font-semibold text-white disabled:opacity-60"
-                                onClick={() => handleTraer(consulta.resultado.otraZona!.rotacionClienteId)}
-                            >
-                                Traerlo al {nombreDia}
-                            </button>
+                            {otraZonaTraible && (
+                                <button
+                                    type="button"
+                                    disabled={trabajando}
+                                    className="h-11 w-full rounded-lg bg-dsnavy text-sm font-semibold text-white disabled:opacity-60"
+                                    onClick={() => handleTraer(consulta.resultado.otraZona!.rotacionClienteId)}
+                                >
+                                    Traerlo al {nombreDia}
+                                </button>
+                            )}
                             {/* Segundo, y sin color de acción principal: mover el plan es lo
                                 correcto cuando el cliente cambió de lugar; la extra es para la
                                 pasada puntual, y deja la visita de la otra zona pendiente. */}

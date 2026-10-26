@@ -35,6 +35,7 @@ import { useAppExterna } from '@/hooks/useAppExterna'
 import { abrirAppExternaEnPestana } from '@/lib/appsExternas'
 import { Notification } from '@/components/ui/Notification'
 import { errorCode } from '@/lib/apiError'
+import { mensajeFueraDeCalendario, sePuedeTraer } from '@/lib/semanaCalendario'
 import { titleCaseNombre } from '@/lib/textFormat'
 import { getWeekRangeLabel, getDiaDeHoy } from '@/lib/weekDates'
 import {
@@ -69,6 +70,17 @@ function mensajeDeEliminar(err: unknown): string {
             return 'Este cliente es parte de tu recorrido: para sacarlo hablá con tu supervisor.'
         default:
             return 'No se pudo sacar de tu agenda. Volvé a intentar.'
+    }
+}
+
+function mensajeDeTraer(err: unknown): string {
+    switch (errorCode(err)) {
+        case 'FILA_RESUELTA':
+            return 'Este cliente ya se resolvió, así que no se puede mover.'
+        case 'SEMANA_FUERA_DE_CALENDARIO':
+            return 'Este cliente no se puede traer a esta semana.'
+        default:
+            return 'No se pudo traer el cliente. Volvé a intentar.'
     }
 }
 
@@ -222,22 +234,55 @@ export default function AgendaSemanaPage() {
         actualizarPosicion({ semana })
     }
 
-    // Con ciclo abierto, esa es la semana. Sin ciclo (standby, de pie casi todos los lunes),
-    // arranca en la primera semana PENDIENTE si se conoce — es la que `asegurar` abriría de
-    // todas formas ante la primera acción real — y si no, en la primera semana conocida.
+    // La semana de la ruta que toca por calendario, igual para todos (desde el 2/11/2026).
+    // null = antes de esa fecha o back viejo: todo sigue como antes (ver docs/dominio/modelo.md,
+    // "El tiempo"). `?? null` porque un back viejo ni manda la clave.
+    const semanaEnCurso = cicloActual?.semanaEnCurso ?? null
+
+    // Con ciclo abierto, esa es la semana. Sin ciclo (standby), la del calendario; sin
+    // calendario, la primera semana PENDIENTE si se conoce — es la que `asegurar` abriría de
+    // todas formas ante la primera acción real — y si no, la primera semana conocida.
     const semanaEfectiva =
-        semanaVista ?? ciclo?.semana ?? semanasPendientes?.[0] ?? semanas?.[0]?.semana ?? null
+        semanaVista ??
+        ciclo?.semana ??
+        semanaEnCurso ??
+        semanasPendientes?.[0] ??
+        semanas?.[0]?.semana ??
+        null
     const operable = ciclo == null || semanaEfectiva === ciclo.semana
 
-    // Se puede AGREGAR en cualquier zona que todavía falte hacer —la en curso incluida—,
-    // y en ninguna de las ya cerradas. No es una restricción de permisos (el backend
-    // acepta cualquier semana del set, y "Reagendar" ya movía filas a donde sea): es que
-    // una fila agregada a una zona hecha no vuelve a aparecer nunca. Su ciclo ya cerró y
-    // `proponerSemana` solo propone entre las pendientes, así que el vendedor programaría
-    // una visita que el sistema no le muestra más. `semanasPendientes` son justamente las
-    // que no tienen ciclo cerrado en esta rotación.
+    // Con calendario, cualquier otra zona es para mirar: el back rechaza iniciar, "No
+    // visité", reagendar y agregar fuera de la semana en curso (409
+    // SEMANA_FUERA_DE_CALENDARIO). `operable` no sirve para esto: decide de dónde salen los
+    // datos (agenda o preview), y el standby en la semana en curso también es preview.
+    const soloLectura = semanaEnCurso !== null && semanaEfectiva !== semanaEnCurso
+    const modoVista: 'operable' | 'preview' =
+        semanaEnCurso !== null
+            ? soloLectura
+                ? 'preview'
+                : 'operable'
+            : operable && ciclo != null
+              ? 'operable'
+              : 'preview'
+
+    // Sin calendario se puede AGREGAR en cualquier zona que todavía falte hacer —la en curso
+    // incluida—, y en ninguna de las ya cerradas: una fila agregada a una zona hecha no
+    // vuelve a aparecer nunca. Su ciclo ya cerró y `proponerSemana` solo propone entre las
+    // pendientes, así que el vendedor programaría una visita que el sistema no le muestra
+    // más. `semanasPendientes` son justamente las que no tienen ciclo cerrado en esta
+    // rotación. Con calendario, solo en la semana en curso.
     const zonaPlanificable =
-        semanaEfectiva !== null && (semanasPendientes ?? []).includes(semanaEfectiva)
+        semanaEfectiva !== null &&
+        (semanaEnCurso !== null
+            ? semanaEfectiva === semanaEnCurso
+            : (semanasPendientes ?? []).includes(semanaEfectiva))
+
+    // "Traer a esta semana" se ofrece mirando una zona que viene, nunca una que ya pasó:
+    // una semana sin trabajar se pierde y sus pendientes los rescata gerencia.
+    const traible =
+        soloLectura && semanaEfectiva !== null && sePuedeTraer(semanaEfectiva, semanaEnCurso)
+    const nombreZonaEnCurso =
+        semanas?.find(z => z.semana === semanaEnCurso)?.descripcion || 'esta semana'
 
     // El vendedor no ve "semana": ve la zona por su nombre ("Zárate"). `descripcion` puede
     // ser null (zona sin nombrar todavía) — ahí, y solo ahí, cae al número.
@@ -289,6 +334,7 @@ export default function AgendaSemanaPage() {
     )
     const [estadoVisitaCliente, setEstadoVisitaCliente] = useState<IAgendaClient | null>(null)
     const [eliminarCliente, setEliminarCliente] = useState<IAgendaClient | null>(null)
+    const [traerCliente, setTraerCliente] = useState<IAgendaClient | null>(null)
     // El día destino del "+" que se tocó. null = sheet cerrado. Es el día del ENCABEZADO,
     // no `diaActivo`: el board scrollea entre columnas y los dos pueden diferir por un
     // instante mientras el swipe se asienta.
@@ -357,8 +403,9 @@ export default function AgendaSemanaPage() {
     // - Si el cliente que teníamos como en curso ya no lo está en el servidor (se cerró
     //   desde otro dispositivo/pestaña), suelta el puntero.
     //
-    // El cliente en curso NO tiene por qué estar en la agenda del ciclo abierto: el vendedor
-    // puede visitar hoy a un cliente de otra zona desde la vista previa, y eso es un hecho
+    // El cliente en curso NO tiene por qué estar en la agenda del ciclo abierto: sin
+    // calendario el vendedor puede visitar hoy a un cliente de otra zona desde la vista
+    // previa (y con calendario, quedar con una visita abierta de antes), y eso es un hecho
     // válido que no mueve el plan (docs/dominio/modelo.md). Por eso se busca también en el
     // preview que se está mirando, y si no aparece en ninguno de los dos, decide el servidor
     // (`GET /visitas/activa`) y no la ausencia en la agenda — si no, iniciar una visita en
@@ -455,8 +502,25 @@ export default function AgendaSemanaPage() {
                     ? 'Cliente reagendado'
                     : `Cliente movido a la semana ${semanaDestino}`,
             )
-        } catch {
-            mostrar('error', 'No se pudo reagendar. Volvé a intentar.')
+        } catch (err) {
+            mostrar('error', mensajeFueraDeCalendario(err) ?? 'No se pudo reagendar. Volvé a intentar.')
+        }
+    }
+
+    // Mueve la fila a la semana en curso, mismo día, y la deja pendiente: es un reacomodo
+    // del plan (queda auditado con origen vendedor), no un hecho.
+    async function onConfirmTraer() {
+        const cliente = traerCliente
+        if (!cliente || semanaEnCurso === null) return
+        try {
+            await reacomodar.mutateAsync({
+                rotacionClienteId: cliente.rotacionClienteId,
+                semana: semanaEnCurso,
+                dia: cliente.dia,
+            })
+            mostrar('exito', `Lo trajimos a esta semana, el ${NOMBRE_DIA[DIAS[cliente.dia - 1]]}`)
+        } catch (err) {
+            mostrar('error', mensajeDeTraer(err))
         }
     }
 
@@ -530,6 +594,11 @@ export default function AgendaSemanaPage() {
             }
             mostrar('exito', 'Registrado')
         } catch (err) {
+            const fueraDeCalendario = mensajeFueraDeCalendario(err)
+            if (fueraDeCalendario) {
+                mostrar('error', fueraDeCalendario)
+                return
+            }
             const code = errorCode(err)
             const yaResuelto = code === 'CICLO_CLIENTE_YA_RESUELTO' || code === 'VISITA_YA_CERRADA'
             mostrar(
@@ -624,8 +693,8 @@ export default function AgendaSemanaPage() {
             <AppHeader
                 vendedorNombre={user?.name ?? ''}
                 tituloSemana={semanaEfectiva ? (nombreZona ?? `Semana ${semanaEfectiva}`) : 'Cargando…'}
-                subtitulo={semanaEfectiva && operable && ciclo != null ? getWeekRangeLabel() : undefined}
-                modo={operable && ciclo != null ? 'operable' : 'preview'}
+                subtitulo={semanaEfectiva && modoVista === 'operable' ? getWeekRangeLabel() : undefined}
+                modo={modoVista}
                 onLogout={logout}
                 onPrevWeek={() => moverSemana(-1)}
                 onNextWeek={() => moverSemana(1)}
@@ -649,10 +718,28 @@ export default function AgendaSemanaPage() {
             ) : (
                 <>
                     <DiaTabs activo={diaActivo} onSelect={setDiaActivo} />
+                    {/* El chip "Vista previa" del header solo no alcanza: acá el vendedor
+                        puede creer que esa zona le toca hoy. */}
+                    {soloLectura && (
+                        <div className="flex items-center justify-between gap-2 border-b border-linea bg-tarjeta px-3.5 py-1.5">
+                            <span className="text-[12px] font-semibold leading-tight text-tinta-2">
+                                No es la zona de esta semana: es para mirar.
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setSemanaVista(semanaEnCurso)}
+                                className="h-8 shrink-0 rounded-lg border border-linea px-2.5 text-[12px] font-semibold text-tinta"
+                            >
+                                Volver a esta semana
+                            </button>
+                        </div>
+                    )}
                     <AgendaBoard
                         semana={semana}
                         activo={diaActivo}
-                        modo={operable && ciclo != null ? 'operable' : 'preview'}
+                        modo={modoVista}
+                        soloLectura={soloLectura}
+                        onTraer={traible ? setTraerCliente : undefined}
                         hayVisitaEnCurso={visitaEnCurso !== null}
                         reintentandoId={reintentarSeguimiento.isPending ? (reintentarSeguimiento.variables ?? null) : null}
                         onActivoChange={setDiaActivo}
@@ -663,8 +750,11 @@ export default function AgendaSemanaPage() {
                         onAbrirAppExterna={abrirAppExternaEnPestana}
                         onReintentarSeguimiento={onReintentarSincronizacion}
                         onEditarAlta={setRelevamiento}
-                        onReintentarAlta={cliente =>
-                            setClienteNuevo({ modo: 'reintentar', cliente, diaSugerido: cliente.dia })
+                        onReintentarAlta={
+                            soloLectura
+                                ? undefined
+                                : cliente =>
+                                      setClienteNuevo({ modo: 'reintentar', cliente, diaSugerido: cliente.dia })
                         }
                     />
                 </>
@@ -734,7 +824,13 @@ export default function AgendaSemanaPage() {
                 diaActual={estadoVisitaCliente ? DIAS[estadoVisitaCliente.dia - 1] : null}
                 estadoActual={estadoVisitaCliente?.estado ?? null}
                 semanaActual={semanaEfectiva ?? 1}
-                semanasDisponibles={semanas ?? []}
+                // Con calendario se reagenda solo entre los días de la semana en curso: con
+                // una sola zona el sheet no pinta el selector.
+                semanasDisponibles={
+                    semanaEnCurso !== null
+                        ? (semanas ?? []).filter(z => z.semana === semanaEnCurso)
+                        : (semanas ?? [])
+                }
                 onReagendar={onReagendar}
                 onElegirNoVisita={onElegirNoVisita}
                 // Solo lo que el vendedor agregó a mano y sigue pendiente: lo planificado
@@ -762,6 +858,18 @@ export default function AgendaSemanaPage() {
                     onConfirm={onConfirmEliminar}
                 />
             )}
+            {traerCliente && (
+                <ConfirmDialog
+                    open
+                    onOpenChange={abierto => {
+                        if (!abierto) setTraerCliente(null)
+                    }}
+                    title={`¿Traer a ${titleCaseNombre(traerCliente.nombreFantasia || traerCliente.nombreCliente)} a esta semana?`}
+                    description={`Queda pendiente el ${NOMBRE_DIA[DIAS[traerCliente.dia - 1]]} en ${nombreZonaEnCurso}.`}
+                    confirmLabel="Traer"
+                    onConfirm={onConfirmTraer}
+                />
+            )}
             {/* `ocultar` y no `desmontar`: cerrar deja las instancias vivas para que reabrir
                 el mismo cliente sea instantáneo. */}
             {appExterna.clienteActivo && Object.keys(appExterna.montadas).length > 0 && (
@@ -783,15 +891,17 @@ export default function AgendaSemanaPage() {
                 />
             )}
             {/* `semanaEfectiva` y NO `ciclo.semana`: el "+" vive en el encabezado del día de
-                la zona que está EN PANTALLA, y el caso central es planificar la zona que
-                viene. Con la del ciclo, tocar el "+" mirando otra zona escribía la fila en
-                la zona en curso sin avisar. */}
+                la zona que está EN PANTALLA. Sin calendario el caso central es planificar la
+                zona que viene, y con la del ciclo tocar el "+" mirando otra zona escribía la
+                fila en la zona en curso sin avisar. Con calendario el "+" solo está en la
+                semana en curso (`zonaPlanificable`). */}
             {zonaPlanificable && semanaEfectiva != null && diaAAgregar != null && (
                 <BuscadorDiaSheet
                     open
                     onClose={() => setDiaAAgregar(null)}
                     semana={semanaEfectiva}
                     dia={DIAS.indexOf(diaAAgregar) + 1}
+                    semanaEnCurso={semanaEnCurso}
                     onExtraCreada={() => {
                         setDiaActivo(diaAAgregar)
                         mostrar('exito', `Cliente agregado al ${NOMBRE_DIA[diaAAgregar]}`)

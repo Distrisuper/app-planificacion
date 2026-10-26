@@ -412,6 +412,17 @@ it('si iniciar falla porque el ciclo cliente ya estaba resuelto, avisa y cierra 
     expect(onClose).toHaveBeenCalled()
 })
 
+it('si iniciar falla porque el cliente es de otra semana del calendario, lo dice con palabras del vendedor', async () => {
+    ;(api.iniciarVisita as any).mockRejectedValue({
+        response: { status: 409, data: { code: 'SEMANA_FUERA_DE_CALENDARIO', semanaEnCurso: 2 } },
+    })
+    renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    expect(
+        await screen.findByText('Este cliente es de otra semana. Podés traerlo a esta semana.'),
+    ).toBeInTheDocument()
+})
+
 it('si iniciar falla por un error genérico, muestra el error inline y NO cierra el flujo', async () => {
     ;(api.iniciarVisita as any).mockRejectedValue({
         response: { data: { code: 'ALGO_INESPERADO' } },

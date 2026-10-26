@@ -20,12 +20,15 @@ interface AgendaBoardProps {
     reintentandoId?: number | null
     onActivoChange: (dia: Dia) => void
     /** Si se pasa, cada encabezado de día muestra un "+" que abre el buscador con ESE
-     *  día —de la zona que se está mirando— como destino. Se pinta en TODA zona de la
-     *  rotación, no solo en la del ciclo: el caso que lo pidió es el vendedor
-     *  planificando la zona siguiente, que ve que le faltan clientes y los agrega
-     *  desde ahí. La prop sigue siendo opcional para que el board pueda montarse sin
-     *  escritura si algún día hace falta. */
+     *  día —de la zona que se está mirando— como destino. La página decide en qué zonas
+     *  (`zonaPlanificable`): sin calendario, en toda zona pendiente; con calendario, solo
+     *  en la de la semana en curso. */
     onAgregarCliente?: (dia: Dia) => void
+    /** Pass-through hacia `ClienteCard`: la zona en pantalla no es la de la semana del
+     *  calendario. */
+    soloLectura?: boolean
+    /** Pass-through hacia `ClienteCard`: "Traer a esta semana". */
+    onTraer?: (cliente: IAgendaClient) => void
     onAbrir: (cliente: IAgendaClient) => void
     onEstadoVisita: (cliente: IAgendaClient) => void
     onIniciarVisita: (cliente: IAgendaClient) => void
@@ -47,6 +50,8 @@ export default function AgendaBoard({
     reintentandoId = null,
     onActivoChange,
     onAgregarCliente,
+    soloLectura = false,
+    onTraer,
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
@@ -200,6 +205,8 @@ export default function AgendaBoard({
                                         key={c.codigoParticularCliente}
                                         cliente={c}
                                         modo={modo}
+                                        soloLectura={soloLectura}
+                                        onTraer={onTraer}
                                         otraVisitaEnCurso={hayVisitaEnCurso && c.estado !== 'en_curso'}
                                         reintentandoId={reintentandoId}
                                         onAbrir={onAbrir}

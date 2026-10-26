@@ -280,6 +280,10 @@ export interface ICicloActualResult {
     ciclo: ICicloSemana | null
     semanas?: IZonaCiclo[]
     semanasPendientes?: number[]
+    /** La semana de la ruta que toca por calendario, igual para todos los vendedores (desde
+     *  el 2/11/2026). null = antes de esa fecha; ausente = back viejo. En los dos casos el
+     *  front se comporta como antes. */
+    semanaEnCurso?: number | null
 }
 
 export interface ISincronizarResult {
