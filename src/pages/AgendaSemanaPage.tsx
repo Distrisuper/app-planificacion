@@ -48,6 +48,7 @@ import {
     MENSAJE_MOVER_FUERA_DE_CALENDARIO,
     MENSAJE_VISITA_FUERA_DE_CALENDARIO,
     etiquetaSemana,
+    fechaCorta,
     filaArmada,
     mensajeFueraDeCalendario,
     semanasNavegables,
@@ -291,7 +292,7 @@ export default function AgendaSemanaPage() {
     // cuelgan la adopción de la visita en curso y los parches de visitas, ficha y
     // ofrecimientos. Todo lo demás sale de la semana de calendario.
     const usarAgendaReal = calendario && tipoVista === 'actual' && ciclo?.semana === semanaEnCurso
-    const { data: semanaCal } = useSemanaCalendario(
+    const { data: semanaCal, isError: semanaCalSinDatos } = useSemanaCalendario(
         fechaVista ?? undefined,
         calendario && conRuta && !usarAgendaReal,
     )
@@ -327,10 +328,14 @@ export default function AgendaSemanaPage() {
     // además la fecha del lunes ("Zárate · 9/11").
     const nombreZona = semanas?.find(z => z.semana === semanaEfectiva)?.descripcion || null
     const datosVista = entradaVista ?? semanaCal
+    // Una semana pasada en la que el vendedor no tuvo agenda no tiene datos (el back responde
+    // 404): ahí queda la fecha sola, en vez de un "Cargando…" que no termina nunca.
     const tituloSemana = calendario
         ? datosVista && fechaVista
             ? etiquetaSemana({ fechaLunes: fechaVista, semana: datosVista.semana, descripcion: datosVista.descripcion })
-            : 'Cargando…'
+            : semanaCalSinDatos && fechaVista
+              ? `Semana del ${fechaCorta(fechaVista)}`
+              : 'Cargando…'
         : semanaEfectiva
           ? (nombreZona ?? `Semana ${semanaEfectiva}`)
           : 'Cargando…'
@@ -839,7 +844,7 @@ export default function AgendaSemanaPage() {
                 />
             ) : (
                 <>
-                    <DiaTabs activo={diaActivo} onSelect={setDiaActivo} />
+                    <DiaTabs activo={diaActivo} onSelect={setDiaActivo} fechaLunes={fechaVista ?? undefined} />
                     {/* El chip del header solo no alcanza: acá el vendedor puede creer que
                         esa semana le toca hoy. */}
                     {tipoVista !== null && tipoVista !== 'actual' && fechaLunesEnCurso !== null && (
@@ -863,6 +868,7 @@ export default function AgendaSemanaPage() {
                         activo={diaActivo}
                         modo={modoVista}
                         uso={usoVista}
+                        fechaLunes={fechaVista ?? undefined}
                         hayVisitaEnCurso={visitaEnCurso !== null}
                         reintentandoId={reintentarSeguimiento.isPending ? (reintentarSeguimiento.variables ?? null) : null}
                         onActivoChange={setDiaActivo}
@@ -1019,7 +1025,7 @@ export default function AgendaSemanaPage() {
                     semana={semanaEfectiva}
                     dia={DIAS.indexOf(diaAAgregar) + 1}
                     fechaLunes={fechaVista ?? undefined}
-                    antesDeEscribir={fechaVista !== null ? () => armarAntesDeEscribir(fechaVista) : undefined}
+                    prepararSemana={fechaVista !== null ? () => armarAntesDeEscribir(fechaVista) : undefined}
                     onExtraCreada={() => {
                         setDiaActivo(diaAAgregar)
                         mostrar('exito', `Cliente agregado al ${NOMBRE_DIA[diaAAgregar]}`)
@@ -1028,7 +1034,11 @@ export default function AgendaSemanaPage() {
                         setDiaActivo(diaAAgregar)
                         mostrar('exito', `Cliente movido al ${NOMBRE_DIA[diaAAgregar]}`)
                     }}
-                    onNavegarAExistente={abrirPropuesta}
+                    // En una semana que viene no se visita: "Ver cliente" lleva a su día en vez
+                    // de abrir la propuesta (desde donde se inicia la visita).
+                    onNavegarAExistente={
+                        usoVista === 'operar' ? abrirPropuesta : cliente => setDiaActivo(DIAS[cliente.dia - 1])
+                    }
                     onAviso={mostrar}
                     onClienteNuevo={
                         /* Apagado temporal: sin el handler el botón no se pinta (ver

@@ -1289,6 +1289,17 @@ describe('semana del calendario', () => {
         expect(screen.getByText(/semana para planificar/i)).toBeInTheDocument()
     })
 
+    it('los días de una semana que viene llevan sus propias fechas', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+
+        expect(await screen.findByRole('button', { name: /^LUN 23/ })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^VIE 27/ })).toBeInTheDocument()
+    })
+
     it('en una semana que viene, reagendar no ofrece "No visité"', async () => {
         fijarLunes()
         mockSemanas()
@@ -1388,7 +1399,9 @@ describe('semana del calendario', () => {
         expect(screen.queryByText(/semana para planificar/i)).not.toBeInTheDocument()
     })
 
-    it('el "+" de una semana sin armar la arma antes de agregar, y manda la fecha', async () => {
+    // Consultar una semana sin armar mira la ruta base del back, que no tiene sus filas: el
+    // cliente que se ve en pantalla volvía como "sin fila" y el buscador ofrecía duplicarlo.
+    it('el "+" de una semana sin armar la arma antes de consultar, y manda la fecha', async () => {
         fijarLunes()
         mockSemanas()
         ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
@@ -1414,14 +1427,67 @@ describe('semana del calendario', () => {
         await irASemanaSiguiente()
 
         fireEvent.click(await screen.findByRole('button', { name: /agregar cliente al lunes/i }))
+        // Abrir el buscador no arma: si el vendedor lo cierra sin elegir, la semana sigue
+        // siendo la ruta base.
+        expect(api.armarSemana).not.toHaveBeenCalled()
         fireEvent.change(screen.getByPlaceholderText(/nombre o código/i), { target: { value: 'lopez' } })
         fireEvent.click(await screen.findByText('ALMACEN LOPEZ'))
-        // Abrir el buscador no arma: si el vendedor cancela, la semana sigue siendo la ruta base.
-        expect(api.armarSemana).not.toHaveBeenCalled()
-        fireEvent.click(await screen.findByRole('button', { name: 'Agregar' }))
 
-        await waitFor(() => expect(api.confirmarExtra).toHaveBeenCalledWith('4412', 4, 1, '2026-11-23'))
+        await waitFor(() => expect(api.consultarBuscador).toHaveBeenCalledWith('4412', 4, '2026-11-23'))
         expect(api.armarSemana).toHaveBeenCalledWith('2026-11-23')
+        const ordenArmar = (api.armarSemana as any).mock.invocationCallOrder[0]
+        const ordenConsultar = (api.consultarBuscador as any).mock.invocationCallOrder[0]
+        expect(ordenArmar).toBeLessThan(ordenConsultar)
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Agregar' }))
+        await waitFor(() => expect(api.confirmarExtra).toHaveBeenCalledWith('4412', 4, 1, '2026-11-23'))
+    })
+
+    it('"Ver cliente" desde el "+" de una semana que viene no abre la visita', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.buscarEnCartera as any).mockResolvedValue([
+            {
+                codigoParticularCliente: '10034',
+                nombreCliente: 'ALMACEN DON JOSE',
+                estado: 'pendiente',
+                semana: 4,
+                dia: 1,
+                descripcionZona: null,
+                fecha: null,
+                motivo: null,
+            },
+        ])
+        ;(api.consultarBuscador as any).mockResolvedValue({
+            estado: 'pendiente_zona_actual',
+            filaExistente: { ...clienteLunes, rotacionClienteId: 99 },
+            otraZona: null,
+        })
+        renderPage()
+        await irASemanaSiguiente()
+
+        fireEvent.click(await screen.findByRole('button', { name: /agregar cliente al lunes/i }))
+        fireEvent.change(screen.getByPlaceholderText(/nombre o código/i), { target: { value: 'jose' } })
+        fireEvent.click(await screen.findByText('ALMACEN DON JOSE'))
+        fireEvent.click(await screen.findByRole('button', { name: 'Ver cliente' }))
+
+        await waitFor(() => expect(screen.queryByRole('button', { name: 'Ver cliente' })).not.toBeInTheDocument())
+        expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+    })
+
+    it('una semana pasada sin datos no se queda en "Cargando…"', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getSemanaCalendario as any).mockRejectedValue({
+            response: { status: 404, data: { code: 'SEMANA_SIN_DATOS' } },
+        })
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+        fireEvent.click(screen.getByRole('button', { name: /zona anterior/i }))
+        expect(await screen.findByText('Semana del 9/11', {}, { timeout: 4000 })).toBeInTheDocument()
     })
 
     // El back manda el calendario aunque el vendedor no tenga rotación: sin esto la página

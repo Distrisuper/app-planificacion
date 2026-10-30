@@ -8,8 +8,9 @@ import { useTextoDebounced } from './useTextoDebounced'
  *  en otra zona. No invalida nada — no escribe. */
 export function useConsultarBuscador() {
     return useMutation({
-        mutationFn: ({ codigo, semana }: { codigo: string; semana: number }) =>
-            consultarBuscador(codigo, semana),
+        mutationFn: ({ codigo, semana, fechaLunes }: { codigo: string; semana: number; fechaLunes?: string }) =>
+            // Sin `fechaLunes` (fuera del modo calendario) la llamada queda igual que antes.
+            fechaLunes ? consultarBuscador(codigo, semana, fechaLunes) : consultarBuscador(codigo, semana),
     })
 }
 

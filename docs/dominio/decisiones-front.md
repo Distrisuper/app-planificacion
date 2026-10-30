@@ -47,8 +47,13 @@ estado actual.
   - **Armar justo antes de escribir, nunca al abrir un sheet:** armar es darle copia propia a la
     semana, y si el vendedor cancela quedaría desenganchada de la ruta base sin que nadie lo pidiera.
     Mover arma el origen y el destino si no lo están; al armar el origen la fila cambia de id y se la
-    busca por cliente y día (`filaArmada`). El buscador del "+" y "Cliente nuevo" reciben un
-    `antesDeEscribir` que arma la semana.
+    busca por cliente y día (`filaArmada`). "Cliente nuevo" arma antes de crear. **El buscador del
+    "+" arma antes de consultar** (`prepararSemana`), no recién al agregar: sin armar, la consulta no
+    ve las filas que el vendedor tiene en pantalla, contesta "sin fila" y ofrece agregar un cliente
+    que ya está. La consulta manda además `fechaLunes`. En una semana que viene, "Ver cliente" lleva
+    a su día en vez de abrir la propuesta.
+  - El tablero y los tabs de día se fechan con el lunes de la semana en pantalla, no con el de hoy.
+  - Una semana pasada sin datos (el back responde 404) muestra "Semana del 9/11" y columnas vacías.
   - Reagendar (`EstadoVisitaSheet`) ofrece semana + día del horizonte, keyado por número de ruta
     (dentro del horizonte no se repite) y con las fechas de la semana elegida (`fechasLunes`).
   - Sin `semanas` (vendedor sin rotación) queda el cartel de "sin ruta asignada" aunque venga el

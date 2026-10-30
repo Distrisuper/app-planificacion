@@ -23,13 +23,14 @@ interface BuscadorDiaSheetProps {
      *  destino de todo lo que hace este sheet. */
     semana: number
     dia: number
-    /** Modo calendario: la semana de calendario destino ('YYYY-MM-DD'). Viaja en agregar y
-     *  traer; ausente = sin calendario, como antes. */
+    /** Modo calendario: la semana de calendario destino ('YYYY-MM-DD'). Viaja en consultar,
+     *  agregar y traer; ausente = sin calendario, como antes. */
     fechaLunes?: string
-    /** Corre justo antes de cada escritura (agregar, traer). La página la usa para armar una
-     *  semana que todavía es la ruta base; se llama acá y no al abrir el sheet para que
-     *  cancelar no deje una copia propia que nadie pidió. */
-    antesDeEscribir?: () => Promise<void>
+    /** Corre antes de consultar un cliente y antes de cada escritura. La página la usa para
+     *  armar una semana que todavía es la ruta base: sin armar, la consulta no ve las filas
+     *  que el vendedor tiene en pantalla y ofrece agregar un cliente que ya está. No corre al
+     *  abrir el sheet: cerrarlo sin elegir no deja una copia propia que nadie pidió. */
+    prepararSemana?: () => Promise<void>
     /** Se creó una fila `es_extra` nueva en la celda destino. */
     onExtraCreada: (cliente: IAgendaClient) => void
     /** El cliente ya tenía una fila pendiente y se decidió ir a verla en vez de crear. */
@@ -70,7 +71,7 @@ export function BuscadorDiaSheet({
     semana,
     dia,
     fechaLunes,
-    antesDeEscribir,
+    prepararSemana,
     onExtraCreada,
     onNavegarAExistente,
     onTraido,
@@ -105,9 +106,11 @@ export function BuscadorDiaSheet({
 
     async function handleSeleccionar(r: IResultadoBuscadorGeneral) {
         try {
+            await prepararSemana?.()
             const resultado = await consultarBuscador.mutateAsync({
                 codigo: r.codigoParticularCliente,
                 semana,
+                fechaLunes,
             })
             setConsulta({ codigo: r.codigoParticularCliente, nombre: r.nombreCliente, resultado })
         } catch {
@@ -124,7 +127,7 @@ export function BuscadorDiaSheet({
 
     async function handleTraer(rotacionClienteId: number) {
         try {
-            await antesDeEscribir?.()
+            await prepararSemana?.()
             await reacomodar.mutateAsync(
                 fechaLunes ? { rotacionClienteId, dia, fechaLunes } : { rotacionClienteId, semana, dia },
             )
@@ -142,7 +145,7 @@ export function BuscadorDiaSheet({
     async function handleAgregarExtra() {
         if (!consulta) return
         try {
-            await antesDeEscribir?.()
+            await prepararSemana?.()
             const creada = await confirmarExtra.mutateAsync({ codigo: consulta.codigo, semana, dia, fechaLunes })
             cerrar()
             onExtraCreada(creada)

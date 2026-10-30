@@ -308,9 +308,10 @@ export const getAcciones = async (): Promise<IAccion[]> => {
 export const consultarBuscador = async (
     codigo: string,
     semana: number,
+    fechaLunes?: string,
 ): Promise<IConsultaBuscador> => {
     const res = await apiClient.get(`/planificacion/buscador/cliente/${codigo}`, {
-        params: { semana },
+        params: fechaLunes ? { semana, fechaLunes } : { semana },
     })
     return res.data.data
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
 import ClienteCard, { type UsoSemana } from './ClienteCard'
 import { getWeekDates, formatDayDate, isSameDay } from '@/lib/weekDates'
+import { lunesLocal } from '@/lib/semanaCalendario'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import type { AppExterna } from '@/lib/appsExternas'
 import type { Dia, IAgendaClient, IVisitClientCard, SemanaAgenda } from '@/types/planificacion'
@@ -27,6 +28,9 @@ interface AgendaBoardProps {
     /** Pass-through hacia `ClienteCard`: qué se puede hacer en la semana de calendario en
      *  pantalla. */
     uso?: UsoSemana
+    /** Modo calendario: el lunes ('YYYY-MM-DD') de la semana en pantalla, para fechar las
+     *  columnas. Sin esto se fecha con la semana de hoy. */
+    fechaLunes?: string
     onAbrir: (cliente: IAgendaClient) => void
     onEstadoVisita: (cliente: IAgendaClient) => void
     onIniciarVisita: (cliente: IAgendaClient) => void
@@ -49,6 +53,7 @@ export default function AgendaBoard({
     onActivoChange,
     onAgregarCliente,
     uso = 'operar',
+    fechaLunes,
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
@@ -59,7 +64,7 @@ export default function AgendaBoard({
 }: AgendaBoardProps) {
     const boardRef = useRef<HTMLDivElement>(null)
     const columnRefs = useRef<Partial<Record<Dia, HTMLDivElement>>>({})
-    const weekDates = useMemo(() => getWeekDates(), [])
+    const weekDates = useMemo(() => getWeekDates(fechaLunes ? lunesLocal(fechaLunes) : undefined), [fechaLunes])
     const today = useMemo(() => new Date(), [])
 
     // A programmatic smooth scroll fires many scroll events while it's mid-transit,

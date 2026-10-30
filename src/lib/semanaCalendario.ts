@@ -78,8 +78,13 @@ export function filaArmada(
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 
+/** "9/11" */
+export function fechaCorta(fechaLunes: string): string {
+    const lunes = lunesLocal(fechaLunes)
+    return `${lunes.getDate()}/${lunes.getMonth() + 1}`
+}
+
 /** "Zárate · 9/11", o "Semana 2 · 9/11" si la zona no tiene nombre. */
 export function etiquetaSemana(s: { fechaLunes: string; semana: number; descripcion: string | null }): string {
-    const lunes = lunesLocal(s.fechaLunes)
-    return `${s.descripcion || `Semana ${s.semana}`} · ${lunes.getDate()}/${lunes.getMonth() + 1}`
+    return `${s.descripcion || `Semana ${s.semana}`} · ${fechaCorta(s.fechaLunes)}`
 }
