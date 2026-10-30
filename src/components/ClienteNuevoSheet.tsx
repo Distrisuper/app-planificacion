@@ -8,7 +8,7 @@ import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { IAgendaClient } from '@/types/planificacion'
 
 export type ModoClienteNuevo =
-    | { modo: 'crear'; semana: number; dia: number }
+    | { modo: 'crear'; semana: number; dia: number; fechaLunes?: string }
     | { modo: 'reintentar'; cliente: IAgendaClient; diaSugerido: number }
 
 interface ClienteNuevoSheetProps {
@@ -17,6 +17,8 @@ interface ClienteNuevoSheetProps {
     onClose: () => void
     onListo: (cliente: IAgendaClient, contexto: ModoClienteNuevo) => void
     onAviso: (tipo: NotificacionTipo, mensaje: string) => void
+    /** Corre justo antes de crear: la página arma ahí una semana que todavía es la ruta base. */
+    antesDeEscribir?: () => Promise<void>
 }
 
 const DIAS = [1, 2, 3, 4, 5]
@@ -29,7 +31,7 @@ const LABEL = 'mb-1 block text-[9.5px] font-bold uppercase tracking-wide text-ds
  * después de un "No visité". Editar los datos del comercio vive en `RelevamientoSheet`
  * (spec 2026-09-21). Vocabulario del vendedor: nunca "alta" ni "prospecto".
  */
-export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, onAviso }: ClienteNuevoSheetProps) {
+export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, onAviso, antesDeEscribir }: ClienteNuevoSheetProps) {
     const crear = useCrearAlta()
     const reintentar = useReintentarAlta()
     const [nombre, setNombre] = useState('')
@@ -55,12 +57,15 @@ export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, on
         try {
             let cliente: IAgendaClient
             if (contexto.modo === 'crear') {
+                await antesDeEscribir?.()
                 cliente = await crear.mutateAsync({
                     semana: contexto.semana,
                     dia,
                     nombre: nombreLimpio,
                     razonSocial: razonSocial.trim() || undefined,
                     direccion: direccion.trim() || undefined,
+                    // Sin calendario la clave ni viaja: el body queda como antes.
+                    ...(contexto.fechaLunes ? { fechaLunes: contexto.fechaLunes } : {}),
                 })
             } else {
                 cliente = await reintentar.mutateAsync({ rotacionClienteId: contexto.cliente.rotacionClienteId, dia })

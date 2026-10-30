@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
-import ClienteCard from './ClienteCard'
+import ClienteCard, { type UsoSemana } from './ClienteCard'
 import { getWeekDates, formatDayDate, isSameDay } from '@/lib/weekDates'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import type { AppExterna } from '@/lib/appsExternas'
@@ -21,14 +21,12 @@ interface AgendaBoardProps {
     onActivoChange: (dia: Dia) => void
     /** Si se pasa, cada encabezado de día muestra un "+" que abre el buscador con ESE
      *  día —de la zona que se está mirando— como destino. La página decide en qué zonas
-     *  (`zonaPlanificable`): sin calendario, en toda zona pendiente; con calendario, solo
-     *  en la de la semana en curso. */
+     *  (`zonaPlanificable`): sin calendario, en toda zona pendiente; con calendario, en la
+     *  semana en curso y en las que vienen. */
     onAgregarCliente?: (dia: Dia) => void
-    /** Pass-through hacia `ClienteCard`: la zona en pantalla no es la de la semana del
-     *  calendario. */
-    soloLectura?: boolean
-    /** Pass-through hacia `ClienteCard`: "Traer a esta semana". */
-    onTraer?: (cliente: IAgendaClient) => void
+    /** Pass-through hacia `ClienteCard`: qué se puede hacer en la semana de calendario en
+     *  pantalla. */
+    uso?: UsoSemana
     onAbrir: (cliente: IAgendaClient) => void
     onEstadoVisita: (cliente: IAgendaClient) => void
     onIniciarVisita: (cliente: IAgendaClient) => void
@@ -50,8 +48,7 @@ export default function AgendaBoard({
     reintentandoId = null,
     onActivoChange,
     onAgregarCliente,
-    soloLectura = false,
-    onTraer,
+    uso = 'operar',
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
@@ -205,8 +202,7 @@ export default function AgendaBoard({
                                         key={c.codigoParticularCliente}
                                         cliente={c}
                                         modo={modo}
-                                        soloLectura={soloLectura}
-                                        onTraer={onTraer}
+                                        uso={uso}
                                         otraVisitaEnCurso={hayVisitaEnCurso && c.estado !== 'en_curso'}
                                         reintentandoId={reintentandoId}
                                         onAbrir={onAbrir}

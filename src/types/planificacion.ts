@@ -284,6 +284,33 @@ export interface ICicloActualResult {
      *  el 2/11/2026). null = antes de esa fecha; ausente = back viejo. En los dos casos el
      *  front se comporta como antes. */
     semanaEnCurso?: number | null
+    /** El lunes ('YYYY-MM-DD') de la semana en curso. Mismo null/ausente que `semanaEnCurso`. */
+    fechaLunesEnCurso?: string | null
+    /** La semana en curso y las 4 que vienen, por fecha: lo que el vendedor puede planificar. */
+    horizonte?: ISemanaHorizonte[]
+}
+
+/** Una semana de calendario del horizonte. `armada` = ya tiene copia propia; sin armar se ve
+ *  tal cual la ruta base y se arma antes de la primera edición. */
+export interface ISemanaHorizonte {
+    fechaLunes: string
+    semana: number
+    descripcion: string | null
+    armada: boolean
+}
+
+export type TipoSemanaCalendario = 'pasada' | 'actual' | 'futura'
+
+/** `GET /agenda/semanas/:fechaLunes` (y `POST .../armar`, misma forma). Las filas de una
+ *  semana sin armar no traen `rotacionClienteId`: no se usa hasta armarla. */
+export interface ISemanaCalendario {
+    fechaLunes: string
+    semana: number
+    descripcion: string | null
+    tipo: TipoSemanaCalendario
+    armada: boolean
+    rotacionId: number | null
+    dias: Record<Dia, IAgendaClient[]>
 }
 
 export interface ISincronizarResult {
@@ -302,6 +329,8 @@ export interface ISincronizarResult {
 export interface IReacomodarDTO {
     semana?: number
     dia: number
+    /** Semana de calendario destino (modo calendario, en lugar de `semana`). Ausente = la misma. */
+    fechaLunes?: string
     /** true = el mismo movimiento también se aplica en la ruta base (desde la próxima vuelta). */
     aplicarARutaBase?: boolean
 }
@@ -557,6 +586,8 @@ export interface ICupoCliente {
 export interface ICrearAltaDTO {
     semana: number
     dia: number
+    /** Semana de calendario destino (modo calendario). */
+    fechaLunes?: string
     nombre: string
     razonSocial?: string
     direccion?: string

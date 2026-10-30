@@ -13,6 +13,9 @@ interface AppHeaderProps {
     subtitulo?: string
     /** 'preview' = hojeando una semana que no es la abierta. */
     modo?: 'operable' | 'preview'
+    /** Modo calendario: el chip que dice qué semana es ("Esta semana", "Para planificar",
+     *  "Ya pasó"). Si viene, reemplaza al subtítulo y al "Vista previa". */
+    chip?: string
     onLogout?: () => void
     onPrevWeek?: () => void
     onNextWeek?: () => void
@@ -46,6 +49,7 @@ export default function AppHeader({
     tituloSemana,
     subtitulo,
     modo,
+    chip,
     onLogout,
     onPrevWeek,
     onNextWeek,
@@ -130,9 +134,9 @@ export default function AppHeader({
                         </Button>
                         <div className="flex min-w-0 items-center justify-center gap-1.5">
                             <span className="truncate text-[13.5px] font-extrabold">{tituloSemana}</span>
-                            {preview ? (
+                            {chip || preview ? (
                                 <span className="shrink-0 rounded-full bg-white/15 px-2 py-px text-[9.5px] font-extrabold uppercase tracking-wide text-white/80">
-                                    Vista previa
+                                    {chip ?? 'Vista previa'}
                                 </span>
                             ) : (
                                 subtitulo && (

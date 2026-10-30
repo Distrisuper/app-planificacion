@@ -19,8 +19,19 @@ export function useConsultarBuscador() {
 export function useConfirmarExtra() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ codigo, semana, dia }: { codigo: string; semana: number; dia?: number }) =>
-            confirmarExtra(codigo, semana, dia),
+        mutationFn: ({
+            codigo,
+            semana,
+            dia,
+            fechaLunes,
+        }: {
+            codigo: string
+            semana: number
+            dia?: number
+            fechaLunes?: string
+        }) =>
+            // Sin `fechaLunes` (fuera del modo calendario) la llamada queda igual que antes.
+            fechaLunes ? confirmarExtra(codigo, semana, dia, fechaLunes) : confirmarExtra(codigo, semana, dia),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: agendaKeys.semana })
             qc.invalidateQueries({ queryKey: ['ciclo', 'preview'] })

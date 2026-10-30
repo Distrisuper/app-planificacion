@@ -6,8 +6,8 @@ import { useReacomodar } from '@/hooks/useCiclo'
 import { diaLabel, etiquetaEstado, zonaLabel } from './etiquetas'
 import {
     MENSAJE_AGREGAR_FUERA_DE_CALENDARIO,
+    MENSAJE_MOVER_FUERA_DE_CALENDARIO,
     mensajeFueraDeCalendario,
-    sePuedeTraer,
 } from '@/lib/semanaCalendario'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type {
@@ -23,10 +23,13 @@ interface BuscadorDiaSheetProps {
      *  destino de todo lo que hace este sheet. */
     semana: number
     dia: number
-    /** La semana del calendario (`GET /ciclo/actual`). Con valor, no se ofrece traer una
-     *  fila de una zona que ya pasó: esos pendientes los rescata gerencia. null o ausente =
-     *  sin calendario, como antes. */
-    semanaEnCurso?: number | null
+    /** Modo calendario: la semana de calendario destino ('YYYY-MM-DD'). Viaja en agregar y
+     *  traer; ausente = sin calendario, como antes. */
+    fechaLunes?: string
+    /** Corre justo antes de cada escritura (agregar, traer). La página la usa para armar una
+     *  semana que todavía es la ruta base; se llama acá y no al abrir el sheet para que
+     *  cancelar no deje una copia propia que nadie pidió. */
+    antesDeEscribir?: () => Promise<void>
     /** Se creó una fila `es_extra` nueva en la celda destino. */
     onExtraCreada: (cliente: IAgendaClient) => void
     /** El cliente ya tenía una fila pendiente y se decidió ir a verla en vez de crear. */
@@ -66,7 +69,8 @@ export function BuscadorDiaSheet({
     onClose,
     semana,
     dia,
-    semanaEnCurso = null,
+    fechaLunes,
+    antesDeEscribir,
     onExtraCreada,
     onNavegarAExistente,
     onTraido,
@@ -120,13 +124,16 @@ export function BuscadorDiaSheet({
 
     async function handleTraer(rotacionClienteId: number) {
         try {
-            await reacomodar.mutateAsync({ rotacionClienteId, semana, dia })
+            await antesDeEscribir?.()
+            await reacomodar.mutateAsync(
+                fechaLunes ? { rotacionClienteId, dia, fechaLunes } : { rotacionClienteId, semana, dia },
+            )
             cerrar()
             onTraido()
         } catch (err) {
             onAviso(
                 'error',
-                mensajeFueraDeCalendario(err, 'Este cliente no se puede traer a esta semana.') ??
+                mensajeFueraDeCalendario(err, MENSAJE_MOVER_FUERA_DE_CALENDARIO) ??
                     'No se pudo mover el cliente. Volvé a intentar.',
             )
         }
@@ -135,7 +142,8 @@ export function BuscadorDiaSheet({
     async function handleAgregarExtra() {
         if (!consulta) return
         try {
-            const creada = await confirmarExtra.mutateAsync({ codigo: consulta.codigo, semana, dia })
+            await antesDeEscribir?.()
+            const creada = await confirmarExtra.mutateAsync({ codigo: consulta.codigo, semana, dia, fechaLunes })
             cerrar()
             onExtraCreada(creada)
         } catch (err) {
@@ -148,8 +156,6 @@ export function BuscadorDiaSheet({
     }
 
     const fila = consulta?.resultado.filaExistente
-    const otraZona = consulta?.resultado.otraZona
-    const otraZonaTraible = otraZona != null && sePuedeTraer(otraZona.semana, semanaEnCurso)
     // Ya está pendiente en esta zona pero en OTRO día: traerlo acá es reagendar dentro
     // de la zona, que es una decisión táctica del vendedor. Si ya está en este mismo
     // día no hay nada que mover — solo queda verlo.
@@ -281,16 +287,14 @@ export function BuscadorDiaSheet({
                             .
                         </p>
                         <div className="flex flex-col gap-2">
-                            {otraZonaTraible && (
-                                <button
-                                    type="button"
-                                    disabled={trabajando}
-                                    className="h-11 w-full rounded-lg bg-dsnavy text-sm font-semibold text-white disabled:opacity-60"
-                                    onClick={() => handleTraer(consulta.resultado.otraZona!.rotacionClienteId)}
-                                >
-                                    Traerlo al {nombreDia}
-                                </button>
-                            )}
+                            <button
+                                type="button"
+                                disabled={trabajando}
+                                className="h-11 w-full rounded-lg bg-dsnavy text-sm font-semibold text-white disabled:opacity-60"
+                                onClick={() => handleTraer(consulta.resultado.otraZona!.rotacionClienteId)}
+                            >
+                                Traerlo al {nombreDia}
+                            </button>
                             {/* Segundo, y sin color de acción principal: mover el plan es lo
                                 correcto cuando el cliente cambió de lugar; la extra es para la
                                 pasada puntual, y deja la visita de la otra zona pendiente. */}

@@ -419,7 +419,7 @@ it('si iniciar falla porque el cliente es de otra semana del calendario, lo dice
     renderFlow()
     fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
     expect(
-        await screen.findByText('Este cliente es de otra semana. Podés traerlo a esta semana.'),
+        await screen.findByText('Este cliente es de otra semana: pasalo a esta semana desde "Reagendar".'),
     ).toBeInTheDocument()
 })
 
