@@ -3,6 +3,7 @@ import { X, Trash2 } from 'lucide-react'
 import BottomSheet from './ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import { getWeekDates, formatDayDate } from '@/lib/weekDates'
+import { etiquetaSemana, lunesLocal } from '@/lib/semanaCalendario'
 import type { Dia, EstadoCicloCliente, IZonaCiclo } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
@@ -21,8 +22,13 @@ interface EstadoVisitaSheetProps {
      *  gris SOLO cuando la zona sí tiene nombre — si no lo tiene, "Semana N" pasa a
      *  ser el texto principal y no se duplica abajo. */
     semanasDisponibles: IZonaCiclo[]
+    /** Modo calendario: el lunes ('YYYY-MM-DD') de cada semana ofrecida, por número. Con
+     *  esto el chip dice "Zárate · 9/11" y las fechas de los días son las de la semana
+     *  ELEGIDA (sin esto, solo se fechan los días de la semana de hoy). */
+    fechasLunes?: Record<number, string>
     onReagendar: (semana: number, dia: Dia) => void
-    onElegirNoVisita: () => void
+    /** Ausente = no se ofrece "No visité" (una semana que viene se planifica, no se visita). */
+    onElegirNoVisita?: () => void
     /**
      * Ausente = no se ofrece sacar de la agenda. La página la pasa SOLO para las filas
      * que el vendedor agregó a mano y siguen pendientes (`esExtra && estado === 'pendiente'`):
@@ -39,13 +45,20 @@ export default function EstadoVisitaSheet({
     estadoActual,
     semanaActual,
     semanasDisponibles,
+    fechasLunes,
     onReagendar,
     onElegirNoVisita,
     onEliminar,
     onClose,
 }: EstadoVisitaSheetProps) {
-    const weekDates = getWeekDates()
     const [semanaElegida, setSemanaElegida] = useState(semanaActual)
+    const lunesElegido = fechasLunes?.[semanaElegida]
+    const weekDates = getWeekDates(lunesElegido ? lunesLocal(lunesElegido) : undefined)
+    // Sin calendario solo se fechan los días de la semana de hoy (no se sabe cuándo cae otra
+    // zona); con calendario, los de la semana elegida.
+    const fechaDias = fechasLunes ? lunesElegido !== undefined : semanaElegida === semanaActual
+    const etiquetaZona = (z: IZonaCiclo) =>
+        fechasLunes?.[z.semana] ? etiquetaSemana({ ...z, fechaLunes: fechasLunes[z.semana] }) : null
     const [seleccion, setSeleccion] = useState<Seleccion | null>(null)
     const yaNoVisita = estadoActual === 'no_visita'
 
@@ -59,7 +72,7 @@ export default function EstadoVisitaSheet({
     }, [open, semanaActual])
 
     function confirmar() {
-        if (seleccion === 'no_visita') onElegirNoVisita()
+        if (seleccion === 'no_visita') onElegirNoVisita?.()
         else if (seleccion) onReagendar(semanaElegida, seleccion)
     }
 
@@ -67,9 +80,9 @@ export default function EstadoVisitaSheet({
 
     // Nombre de la zona elegida, con el mismo fallback que el header: si nunca se
     // nombró, el número es lo único que hay para mostrar.
+    const zonaElegida = semanasDisponibles.find(z => z.semana === semanaElegida)
     const nombreZonaElegida =
-        semanasDisponibles.find(z => z.semana === semanaElegida)?.descripcion ??
-        `Semana ${semanaElegida}`
+        (zonaElegida && etiquetaZona(zonaElegida)) ?? zonaElegida?.descripcion ?? `Semana ${semanaElegida}`
 
     let labelBoton = 'Elegí un día'
     if (seleccion === 'no_visita') labelBoton = 'Registrar No visité'
@@ -121,11 +134,11 @@ export default function EstadoVisitaSheet({
                             }`}
                         >
                             <span className="text-[13px] font-semibold">
-                                {z.descripcion ?? `Semana ${z.semana}`}
+                                {etiquetaZona(z) ?? z.descripcion ?? `Semana ${z.semana}`}
                             </span>
-                            {/* Solo si tiene nombre: si no, "Semana N" ya es el texto de
-                                arriba y repetirlo achicado abajo sería ruido. */}
-                            {z.descripcion && (
+                            {/* Solo si tiene nombre y no hay fecha: si no, "Semana N" ya es el
+                                texto de arriba y repetirlo achicado abajo sería ruido. */}
+                            {z.descripcion && !etiquetaZona(z) && (
                                 <span className="text-[10px] text-dsmuted">Semana {z.semana}</span>
                             )}
                         </button>
@@ -154,30 +167,34 @@ export default function EstadoVisitaSheet({
                             }`}
                         >
                             {DIA_NOMBRE[d]}
-                            {semanaElegida === semanaActual && <> · {formatDayDate(weekDates[d])}</>}
+                            {fechaDias && <> · {formatDayDate(weekDates[d])}</>}
                             {isActual && <span className="text-dsmuted"> (actual)</span>}
                         </button>
                     )
                 })}
             </div>
 
-            <div className="my-3 flex items-center gap-2">
-                <div className="h-px flex-1 bg-[#E7E9F0]" />
-                <span className="text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">O registrar</span>
-                <div className="h-px flex-1 bg-[#E7E9F0]" />
-            </div>
+            {onElegirNoVisita && (
+                <>
+                    <div className="my-3 flex items-center gap-2">
+                        <div className="h-px flex-1 bg-[#E7E9F0]" />
+                        <span className="text-[10px] font-extrabold uppercase tracking-wide text-dsmuted">O registrar</span>
+                        <div className="h-px flex-1 bg-[#E7E9F0]" />
+                    </div>
 
-            <button
-                onClick={() => setSeleccion('no_visita')}
-                disabled={yaNoVisita}
-                className={`flex h-11 w-full items-center gap-2 rounded-lg border-[1.5px] px-4 text-left text-[14px] font-semibold disabled:opacity-60 ${
-                    seleccion === 'no_visita' ? 'border-dsred bg-dsred/10 text-dsred' : 'border-[#E1E6F0] text-[#182645]'
-                }`}
-            >
-                <X className="h-[14px] w-[14px]" strokeWidth={2.4} />
-                No visité
-                {yaNoVisita && <span className="text-dsmuted"> (ya registrado)</span>}
-            </button>
+                    <button
+                        onClick={() => setSeleccion('no_visita')}
+                        disabled={yaNoVisita}
+                        className={`flex h-11 w-full items-center gap-2 rounded-lg border-[1.5px] px-4 text-left text-[14px] font-semibold disabled:opacity-60 ${
+                            seleccion === 'no_visita' ? 'border-dsred bg-dsred/10 text-dsred' : 'border-[#E1E6F0] text-[#182645]'
+                        }`}
+                    >
+                        <X className="h-[14px] w-[14px]" strokeWidth={2.4} />
+                        No visité
+                        {yaNoVisita && <span className="text-dsmuted"> (ya registrado)</span>}
+                    </button>
+                </>
+            )}
 
             {/* Tercera salida, separada de las otras dos: reagendar y "No visité" son
                 decisiones sobre la visita; esto es borrar una fila que nunca debió

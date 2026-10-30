@@ -25,6 +25,50 @@ estado actual.
 
 - **La "semana actual" la resuelve el backend** (`GET /planificacion/ciclo/actual`). Se descartó
   calcularla en el front con un ancla local: se desincroniza al reinstalar o cambiar de equipo.
+- **Semana del calendario (desde el 2/11/2026).** Un solo switch en `AgendaSemanaPage`:
+  `calendario` = `GET /ciclo/actual` trae `semanaEnCurso`, `fechaLunesEnCurso` y un `horizonte` no
+  vacío. Sin eso todo sigue exactamente como antes (por zonas, `?semana=N`), así que front y back se
+  despliegan en cualquier orden. Con calendario:
+  - La semana que se mira es una fecha (`?lunes=YYYY-MM-DD`, con la misma regla de "solo si se navegó
+    en esta sesión"). Aterriza en `fechaLunesEnCurso`. Las flechas van, sin dar la vuelta, de la
+    primera semana de la vuelta actual (`fechaLunesEnCurso − 7·(semanaEnCurso − 1)`) a la última del
+    horizonte (`semanasNavegables` en `lib/semanaCalendario.ts`). El encabezado dice "Zárate · 9/11"
+    (o "Semana 2 · 9/11") con un chip: "Esta semana", "Para planificar" o "Ya pasó"; fuera de la en
+    curso, una franja lo repite y lleva de vuelta.
+  - **La en curso con su ciclo abierto sale de `GET /agenda/semana`, como siempre**: de esa query
+    cuelgan la adopción de la visita en curso y los parches de visitas, ficha y ofrecimientos. El
+    resto (futuras, pasadas, la en curso sin ciclo) sale de `GET /agenda/semanas/:fechaLunes`, con
+    key bajo el prefijo `['ciclo', 'preview']` para que esos mismos parches e invalidaciones la cubran.
+  - Qué se ofrece lo decide `uso` en `ClienteCard`: `operar` (en curso), `planificar` (futura: solo
+    "Reagendar"; sin iniciar, propuesta, "Datos" ni "Volver a agendar") y `mirar` (pasada: nada; lo
+    resuelto conserva "Ver resumen"). El "+" está en la en curso y en las futuras. "No visité" y
+    "Sacar de mi agenda" solo en la en curso. No se reusa `modo` para gatear: `'preview'` también es
+    el standby de la semana en curso, que es accionable.
+  - **Armar justo antes de escribir, nunca al abrir un sheet:** armar es darle copia propia a la
+    semana, y si el vendedor cancela quedaría desenganchada de la ruta base sin que nadie lo pidiera.
+    Mover arma el origen y el destino si no lo están; al armar el origen la fila cambia de id y se la
+    busca por cliente y día (`filaArmada`). "Cliente nuevo" arma antes de crear. **El buscador del
+    "+" arma antes de consultar** (`prepararSemana`), no recién al agregar: sin armar, la consulta no
+    ve las filas que el vendedor tiene en pantalla, contesta "sin fila" y ofrece agregar un cliente
+    que ya está. La consulta manda además `fechaLunes`. En una semana que viene, "Ver cliente" lleva
+    a su día en vez de abrir la propuesta.
+  - El tablero y los tabs de día se fechan con el lunes de la semana en pantalla, no con el de hoy.
+  - Una semana pasada sin datos (el back responde 404) muestra "Semana del 9/11" y columnas vacías.
+  - Reagendar (`EstadoVisitaSheet`) ofrece semana + día del horizonte, keyado por número de ruta
+    (dentro del horizonte no se repite) y con las fechas de la semana elegida (`fechasLunes`).
+  - Sin `semanas` (vendedor sin rotación) queda el cartel de "sin ruta asignada" aunque venga el
+    calendario.
+  - Los errores del calendario se traducen con `mensajeErrorCalendario` en cada `catch` de acción:
+    409 `SEMANA_FUERA_DE_CALENDARIO` con un texto por caso (visitar, mover, agregar, visita ya
+    abierta); 409 `SEMANA_SIN_AGENDA` (armar sin de dónde), 400 `FECHA_LUNES_INVALIDA` y 409
+    `VISITA_EN_CURSO` (corte postergado por una visita abierta de la vuelta vieja) con un texto fijo.
+    Una semana pasada con 404 `SEMANA_SIN_DATOS` se muestra vacía, con "Semana del 9/11" y la franja
+    "ya pasó y no tuvo agenda".
+  - **Hasta el sábado 31/10** el back ya manda `fechaLunesEnCurso` y `horizonte`, pero
+    `semanaEnCurso` es null y la semana actual es la del modelo viejo: el switch exige
+    `semanaEnCurso`, así que la agenda sigue como antes y el modo calendario entra recién el 31/10.
+  - El buscador del "+" consulta con `fechaLunes`; `otraZona` trae la `fechaLunes` de la fila y el
+    texto la muestra ("ya está planificado el martes en Semana 5 · 30/11").
 - **Las horas se formatean en TZ de negocio**, con `horaNegocio` de `src/lib/fechas.ts`
   (`America/Argentina/Buenos_Aires` vía `Intl`). Nunca `slice(11, 16)` sobre el ISO (muestra UTC)
   ni `toLocaleTimeString()` pelado (usa la TZ del equipo). El campo `fecha` no se recalcula: es el

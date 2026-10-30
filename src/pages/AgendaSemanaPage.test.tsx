@@ -1194,3 +1194,467 @@ describe('sacar de la agenda', () => {
         expect(await screen.findByText(/ya se resolvió/i)).toBeInTheDocument()
     })
 })
+
+// ── Semana del calendario ───────────────────────────────────────────────────────
+// Desde el 2/11/2026 todos los vendedores van en la misma semana de la ruta y avanza con
+// el calendario. `GET /ciclo/actual` trae la semana en curso y el horizonte (la en curso +
+// 4): en la en curso se hace todo, las que vienen se planifican sin visitar y las que ya
+// pasaron se miran. Cada semana es una fecha (`fechaLunes`), no un número de zona.
+describe('semana del calendario', () => {
+    const ZONAS_5 = [1, 2, 3, 4, 5].map(semana => ({ semana, descripcion: null }))
+    const HORIZONTE = [
+        { fechaLunes: '2026-11-16', semana: 3, descripcion: null, armada: true },
+        { fechaLunes: '2026-11-23', semana: 4, descripcion: null, armada: false },
+        { fechaLunes: '2026-11-30', semana: 5, descripcion: null, armada: true },
+        { fechaLunes: '2026-12-07', semana: 1, descripcion: null, armada: false },
+        { fechaLunes: '2026-12-14', semana: 2, descripcion: null, armada: false },
+    ]
+    const CALENDARIO = {
+        semanaEnCurso: 3,
+        fechaLunesEnCurso: '2026-11-16',
+        horizonte: HORIZONTE,
+    }
+    // Ciclo abierto en la semana en curso: la en curso sale de la agenda de siempre.
+    const CALENDARIO_ABIERTO = { ...CICLO_ACTUAL_ABIERTO, semanas: ZONAS_5, semanasPendientes: [3, 4, 5], ...CALENDARIO }
+
+    /** Cada semana trae a `clienteLunes` pendiente. Sin armar, la fila no tiene id. */
+    function mockSemanas() {
+        ;(api.getSemanaCalendario as any).mockImplementation(async (fechaLunes: string) => {
+            const h = HORIZONTE.find(s => s.fechaLunes === fechaLunes)
+            const armada = h?.armada ?? true
+            return {
+                fechaLunes,
+                semana: h?.semana ?? (fechaLunes === '2026-11-02' ? 1 : 2),
+                descripcion: null,
+                tipo: fechaLunes === '2026-11-16' ? 'actual' : fechaLunes < '2026-11-16' ? 'pasada' : 'futura',
+                armada,
+                rotacionId: 10,
+                dias: {
+                    ...semanaVacia,
+                    LUN: [armada ? clienteLunes : { ...clienteLunes, rotacionClienteId: undefined }],
+                },
+            }
+        })
+        ;(api.armarSemana as any).mockImplementation(async (fechaLunes: string) => ({
+            fechaLunes,
+            semana: HORIZONTE.find(s => s.fechaLunes === fechaLunes)?.semana ?? 4,
+            descripcion: null,
+            tipo: 'futura',
+            armada: true,
+            rotacionId: 10,
+            dias: { ...semanaVacia, LUN: [{ ...clienteLunes, rotacionClienteId: 99 }] },
+        }))
+        ;(api.reacomodar as any).mockResolvedValue(undefined)
+    }
+
+    async function irASemanaSiguiente() {
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+        fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
+        await waitFor(() => expect(api.getSemanaCalendario).toHaveBeenCalledWith('2026-11-23'))
+    }
+
+    it('aterriza en la semana en curso, con su fecha en el encabezado', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+
+        expect(await screen.findByText('Semana 3 · 16/11')).toBeInTheDocument()
+        expect(api.getAgendaSemana).toHaveBeenCalled()
+        expect(api.getSemanaCalendario).not.toHaveBeenCalled()
+    })
+
+    it('sin ciclo abierto, la semana en curso sale del calendario y se opera igual', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue({ ...CALENDARIO_ABIERTO, ciclo: null })
+        renderPage()
+
+        await waitFor(() => expect(api.getSemanaCalendario).toHaveBeenCalledWith('2026-11-16'))
+        expect(await screen.findByRole('button', { name: /iniciar visita/i })).toBeInTheDocument()
+        expect(api.previewSemana).not.toHaveBeenCalled()
+    })
+
+    it('una semana que viene se planifica: reagendar y "+", sin visitar', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+
+        expect(await screen.findByText('Reagendar')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /agregar cliente al lunes/i })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /propuesta/i })).not.toBeInTheDocument()
+        expect(screen.getByText(/semana para planificar/i)).toBeInTheDocument()
+    })
+
+    it('los días de una semana que viene llevan sus propias fechas', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+
+        expect(await screen.findByRole('button', { name: /^LUN 23/ })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^VIE 27/ })).toBeInTheDocument()
+    })
+
+    it('en una semana que viene, reagendar no ofrece "No visité"', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        await screen.findByRole('button', { name: /^martes/i })
+        expect(screen.queryByText('No visité')).not.toBeInTheDocument()
+    })
+
+    it('mover desde una semana sin armar la arma antes y mueve la fila con el id nuevo', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByRole('button', { name: 'Semana 5 · 30/11' }))
+        fireEvent.click(screen.getByRole('button', { name: /^martes/i }))
+        fireEvent.click(screen.getByRole('button', { name: /mover a semana 5 · 30\/11 · martes/i }))
+
+        await waitFor(() =>
+            expect(api.reacomodar).toHaveBeenCalledWith(99, { dia: 2, fechaLunes: '2026-11-30' }),
+        )
+        expect(api.armarSemana).toHaveBeenCalledWith('2026-11-23')
+        // El destino ya estaba armado: no se vuelve a armar.
+        expect(api.armarSemana).not.toHaveBeenCalledWith('2026-11-30')
+        const ordenArmar = (api.armarSemana as any).mock.invocationCallOrder[0]
+        const ordenMover = (api.reacomodar as any).mock.invocationCallOrder[0]
+        expect(ordenArmar).toBeLessThan(ordenMover)
+    })
+
+    it('desde la semana en curso, un pendiente se pasa a una que viene ("no llegué")', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByRole('button', { name: 'Semana 4 · 23/11' }))
+        fireEvent.click(screen.getByRole('button', { name: /^lunes/i }))
+        fireEvent.click(screen.getByRole('button', { name: /mover a semana 4 · 23\/11 · lunes/i }))
+
+        await waitFor(() =>
+            expect(api.reacomodar).toHaveBeenCalledWith(42, { dia: 1, fechaLunes: '2026-11-23' }),
+        )
+        // El destino no estaba armado: se arma antes de escribir en él.
+        expect(api.armarSemana).toHaveBeenCalledWith('2026-11-23')
+    })
+
+    it('cambiar de día dentro de la semana en curso no manda fecha ni arma nada', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByRole('button', { name: /^martes/i }))
+        fireEvent.click(screen.getByRole('button', { name: /mover al martes/i }))
+
+        await waitFor(() => expect(api.reacomodar).toHaveBeenCalledWith(42, { dia: 2 }))
+        expect((api.reacomodar as any).mock.calls[0][1].fechaLunes).toBeUndefined()
+        expect(api.armarSemana).not.toHaveBeenCalled()
+    })
+
+    it('una semana que ya pasó es para mirar: sin reagendar, visitar ni "+"', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+        fireEvent.click(screen.getByRole('button', { name: /zona anterior/i }))
+        await waitFor(() => expect(api.getSemanaCalendario).toHaveBeenCalledWith('2026-11-09'))
+
+        expect(await screen.findByText('Almacen Don Jose')).toBeInTheDocument()
+        expect(screen.getByText(/esta semana ya pasó/i)).toBeInTheDocument()
+        expect(screen.queryByText('Reagendar')).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /agregar cliente al lunes/i })).not.toBeInTheDocument()
+    })
+
+    it('desde otra semana, "Volver a esta semana" vuelve a la en curso', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+
+        fireEvent.click(await screen.findByRole('button', { name: /volver a esta semana/i }))
+        expect(await screen.findByText('Semana 3 · 16/11')).toBeInTheDocument()
+        expect(screen.queryByText(/semana para planificar/i)).not.toBeInTheDocument()
+    })
+
+    // Consultar una semana sin armar mira la ruta base del back, que no tiene sus filas: el
+    // cliente que se ve en pantalla volvía como "sin fila" y el buscador ofrecía duplicarlo.
+    it('el "+" de una semana sin armar la arma antes de consultar, y manda la fecha', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.buscarEnCartera as any).mockResolvedValue([
+            {
+                codigoParticularCliente: '4412',
+                nombreCliente: 'ALMACEN LOPEZ',
+                estado: 'sin_plan',
+                semana: null,
+                dia: null,
+                descripcionZona: null,
+                fecha: null,
+                motivo: null,
+            },
+        ])
+        ;(api.consultarBuscador as any).mockResolvedValue({
+            estado: 'sin_fila_disponible',
+            filaExistente: null,
+            otraZona: null,
+        })
+        ;(api.confirmarExtra as any).mockResolvedValue(clienteLunes)
+        renderPage()
+        await irASemanaSiguiente()
+
+        fireEvent.click(await screen.findByRole('button', { name: /agregar cliente al lunes/i }))
+        // Abrir el buscador no arma: si el vendedor lo cierra sin elegir, la semana sigue
+        // siendo la ruta base.
+        expect(api.armarSemana).not.toHaveBeenCalled()
+        fireEvent.change(screen.getByPlaceholderText(/nombre o código/i), { target: { value: 'lopez' } })
+        fireEvent.click(await screen.findByText('ALMACEN LOPEZ'))
+
+        await waitFor(() => expect(api.consultarBuscador).toHaveBeenCalledWith('4412', 4, '2026-11-23'))
+        expect(api.armarSemana).toHaveBeenCalledWith('2026-11-23')
+        const ordenArmar = (api.armarSemana as any).mock.invocationCallOrder[0]
+        const ordenConsultar = (api.consultarBuscador as any).mock.invocationCallOrder[0]
+        expect(ordenArmar).toBeLessThan(ordenConsultar)
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Agregar' }))
+        await waitFor(() => expect(api.confirmarExtra).toHaveBeenCalledWith('4412', 4, 1, '2026-11-23'))
+    })
+
+    it('"Ver cliente" desde el "+" de una semana que viene no abre la visita', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.buscarEnCartera as any).mockResolvedValue([
+            {
+                codigoParticularCliente: '10034',
+                nombreCliente: 'ALMACEN DON JOSE',
+                estado: 'pendiente',
+                semana: 4,
+                dia: 1,
+                descripcionZona: null,
+                fecha: null,
+                motivo: null,
+            },
+        ])
+        ;(api.consultarBuscador as any).mockResolvedValue({
+            estado: 'pendiente_zona_actual',
+            filaExistente: { ...clienteLunes, rotacionClienteId: 99 },
+            otraZona: null,
+        })
+        renderPage()
+        await irASemanaSiguiente()
+
+        fireEvent.click(await screen.findByRole('button', { name: /agregar cliente al lunes/i }))
+        fireEvent.change(screen.getByPlaceholderText(/nombre o código/i), { target: { value: 'jose' } })
+        fireEvent.click(await screen.findByText('ALMACEN DON JOSE'))
+        fireEvent.click(await screen.findByRole('button', { name: 'Ver cliente' }))
+
+        await waitFor(() => expect(screen.queryByRole('button', { name: 'Ver cliente' })).not.toBeInTheDocument())
+        expect(screen.queryByRole('button', { name: /iniciar visita/i })).not.toBeInTheDocument()
+    })
+
+    it('una semana pasada sin datos no se queda en "Cargando…"', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getSemanaCalendario as any).mockRejectedValue({
+            response: { status: 404, data: { code: 'SEMANA_SIN_DATOS' } },
+        })
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+        fireEvent.click(screen.getByRole('button', { name: /zona anterior/i }))
+        expect(await screen.findByText('Semana del 9/11', {}, { timeout: 4000 })).toBeInTheDocument()
+        expect(screen.getByText(/esta semana ya pasó y no tuvo agenda/i)).toBeInTheDocument()
+    })
+
+    // El back manda el calendario aunque el vendedor no tenga rotación: sin esto la página
+    // aterrizaba en una semana vacía y nunca mostraba el cartel.
+    it('sin rotación materializada sigue mostrando el cartel aunque venga el calendario', async () => {
+        ;(api.getCicloActual as any).mockResolvedValue({ ...CICLO_ACTUAL_SIN_ROTACION, ...CALENDARIO })
+        renderPage()
+
+        expect(await screen.findByText(/no tenés una ruta asignada/i)).toBeInTheDocument()
+        expect(api.getSemanaCalendario).not.toHaveBeenCalled()
+    })
+
+    it('el vendedor de prueba sin agenda sigue viendo "Elegir cartera" con el calendario', async () => {
+        authMock.mockReturnValue({
+            user: { name: 'Tester' },
+            logout: vi.fn(),
+            capacidades: { operaComoVendedor: false, operaComoVendedorDePrueba: true, superviseVendedores: false },
+            vendedorDePrueba: null,
+        })
+        ;(api.getCicloActual as any).mockResolvedValue({ ...CICLO_ACTUAL_SIN_ROTACION, ...CALENDARIO })
+        renderPage()
+
+        expect(await screen.findByRole('button', { name: /elegir cartera/i })).toBeInTheDocument()
+    })
+
+    it('el 409 de semana fuera del calendario se lee con palabras del vendedor', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+        ;(api.getMotivos as any).mockResolvedValue([
+            { motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] },
+        ])
+        ;(api.registrarNoVisita as any).mockRejectedValue({
+            response: { status: 409, data: { code: 'SEMANA_FUERA_DE_CALENDARIO', semanaEnCurso: 4 } },
+        })
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByText('No visité'))
+        fireEvent.click(screen.getByText('Registrar No visité'))
+        fireEvent.click(await screen.findByText('Cerrado'))
+        fireEvent.click(screen.getByText('Registrar'))
+
+        expect(await screen.findByText(/este cliente es de otra semana/i)).toBeInTheDocument()
+    })
+
+    // Corte postergado: el vendedor tiene abierta una visita de la vuelta vieja.
+    it('"No visité" con una visita abierta de la semana pasada lo dice, no un error genérico', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+        ;(api.getMotivos as any).mockResolvedValue([
+            { motivoId: 1, nivel: 'visita', descripcion: 'Cerrado', resultado: null, codigo: null, campos: [] },
+        ])
+        ;(api.registrarNoVisita as any).mockRejectedValue({
+            response: { status: 409, data: { code: 'VISITA_EN_CURSO' } },
+        })
+        renderPage()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByText('No visité'))
+        fireEvent.click(screen.getByText('Registrar No visité'))
+        fireEvent.click(await screen.findByText('Cerrado'))
+        fireEvent.click(screen.getByText('Registrar'))
+
+        expect(await screen.findByText(/visita abierta de la semana pasada/i)).toBeInTheDocument()
+    })
+
+    it('mover a una semana que no tiene de dónde armarse lo dice, no un error genérico', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.armarSemana as any).mockRejectedValue({ response: { status: 409, data: { code: 'SEMANA_SIN_AGENDA' } } })
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByRole('button', { name: /^martes/i }))
+        fireEvent.click(screen.getByRole('button', { name: /mover al martes/i }))
+
+        expect(await screen.findByText(/no tiene agenda/i)).toBeInTheDocument()
+        expect(api.reacomodar).not.toHaveBeenCalled()
+    })
+
+    it('el "+" muestra en qué semana está planificado el cliente y lo trae a la semana en pantalla', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        ;(api.buscarEnCartera as any).mockResolvedValue([
+            {
+                codigoParticularCliente: '4412',
+                nombreCliente: 'ALMACEN LOPEZ',
+                estado: 'pendiente',
+                semana: 5,
+                dia: 2,
+                descripcionZona: null,
+                fecha: null,
+                motivo: null,
+            },
+        ])
+        ;(api.consultarBuscador as any).mockResolvedValue({
+            estado: 'pendiente_otra_zona',
+            filaExistente: null,
+            otraZona: { rotacionClienteId: 77, semana: 5, dia: 2, descripcionZona: null, fechaLunes: '2026-11-30' },
+        })
+        renderPage()
+        await irASemanaSiguiente()
+
+        fireEvent.click(await screen.findByRole('button', { name: /agregar cliente al lunes/i }))
+        fireEvent.change(screen.getByPlaceholderText(/nombre o código/i), { target: { value: 'lopez' } })
+        fireEvent.click(await screen.findByText('ALMACEN LOPEZ'))
+
+        expect(await screen.findByText('Semana 5 · 30/11')).toBeInTheDocument()
+        fireEvent.click(screen.getByRole('button', { name: /traerlo al lunes/i }))
+        await waitFor(() => expect(api.reacomodar).toHaveBeenCalledWith(77, { dia: 1, fechaLunes: '2026-11-23' }))
+    })
+
+    // Hasta el sábado 31/10 el back ya manda el horizonte, pero `semanaEnCurso` es null y la
+    // semana actual sigue siendo la del modelo viejo: la agenda tiene que seguir como hoy.
+    it('antes del 2/11, con horizonte pero sin semana en curso, la agenda sigue como antes', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue({
+            ...CICLO_ACTUAL_ABIERTO,
+            semanaEnCurso: null,
+            fechaLunesEnCurso: '2026-10-26',
+            horizonte: [
+                { fechaLunes: '2026-10-26', semana: 5, descripcion: null, armada: true },
+                { fechaLunes: '2026-11-02', semana: 1, descripcion: null, armada: false },
+                { fechaLunes: '2026-11-09', semana: 2, descripcion: null, armada: false },
+                { fechaLunes: '2026-11-16', semana: 3, descripcion: null, armada: false },
+                { fechaLunes: '2026-11-23', semana: 4, descripcion: null, armada: false },
+            ],
+        })
+        ;(api.getAgendaSemana as any).mockResolvedValue({ ...semanaVacia, LUN: [clienteLunes] })
+        renderPage()
+
+        expect(await screen.findByRole('button', { name: /iniciar visita/i })).toBeInTheDocument()
+        expect(screen.getByText('Semana 3')).toBeInTheDocument()
+        expect(api.getSemanaCalendario).not.toHaveBeenCalled()
+    })
+
+    // Antes del 2/11 (o un back viejo) no viene el calendario y todo sigue como hasta ahora.
+    it('sin calendario, otra zona sigue siendo operable como antes', async () => {
+        fijarLunes()
+        ;(api.getCicloActual as any).mockResolvedValue({
+            ...CICLO_ACTUAL_ABIERTO,
+            semanaEnCurso: null,
+            fechaLunesEnCurso: null,
+        })
+        ;(api.previewSemana as any).mockImplementation(async (semana: number) => ({
+            semana,
+            clientes: 1,
+            omitidos: [],
+            dias: { ...semanaVacia, LUN: [clienteLunes] },
+        }))
+        renderPage()
+        await waitFor(() => expect(api.getAgendaSemana).toHaveBeenCalled())
+
+        fireEvent.click(screen.getByRole('button', { name: /zona siguiente/i }))
+        await waitFor(() => expect(api.previewSemana).toHaveBeenCalledWith(4))
+
+        expect(await screen.findByRole('button', { name: /iniciar visita/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /agregar cliente al lunes/i })).toBeInTheDocument()
+        expect(api.getSemanaCalendario).not.toHaveBeenCalled()
+    })
+})

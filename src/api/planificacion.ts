@@ -30,6 +30,7 @@ import type {
     IClientContextRubro,
     IRubroDropsResponse,
     IRubroEstado,
+    ISemanaCalendario,
     ISincronizarResult,
     NivelMotivo,
     SemanaAgenda,
@@ -51,6 +52,19 @@ export const getCicloActual = async (): Promise<ICicloActualResult> => {
 /** El plan de UNA semana de la rotación, de solo lectura — no abre nada. */
 export const previewSemana = async (semana: number): Promise<IPreviewCiclo> => {
     const res = await apiClient.get(`/planificacion/rotacion/semana/${semana}`)
+    return res.data.data
+}
+
+/** Una semana de calendario (pasada, en curso o futura del horizonte), por su lunes. */
+export const getSemanaCalendario = async (fechaLunes: string): Promise<ISemanaCalendario> => {
+    const res = await apiClient.get(`/planificacion/agenda/semanas/${fechaLunes}`)
+    return res.data.data
+}
+
+/** Idempotente: le da a la semana su copia propia de la ruta base. Se llama justo antes de
+ *  la primera escritura sobre una semana sin armar. */
+export const armarSemana = async (fechaLunes: string): Promise<ISemanaCalendario> => {
+    const res = await apiClient.post(`/planificacion/agenda/semanas/${fechaLunes}/armar`)
     return res.data.data
 }
 
@@ -294,9 +308,10 @@ export const getAcciones = async (): Promise<IAccion[]> => {
 export const consultarBuscador = async (
     codigo: string,
     semana: number,
+    fechaLunes?: string,
 ): Promise<IConsultaBuscador> => {
     const res = await apiClient.get(`/planificacion/buscador/cliente/${codigo}`, {
-        params: { semana },
+        params: fechaLunes ? { semana, fechaLunes } : { semana },
     })
     return res.data.data
 }
@@ -307,10 +322,12 @@ export const confirmarExtra = async (
     codigo: string,
     semana: number,
     dia?: number,
+    fechaLunes?: string,
 ): Promise<IAgendaClient> => {
     const res = await apiClient.post(`/planificacion/buscador/cliente/${codigo}/extra`, {
         semana,
         dia,
+        fechaLunes,
     })
     return res.data.data
 }
