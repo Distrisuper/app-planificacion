@@ -813,6 +813,9 @@ export interface IConsultaBuscador {
         semana: number
         dia: number
         descripcionZona: string | null
+        /** Modo calendario (consulta con `fechaLunes`): la semana de calendario de esa fila.
+         *  Solo semanas armadas del horizonte: una pasada no se puede traer. */
+        fechaLunes?: string
     } | null
 }
 

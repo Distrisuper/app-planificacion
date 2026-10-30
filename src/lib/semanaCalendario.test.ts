@@ -4,7 +4,7 @@ import {
     MENSAJE_FUERA_DE_CALENDARIO,
     etiquetaSemana,
     lunesLocal,
-    mensajeFueraDeCalendario,
+    mensajeErrorCalendario,
     semanasNavegables,
     tipoDeSemana,
 } from './semanaCalendario'
@@ -16,20 +16,27 @@ const fueraDeCalendario = {
 const horizonte = (fechas: string[], primera: number) =>
     fechas.map((fechaLunes, i) => ({ fechaLunes, semana: ((primera - 1 + i) % 5) + 1, descripcion: null, armada: false }))
 
-describe('mensajeFueraDeCalendario', () => {
+describe('mensajeErrorCalendario', () => {
     it('traduce el 409 del back al mensaje del vendedor', () => {
-        expect(mensajeFueraDeCalendario(fueraDeCalendario)).toBe(MENSAJE_FUERA_DE_CALENDARIO)
+        expect(mensajeErrorCalendario(fueraDeCalendario)).toBe(MENSAJE_FUERA_DE_CALENDARIO)
     })
 
     it('usa el mensaje que pide quien llama', () => {
-        expect(mensajeFueraDeCalendario(fueraDeCalendario, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO)).toBe(
+        expect(mensajeErrorCalendario(fueraDeCalendario, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO)).toBe(
             MENSAJE_AGREGAR_FUERA_DE_CALENDARIO,
         )
     })
 
     it('null para cualquier otro error', () => {
-        expect(mensajeFueraDeCalendario({ response: { data: { code: 'FILA_RESUELTA' } } })).toBeNull()
-        expect(mensajeFueraDeCalendario(new Error('red caída'))).toBeNull()
+        expect(mensajeErrorCalendario({ response: { data: { code: 'FILA_RESUELTA' } } })).toBeNull()
+        expect(mensajeErrorCalendario(new Error('red caída'))).toBeNull()
+    })
+
+    it('traduce también los demás errores del calendario', () => {
+        const con = (code: string) => ({ response: { data: { code } } })
+        expect(mensajeErrorCalendario(con('SEMANA_SIN_AGENDA'))).toMatch(/no tiene agenda/i)
+        expect(mensajeErrorCalendario(con('FECHA_LUNES_INVALIDA'))).toMatch(/recargá/i)
+        expect(mensajeErrorCalendario(con('VISITA_EN_CURSO'))).toMatch(/visita abierta de la semana pasada/i)
     })
 })
 

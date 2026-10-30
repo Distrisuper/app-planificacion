@@ -12,20 +12,33 @@ import type { Dia, IAgendaClient, ISemanaHorizonte, TipoSemanaCalendario } from 
 export const MENSAJE_FUERA_DE_CALENDARIO = 'Este cliente es de otra semana: pasalo a esta semana desde "Reagendar".'
 export const MENSAJE_AGREGAR_FUERA_DE_CALENDARIO = 'En esta semana no se pueden agregar clientes.'
 export const MENSAJE_MOVER_FUERA_DE_CALENDARIO = 'Ese cliente no se puede mover a esa semana.'
-/** Para una visita ya abierta (quedó del viernes, se mira el lunes): no se puede mover
- *  —tiene resolución—, pero cerrarla no tiene guard en el back. */
-export const MENSAJE_VISITA_FUERA_DE_CALENDARIO = 'Esta visita es de otra semana: solo se puede cerrar.'
+/** "Volver más tarde" sobre una visita que quedó abierta de una semana que ya pasó (del
+ *  viernes, se mira el sábado): no puede volver a quedar pendiente, pero cerrarla o
+ *  registrar "No visité" sí se puede. */
+export const MENSAJE_VISITA_FUERA_DE_CALENDARIO =
+    'Esta visita es de una semana que ya pasó: cerrala o registrá "No visité".'
+
+/** Los otros errores del calendario: no dependen de qué estaba haciendo el vendedor. */
+const MENSAJES_CALENDARIO: Record<string, string> = {
+    SEMANA_SIN_AGENDA: 'Esa semana todavía no tiene agenda. Avisá a tu supervisor.',
+    FECHA_LUNES_INVALIDA: 'No pudimos ubicar esa semana. Recargá la app y volvé a intentar.',
+    // Corte de vuelta postergado: hasta cerrar esa visita no se abre la semana nueva.
+    VISITA_EN_CURSO: 'Tenés una visita abierta de la semana pasada: cerrala antes de seguir.',
+}
 
 /**
- * El texto del 409 `SEMANA_FUERA_DE_CALENDARIO` (el back rechaza una acción del vendedor
- * fuera de lo que permite el calendario), o null si el error es otro. Va primero en cada
- * `catch`: sin esto el vendedor leía un "Volvé a intentar" que no iba a andar nunca.
+ * El texto de un error del calendario, o null si el error es otro. El 409
+ * `SEMANA_FUERA_DE_CALENDARIO` (una acción fuera de lo que permite la semana) usa `mensaje`,
+ * que depende de qué se estaba haciendo. Va primero en cada `catch`: sin esto el vendedor
+ * leía un "Volvé a intentar" que no iba a andar nunca.
  */
-export function mensajeFueraDeCalendario(
+export function mensajeErrorCalendario(
     err: unknown,
     mensaje: string = MENSAJE_FUERA_DE_CALENDARIO,
 ): string | null {
-    return errorCode(err) === 'SEMANA_FUERA_DE_CALENDARIO' ? mensaje : null
+    const code = errorCode(err)
+    if (code === 'SEMANA_FUERA_DE_CALENDARIO') return mensaje
+    return (code && MENSAJES_CALENDARIO[code]) || null
 }
 
 /** 'YYYY-MM-DD' como fecha LOCAL: `new Date('2026-11-09')` es UTC y en Buenos Aires cae el

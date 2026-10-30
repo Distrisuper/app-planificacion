@@ -423,6 +423,15 @@ it('si iniciar falla porque el cliente es de otra semana del calendario, lo dice
     ).toBeInTheDocument()
 })
 
+it('si iniciar falla porque quedó abierta una visita de la semana pasada, lo dice', async () => {
+    ;(api.iniciarVisita as any).mockRejectedValue({
+        response: { status: 409, data: { code: 'VISITA_EN_CURSO' } },
+    })
+    renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    expect(await screen.findByText(/visita abierta de la semana pasada/i)).toBeInTheDocument()
+})
+
 it('si iniciar falla por un error genérico, muestra el error inline y NO cierra el flujo', async () => {
     ;(api.iniciarVisita as any).mockRejectedValue({
         response: { data: { code: 'ALGO_INESPERADO' } },

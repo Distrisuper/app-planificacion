@@ -50,7 +50,7 @@ import {
     etiquetaSemana,
     fechaCorta,
     filaArmada,
-    mensajeFueraDeCalendario,
+    mensajeErrorCalendario,
     semanasNavegables,
     tipoDeSemana,
 } from '@/lib/semanaCalendario'
@@ -292,7 +292,7 @@ export default function AgendaSemanaPage() {
     // cuelgan la adopción de la visita en curso y los parches de visitas, ficha y
     // ofrecimientos. Todo lo demás sale de la semana de calendario.
     const usarAgendaReal = calendario && tipoVista === 'actual' && ciclo?.semana === semanaEnCurso
-    const { data: semanaCal, isError: semanaCalSinDatos } = useSemanaCalendario(
+    const { data: semanaCal, error: semanaCalError } = useSemanaCalendario(
         fechaVista ?? undefined,
         calendario && conRuta && !usarAgendaReal,
     )
@@ -329,7 +329,10 @@ export default function AgendaSemanaPage() {
     const nombreZona = semanas?.find(z => z.semana === semanaEfectiva)?.descripcion || null
     const datosVista = entradaVista ?? semanaCal
     // Una semana pasada en la que el vendedor no tuvo agenda no tiene datos (el back responde
-    // 404): ahí queda la fecha sola, en vez de un "Cargando…" que no termina nunca.
+    // 404 SEMANA_SIN_DATOS): ahí queda la fecha sola y el tablero vacío, en vez de un
+    // "Cargando…" que no termina nunca. Lo mismo ante cualquier otro error al pedirla.
+    const semanaCalSinDatos = semanaCalError != null
+    const pasadaSinAgenda = errorCode(semanaCalError) === 'SEMANA_SIN_DATOS'
     const tituloSemana = calendario
         ? datosVista && fechaVista
             ? etiquetaSemana({ fechaLunes: fechaVista, semana: datosVista.semana, descripcion: datosVista.descripcion })
@@ -595,7 +598,7 @@ export default function AgendaSemanaPage() {
         } catch (err) {
             mostrar(
                 'error',
-                mensajeFueraDeCalendario(err, MENSAJE_MOVER_FUERA_DE_CALENDARIO) ??
+                mensajeErrorCalendario(err, MENSAJE_MOVER_FUERA_DE_CALENDARIO) ??
                     'No se pudo reagendar. Volvé a intentar.',
             )
         }
@@ -632,7 +635,7 @@ export default function AgendaSemanaPage() {
         } catch (err) {
             mostrar(
                 'error',
-                mensajeFueraDeCalendario(err, MENSAJE_MOVER_FUERA_DE_CALENDARIO) ??
+                mensajeErrorCalendario(err, MENSAJE_MOVER_FUERA_DE_CALENDARIO) ??
                     'No se pudo reagendar. Volvé a intentar.',
             )
         }
@@ -708,7 +711,7 @@ export default function AgendaSemanaPage() {
             }
             mostrar('exito', 'Registrado')
         } catch (err) {
-            const fueraDeCalendario = mensajeFueraDeCalendario(
+            const fueraDeCalendario = mensajeErrorCalendario(
                 err,
                 enCurso !== null ? MENSAJE_VISITA_FUERA_DE_CALENDARIO : MENSAJE_FUERA_DE_CALENDARIO,
             )
@@ -852,7 +855,9 @@ export default function AgendaSemanaPage() {
                             <span className="text-[12px] font-semibold leading-tight text-tinta-2">
                                 {tipoVista === 'futura'
                                     ? 'Semana para planificar: no se visita.'
-                                    : 'Esta semana ya pasó: es para mirar.'}
+                                    : pasadaSinAgenda
+                                      ? 'Esta semana ya pasó y no tuvo agenda.'
+                                      : 'Esta semana ya pasó: es para mirar.'}
                             </span>
                             <button
                                 type="button"

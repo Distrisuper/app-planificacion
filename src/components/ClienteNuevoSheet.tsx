@@ -3,7 +3,7 @@ import BottomSheet from '@/components/ui/BottomSheet'
 import { Button } from '@/components/ui/button'
 import { useCrearAlta, useReintentarAlta } from '@/hooks/useAltas'
 import { diaLabel } from './buscador/etiquetas'
-import { MENSAJE_AGREGAR_FUERA_DE_CALENDARIO, mensajeFueraDeCalendario } from '@/lib/semanaCalendario'
+import { MENSAJE_AGREGAR_FUERA_DE_CALENDARIO, mensajeErrorCalendario } from '@/lib/semanaCalendario'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type { IAgendaClient } from '@/types/planificacion'
 
@@ -75,7 +75,7 @@ export default function ClienteNuevoSheet({ open, contexto, onClose, onListo, on
         } catch (err) {
             onAviso(
                 'error',
-                mensajeFueraDeCalendario(err, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO) ??
+                mensajeErrorCalendario(err, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO) ??
                     'No se pudo guardar el cliente nuevo. Volvé a intentar.',
             )
         }

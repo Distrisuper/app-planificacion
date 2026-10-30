@@ -7,7 +7,8 @@ import { diaLabel, etiquetaEstado, zonaLabel } from './etiquetas'
 import {
     MENSAJE_AGREGAR_FUERA_DE_CALENDARIO,
     MENSAJE_MOVER_FUERA_DE_CALENDARIO,
-    mensajeFueraDeCalendario,
+    etiquetaSemana,
+    mensajeErrorCalendario,
 } from '@/lib/semanaCalendario'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type {
@@ -113,8 +114,12 @@ export function BuscadorDiaSheet({
                 fechaLunes,
             })
             setConsulta({ codigo: r.codigoParticularCliente, nombre: r.nombreCliente, resultado })
-        } catch {
-            onAviso('error', 'No pudimos consultar este cliente. Volvé a intentar.')
+        } catch (err) {
+            onAviso(
+                'error',
+                mensajeErrorCalendario(err, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO) ??
+                    'No pudimos consultar este cliente. Volvé a intentar.',
+            )
         }
     }
 
@@ -136,7 +141,7 @@ export function BuscadorDiaSheet({
         } catch (err) {
             onAviso(
                 'error',
-                mensajeFueraDeCalendario(err, MENSAJE_MOVER_FUERA_DE_CALENDARIO) ??
+                mensajeErrorCalendario(err, MENSAJE_MOVER_FUERA_DE_CALENDARIO) ??
                     'No se pudo mover el cliente. Volvé a intentar.',
             )
         }
@@ -152,7 +157,7 @@ export function BuscadorDiaSheet({
         } catch (err) {
             onAviso(
                 'error',
-                mensajeFueraDeCalendario(err, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO) ??
+                mensajeErrorCalendario(err, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO) ??
                     'No se pudo agregar el cliente. Volvé a intentar.',
             )
         }
@@ -282,10 +287,18 @@ export function BuscadorDiaSheet({
                             <b>{consulta.nombre}</b> ya está planificado el{' '}
                             {diaLabel(consulta.resultado.otraZona.dia)} en{' '}
                             <b>
-                                {zonaLabel(
-                                    consulta.resultado.otraZona.descripcionZona,
-                                    consulta.resultado.otraZona.semana,
-                                )}
+                                {/* Con calendario, la semana con su fecha: el número solo no dice
+                                    si es esta vuelta o la siguiente. */}
+                                {consulta.resultado.otraZona.fechaLunes
+                                    ? etiquetaSemana({
+                                          fechaLunes: consulta.resultado.otraZona.fechaLunes,
+                                          semana: consulta.resultado.otraZona.semana,
+                                          descripcion: consulta.resultado.otraZona.descripcionZona,
+                                      })
+                                    : zonaLabel(
+                                          consulta.resultado.otraZona.descripcionZona,
+                                          consulta.resultado.otraZona.semana,
+                                      )}
                             </b>
                             .
                         </p>

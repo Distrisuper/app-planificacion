@@ -58,8 +58,17 @@ estado actual.
     (dentro del horizonte no se repite) y con las fechas de la semana elegida (`fechasLunes`).
   - Sin `semanas` (vendedor sin rotación) queda el cartel de "sin ruta asignada" aunque venga el
     calendario.
-  - El 409 `SEMANA_FUERA_DE_CALENDARIO` se traduce con `mensajeFueraDeCalendario` en cada `catch` de
-    acción, con un texto por caso (visitar, mover, agregar, visita ya abierta).
+  - Los errores del calendario se traducen con `mensajeErrorCalendario` en cada `catch` de acción:
+    409 `SEMANA_FUERA_DE_CALENDARIO` con un texto por caso (visitar, mover, agregar, visita ya
+    abierta); 409 `SEMANA_SIN_AGENDA` (armar sin de dónde), 400 `FECHA_LUNES_INVALIDA` y 409
+    `VISITA_EN_CURSO` (corte postergado por una visita abierta de la vuelta vieja) con un texto fijo.
+    Una semana pasada con 404 `SEMANA_SIN_DATOS` se muestra vacía, con "Semana del 9/11" y la franja
+    "ya pasó y no tuvo agenda".
+  - **Hasta el sábado 31/10** el back ya manda `fechaLunesEnCurso` y `horizonte`, pero
+    `semanaEnCurso` es null y la semana actual es la del modelo viejo: el switch exige
+    `semanaEnCurso`, así que la agenda sigue como antes y el modo calendario entra recién el 31/10.
+  - El buscador del "+" consulta con `fechaLunes`; `otraZona` trae la `fechaLunes` de la fila y el
+    texto la muestra ("ya está planificado el martes en Semana 5 · 30/11").
 - **Las horas se formatean en TZ de negocio**, con `horaNegocio` de `src/lib/fechas.ts`
   (`America/Argentina/Buenos_Aires` vía `Intl`). Nunca `slice(11, 16)` sobre el ISO (muestra UTC)
   ni `toLocaleTimeString()` pelado (usa la TZ del equipo). El campo `fecha` no se recalcula: es el
