@@ -135,7 +135,10 @@ export default function ClienteCard({
                             En curso
                         </span>
                     )}
-                    {cliente.estado === 'no_visita' && (
+                    {/* En una semana que ya pasó, lo planificado que nunca se resolvió también
+                        es "No visitado". Solo se lee así: no se registra ningún no_visita
+                        (pendiente sigue siendo ausencia de resolución). */}
+                    {(cliente.estado === 'no_visita' || (uso === 'mirar' && cliente.estado === 'pendiente')) && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#F1F3F7] px-1.5 py-0.5 text-[9.5px] font-extrabold uppercase tracking-wide text-[#54607A]">
                             <Ban className="h-2.5 w-2.5" strokeWidth={2.6} />
                             No visitado

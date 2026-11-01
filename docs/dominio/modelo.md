@@ -166,7 +166,8 @@ martes — la divergencia se conserva, que es lo que hace medible la adherencia.
   - **Las que vienen (horizonte):** planificar sin visitar. Cambiar un cliente de día, pasarlo a otra
     semana del horizonte (la en curso incluida: el viejo "Traer a esta semana" es este caso), agregar
     un extra o un cliente nuevo.
-  - **Las que pasaron:** solo mirar, con su estado real.
+  - **Las que pasaron:** solo mirar, con su estado real: cualquiera desde el 2/11/2026, de la vuelta
+    que sea. Lo planificado que no se resolvió se lee "No visitado" (sin registrar nada).
   - Lo demás el back lo rechaza con 409 `SEMANA_FUERA_DE_CALENDARIO`.
 - **Una semana sin trabajar se pierde.** El calendario no espera: lo que quedó pendiente de una semana
   que ya pasó no lo rescata el vendedor, lo rescata gerencia.

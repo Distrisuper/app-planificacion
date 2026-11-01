@@ -1399,6 +1399,68 @@ describe('semana del calendario', () => {
         expect(screen.queryByText(/semana para planificar/i)).not.toBeInTheDocument()
     })
 
+    it('en una semana que ya pasó, lo planificado que no se resolvió se lee "No visitado"', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+        expect(await screen.findByText('Almacen Don Jose')).toBeInTheDocument()
+        // En una que viene, el mismo pendiente no es "No visitado": todavía no le tocó.
+        expect(screen.queryByText('No visitado')).not.toBeInTheDocument()
+
+        fireEvent.click(screen.getByRole('button', { name: /volver a esta semana/i }))
+        fireEvent.click(await screen.findByRole('button', { name: /zona anterior/i }))
+        await waitFor(() => expect(api.getSemanaCalendario).toHaveBeenCalledWith('2026-11-09'))
+        expect(await screen.findByText('No visitado')).toBeInTheDocument()
+    })
+
+    // El historial no se corta en la vuelta actual: desde la semana 1 del bloque siguiente
+    // el vendedor sigue viendo la semana 5 de la vuelta anterior y todo hasta el 2/11.
+    it('el historial llega a las semanas de la vuelta anterior', async () => {
+        fijarLunes()
+        mockSemanas()
+        const horizonteBloque2 = [
+            { fechaLunes: '2026-12-07', semana: 1, descripcion: null, armada: true },
+            { fechaLunes: '2026-12-14', semana: 2, descripcion: null, armada: false },
+            { fechaLunes: '2026-12-21', semana: 3, descripcion: null, armada: false },
+            { fechaLunes: '2026-12-28', semana: 4, descripcion: null, armada: false },
+            { fechaLunes: '2027-01-04', semana: 5, descripcion: null, armada: false },
+        ]
+        ;(api.getCicloActual as any).mockResolvedValue({
+            ...CALENDARIO_ABIERTO,
+            ciclo: null,
+            semanaEnCurso: 1,
+            fechaLunesEnCurso: '2026-12-07',
+            horizonte: horizonteBloque2,
+        })
+        renderPage()
+        await waitFor(() => expect(api.getSemanaCalendario).toHaveBeenCalledWith('2026-12-07'))
+
+        fireEvent.click(screen.getByRole('button', { name: /zona anterior/i }))
+        await waitFor(() => expect(api.getSemanaCalendario).toHaveBeenCalledWith('2026-11-30'))
+        expect(await screen.findByText(/esta semana ya pasó/i)).toBeInTheDocument()
+    })
+
+    // Con meses de historial, las flechas de a una no alcanzan: tocando el título se elige
+    // la semana en una lista por mes.
+    it('tocando el título se elige cualquier semana desde el 2/11, por mes', async () => {
+        fijarLunes()
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+
+        fireEvent.click(await screen.findByRole('button', { name: /elegir semana/i }))
+        expect(await screen.findByText('Noviembre 2026')).toBeInTheDocument()
+        expect(screen.getByText('Diciembre 2026')).toBeInTheDocument()
+        // Más allá del horizonte no se ofrece.
+        expect(screen.queryByRole('button', { name: 'Semana del 21/12' })).not.toBeInTheDocument()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Semana del 2/11' }))
+        await waitFor(() => expect(api.getSemanaCalendario).toHaveBeenCalledWith('2026-11-02'))
+        expect(await screen.findByText(/esta semana ya pasó/i)).toBeInTheDocument()
+    })
+
     // Consultar una semana sin armar mira la ruta base del back, que no tiene sus filas: el
     // cliente que se ve en pantalla volvía como "sin fila" y el buscador ofrecía duplicarlo.
     it('el "+" de una semana sin armar la arma antes de consultar, y manda la fecha', async () => {
@@ -1608,9 +1670,9 @@ describe('semana del calendario', () => {
         await waitFor(() => expect(api.reacomodar).toHaveBeenCalledWith(77, { dia: 1, fechaLunes: '2026-11-23' }))
     })
 
-    // Hasta el sábado 31/10 el back ya manda el horizonte, pero `semanaEnCurso` es null y la
-    // semana actual sigue siendo la del modelo viejo: la agenda tiene que seguir como hoy.
-    it('antes del 2/11, con horizonte pero sin semana en curso, la agenda sigue como antes', async () => {
+    // Un back que manda el horizonte pero con `semanaEnCurso` null (la semana actual todavía es
+    // la del modelo viejo): la agenda tiene que seguir como antes.
+    it('con horizonte pero sin semana en curso, la agenda sigue como antes', async () => {
         fijarLunes()
         mockSemanas()
         ;(api.getCicloActual as any).mockResolvedValue({
@@ -1633,7 +1695,7 @@ describe('semana del calendario', () => {
         expect(api.getSemanaCalendario).not.toHaveBeenCalled()
     })
 
-    // Antes del 2/11 (o un back viejo) no viene el calendario y todo sigue como hasta ahora.
+    // Con un back viejo no viene el calendario y todo sigue como hasta ahora.
     it('sin calendario, otra zona sigue siendo operable como antes', async () => {
         fijarLunes()
         ;(api.getCicloActual as any).mockResolvedValue({

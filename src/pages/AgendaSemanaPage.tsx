@@ -10,6 +10,7 @@ import VisitaEnCursoBar from '@/components/VisitaEnCursoBar'
 import ResolucionSheet from '@/components/ResolucionSheet'
 import RecuadroCupo from '@/components/RecuadroCupo'
 import EstadoVisitaSheet from '@/components/EstadoVisitaSheet'
+import ElegirSemanaSheet from '@/components/ElegirSemanaSheet'
 import ConfirmDialog from '@/components/ui/ConfirmDialog'
 import AppExternaSheet from '@/components/AppExternaSheet'
 import ClienteNuevoSheet, { type ModoClienteNuevo } from '@/components/ClienteNuevoSheet'
@@ -131,6 +132,7 @@ export default function AgendaSemanaPage() {
     const { user, logout, capacidades } = useAuth()
     const probando = estaProbando(capacidades)
     const [eligiendoCartera, setEligiendoCartera] = useState(false)
+    const [eligiendoSemana, setEligiendoSemana] = useState(false)
     const { data: cicloActual, error: cicloActualError, isSuccess: cicloResuelto } =
         useCicloActual()
     const mensajeCuenta = mensajeDeCuenta(errorCode(cicloActualError))
@@ -271,7 +273,7 @@ export default function AgendaSemanaPage() {
     const conRuta = (semanas?.length ?? 0) > 0
     const navegables =
         calendario && semanaEnCurso !== null && fechaLunesEnCurso !== null
-            ? semanasNavegables(fechaLunesEnCurso, semanaEnCurso, horizonte)
+            ? semanasNavegables(fechaLunesEnCurso, horizonte)
             : []
     const lunesParam = searchParams.get('lunes')
     // Misma regla que la semana de abajo: la URL gana solo si se navegó en esta sesión.
@@ -823,6 +825,7 @@ export default function AgendaSemanaPage() {
                 onLogout={logout}
                 onPrevWeek={() => moverSemana(-1)}
                 onNextWeek={() => moverSemana(1)}
+                onElegirSemana={calendario ? () => setEligiendoSemana(true) : undefined}
                 buscando={textoBusqueda !== null}
                 textoBusqueda={textoBusqueda ?? ''}
                 onAbrirBusqueda={() => setTextoBusqueda('')}
@@ -892,6 +895,17 @@ export default function AgendaSemanaPage() {
                         }
                     />
                 </>
+            )}
+
+            {calendario && fechaLunesEnCurso !== null && (
+                <ElegirSemanaSheet
+                    open={eligiendoSemana}
+                    onClose={() => setEligiendoSemana(false)}
+                    semanas={navegables}
+                    fechaLunesEnCurso={fechaLunesEnCurso}
+                    fechaVista={fechaVista}
+                    onElegir={setFechaVista}
+                />
             )}
 
             <VisitaFlow

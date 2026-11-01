@@ -1,5 +1,5 @@
 import { errorCode } from './apiError'
-import { isoLocal } from './fechas'
+import { isoLocal, nombreMes } from './fechas'
 import type { Dia, IAgendaClient, ISemanaHorizonte, TipoSemanaCalendario } from '@/types/planificacion'
 
 /**
@@ -54,20 +54,33 @@ function sumarSemanas(fechaLunes: string, semanas: number): string {
     return isoLocal(fecha)
 }
 
+/** El lunes en que arranca el calendario: la semana 1 de todos. Antes no hay semanas de
+ *  calendario que mirar (lo anterior es la vuelta del modelo viejo). */
+export const ANCLA_CALENDARIO = '2026-11-02'
+
 /**
- * Las semanas por las que navega el vendedor, de la más vieja a la última del horizonte: las
- * que ya pasaron en esta vuelta (la semana 1 es `fechaLunesEnCurso − 7·(semanaEnCurso − 1)`)
- * y el horizonte. Antes de la vuelta actual no se mira: el contrato no lo pide.
+ * Las semanas por las que navega el vendedor, de la más vieja a la última del horizonte:
+ * todas las que ya pasaron desde el 2/11 (de cualquier vuelta, solo para mirar) y el
+ * horizonte. Son ~52 por año: alcanza con una lista.
  */
-export function semanasNavegables(
-    fechaLunesEnCurso: string,
-    semanaEnCurso: number,
-    horizonte: ISemanaHorizonte[],
-): string[] {
+export function semanasNavegables(fechaLunesEnCurso: string, horizonte: ISemanaHorizonte[]): string[] {
     const pasadas: string[] = []
-    for (let k = semanaEnCurso - 1; k >= 1; k--) pasadas.push(sumarSemanas(fechaLunesEnCurso, -k))
+    for (let f = ANCLA_CALENDARIO; f < fechaLunesEnCurso; f = sumarSemanas(f, 1)) pasadas.push(f)
     const delHorizonte = horizonte.map(h => h.fechaLunes).filter(f => f >= fechaLunesEnCurso)
     return [...pasadas, ...delHorizonte.sort()]
+}
+
+/** Las semanas agrupadas por el mes de su lunes, del mes más nuevo al más viejo (lo
+ *  reciente arriba); dentro del mes, en orden de calendario. Es la lista de "Elegir semana". */
+export function semanasPorMes(fechas: string[]): { mes: string; fechas: string[] }[] {
+    const grupos: { mes: string; fechas: string[] }[] = []
+    for (const f of [...fechas].sort()) {
+        const mes = nombreMes(lunesLocal(f))
+        const ultimo = grupos[grupos.length - 1]
+        if (ultimo?.mes === mes) ultimo.fechas.push(f)
+        else grupos.push({ mes, fechas: [f] })
+    }
+    return grupos.reverse()
 }
 
 /** 'YYYY-MM-DD' se ordena igual como texto que como fecha. */

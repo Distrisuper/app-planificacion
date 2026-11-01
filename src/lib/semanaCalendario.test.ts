@@ -6,6 +6,7 @@ import {
     lunesLocal,
     mensajeErrorCalendario,
     semanasNavegables,
+    semanasPorMes,
     tipoDeSemana,
 } from './semanaCalendario'
 
@@ -48,14 +49,14 @@ describe('lunesLocal', () => {
 })
 
 describe('semanasNavegables', () => {
-    it('la semana 1 no tiene pasadas: solo el horizonte', () => {
+    it('el 2/11 no tiene pasadas: solo el horizonte', () => {
         const h = horizonte(['2026-11-02', '2026-11-09', '2026-11-16', '2026-11-23', '2026-11-30'], 1)
-        expect(semanasNavegables('2026-11-02', 1, h)).toEqual(h.map(s => s.fechaLunes))
+        expect(semanasNavegables('2026-11-02', h)).toEqual(h.map(s => s.fechaLunes))
     })
 
-    it('en la semana 3 suma las dos que ya pasaron de esta vuelta, en orden', () => {
+    it('en la semana 3 suma las dos que ya pasaron, en orden', () => {
         const h = horizonte(['2026-11-16', '2026-11-23', '2026-11-30', '2026-12-07', '2026-12-14'], 3)
-        expect(semanasNavegables('2026-11-16', 3, h)).toEqual([
+        expect(semanasNavegables('2026-11-16', h)).toEqual([
             '2026-11-02',
             '2026-11-09',
             '2026-11-16',
@@ -63,6 +64,24 @@ describe('semanasNavegables', () => {
             '2026-11-30',
             '2026-12-07',
             '2026-12-14',
+        ])
+    })
+
+    it('en la semana 1 del bloque siguiente sigue mirando todo el historial desde el 2/11', () => {
+        const h = horizonte(['2026-12-07', '2026-12-14', '2026-12-21', '2026-12-28', '2027-01-04'], 1)
+        const navegables = semanasNavegables('2026-12-07', h)
+        expect(navegables[0]).toBe('2026-11-02')
+        expect(navegables).toContain('2026-11-30')
+        expect(navegables).toHaveLength(10)
+    })
+})
+
+describe('semanasPorMes', () => {
+    it('agrupa cada semana en el mes de su lunes, del mes más nuevo al más viejo', () => {
+        expect(semanasPorMes(['2026-11-23', '2026-11-30', '2026-12-07', '2027-01-04'])).toEqual([
+            { mes: 'Enero 2027', fechas: ['2027-01-04'] },
+            { mes: 'Diciembre 2026', fechas: ['2026-12-07'] },
+            { mes: 'Noviembre 2026', fechas: ['2026-11-23', '2026-11-30'] },
         ])
     })
 })
