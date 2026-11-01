@@ -375,14 +375,14 @@ function ramaActual(ctx) {
 }
 
 // ── checkout principal ─────────────────────────────────────────────────────
-// Cada tarea se trabaja en un worktree propio (los de Orca, en orca/workspaces/...; los de
-// Claude Code, en .claude/worktrees/...). El checkout principal del repo es solo para leer,
-// actualizar la base y crear worktrees: pasó que una sesión abierta ahí creó una rama y dejó
-// el checkout parado en otra rama. Ahí se niega editar archivos del proyecto y todo git que
-// cambie el estado; fuera (cualquier worktree enlazado) esta regla no dice nada.
+// Cada tarea se trabaja en un worktree propio, que crea la app de Claude en .claude/worktrees/...
+// El checkout principal del repo es solo para leer, actualizar la base y crear worktrees:
+// pasó que una sesión abierta ahí creó una rama y dejó el checkout parado en otra rama. Ahí se
+// niega editar archivos del proyecto y todo git que cambie el estado; fuera (cualquier worktree
+// enlazado) esta regla no dice nada.
 const CHECKOUT_PRINCIPAL =
   'estás en el checkout principal del repo: las tareas se trabajan en un worktree ' +
-  '(`orca worktree create --repo name:<repo> --name <slug> --agent claude` o `git worktree add`). ' +
+  'de la app de Claude (`EnterWorktree`, que lo crea en `.claude/worktrees/`). ' +
   'Acá solo se lee, se actualiza la base y se crean worktrees'
 const GIT_CAMBIA_ESTADO = new Set(['commit', 'add', 'rm', 'mv', 'merge', 'rebase', 'cherry-pick', 'revert', 'reset', 'push', 'restore', 'clean'])
 // `git branch` lista (o borra, para limpiar) con estas flags; con un nombre y sin ellas crea,
