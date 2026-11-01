@@ -801,6 +801,30 @@ describe('worktrees de la app: core.hooksPath', () => {
       }),
       /pre-push no está activo/,
     ))
+
+  // En Windows, Git Bash puede dejar `/c/Users/.../.githooks` y git `C:\...\.githooks` o
+  // `C:/.../.githooks`. Se simula win32 cambiando `process.platform` solo durante la llamada.
+  describe('en Windows', () => {
+    const W_PRINCIPAL = 'C:\\Users\\vend\\repos\\app'
+    const W_WT = `${W_PRINCIPAL}\\.claude\\worktrees\\tarea-1`
+    const comoWin32 = fn => {
+      const antes = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      try {
+        return fn()
+      } finally {
+        Object.defineProperty(process, 'platform', antes)
+      }
+    }
+    const pushWin = hooks => comoWin32(() => pushCon(hooks, () => ({ worktree: W_WT, principal: W_PRINCIPAL })))
+    test('acepta /c/... de Git Bash al .githooks del principal', () => pasa(pushWin('/c/Users/vend/repos/app/.githooks')))
+    test('acepta /c/... de Git Bash al .githooks del worktree', () => pasa(pushWin('/c/Users/vend/repos/app/.claude/worktrees/tarea-1/.githooks')))
+    test('acepta C:\\...\\.githooks del principal', () => pasa(pushWin(`${W_PRINCIPAL}\\.githooks`)))
+    test('acepta C:/.../.githooks sin distinguir mayúsculas', () => pasa(pushWin('c:/users/VEND/repos/app/.githooks')))
+    test('acepta .githooks relativo', () => pasa(pushWin('.githooks')))
+    for (const h of ['/c/Users/vend/otro/.githooks', '/d/Users/vend/repos/app/.githooks', 'C:\\tmp\\x', ''])
+      test(`niega ${JSON.stringify(h)}`, () => denyPor(pushWin(h), /pre-push no está activo/))
+  })
 })
 
 // Si la sesión arrancó en el checkout principal y trabaja en un worktree de la app,
@@ -865,13 +889,14 @@ describe('checkout principal: detección real', () => {
   })
   test('raicesGitReal da el worktree y el checkout principal', () => {
     const { raicesGitReal } = require('./guard.cjs')
-    assert.deepEqual(raicesGitReal(enlazado), { worktree: fs.realpathSync(enlazado), principal: fs.realpathSync(principal) })
+    assert.deepEqual(raicesGitReal(enlazado), { worktree: fs.realpathSync.native(enlazado), principal: fs.realpathSync.native(principal) })
   })
   test('core.hooksPath por un symlink al .githooks del principal pasa', () => {
     const { raicesGitReal } = require('./guard.cjs')
     fs.mkdirSync(path.join(principal, '.githooks'))
     const link = path.join(raiz, 'hooks-link')
-    fs.symlinkSync(path.join(principal, '.githooks'), link)
+    // `junction`: en Windows un symlink de carpeta pide permisos de administrador; fuera de Windows se ignora.
+    fs.symlinkSync(path.join(principal, '.githooks'), link, 'junction')
     pasa(
       evaluar(
         { tool_name: 'Bash', tool_input: { command: 'git push -u origin feature/x' }, cwd: enlazado },

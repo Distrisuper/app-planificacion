@@ -349,29 +349,39 @@ function reglaPush(resto, ctx) {
 // `.githooks` relativo (git lo resuelve contra la raíz del worktree) o cualquier ruta que,
 // resuelta, sea el `.githooks` del worktree o el del checkout principal: la app de Claude deja
 // en `config.worktree` la ruta absoluta al del principal. Sin poder leer las raíces de git,
-// solo pasa el relativo.
+// solo pasa el relativo. En Windows, Git Bash puede dejar `/c/Users/...`: se pasa a `C:/Users/...`.
 function hooksPathActivo(ctx) {
   const valor = hooksPath(ctx)
   if (!valor) return false
   if (valor === HOOKS_PATH) return true
   try {
     const { worktree, principal } = ctx.raicesGit()
-    const destino = rutaReal(path.resolve(worktree, valor))
-    return [worktree, principal].some(r => destino === rutaReal(path.join(r, HOOKS_PATH)))
+    const p = rutasDelSistema()
+    const destino = rutaReal(p.resolve(worktree, normalizarRutaGitBash(valor)))
+    return [worktree, principal].some(r => destino === rutaReal(p.join(r, HOOKS_PATH)))
   } catch {
     return false
   }
 }
 
-// `realpath` si existe (un symlink al `.githooks` cuenta); si no, la ruta resuelta.
-function rutaReal(p) {
-  let r = path.resolve(p)
+// `path.win32` en Windows y `path.posix` en el resto. Es lo mismo que `path`, pero se decide
+// en cada llamada: así los tests pueden simular win32 desde Linux.
+function rutasDelSistema() {
+  return process.platform === 'win32' ? path.win32 : path.posix
+}
+
+// `realpath` si existe (un symlink o junction al `.githooks` cuenta; `.native` expande los
+// nombres cortos de Windows, `RUNNER~1`); si no, la ruta tal cual. En Windows sin distinguir
+// mayúsculas ni `\` de `/`.
+function rutaReal(abs) {
+  let r = abs
   try {
-    r = fs.realpathSync(r)
+    r = fs.realpathSync.native(r)
   } catch {
     // no existe: se compara la ruta tal cual
   }
-  return normalizarDirGit(r)
+  r = r.replace(/\\/g, '/').replace(/\/+$/, '')
+  return process.platform === 'win32' ? r.toLowerCase() : r
 }
 
 // Una refspec apunta a la base si su destino (lo que va después de ':', o la refspec entera)
@@ -758,7 +768,7 @@ function raicesGitReal(cwd) {
     .split(/\r?\n/)
     .filter(Boolean)
   if (!toplevel || !comun) throw new Error('git rev-parse sin raíces')
-  return { worktree: fs.realpathSync(toplevel), principal: fs.realpathSync(path.dirname(comun)) }
+  return { worktree: fs.realpathSync.native(toplevel), principal: fs.realpathSync.native(path.dirname(comun)) }
 }
 
 // Si el hook revienta fuera de `evaluar` (input raro, stdout roto...), Claude Code lo toma
