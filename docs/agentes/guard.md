@@ -22,8 +22,12 @@ Si una regla molesta, se discute acá y se cambia junto con su test; no se desac
   borre `master` en el remoto, venga de donde venga. Escape, solo para una persona en su
   terminal: `ALLOW_BASE_PUSH=1 git push ...`. `npm install` lo activa (`prepare` →
   `core.hooksPath=.githooks`), y el archivo `pre-push` tiene que estar como ejecutable en git
-  (`100755`): si no, en Linux/mac git lo ignora. Si `core.hooksPath` no es `.githooks`, el guard
-  niega todo `git push` desde Claude Code.
+  (`100755`): si no, en Linux/mac git lo ignora. El guard niega todo `git push` desde Claude
+  Code salvo que `core.hooksPath` sea `.githooks` o una ruta que, resuelta (relativa a la raíz
+  del worktree, con `realpath` si existe), sea el `.githooks` del worktree actual o el del
+  checkout principal (el padre de `git rev-parse --git-common-dir`). Lo segundo es lo que deja
+  la app de Claude en `config.worktree` de sus worktrees (`.claude/worktrees/<nombre>`). Vacío,
+  ilegible o cualquier otra ruta se niega.
 - **`permissions.deny` de `settings.json`** es una red por si el hook no corre (script
   faltante, timeout): `.env` reales, credenciales, `gh pr merge` / `ready` / `review --approve`,
   `gh auth token`, `git push --no-verify` / `--force` / `-f` / `--force-with-lease` / `--mirror`,
@@ -46,7 +50,7 @@ Si una regla molesta, se discute acá y se cambia junto con su test; no se desac
 | `git commit` en `master`, `branch -D master`; `reset --hard`, `checkout .` / `restore .`, `clean -f` **fuera** del worktree (`-C ..`, `--work-tree`, `--git-dir`, `GIT_DIR=`, cwd fuera) | Ensucian la base o descartan trabajo ajeno. Dentro del propio worktree, descartar es decisión de quien trabaja ahí y pasa (igual en los cuatro repos). |
 | `rm -r` fuera del repo, de la raíz o de `src`, `docs`, `.git`, `.claude`, `.githooks`, `e2e`, `public`, `scripts`, `Prototipo` | Los worktrees de otras tareas viven al lado (`../`). |
 | `ssh` / `scp` / `sftp` / `ssh-keyscan` / `ssh-copy-id` | Ningún flujo de este front los necesita. |
-| Editar `.claude/hooks/`, `.claude/settings*.json`, `.githooks/`, `.git/hooks/` (por tool, sin distinguir mayúsculas, o por terminal, incluido un comando de lectura con `>`, `>>`, `tee`, `Out-File`, `Set-Content` o `--output`) | Que Claude Code no pueda apagar su propio guard. **Leerlos sí**: `Read`, `Grep`, `cat`, `head`, `tail`, `grep`, `rg`, `Select-String`, `sed -n '<rango>p'`, `git diff/log/show/blame/grep`, y correr sus tests (`npm run check:hooks`). Cambiarlos lo hace una persona. |
+| Editar `.claude/hooks/`, `.claude/settings*.json`, `.githooks/`, `.git/hooks/` (por tool, sin distinguir mayúsculas, también los del checkout principal y los de cualquier worktree de la app en `.claude/worktrees/<x>/`, sea `CLAUDE_PROJECT_DIR` el worktree o el principal; o por terminal, incluido un comando de lectura con `>`, `>>`, `tee`, `Out-File`, `Set-Content` o `--output`) | Que Claude Code no pueda apagar su propio guard. **Leerlos sí**: `Read`, `Grep`, `cat`, `head`, `tail`, `grep`, `rg`, `Select-String`, `sed -n '<rango>p'`, `git diff/log/show/blame/grep`, y correr sus tests (`npm run check:hooks`). Cambiarlos lo hace una persona. |
 
 Los servidores de desarrollo (`npm run dev`, `vite`, `playwright test`) **no** se bloquean, pero
 para verificar una tarea no hacen falta: la verificación es `npm run check`.
