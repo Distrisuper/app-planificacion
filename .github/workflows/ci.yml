@@ -22,3 +22,18 @@ jobs:
       - run: npm ci
       - run: npm run check
       - run: npm run build
+
+  # El guard y el pre-push corren en las máquinas de quien trabaja, también en Windows (Git
+  # Bash, PowerShell). Solo sus tests: lint, tsc y vitest no dependen del sistema.
+  hooks-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+      - run: npm run check:hooks

@@ -24,7 +24,8 @@ Si una regla molesta, se discute acá y se cambia junto con su test; no se desac
   `core.hooksPath=.githooks`), y el archivo `pre-push` tiene que estar como ejecutable en git
   (`100755`): si no, en Linux/mac git lo ignora. El guard niega todo `git push` desde Claude
   Code salvo que `core.hooksPath` sea `.githooks` o una ruta que, resuelta (relativa a la raíz
-  del worktree, con `realpath` si existe), sea el `.githooks` del worktree actual o el del
+  del worktree, con `realpath` si existe; en Windows también `/c/...` de Git Bash y sin distinguir
+  mayúsculas), sea el `.githooks` del worktree actual o el del
   checkout principal (el padre de `git rev-parse --git-common-dir`). Lo segundo es lo que deja
   la app de Claude en `config.worktree` de sus worktrees (`.claude/worktrees/<nombre>`). Vacío,
   ilegible o cualquier otra ruta se niega.
