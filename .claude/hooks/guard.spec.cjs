@@ -778,6 +778,58 @@ describe('checkout principal', () => {
   })
 })
 
+// La app de Claude crea los worktrees en `<principal>/.claude/worktrees/<nombre>` y deja
+// `core.hooksPath` con la ruta absoluta en `config.worktree`.
+describe('worktrees de la app: core.hooksPath', () => {
+  const PRINCIPAL = path.resolve('/repos/app')
+  const WT = path.join(PRINCIPAL, '.claude', 'worktrees', 'tarea-1')
+  const pushCon = (hooks, raices = () => ({ worktree: WT, principal: PRINCIPAL })) =>
+    evaluar(
+      { tool_name: 'Bash', tool_input: { command: 'git push -u origin HEAD:fix/x' }, cwd: WT },
+      { projectDir: WT, ramaActual: () => 'claude/tarea-1', hooksPath: () => hooks, raicesGit: raices },
+    )
+  test('acepta .githooks relativo', () => pasa(pushCon('.githooks')))
+  test('acepta la ruta absoluta al .githooks del checkout principal', () => pasa(pushCon(path.join(PRINCIPAL, '.githooks'))))
+  test('acepta la ruta absoluta al .githooks del worktree', () => pasa(pushCon(path.join(WT, '.githooks'))))
+  test('acepta la ruta absoluta con / al final', () => pasa(pushCon(`${path.join(PRINCIPAL, '.githooks')}/`)))
+  for (const h of ['/tmp/x', '', '/dev/null', path.join(PRINCIPAL, 'otra', '.githooks'), path.join(WT, '.githooks', '..')])
+    test(`niega ${JSON.stringify(h)}`, () => denyPor(pushCon(h), /pre-push no está activo/))
+  test('niega una ruta absoluta si no se pueden leer las raíces de git', () =>
+    denyPor(
+      pushCon(path.join(PRINCIPAL, '.githooks'), () => {
+        throw new Error('sin git')
+      }),
+      /pre-push no está activo/,
+    ))
+})
+
+// Si la sesión arrancó en el checkout principal y trabaja en un worktree de la app,
+// `projectDir` es el principal y la ruta relativa queda `.claude/worktrees/<x>/.claude/hooks/…`.
+describe('worktrees de la app: el guard se protege igual', () => {
+  const PRINCIPAL = path.resolve('/repos/app')
+  const WT = path.join(PRINCIPAL, '.claude', 'worktrees', 'tarea-1')
+  const OTRO = path.resolve('/repos/app/.claude/worktrees/otra')
+  const editar = (projectDir, cwd, file_path, tool_name = 'Edit') =>
+    evaluar(
+      { tool_name, tool_input: { file_path }, cwd },
+      { projectDir, ramaActual: () => 'claude/tarea-1', hooksPath: () => '.githooks', raicesGit: () => ({ worktree: cwd, principal: PRINCIPAL }) },
+    )
+  const protegidos = ['.claude/hooks/guard.cjs', '.claude/settings.json', '.claude/settings.local.json', '.githooks/pre-push.cjs', '.CLAUDE/Hooks/guard.cjs']
+  for (const f of protegidos) {
+    test(`niega editar ${f} con projectDir = worktree`, () => denyPor(editar(WT, WT, path.join(WT, f)), /parte del guard/))
+    test(`niega editar ${f} del worktree con projectDir = principal`, () => denyPor(editar(PRINCIPAL, WT, path.join(WT, f), 'Write'), /parte del guard/))
+    test(`niega editar ${f} del principal desde un worktree`, () => denyPor(editar(WT, WT, path.join(PRINCIPAL, f)), /parte del guard/))
+    test(`niega editar ${f} de otro worktree`, () => denyPor(editar(WT, WT, path.join(OTRO, f)), /parte del guard/))
+  }
+  test('permite editar código del worktree con projectDir = principal', () => pasa(editar(PRINCIPAL, WT, path.join(WT, 'src', 'a.ts'))))
+  test('permite editar fuera del repo', () => pasa(editar(WT, WT, path.resolve('/home/x/.claude/settings.json'))))
+  test('sin raíces de git sigue protegiendo lo de projectDir', () =>
+    denyPor(
+      evaluar({ tool_name: 'Edit', tool_input: { file_path: '.claude/hooks/guard.cjs' }, cwd: WT }, { projectDir: WT, raicesGit: () => { throw new Error('sin git') } }),
+      /parte del guard/,
+    ))
+})
+
 describe('checkout principal: detección real', () => {
   const fs = require('node:fs')
   const os = require('node:os')
@@ -810,6 +862,22 @@ describe('checkout principal: detección real', () => {
       if (antes === undefined) delete process.env.GIT_CEILING_DIRECTORIES
       else process.env.GIT_CEILING_DIRECTORIES = antes
     }
+  })
+  test('raicesGitReal da el worktree y el checkout principal', () => {
+    const { raicesGitReal } = require('./guard.cjs')
+    assert.deepEqual(raicesGitReal(enlazado), { worktree: fs.realpathSync(enlazado), principal: fs.realpathSync(principal) })
+  })
+  test('core.hooksPath por un symlink al .githooks del principal pasa', () => {
+    const { raicesGitReal } = require('./guard.cjs')
+    fs.mkdirSync(path.join(principal, '.githooks'))
+    const link = path.join(raiz, 'hooks-link')
+    fs.symlinkSync(path.join(principal, '.githooks'), link)
+    pasa(
+      evaluar(
+        { tool_name: 'Bash', tool_input: { command: 'git push -u origin feature/x' }, cwd: enlazado },
+        { projectDir: enlazado, ramaActual: () => 'feature/x', hooksPath: () => link, raicesGit: () => raicesGitReal(enlazado) },
+      ),
+    )
   })
   after(() => {
     try {
