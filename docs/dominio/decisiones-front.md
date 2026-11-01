@@ -59,6 +59,11 @@ estado actual.
     que ya está. La consulta manda además `fechaLunes`. En una semana que viene, "Ver cliente" lleva
     a su día en vez de abrir la propuesta.
   - El tablero y los tabs de día se fechan con el lunes de la semana en pantalla, no con el de hoy.
+    La semana cambia el domingo 00:00 (back) y `mondayOfWeek` (`lib/weekDates.ts`) cuenta el domingo
+    en la semana que terminó: con calendario nada de la agenda sale de ese cálculo, todo sale de
+    `fechaLunesEnCurso` / `horizonte`. `mondayOfWeek` queda solo para el modelo anterior.
+  - `armada: false` (filas sin `rotacionClienteId`) casi no va a llegar, porque un proceso del back
+    arma la en curso + 4, pero se sigue manejando igual (armar antes de escribir).
   - Una semana pasada sin datos (el back responde 404) muestra "Semana del 9/11" y columnas vacías.
   - Reagendar (`EstadoVisitaSheet`) ofrece semana + día del horizonte, keyado por número de ruta
     (dentro del horizonte no se repite) y con las fechas de la semana elegida (`fechasLunes`).

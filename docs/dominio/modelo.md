@@ -151,8 +151,10 @@ martes — la divergencia se conserva, que es lo que hace medible la adherencia.
 - **Los días que ya pasaron no generan lógica.** No hay "día vencido": un cliente sin visitar el lunes
   sigue pendiente y el vendedor decide antes del viernes.
 - **La semana de la ruta la marca el calendario, igual para todos (desde el lunes 2/11/2026).** Ese
-  lunes todos los vendedores arrancan en la semana 1 y la semana avanza sola cada lunes, en un ciclo
-  de 5 semanas. Antes del 2/11 (o con un back viejo) rige el modelo anterior: la rotación se
+  lunes todos los vendedores arrancan en la semana 1 y la semana avanza sola, en un ciclo de 5
+  semanas. Cambia el domingo a las 00:00 (Buenos Aires): el sábado es de la semana que termina y el
+  domingo ya es de la siguiente. El front no la calcula con el reloj del dispositivo: la lee de
+  `GET /ciclo/actual` (`fechaLunesEnCurso`, `horizonte`). Antes del 2/11 (o con un back viejo) rige el modelo anterior: la rotación se
   completaba con todas sus semanas en cualquier orden y `proponerSemana` proponía una de las que
   faltaban. Por qué cambió: "Semanas secuenciales por calendario", más abajo.
 - **Cada semana es una fecha.** La ruta base es el plan general (de gerencia). La agenda de cada

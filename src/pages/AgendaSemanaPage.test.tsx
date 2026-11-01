@@ -1289,6 +1289,23 @@ describe('semana del calendario', () => {
         expect(screen.getByText(/semana para planificar/i)).toBeInTheDocument()
     })
 
+    // La semana cambia el domingo a las 00:00 (back #274). El domingo el dispositivo todavía
+    // cae en la semana que terminó (`mondayOfWeek`), pero la en curso ya es la siguiente: las
+    // fechas salen de `fechaLunesEnCurso`, nunca del reloj.
+    it('un domingo, la agenda ya muestra la semana que empieza mañana, la que dice el back', async () => {
+        vi.useFakeTimers({ shouldAdvanceTime: true })
+        vi.setSystemTime(new Date(2026, 10, 15, 10, 0)) // domingo 15/11
+        mockSemanas()
+        ;(api.getCicloActual as any).mockResolvedValue({ ...CALENDARIO_ABIERTO, ciclo: null })
+        renderPage()
+
+        await waitFor(() => expect(api.getSemanaCalendario).toHaveBeenCalledWith('2026-11-16'))
+        expect(await screen.findByText('Semana 3 · 16/11')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^LUN 16/ })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^LUN 9/ })).not.toBeInTheDocument()
+        expect(screen.queryByText(/esta semana ya pasó/i)).not.toBeInTheDocument()
+    })
+
     it('los días de una semana que viene llevan sus propias fechas', async () => {
         fijarLunes()
         mockSemanas()

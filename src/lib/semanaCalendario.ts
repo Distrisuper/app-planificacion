@@ -13,7 +13,7 @@ export const MENSAJE_FUERA_DE_CALENDARIO = 'Este cliente es de otra semana: pasa
 export const MENSAJE_AGREGAR_FUERA_DE_CALENDARIO = 'En esta semana no se pueden agregar clientes.'
 export const MENSAJE_MOVER_FUERA_DE_CALENDARIO = 'Ese cliente no se puede mover a esa semana.'
 /** "Volver más tarde" sobre una visita que quedó abierta de una semana que ya pasó (del
- *  viernes, se mira el sábado): no puede volver a quedar pendiente, pero cerrarla o
+ *  viernes o el sábado, se mira el domingo, que ya es la semana siguiente): no puede volver a quedar pendiente, pero cerrarla o
  *  registrar "No visité" sí se puede. */
 export const MENSAJE_VISITA_FUERA_DE_CALENDARIO =
     'Esta visita es de una semana que ya pasó: cerrala o registrá "No visité".'
