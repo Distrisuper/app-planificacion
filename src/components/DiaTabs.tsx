@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { getWeekDates, isSameDay } from '@/lib/weekDates'
+import { lunesLocal } from '@/lib/semanaCalendario'
 import type { Dia } from '@/types/planificacion'
 
 const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
@@ -7,6 +8,9 @@ const DIAS: Dia[] = ['LUN', 'MAR', 'MIE', 'JUE', 'VIE']
 interface DiaTabsProps {
     activo: Dia
     onSelect: (dia: Dia) => void
+    /** Modo calendario: el lunes ('YYYY-MM-DD') de la semana en pantalla. Sin esto se fecha
+     *  con la semana de hoy. */
+    fechaLunes?: string
 }
 
 /**
@@ -14,8 +18,8 @@ interface DiaTabsProps {
  * HOY. Sin el conteo resueltos/total: ya lo dice la banda del día en el tablero, y
  * duplicado solo le costaba alto a la lista de clientes.
  */
-export default function DiaTabs({ activo, onSelect }: DiaTabsProps) {
-    const fechas = useMemo(() => getWeekDates(), [])
+export default function DiaTabs({ activo, onSelect, fechaLunes }: DiaTabsProps) {
+    const fechas = useMemo(() => getWeekDates(fechaLunes ? lunesLocal(fechaLunes) : undefined), [fechaLunes])
     const hoy = useMemo(() => new Date(), [])
 
     return (

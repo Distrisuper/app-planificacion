@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import AccountMenu from '@/components/AccountMenu'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -13,9 +13,15 @@ interface AppHeaderProps {
     subtitulo?: string
     /** 'preview' = hojeando una semana que no es la abierta. */
     modo?: 'operable' | 'preview'
+    /** Modo calendario: el chip que dice qué semana es ("Esta semana", "Para planificar",
+     *  "Ya pasó"). Si viene, reemplaza al subtítulo y al "Vista previa". */
+    chip?: string
     onLogout?: () => void
     onPrevWeek?: () => void
     onNextWeek?: () => void
+    /** Modo calendario: tocar el título abre la lista de semanas para saltar a cualquiera
+     *  (el historial crece y con las flechas de a una no se llega). */
+    onElegirSemana?: () => void
     /**
      * Búsqueda general (solo lectura, toda la cartera). Sin `onAbrirBusqueda` no se
      * pinta la lupa — este componente sigue siendo props-only, no toca react-query.
@@ -46,9 +52,11 @@ export default function AppHeader({
     tituloSemana,
     subtitulo,
     modo,
+    chip,
     onLogout,
     onPrevWeek,
     onNextWeek,
+    onElegirSemana,
     buscando = false,
     textoBusqueda = '',
     onAbrirBusqueda,
@@ -129,10 +137,22 @@ export default function AppHeader({
                             <ChevronLeft className="h-5 w-5" strokeWidth={2.4} />
                         </Button>
                         <div className="flex min-w-0 items-center justify-center gap-1.5">
-                            <span className="truncate text-[13.5px] font-extrabold">{tituloSemana}</span>
-                            {preview ? (
+                            {onElegirSemana ? (
+                                <button
+                                    type="button"
+                                    aria-label={`Elegir semana (${tituloSemana})`}
+                                    onClick={onElegirSemana}
+                                    className="flex min-w-0 items-center gap-0.5 rounded-md"
+                                >
+                                    <span className="truncate text-[13.5px] font-extrabold">{tituloSemana}</span>
+                                    <ChevronDown className="h-4 w-4 shrink-0 text-white/70" strokeWidth={2.4} />
+                                </button>
+                            ) : (
+                                <span className="truncate text-[13.5px] font-extrabold">{tituloSemana}</span>
+                            )}
+                            {chip || preview ? (
                                 <span className="shrink-0 rounded-full bg-white/15 px-2 py-px text-[9.5px] font-extrabold uppercase tracking-wide text-white/80">
-                                    Vista previa
+                                    {chip ?? 'Vista previa'}
                                 </span>
                             ) : (
                                 subtitulo && (

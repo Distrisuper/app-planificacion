@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Plus } from 'lucide-react'
-import ClienteCard from './ClienteCard'
+import ClienteCard, { type UsoSemana } from './ClienteCard'
 import { getWeekDates, formatDayDate, isSameDay } from '@/lib/weekDates'
+import { lunesLocal } from '@/lib/semanaCalendario'
 import { estaResuelto } from '@/lib/estadoCiclo'
 import type { AppExterna } from '@/lib/appsExternas'
 import type { Dia, IAgendaClient, IVisitClientCard, SemanaAgenda } from '@/types/planificacion'
@@ -20,12 +21,16 @@ interface AgendaBoardProps {
     reintentandoId?: number | null
     onActivoChange: (dia: Dia) => void
     /** Si se pasa, cada encabezado de día muestra un "+" que abre el buscador con ESE
-     *  día —de la zona que se está mirando— como destino. Se pinta en TODA zona de la
-     *  rotación, no solo en la del ciclo: el caso que lo pidió es el vendedor
-     *  planificando la zona siguiente, que ve que le faltan clientes y los agrega
-     *  desde ahí. La prop sigue siendo opcional para que el board pueda montarse sin
-     *  escritura si algún día hace falta. */
+     *  día —de la zona que se está mirando— como destino. La página decide en qué zonas
+     *  (`zonaPlanificable`): sin calendario, en toda zona pendiente; con calendario, en la
+     *  semana en curso y en las que vienen. */
     onAgregarCliente?: (dia: Dia) => void
+    /** Pass-through hacia `ClienteCard`: qué se puede hacer en la semana de calendario en
+     *  pantalla. */
+    uso?: UsoSemana
+    /** Modo calendario: el lunes ('YYYY-MM-DD') de la semana en pantalla, para fechar las
+     *  columnas. Sin esto se fecha con la semana de hoy. */
+    fechaLunes?: string
     onAbrir: (cliente: IAgendaClient) => void
     onEstadoVisita: (cliente: IAgendaClient) => void
     onIniciarVisita: (cliente: IAgendaClient) => void
@@ -47,6 +52,8 @@ export default function AgendaBoard({
     reintentandoId = null,
     onActivoChange,
     onAgregarCliente,
+    uso = 'operar',
+    fechaLunes,
     onAbrir,
     onEstadoVisita,
     onIniciarVisita,
@@ -57,7 +64,7 @@ export default function AgendaBoard({
 }: AgendaBoardProps) {
     const boardRef = useRef<HTMLDivElement>(null)
     const columnRefs = useRef<Partial<Record<Dia, HTMLDivElement>>>({})
-    const weekDates = useMemo(() => getWeekDates(), [])
+    const weekDates = useMemo(() => getWeekDates(fechaLunes ? lunesLocal(fechaLunes) : undefined), [fechaLunes])
     const today = useMemo(() => new Date(), [])
 
     // A programmatic smooth scroll fires many scroll events while it's mid-transit,
@@ -200,6 +207,7 @@ export default function AgendaBoard({
                                         key={c.codigoParticularCliente}
                                         cliente={c}
                                         modo={modo}
+                                        uso={uso}
                                         otraVisitaEnCurso={hayVisitaEnCurso && c.estado !== 'en_curso'}
                                         reintentandoId={reintentandoId}
                                         onAbrir={onAbrir}

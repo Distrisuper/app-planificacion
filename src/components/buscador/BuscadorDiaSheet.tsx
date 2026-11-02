@@ -4,6 +4,12 @@ import BottomSheet from '@/components/ui/BottomSheet'
 import { useConfirmarExtra, useConsultarBuscador, useBuscarEnCartera } from '@/hooks/useBuscador'
 import { useReacomodar } from '@/hooks/useCiclo'
 import { diaLabel, etiquetaEstado, zonaLabel } from './etiquetas'
+import {
+    MENSAJE_AGREGAR_FUERA_DE_CALENDARIO,
+    MENSAJE_MOVER_FUERA_DE_CALENDARIO,
+    etiquetaSemana,
+    mensajeErrorCalendario,
+} from '@/lib/semanaCalendario'
 import type { NotificacionTipo } from '@/components/ui/Notification'
 import type {
     IAgendaClient,
@@ -18,6 +24,14 @@ interface BuscadorDiaSheetProps {
      *  destino de todo lo que hace este sheet. */
     semana: number
     dia: number
+    /** Modo calendario: la semana de calendario destino ('YYYY-MM-DD'). Viaja en consultar,
+     *  agregar y traer; ausente = sin calendario, como antes. */
+    fechaLunes?: string
+    /** Corre antes de consultar un cliente y antes de cada escritura. La página la usa para
+     *  armar una semana que todavía es la ruta base: sin armar, la consulta no ve las filas
+     *  que el vendedor tiene en pantalla y ofrece agregar un cliente que ya está. No corre al
+     *  abrir el sheet: cerrarlo sin elegir no deja una copia propia que nadie pidió. */
+    prepararSemana?: () => Promise<void>
     /** Se creó una fila `es_extra` nueva en la celda destino. */
     onExtraCreada: (cliente: IAgendaClient) => void
     /** El cliente ya tenía una fila pendiente y se decidió ir a verla en vez de crear. */
@@ -57,6 +71,8 @@ export function BuscadorDiaSheet({
     onClose,
     semana,
     dia,
+    fechaLunes,
+    prepararSemana,
     onExtraCreada,
     onNavegarAExistente,
     onTraido,
@@ -91,13 +107,19 @@ export function BuscadorDiaSheet({
 
     async function handleSeleccionar(r: IResultadoBuscadorGeneral) {
         try {
+            await prepararSemana?.()
             const resultado = await consultarBuscador.mutateAsync({
                 codigo: r.codigoParticularCliente,
                 semana,
+                fechaLunes,
             })
             setConsulta({ codigo: r.codigoParticularCliente, nombre: r.nombreCliente, resultado })
-        } catch {
-            onAviso('error', 'No pudimos consultar este cliente. Volvé a intentar.')
+        } catch (err) {
+            onAviso(
+                'error',
+                mensajeErrorCalendario(err, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO) ??
+                    'No pudimos consultar este cliente. Volvé a intentar.',
+            )
         }
     }
 
@@ -110,22 +132,34 @@ export function BuscadorDiaSheet({
 
     async function handleTraer(rotacionClienteId: number) {
         try {
-            await reacomodar.mutateAsync({ rotacionClienteId, semana, dia })
+            await prepararSemana?.()
+            await reacomodar.mutateAsync(
+                fechaLunes ? { rotacionClienteId, dia, fechaLunes } : { rotacionClienteId, semana, dia },
+            )
             cerrar()
             onTraido()
-        } catch {
-            onAviso('error', 'No se pudo mover el cliente. Volvé a intentar.')
+        } catch (err) {
+            onAviso(
+                'error',
+                mensajeErrorCalendario(err, MENSAJE_MOVER_FUERA_DE_CALENDARIO) ??
+                    'No se pudo mover el cliente. Volvé a intentar.',
+            )
         }
     }
 
     async function handleAgregarExtra() {
         if (!consulta) return
         try {
-            const creada = await confirmarExtra.mutateAsync({ codigo: consulta.codigo, semana, dia })
+            await prepararSemana?.()
+            const creada = await confirmarExtra.mutateAsync({ codigo: consulta.codigo, semana, dia, fechaLunes })
             cerrar()
             onExtraCreada(creada)
-        } catch {
-            onAviso('error', 'No se pudo agregar el cliente. Volvé a intentar.')
+        } catch (err) {
+            onAviso(
+                'error',
+                mensajeErrorCalendario(err, MENSAJE_AGREGAR_FUERA_DE_CALENDARIO) ??
+                    'No se pudo agregar el cliente. Volvé a intentar.',
+            )
         }
     }
 
@@ -253,10 +287,18 @@ export function BuscadorDiaSheet({
                             <b>{consulta.nombre}</b> ya está planificado el{' '}
                             {diaLabel(consulta.resultado.otraZona.dia)} en{' '}
                             <b>
-                                {zonaLabel(
-                                    consulta.resultado.otraZona.descripcionZona,
-                                    consulta.resultado.otraZona.semana,
-                                )}
+                                {/* Con calendario, la semana con su fecha: el número solo no dice
+                                    si es esta vuelta o la siguiente. */}
+                                {consulta.resultado.otraZona.fechaLunes
+                                    ? etiquetaSemana({
+                                          fechaLunes: consulta.resultado.otraZona.fechaLunes,
+                                          semana: consulta.resultado.otraZona.semana,
+                                          descripcion: consulta.resultado.otraZona.descripcionZona,
+                                      })
+                                    : zonaLabel(
+                                          consulta.resultado.otraZona.descripcionZona,
+                                          consulta.resultado.otraZona.semana,
+                                      )}
                             </b>
                             .
                         </p>
