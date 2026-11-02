@@ -12,6 +12,7 @@
 // Las reglas y su porqué están en docs/agentes/guard.md. Tests: guard.spec.cjs
 // (`npm run check:hooks`). Sin dependencias: corre con `node` pelado. Es .cjs porque el
 // package.json del repo es "type": "module".
+const fs = require('node:fs')
 const path = require('node:path')
 const { execFileSync } = require('node:child_process')
 
@@ -340,9 +341,47 @@ function reglaPush(resto, ctx) {
   if (posicionales.some(apuntaABase)) return deny(`push a ${RAMA_BASE} está prohibido (${RAMA_BASE} = deploy en Vercel); abrí un PR draft`)
   if (ramaActual(ctx) === RAMA_BASE) return deny(`estás en ${RAMA_BASE}; creá una rama antes de pushear`)
   // Sin el pre-push activo, lo único que frena un push a master es este texto.
-  if (hooksPath(ctx) !== HOOKS_PATH)
-    return deny(`el pre-push no está activo (core.hooksPath no es ${HOOKS_PATH}); corré npm install (el prepare lo configura) o git config core.hooksPath ${HOOKS_PATH}`)
+  if (!hooksPathActivo(ctx))
+    return deny(`el pre-push no está activo (core.hooksPath no apunta al ${HOOKS_PATH} del worktree ni al del checkout principal); corré npm install (el prepare lo configura) o git config core.hooksPath ${HOOKS_PATH}`)
   return null
+}
+
+// `.githooks` relativo (git lo resuelve contra la raíz del worktree) o cualquier ruta que,
+// resuelta, sea el `.githooks` del worktree o el del checkout principal: la app de Claude deja
+// en `config.worktree` la ruta absoluta al del principal. Sin poder leer las raíces de git,
+// solo pasa el relativo. En Windows, Git Bash puede dejar `/c/Users/...`: se pasa a `C:/Users/...`.
+function hooksPathActivo(ctx) {
+  const valor = hooksPath(ctx)
+  if (!valor) return false
+  if (valor === HOOKS_PATH) return true
+  try {
+    const { worktree, principal } = ctx.raicesGit()
+    const p = rutasDelSistema()
+    const destino = rutaReal(p.resolve(worktree, normalizarRutaGitBash(valor)))
+    return [worktree, principal].some(r => destino === rutaReal(p.join(r, HOOKS_PATH)))
+  } catch {
+    return false
+  }
+}
+
+// `path.win32` en Windows y `path.posix` en el resto. Es lo mismo que `path`, pero se decide
+// en cada llamada: así los tests pueden simular win32 desde Linux.
+function rutasDelSistema() {
+  return process.platform === 'win32' ? path.win32 : path.posix
+}
+
+// `realpath` si existe (un symlink o junction al `.githooks` cuenta; `.native` expande los
+// nombres cortos de Windows, `RUNNER~1`); si no, la ruta tal cual. En Windows sin distinguir
+// mayúsculas ni `\` de `/`.
+function rutaReal(abs) {
+  let r = abs
+  try {
+    r = fs.realpathSync.native(r)
+  } catch {
+    // no existe: se compara la ruta tal cual
+  }
+  r = r.replace(/\\/g, '/').replace(/\/+$/, '')
+  return process.platform === 'win32' ? r.toLowerCase() : r
 }
 
 // Una refspec apunta a la base si su destino (lo que va después de ':', o la refspec entera)
@@ -375,14 +414,14 @@ function ramaActual(ctx) {
 }
 
 // ── checkout principal ─────────────────────────────────────────────────────
-// Cada tarea se trabaja en un worktree propio (los de Orca, en orca/workspaces/...; los de
-// Claude Code, en .claude/worktrees/...). El checkout principal del repo es solo para leer,
-// actualizar la base y crear worktrees: pasó que una sesión abierta ahí creó una rama y dejó
-// el checkout parado en otra rama. Ahí se niega editar archivos del proyecto y todo git que
-// cambie el estado; fuera (cualquier worktree enlazado) esta regla no dice nada.
+// Cada tarea se trabaja en un worktree propio, que crea la app de Claude en .claude/worktrees/...
+// El checkout principal del repo es solo para leer, actualizar la base y crear worktrees:
+// pasó que una sesión abierta ahí creó una rama y dejó el checkout parado en otra rama. Ahí se
+// niega editar archivos del proyecto y todo git que cambie el estado; fuera (cualquier worktree
+// enlazado) esta regla no dice nada.
 const CHECKOUT_PRINCIPAL =
   'estás en el checkout principal del repo: las tareas se trabajan en un worktree ' +
-  '(`orca worktree create --repo name:<repo> --name <slug> --agent claude` o `git worktree add`). ' +
+  'de la app de Claude (`EnterWorktree`, que lo crea en `.claude/worktrees/`). ' +
   'Acá solo se lee, se actualiza la base y se crean worktrees'
 const GIT_CAMBIA_ESTADO = new Set(['commit', 'add', 'rm', 'mv', 'merge', 'rebase', 'cherry-pick', 'revert', 'reset', 'push', 'restore', 'clean'])
 // `git branch` lista (o borra, para limpiar) con estas flags; con un nombre y sin ellas crea,
@@ -598,6 +637,29 @@ function relativo(fp, input, ctx) {
   return { abs, rel, nombre: path.posix.basename(abs.replace(/\\/g, '/')) }
 }
 
+// Sin distinguir mayúsculas: en NTFS `.CLAUDE/Hooks/guard.cjs` es el mismo archivo.
+const ARCHIVOS_DEL_GUARD = /^(\.claude\/(hooks\/|settings(\.[\w-]+)?\.json$)|\.githooks\/)/i
+const PREFIJO_WORKTREE = /^\.claude\/worktrees\/[^/]+\//i
+
+// El guard de un worktree de la app (`<principal>/.claude/worktrees/<x>/`) es tan del guard
+// como el del principal. La ruta se mira contra `projectDir` y contra el checkout principal
+// (desde un worktree, `projectDir` puede ser cualquiera de los dos), sacando los prefijos
+// `.claude/worktrees/<x>/`. Fuera del repo (`~/.claude/settings.json`) no aplica.
+function esArchivoDelGuard(abs, ctx) {
+  const raices = [ctx.projectDir]
+  try {
+    raices.push(ctx.raicesGit().principal)
+  } catch {
+    // sin git queda solo projectDir
+  }
+  return raices.some(r => {
+    if (!r || !dentroDe(r, abs)) return false
+    let rel = path.relative(path.resolve(r), abs).split(path.sep).join('/')
+    while (PREFIJO_WORKTREE.test(rel)) rel = rel.replace(PREFIJO_WORKTREE, '')
+    return ARCHIVOS_DEL_GUARD.test(rel)
+  })
+}
+
 function reglaArchivo(input, ctx) {
   const ti = input.tool_input || {}
   const fp = ti.file_path || ti.notebook_path
@@ -605,8 +667,7 @@ function reglaArchivo(input, ctx) {
   const { abs, rel, nombre } = relativo(fp, input, ctx)
   if (esArchivoEnv(nombre)) return deny(`desde Claude Code no se lee ni escribe ${nombre}`)
   if (input.tool_name === 'Read') return null
-  // Sin distinguir mayúsculas: en NTFS `.CLAUDE/Hooks/guard.cjs` es el mismo archivo.
-  if (/^(\.claude\/(hooks\/|settings(\.[\w-]+)?\.json$)|\.githooks\/)/i.test(rel) || abs.split(path.sep).join('/').toLowerCase().includes('/.git/hooks/'))
+  if (esArchivoDelGuard(abs, ctx) || abs.split(path.sep).join('/').toLowerCase().includes('/.git/hooks/'))
     return deny(`desde Claude Code no se edita ${rel}: es parte del guard`)
   return reglaCheckoutPrincipalArchivo(abs, ctx)
 }
@@ -695,6 +756,21 @@ function esCheckoutPrincipalReal(cwd) {
   }
 }
 
+// Raíz del worktree donde corre git y del checkout principal (el padre del git-dir común).
+// Si git falla, tira: quien la usa decide (hooksPath niega, la protección de archivos sigue
+// con projectDir).
+function raicesGitReal(cwd) {
+  const [toplevel, comun] = execFileSync('git', ['rev-parse', '--path-format=absolute', '--show-toplevel', '--git-common-dir'], {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  })
+    .split(/\r?\n/)
+    .filter(Boolean)
+  if (!toplevel || !comun) throw new Error('git rev-parse sin raíces')
+  return { worktree: fs.realpathSync.native(toplevel), principal: fs.realpathSync.native(path.dirname(comun)) }
+}
+
 // Si el hook revienta fuera de `evaluar` (input raro, stdout roto...), Claude Code lo toma
 // como error no bloqueante y la acción pasa. Por eso sale con 2, que Claude Code toma como bloqueo.
 function fallaCerrado(e) {
@@ -723,6 +799,7 @@ function main() {
       ramaActual: () => ramaActualReal(input.cwd || projectDir),
       hooksPath: () => hooksPathReal(input.cwd || projectDir),
       esCheckoutPrincipal: dir => esCheckoutPrincipalReal(dir || input.cwd || projectDir),
+      raicesGit: () => raicesGitReal(input.cwd || projectDir),
     }
     r = r || evaluar(input, ctx)
     if (r) process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PreToolUse', ...r } }))
@@ -732,4 +809,4 @@ function main() {
 
 if (require.main === module) main()
 
-module.exports = { evaluar, esArchivoEnv, esCheckoutPrincipalReal, nombreDeComando, RAMA_BASE }
+module.exports = { evaluar, esArchivoEnv, esCheckoutPrincipalReal, raicesGitReal, nombreDeComando, RAMA_BASE }
