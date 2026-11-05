@@ -356,10 +356,10 @@ export default function AgendaSemanaPage() {
     const armar = useArmarSemana()
     const armadaVista = usarAgendaReal || (semanaCal?.armada ?? entradaVista?.armada ?? true)
     /**
-     * Arma la semana si todavía es la ruta base. Se llama justo antes de escribir, nunca al
-     * abrir un sheet: armar es darle copia propia, y si el vendedor cancela, la semana
-     * quedaría desenganchada de la ruta base sin que nadie lo pidiera. Devuelve la semana
-     * armada (con los ids nuevos) o null si ya lo estaba.
+     * Arma la semana si no lo está. Se llama justo antes de escribir, nunca al abrir un
+     * sheet. Una semana que viene siempre llega sin armar (se compone al leerla): armarla no
+     * la copia, devuelve la vista con ids negativos donde la visita de la Ruta no tiene fila,
+     * y reacomodar los acepta tal cual. Devuelve esa semana o null si ya estaba armada.
      */
     async function asegurarArmada(fechaLunes: string): Promise<ISemanaCalendario | null> {
         const armada =

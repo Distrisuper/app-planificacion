@@ -28,6 +28,8 @@ const MENSAJES: Record<string, string> = {
     SEMANA_FUERA_DEL_SET: 'Esa semana no está en esta vuelta.',
     SEMANAS_IGUALES: 'Elegiste dos veces la misma semana: no hay nada que intercambiar.',
     ROTACION_CERRADA: 'Esta vuelta ya está cerrada: no se puede editar.',
+    // Visita de la Ruta sin fila (id negativo) que cambió desde que se leyó la vuelta.
+    VISITA_VIRTUAL_VENCIDA: 'Esa visita cambió desde que se cargó la vuelta. Ya la actualizamos: probá de nuevo.',
 }
 
 /** El texto para el código del error, o `porDefecto` si el código no es uno conocido. */

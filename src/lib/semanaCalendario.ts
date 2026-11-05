@@ -24,6 +24,8 @@ const MENSAJES_CALENDARIO: Record<string, string> = {
     FECHA_LUNES_INVALIDA: 'No pudimos ubicar esa semana. Recargá la app y volvé a intentar.',
     // Corte de vuelta postergado: hasta cerrar esa visita no se abre la semana nueva.
     VISITA_EN_CURSO: 'Tenés una visita abierta de la semana pasada: cerrala antes de seguir.',
+    // Reacomodar una visita de la Ruta sin fila (id negativo) que cambió desde que se leyó.
+    VISITA_VIRTUAL_VENCIDA: 'Esa visita cambió mientras la mirabas. Actualizamos tu agenda: probá de nuevo.',
 }
 
 /**

@@ -15,12 +15,21 @@ import RutaPage from './RutaPage'
 vi.mock('@/components/ruta/GridRotacion', () => ({
     default: ({
         onMover,
+        onQuitar,
     }: {
         onMover: (id: number, semana: number, dia: number, posicion?: number) => void
+        onQuitar?: (id: number) => void
     }) => (
         <>
             <button type="button" onClick={() => onMover(11, 2, 4)}>
                 Soltar la card
+            </button>
+            {/* Una visita de la Ruta sin fila en una semana que viene: id negativo (back #324). */}
+            <button type="button" onClick={() => onMover(-400231, 2, 4)}>
+                Soltar la card de la Ruta
+            </button>
+            <button type="button" onClick={() => onQuitar?.(-400231)}>
+                Quitar la card de la Ruta
             </button>
             {/* Soltar sobre otra card: el grid que ordena manda también el lugar. */}
             <button type="button" onClick={() => onMover(11, 2, 4, 0)}>
@@ -59,7 +68,12 @@ beforeEach(() => {
     vi.mocked(apiAdmin.getRotacion).mockResolvedValue({ ...rotacion, semanas: [] })
 })
 
-async function soltarCard() {
+async function soltarCard(boton = 'Soltar la card') {
+    await abrirVuelta()
+    await userEvent.click(await screen.findByRole('button', { name: boton }))
+}
+
+async function abrirVuelta() {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
         <QueryClientProvider client={qc}>
@@ -70,8 +84,56 @@ async function soltarCard() {
     )
     await userEvent.click(screen.getByRole('button', { name: 'Vendedor' }))
     await userEvent.click(await screen.findByRole('option', { name: 'Juan Pérez' }))
-    await userEvent.click(await screen.findByRole('button', { name: 'Soltar la card' }))
+    await screen.findByRole('button', { name: 'Soltar la card' })
+    await waitFor(() => expect(apiAdmin.getRotacion).toHaveBeenCalled())
 }
+
+const VENCIDA = { response: { status: 409, data: { code: 'VISITA_VIRTUAL_VENCIDA' } } }
+
+describe('RutaPage — visitas de la Ruta sin fila (id negativo)', () => {
+    it('mover manda el id negativo tal cual a reacomodar', async () => {
+        vi.mocked(apiAdmin.reacomodarAdmin).mockResolvedValue({ rutaBase: null })
+        await soltarCard('Soltar la card de la Ruta')
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Solo esta vuelta' }))
+
+        await waitFor(() =>
+            expect(apiAdmin.reacomodarAdmin).toHaveBeenCalledWith('V 2', 7, -400231, {
+                semana: 2,
+                dia: 4,
+                aplicarARutaBase: false,
+            }),
+        )
+    })
+
+    it('si la visita cambió desde que se leyó (409), lo explica y relee la vuelta', async () => {
+        vi.mocked(apiAdmin.reacomodarAdmin).mockRejectedValue(VENCIDA)
+        await soltarCard('Soltar la card de la Ruta')
+        await waitFor(() => expect(apiAdmin.getRotacion).toHaveBeenCalled())
+        const lecturas = vi.mocked(apiAdmin.getRotacion).mock.calls.length
+
+        await userEvent.click(await screen.findByRole('button', { name: 'Solo esta vuelta' }))
+
+        expect(await screen.findByText(/esa visita cambió/i)).toBeInTheDocument()
+        await waitFor(() =>
+            expect(vi.mocked(apiAdmin.getRotacion).mock.calls.length).toBeGreaterThan(lecturas),
+        )
+    })
+
+    it('quitar con 409 de visita vencida lo explica y relee la vuelta', async () => {
+        vi.mocked(apiAdmin.quitarClienteAdmin).mockRejectedValue(VENCIDA)
+        await abrirVuelta()
+        const lecturas = vi.mocked(apiAdmin.getRotacion).mock.calls.length
+
+        await userEvent.click(screen.getByRole('button', { name: 'Quitar la card de la Ruta' }))
+
+        expect(apiAdmin.quitarClienteAdmin).toHaveBeenCalledWith('V 2', 7, -400231)
+        expect(await screen.findByText(/esa visita cambió/i)).toBeInTheDocument()
+        await waitFor(() =>
+            expect(vi.mocked(apiAdmin.getRotacion).mock.calls.length).toBeGreaterThan(lecturas),
+        )
+    })
+})
 
 describe('RutaPage — soltar una card en la vuelta', () => {
     it('pregunta el alcance antes de mover, y manda la elección', async () => {

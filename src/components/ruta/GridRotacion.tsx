@@ -100,9 +100,10 @@ export function parsearCelda(id: string): { semana: number; dia: number } | null
     return { semana: Number(m[1]), dia: DIAS.indexOf(m[2] as Dia) + 1 }
 }
 
-/** `card-11` → 11. null si el id no es de una card. */
+/** `card-11` → 11 y `card--400231` → -400231 (visita de la Ruta sin fila en una semana que
+ *  viene: el back la manda con id negativo). null si el id no es de una card. */
 export function parsearCard(id: string): number | null {
-    const m = /^card-(\d+)$/.exec(id)
+    const m = /^card-(-?\d+)$/.exec(id)
     return m ? Number(m[1]) : null
 }
 
@@ -132,9 +133,10 @@ export function movimientoDeDrop(
     return { rotacionClienteId, ...destino }
 }
 
-/** `antes-11` → 11: la card sobre la que se soltó, en un grid que ordena. */
+/** `antes-11` → 11: la card sobre la que se soltó, en un grid que ordena. Con signo, como
+ *  `parsearCard`. */
 function parsearAntes(id: string): number | null {
-    const m = /^antes-(\d+)$/.exec(id)
+    const m = /^antes-(-?\d+)$/.exec(id)
     return m ? Number(m[1]) : null
 }
 
