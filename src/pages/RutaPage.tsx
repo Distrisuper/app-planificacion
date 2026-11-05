@@ -663,7 +663,10 @@ export default function RutaPage() {
                         className={RECUADRO}
                         estado="error"
                         titulo="No se pudo mover ese cliente."
-                        texto="Puede que ya lo hayan visitado en esta vuelta, o que la semana destino no exista en su ruta."
+                        texto={mensajeErrorRuta(
+                            mover.error,
+                            'Puede que ya lo hayan visitado en esta vuelta, o que la semana destino no exista en su ruta.',
+                        )}
                     />
                 )}
 
@@ -703,7 +706,7 @@ export default function RutaPage() {
                         texto={
                             errorCode(quitar.error) === 'VISITA_EN_CURSO'
                                 ? 'El vendedor está visitando a ese cliente ahora mismo. Probá de nuevo cuando cierre la visita.'
-                                : 'Puede que ya lo hayan visitado en esta vuelta.'
+                                : mensajeErrorRuta(quitar.error, 'Puede que ya lo hayan visitado en esta vuelta.')
                         }
                     />
                 )}

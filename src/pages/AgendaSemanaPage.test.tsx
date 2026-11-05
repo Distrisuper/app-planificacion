@@ -1352,6 +1352,59 @@ describe('semana del calendario', () => {
         expect(ordenArmar).toBeLessThan(ordenMover)
     })
 
+    /** Back #324: una semana que viene no se copia; sale compuesta, siempre `armada: false`, y
+     *  las visitas de la Ruta sin fila traen id negativo. Armar no copia: devuelve la vista. */
+    function mockSemanasCompuestas() {
+        mockSemanas()
+        const compuesta = async (fechaLunes: string) => ({
+            fechaLunes,
+            semana: HORIZONTE.find(s => s.fechaLunes === fechaLunes)?.semana ?? 4,
+            descripcion: null,
+            tipo: 'futura',
+            armada: false,
+            rotacionId: 10,
+            dias: { ...semanaVacia, LUN: [{ ...clienteLunes, rotacionClienteId: -400231 }] },
+        })
+        ;(api.getSemanaCalendario as any).mockImplementation(compuesta)
+        ;(api.armarSemana as any).mockImplementation(compuesta)
+    }
+
+    it('en una semana compuesta, mover una visita de la Ruta manda su id negativo', async () => {
+        fijarLunes()
+        mockSemanasCompuestas()
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+
+        fireEvent.click(await screen.findByText('Reagendar'))
+        fireEvent.click(await screen.findByRole('button', { name: /^martes/i }))
+        fireEvent.click(screen.getByRole('button', { name: /mover al martes/i }))
+
+        await waitFor(() => expect(api.reacomodar).toHaveBeenCalledWith(-400231, { dia: 2 }))
+    })
+
+    it('si la visita cambió desde que se leyó (409), lo explica y relee la semana', async () => {
+        fijarLunes()
+        mockSemanasCompuestas()
+        ;(api.reacomodar as any).mockRejectedValue({
+            response: { status: 409, data: { code: 'VISITA_VIRTUAL_VENCIDA' } },
+        })
+        ;(api.getCicloActual as any).mockResolvedValue(CALENDARIO_ABIERTO)
+        renderPage()
+        await irASemanaSiguiente()
+        await screen.findByText('Reagendar')
+        const lecturas = () =>
+            (api.getSemanaCalendario as any).mock.calls.filter((c: string[]) => c[0] === '2026-11-23').length
+        const antes = lecturas()
+
+        fireEvent.click(screen.getByText('Reagendar'))
+        fireEvent.click(await screen.findByRole('button', { name: /^martes/i }))
+        fireEvent.click(screen.getByRole('button', { name: /mover al martes/i }))
+
+        expect(await screen.findByText(/esa visita cambió/i)).toBeInTheDocument()
+        await waitFor(() => expect(lecturas()).toBeGreaterThan(antes))
+    })
+
     it('desde la semana en curso, un pendiente se pasa a una que viene ("no llegué")', async () => {
         fijarLunes()
         mockSemanas()

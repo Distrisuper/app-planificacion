@@ -3,6 +3,7 @@ import { Search } from 'lucide-react'
 import BottomSheet from '@/components/ui/BottomSheet'
 import { useConfirmarExtra, useConsultarBuscador, useBuscarEnCartera } from '@/hooks/useBuscador'
 import { useReacomodar } from '@/hooks/useCiclo'
+import { errorCode } from '@/lib/apiError'
 import { diaLabel, etiquetaEstado, zonaLabel } from './etiquetas'
 import {
     MENSAJE_AGREGAR_FUERA_DE_CALENDARIO,
@@ -139,6 +140,9 @@ export function BuscadorDiaSheet({
             cerrar()
             onTraido()
         } catch (err) {
+            // La visita de la Ruta sin fila (id negativo) cambió desde la consulta: ese id ya
+            // no sirve. Se vuelve a la búsqueda para que elegir al cliente consulte de nuevo.
+            if (errorCode(err) === 'VISITA_VIRTUAL_VENCIDA') setConsulta(null)
             onAviso(
                 'error',
                 mensajeErrorCalendario(err, MENSAJE_MOVER_FUERA_DE_CALENDARIO) ??

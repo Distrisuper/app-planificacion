@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { errorCode } from '@/lib/apiError'
 import {
     agregarARutaBase,
     agregarClienteExtraAdmin,
@@ -169,6 +170,15 @@ export function useQuitarClienteAdmin(codigo: string) {
             qc.invalidateQueries({
                 queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
             })
+        },
+        // Una visita de la Ruta sin fila (id negativo) que cambió desde que se leyó: el id
+        // ya no sirve, hay que releer la vuelta para que el próximo intento lleve el nuevo.
+        onError: (err, args) => {
+            if (errorCode(err) === 'VISITA_VIRTUAL_VENCIDA') {
+                qc.invalidateQueries({
+                    queryKey: rotacionAdminKeys.grid(codigo, args.rotacionId),
+                })
+            }
         },
     })
 }

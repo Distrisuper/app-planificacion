@@ -50,10 +50,14 @@ estado actual.
     resuelto conserva "Ver resumen"). El "+" está en la en curso y en las futuras. "No visité" y
     "Sacar de mi agenda" solo en la en curso. No se reusa `modo` para gatear: `'preview'` también es
     el standby de la semana en curso, que es accionable.
-  - **Armar justo antes de escribir, nunca al abrir un sheet:** armar es darle copia propia a la
-    semana, y si el vendedor cancela quedaría desenganchada de la ruta base sin que nadie lo pidiera.
-    Mover arma el origen y el destino si no lo están; al armar el origen la fila cambia de id y se la
-    busca por cliente y día (`filaArmada`). "Cliente nuevo" arma antes de crear. **El buscador del
+  - **Armar justo antes de escribir, nunca al abrir un sheet.** Desde api-vendedores #324 una semana
+    que viene no se copia: se compone al leerla (Ruta + desvíos), viene siempre con `armada: false`
+    y armarla no copia, devuelve la vista (un POST idempotente antes de cada escritura). Las visitas
+    de la Ruta sin fila traen `rotacionClienteId` negativo, y reacomodar lo acepta tal cual y le crea
+    la fila al desvío. Mover arma el origen y el destino si no lo están y busca la fila del origen
+    por cliente y día en la respuesta (`filaArmada`). Si la visita cambió desde que se leyó, el back
+    contesta 409 `VISITA_VIRTUAL_VENCIDA`: se avisa y se relee la semana (`useReacomodar`; en
+    Analítica › Ruta, mover y quitar releen la vuelta). "Cliente nuevo" arma antes de crear. **El buscador del
     "+" arma antes de consultar** (`prepararSemana`), no recién al agregar: sin armar, la consulta no
     ve las filas que el vendedor tiene en pantalla, contesta "sin fila" y ofrece agregar un cliente
     que ya está. La consulta manda además `fechaLunes`. En una semana que viene, "Ver cliente" lleva
@@ -62,8 +66,9 @@ estado actual.
     La semana cambia el domingo 00:00 (back) y `mondayOfWeek` (`lib/weekDates.ts`) cuenta el domingo
     en la semana que terminó: con calendario nada de la agenda sale de ese cálculo, todo sale de
     `fechaLunesEnCurso` / `horizonte`. `mondayOfWeek` queda solo para el modelo anterior.
-  - `armada: false` (filas sin `rotacionClienteId`) casi no va a llegar, porque un proceso del back
-    arma la en curso + 4, pero se sigue manejando igual (armar antes de escribir).
+  - `armada: false` es lo normal en las semanas que vienen (ver arriba); la en curso se materializa
+    cuando arranca. Un id negativo es válido en todo el front: el grid de Analítica › Ruta lo parsea
+    con signo (`parsearCard`, `parsearAntes`).
   - Una semana pasada sin datos (el back responde 404) muestra "Semana del 9/11" y columnas vacías.
   - Reagendar (`EstadoVisitaSheet`) ofrece semana + día del horizonte, keyado por número de ruta
     (dentro del horizonte no se repite) y con las fechas de la semana elegida (`fechasLunes`).

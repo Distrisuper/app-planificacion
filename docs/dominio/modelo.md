@@ -158,8 +158,9 @@ martes — la divergencia se conserva, que es lo que hace medible la adherencia.
   completaba con todas sus semanas en cualquier orden y `proponerSemana` proponía una de las que
   faltaban. Por qué cambió: "Semanas secuenciales por calendario", más abajo.
 - **Cada semana es una fecha.** La ruta base es el plan general (de gerencia). La agenda de cada
-  semana de calendario se identifica por su `fechaLunes`: una semana que viene y nadie tocó se ve tal
-  cual la ruta base, y se **arma** (copia propia) la primera vez que alguien la edita. Las semanas
+  semana de calendario se identifica por su `fechaLunes`: una semana que viene no tiene copia, se
+  compone al leerla (la ruta base más sus desvíos, api-vendedores #324) y se materializa cuando
+  arranca. Editarla antes crea solo la fila de ese desvío. Las semanas
   que ya pasaron son histórico. `GET /planificacion/ciclo/actual` manda `semanaEnCurso`,
   `fechaLunesEnCurso` y el `horizonte`: la semana en curso + 4.
 - **Qué hace el vendedor en cada semana:**
@@ -340,8 +341,8 @@ regla: **una semana sin trabajar se pierde**, y sus pendientes los rescata geren
 Lo que decidió el usuario, para no reabrirlo:
 
 - 5 semanas para todos.
-- La ruta base es el plan general; cada semana de calendario tiene su agenda, que se arma (copia
-  propia) la primera vez que alguien la edita. Horizonte: la en curso + 4.
+- La ruta base es el plan general; cada semana de calendario tiene su agenda: la ruta base más sus
+  desvíos (desde api-vendedores #324 ya no se copia por adelantado). Horizonte: la en curso + 4.
 - En la en curso se hace todo; las que vienen se planifican sin visitar (día, semana, extra, cliente
   nuevo); las que pasaron se miran. "Traer a esta semana" es un caso de mover (destino = la en curso).
 - Una semana sin trabajar se pierde; los pendientes de semanas pasadas solo los rescata gerencia.

@@ -7,6 +7,7 @@ import {
     reacomodar,
     sincronizar,
 } from '@/api/planificacion'
+import { errorCode } from '@/lib/apiError'
 import { agendaKeys } from './useAgenda'
 import type { IReacomodarDTO } from '@/types/planificacion'
 
@@ -79,6 +80,14 @@ export function useReacomodar() {
             qc.invalidateQueries({ queryKey: agendaKeys.semana })
             qc.invalidateQueries({ queryKey: ['ciclo', 'preview'] })
             qc.invalidateQueries({ queryKey: cicloKeys.actual })
+        },
+        // 409 VISITA_VIRTUAL_VENCIDA: la visita de la Ruta sin fila (id negativo) cambió desde
+        // que se leyó. Se relee la semana (el prefijo de previews cubre la de calendario) para
+        // que el próximo intento lleve el id que corresponde.
+        onError: err => {
+            if (errorCode(err) !== 'VISITA_VIRTUAL_VENCIDA') return
+            qc.invalidateQueries({ queryKey: agendaKeys.semana })
+            qc.invalidateQueries({ queryKey: cicloKeys.previewTodos })
         },
     })
 }

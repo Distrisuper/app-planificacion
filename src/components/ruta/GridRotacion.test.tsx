@@ -125,6 +125,15 @@ describe('movimientoDeDrop', () => {
         expect(movimientoDeDrop('card-11', null, origenDe)).toBeNull()
     })
 
+    // Una visita de la Ruta sin fila en una semana que viene sale con id negativo (back #324).
+    it('una card con id negativo también se mueve, con su id tal cual', () => {
+        expect(movimientoDeDrop('card--400231', 'celda-3-JUE', origenDe)).toEqual({
+            rotacionClienteId: -400231,
+            semana: 3,
+            dia: 4,
+        })
+    })
+
     it('ignora ids que no son de una card o de una celda', () => {
         expect(movimientoDeDrop('otra-cosa', 'celda-3-JUE', origenDe)).toBeNull()
         expect(movimientoDeDrop('card-11', 'header-LUN', origenDe)).toBeNull()
@@ -181,6 +190,18 @@ describe('movimientoOrdenado', () => {
             rotacionClienteId: 1,
             semana: 2,
             dia: 3,
+        })
+    })
+
+    it('acepta cards con id negativo, la arrastrada y aquella donde se suelta', () => {
+        const conVirtuales: ISemanaRotacionAdmin[] = [
+            { semana: 1, descripcion: null, dias: { ...vacia(), LUN: [c(-5), c(-6)] } },
+        ]
+        expect(movimientoOrdenado('card--5', 'antes--6', conVirtuales)).toEqual({
+            rotacionClienteId: -5,
+            semana: 1,
+            dia: 1,
+            posicion: 1,
         })
     })
 
