@@ -317,10 +317,18 @@ export interface IVendedorOpcion {
     nombreVendedor: string
 }
 
+export type OrigenAlta = 'planificacion' | 'televentas'
+
 /** GET /planificacion/analitica/altas. Una por fila del plan tipo='alta' (un reintento
- *  aparece aparte, a propósito). Espejo del backend. */
+ *  aparece aparte, a propósito) y, después, los potenciales clientes que cargaron los TV.
+ *  Espejo del backend. */
 export interface IAltaRelevada {
-    rotacionClienteId: number
+    origen: OrigenAlta
+    /** pl_rotacion_cliente.id; null en las de televentas. */
+    rotacionClienteId: number | null
+    /** pl_tv_prospecto.id; null en las de planificación. */
+    prospectoId: number | null
+    /** En las de televentas, el TV que la cargó. */
     vendedor: { codigo: string; nombre: string }
     estado: EstadoCicloCliente
     fechaVisita: string | null

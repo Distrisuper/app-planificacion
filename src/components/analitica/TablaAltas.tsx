@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import TablaDatos from '@/components/ui/tabla/TablaDatos'
 import { definirColumnas } from '@/components/ui/tabla/columnas'
 import type { TonoPill } from '@/components/ui/Pill'
-import { ETIQUETA_ESTADO_ALTA, valorVisible } from '@/lib/altasCsv'
+import { ETIQUETA_ESTADO_ALTA, ETIQUETA_ORIGEN_ALTA, claveAlta, valorVisible } from '@/lib/altasCsv'
 import { titleCaseNombre } from '@/lib/textFormat'
 import type { IAltaRelevada } from '@/types/analitica'
 import type { EstadoCicloCliente, IEsquemaAlta } from '@/types/planificacion'
@@ -46,6 +46,7 @@ export default function TablaAltas({ filas, esquema, onElegir }: TablaAltasProps
                             .filter(Boolean)
                             .join(' · '),
                 }),
+                c.texto('origen', 'Origen', a => ETIQUETA_ORIGEN_ALTA[a.origen], { ancho: 120 }),
                 c.estado('estado', 'Estado', estadoDe, ESTADOS_ALTA),
                 c.fecha('visita', 'Visita', a => a.fechaVisita),
                 c.porcentaje('datos', 'Datos cargados', a => (a.camposTotal > 0 ? a.camposCargados / a.camposTotal : null), {
@@ -59,14 +60,14 @@ export default function TablaAltas({ filas, esquema, onElegir }: TablaAltasProps
         <TablaDatos
             datos={filas}
             columnas={columnas}
-            getRowId={a => String(a.rotacionClienteId)}
+            getRowId={claveAlta}
             etiqueta="Clientes nuevos"
             unidad={{ singular: 'cliente nuevo', plural: 'clientes nuevos' }}
             buscar={{ placeholder: 'Buscar comercio, localidad o vendedor…' }}
             ordenInicial={{ id: 'estado', desc: false }}
             onClickFila={onElegir}
             etiquetaFila={a => `Ver ${valorVisible(esquema, a, 'nombre') ?? 'cliente nuevo'}`}
-            testIdFila={a => `fila-alta-${a.rotacionClienteId}`}
+            testIdFila={a => `fila-alta-${claveAlta(a)}`}
         />
     )
 }

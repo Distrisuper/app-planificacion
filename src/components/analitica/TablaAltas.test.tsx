@@ -13,7 +13,7 @@ const ESQUEMA: IEsquemaAlta = {
     catalogos: null,
 }
 const alta: IAltaRelevada = {
-    rotacionClienteId: 9, vendedor: { codigo: 'V 2', nombre: 'Gómez' }, estado: 'no_visita', fechaVisita: '2026-09-21',
+    origen: 'planificacion', rotacionClienteId: 9, prospectoId: null, vendedor: { codigo: 'V 2', nombre: 'Gómez' }, estado: 'no_visita', fechaVisita: '2026-09-21',
     detalle: { nombre: 'Piche', localidad: 'Zárate' }, contacto: null, camposCargados: 2, camposTotal: 15,
 }
 
@@ -28,6 +28,20 @@ it('una fila por alta: comercio (con localidad y vendedor debajo), estado, fecha
     expect(screen.getByText('13%')).toBeInTheDocument()
     fireEvent.click(screen.getByText('Piche'))
     expect(onElegir).toHaveBeenCalledWith(alta)
+})
+
+it('muestra las dos fuentes con su origen, aunque el id de una coincida con el de la otra', () => {
+    const onElegir = vi.fn()
+    const deTv: IAltaRelevada = {
+        ...alta, origen: 'televentas', rotacionClienteId: null, prospectoId: 9, vendedor: { codigo: 'TV1', nombre: 'Lucía' },
+        fechaVisita: null, detalle: { nombre: 'Kiosco Sol' },
+    }
+    render(<TablaAltas filas={[alta, deTv]} esquema={ESQUEMA} onElegir={onElegir} />)
+    expect(screen.getByRole('columnheader', { name: /origen/i })).toBeInTheDocument()
+    expect(screen.getByText('Planificación')).toBeInTheDocument()
+    expect(screen.getByText('Televentas')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Kiosco Sol'))
+    expect(onElegir).toHaveBeenCalledWith(deTv)
 })
 
 it('el estado es la única marca con color: visitada sin vínculo pide atención', () => {

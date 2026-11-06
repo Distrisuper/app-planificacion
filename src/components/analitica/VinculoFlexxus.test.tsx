@@ -4,7 +4,7 @@ import VinculoFlexxus from './VinculoFlexxus'
 import type { IAltaRelevada } from '@/types/analitica'
 
 const alta = (over: Partial<IAltaRelevada> = {}): IAltaRelevada => ({
-    rotacionClienteId: 9, vendedor: { codigo: 'V 2', nombre: 'Gómez' }, estado: 'visitada', fechaVisita: '2026-09-21',
+    origen: 'planificacion', rotacionClienteId: 9, prospectoId: null, vendedor: { codigo: 'V 2', nombre: 'Gómez' }, estado: 'visitada', fechaVisita: '2026-09-21',
     detalle: { nombre: 'Piche' }, contacto: null, camposCargados: 1, camposTotal: 15, vinculo: null, ...over,
 })
 
@@ -36,6 +36,12 @@ it('vinculada: muestra el código y quién, sin input', () => {
     expect(screen.getByText(/vinculada al cliente 10034/i)).toBeInTheDocument()
     expect(screen.getByText(/admin@x.com/)).toBeInTheDocument()
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+})
+
+it('de televentas: se vincula aunque no haya visita, y no promete mover la ficha', () => {
+    render(<VinculoFlexxus alta={alta({ origen: 'televentas', rotacionClienteId: null, prospectoId: 4, estado: 'pendiente', fechaVisita: null })} onVincular={vi.fn()} />)
+    expect(screen.getByLabelText(/código de cliente en flexxus/i)).toBeInTheDocument()
+    expect(screen.queryByText(/la ficha del comercio pasa/i)).not.toBeInTheDocument()
 })
 
 it('no visitada: se vincula después de la visita, sin input', () => {

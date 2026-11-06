@@ -253,6 +253,13 @@ export const vincularAlta = async (rotacionClienteId: number, codigoParticularCl
     return res.data.data
 }
 
+/** El mismo vínculo para un alta de televentas (pl_tv_prospecto): mismo body, misma respuesta
+ *  (con `fichaMovida: 0`) y mismos errores, sin el gate de "no visitada". */
+export const vincularProspecto = async (prospectoId: number, codigoParticularCliente: string): Promise<IVincularAltaResult> => {
+    const res = await apiClient.put(`/planificacion/analitica/prospectos/${prospectoId}/vinculo`, { codigoParticularCliente })
+    return res.data.data
+}
+
 /**
  * "Datos del comercio" cargados. **El período es opcional**: sin `desde`/`hasta` devuelve todo
  * lo acumulado, porque la ficha se llena una vez por cliente y nunca más — no es actividad.

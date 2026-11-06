@@ -11,11 +11,12 @@ import {
     getVisitaDetalle,
     getVisitas,
     vincularAlta,
+    vincularProspecto,
     type IContactosArgs,
     type IObjecionesArgs,
     type IVisitasArgs,
 } from '@/api/analitica'
-import type { IAnaliticaFiltro } from '@/types/analitica'
+import type { IAltaRelevada, IAnaliticaFiltro } from '@/types/analitica'
 
 export const analiticaKeys = {
     resumen: (f: IAnaliticaFiltro) =>
@@ -185,12 +186,15 @@ export function useAltasRelevadas(filtro: IAnaliticaFiltro) {
     })
 }
 
-/** El vínculo cambia la fila del listado (y mueve la ficha, que ve la tab de fichas). */
+/** El vínculo cambia la fila del listado (y mueve la ficha, que ve la tab de fichas). Cada
+ *  origen tiene su endpoint: el id de la otra fuente viene null. */
 export function useVincularAlta() {
     const qc = useQueryClient()
     return useMutation({
-        mutationFn: ({ rotacionClienteId, codigo }: { rotacionClienteId: number; codigo: string }) =>
-            vincularAlta(rotacionClienteId, codigo),
+        mutationFn: ({ alta, codigo }: { alta: IAltaRelevada; codigo: string }) =>
+            alta.origen === 'televentas'
+                ? vincularProspecto(alta.prospectoId!, codigo)
+                : vincularAlta(alta.rotacionClienteId!, codigo),
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ['analitica', 'altas'] })
             qc.invalidateQueries({ queryKey: ['analitica', 'fichas'] })
