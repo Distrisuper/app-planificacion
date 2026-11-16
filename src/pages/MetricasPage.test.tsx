@@ -70,7 +70,9 @@ it('muestra productividad sobre la cartera y ventas contra el MMAA', async () =>
     expect(screen.getByTestId('objetivo-visitas')).toHaveTextContent('faltan 18')
     const fact = screen.getByTestId('anillo-facturacion')
     expect(fact).toHaveTextContent('90%')
-    expect(fact).toHaveTextContent('-10% vs MMAA')
+    const hoy = new Date()
+    const mesAnterior = `${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear() - 1}`
+    expect(fact).toHaveTextContent(`-10% vs ${mesAnterior}`)
 })
 
 // Contra el objetivo van los clientes con visita válida (el número de gerencia), no los de la
