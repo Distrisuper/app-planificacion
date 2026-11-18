@@ -245,8 +245,24 @@ it('iniciar visita captura la ubicación y manda el rotacionClienteId', async ()
         expect(api.iniciarVisita).toHaveBeenCalledWith({
             rotacionClienteId: 42,
             coordInicio: '-34.6,-58.4',
+            precisionM: 10,
             propuesta: [],
         }),
+    )
+})
+
+it('iniciar manda la precisión de la coordenada de inicio, redondeada a metros', async () => {
+    ;(geo.capturarUbicacion as any).mockResolvedValue({
+        ok: true,
+        coord: '-34.6,-58.4',
+        precisionM: 12.6,
+    })
+    renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: /iniciar visita/i }))
+    await waitFor(() =>
+        expect(api.iniciarVisita).toHaveBeenCalledWith(
+            expect.objectContaining({ coordInicio: '-34.6,-58.4', precisionM: 13 }),
+        ),
     )
 })
 
@@ -365,6 +381,7 @@ it('cerrar visita también exige ubicación', async () => {
     await waitFor(() =>
         expect(api.cerrarVisita).toHaveBeenCalledWith(55, {
             coordFinal: '-34.6,-58.4',
+            precisionM: 10,
         }),
     )
 })
@@ -526,6 +543,7 @@ it('confirmar en el mapa recién ahí arranca la visita', async () => {
         expect(api.iniciarVisita).toHaveBeenCalledWith({
             rotacionClienteId: 42,
             coordInicio: '-34.6,-58.4',
+            precisionM: 10,
             propuesta: [],
         }),
     )
@@ -565,6 +583,7 @@ it('directoAMapa con coordenadas salta la propuesta y va derecho al mapa', async
         expect(api.iniciarVisita).toHaveBeenCalledWith({
             rotacionClienteId: 42,
             coordInicio: '-34.6,-58.4',
+            precisionM: 10,
             propuesta: [],
         }),
     )
@@ -624,6 +643,7 @@ it('un cliente nuevo abre el mapa para ubicar el comercio y manda ese pin como c
         expect(api.iniciarVisita).toHaveBeenCalledWith({
             rotacionClienteId: 42,
             coordInicio: '-34.6,-58.4',
+            precisionM: 10,
             // El pin que puso el GPS: la única ubicación que va a tener este comercio.
             coordCliente: '-34.62000000,-58.42000000',
             propuesta: [],
@@ -871,6 +891,7 @@ it('reposicionar destraba el gate y manda coordCliente al iniciar', async () => 
         expect(api.iniciarVisita).toHaveBeenCalledWith({
             rotacionClienteId: 42,
             coordInicio: '-34.603,-58.4',
+            precisionM: 10,
             // Truncado a 8 decimales — mismo motivo que coordInicio (formatearCoord):
             // el regex del backend rechaza los ~15-17 decimales crudos de e.latlng.
             coordCliente: '-34.60300000,-58.40000000',
@@ -919,6 +940,7 @@ it('sin reposicionar, coordCliente no viaja en el payload', async () => {
         expect(api.iniciarVisita).toHaveBeenCalledWith({
             rotacionClienteId: 42,
             coordInicio: '-34.6,-58.4',
+            precisionM: 10,
             propuesta: [],
         }),
     )
@@ -945,6 +967,7 @@ it('cancelar el mapa descarta el reposicionamiento', async () => {
         expect(api.iniciarVisita).toHaveBeenCalledWith({
             rotacionClienteId: 42,
             coordInicio: '-34.6,-58.4',
+            precisionM: 10,
             propuesta: [],
         }),
     )
@@ -1641,21 +1664,66 @@ it('cerrar lejos del cliente no cierra: desvía al mapa', async () => {
     expect(api.cerrarVisita).not.toHaveBeenCalled()
 })
 
-it('cerrar cerca del cliente cierra directo, sin mapa', async () => {
-    // Mismo punto que el cliente: no hay nada que mostrar.
+it('cerrar cerca del cliente también pasa por el mapa, sin pedir otra posición', async () => {
+    // El vendedor quiere VER que está dentro del rango antes de cerrar: el mapa se abre
+    // siempre, aunque el GPS lo ubique encima del cliente.
+    mockGeolocacionEnVivo({ latitude: -34.6, longitude: -58.4, accuracy: 5 })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+    expect(geo.capturarUbicacion).not.toHaveBeenCalled()
+})
+
+it('cerrar desde el mapa graba el punto que el mapa mostraba, con su precisión', async () => {
+    // EL CASO DEL 17/11: antes, confirmar en el mapa recapturaba y esa segunda lectura
+    // podía saltar. Ahora viaja el fix que el vendedor estaba mirando, y no se pide otro.
+    mockGeolocacionEnVivo({ latitude: -34.6001, longitude: -58.4, accuracy: 5.4 })
+    ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
+    renderFlow({ cliente: clienteConCoords })
+
+    fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    await screen.findByTestId('mapa-iniciar-visita')
+    // Dos "Cerrar visita": el del sheet de atrás y el CTA verde del mapa, que va después.
+    const ctas = await screen.findAllByRole('button', { name: /^cerrar visita$/i })
+    expect(ctas).toHaveLength(2)
+    fireEvent.click(ctas[ctas.length - 1])
+
+    await waitFor(() =>
+        expect(api.cerrarVisita).toHaveBeenCalledWith(55, {
+            coordFinal: '-34.60010000,-58.40000000',
+            precisionM: 5,
+        }),
+    )
+    expect(geo.capturarUbicacion).not.toHaveBeenCalled()
+})
+
+it('si el mapa todavía no tiene ninguna lectura, confirmar pide una posición recién ahí', async () => {
+    // jsdom sin geolocation: el watch del mapa no da nada y el CTA dice que busca ubicación.
+    // Cerrar no tiene gate, así que se puede tocar igual; sin un punto a la vista, la
+    // coordenada sale de una captura en ese momento.
     ;(geo.capturarUbicacion as any).mockResolvedValue({
         ok: true,
         coord: '-34.6,-58.4',
-        precisionM: 10,
+        precisionM: 40,
     })
     ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
     renderFlow({ cliente: clienteConCoords })
 
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /buscando tu ubicación/i }))
+    const dialogo = await screen.findByRole('alertdialog')
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
+    fireEvent.click(within(dialogo).getByRole('button', { name: /^cerrar igual$/i }))
+
     await waitFor(() =>
-        expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }),
+        expect(api.cerrarVisita).toHaveBeenCalledWith(55, {
+            coordFinal: '-34.6,-58.4',
+            precisionM: 40,
+        }),
     )
-    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
 })
 
 it('desvía aunque el aviso de alejado esté apagado por un fix viejo', async () => {
@@ -1675,20 +1743,17 @@ it('desvía aunque el aviso de alejado esté apagado por un fix viejo', async ()
     expect(api.cerrarVisita).not.toHaveBeenCalled()
 })
 
-it('un fix demasiado impreciso no desvía: ante la duda no interrumpe', async () => {
-    // 1112 m de distancia pero 2000 m de precisión: no prueba lejanía. Es el agujero
-    // conocido y aceptado del spec — no convertirlo en desvío sin cambiar el spec.
-    ;(geo.capturarUbicacion as any).mockResolvedValue({
-        ok: true,
-        coord: '-34.61,-58.4',
-        precisionM: 2000,
-    })
+it('un fix demasiado impreciso también abre el mapa, que dice que sigue buscando', async () => {
+    // 1112 m de distancia pero 2000 m de precisión: no prueba ni cerca ni lejos. Antes no
+    // desviaba ("ante la duda no interrumpe"); ahora todo cierre pasa por el mapa, y ahí el
+    // CTA lo dice en vez de cerrar con un punto que nadie vio.
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 2000 })
     ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
     renderFlow({ cliente: clienteConCoords })
 
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
-    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalled())
-    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /buscando tu ubicación/i })).toBeEnabled()
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
 })
 
 it('un cliente sin coordenadas cierra directo: no hay contra qué medir', async () => {
@@ -1701,16 +1766,17 @@ it('un cliente sin coordenadas cierra directo: no hay contra qué medir', async 
     renderFlow({ cliente: { ...cliente, estado: 'en_curso', visitaId: 55 } })
 
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
-    await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalled())
+    await waitFor(() =>
+        expect(api.cerrarVisita).toHaveBeenCalledWith(55, {
+            coordFinal: '-34.61,-58.4',
+            precisionM: 10,
+        }),
+    )
     expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
 })
 
-it('cancelar el mapa de cierre no cierra la visita, y volver a tocar vuelve a medir', async () => {
-    ;(geo.capturarUbicacion as any).mockResolvedValue({
-        ok: true,
-        coord: '-34.61,-58.4',
-        precisionM: 10,
-    })
+it('cancelar el mapa de cierre no cierra la visita, y volver a tocar lo vuelve a abrir', async () => {
+    mockGeolocacionEnVivo({ latitude: -34.61, longitude: -58.4, accuracy: 10 })
     ;(api.cerrarVisita as any).mockResolvedValue({ visitaId: 55, ofrecimientosPendientes: 0 })
     renderFlow({ cliente: clienteConCoords })
 
@@ -1720,26 +1786,24 @@ it('cancelar el mapa de cierre no cierra la visita, y volver a tocar vuelve a me
     await waitFor(() => expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument())
     expect(api.cerrarVisita).not.toHaveBeenCalled()
 
-    // Segundo intento: mide de nuevo, y como se acercó, cierra derecho.
-    ;(geo.capturarUbicacion as any).mockResolvedValue({
-        ok: true,
-        coord: '-34.6,-58.4',
-        precisionM: 10,
-    })
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
-    await waitFor(() =>
-        expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }),
-    )
+    await screen.findByTestId('mapa-iniciar-visita')
+    expect(api.cerrarVisita).not.toHaveBeenCalled()
 })
 
-it('con el permiso denegado no cierra ni abre el mapa', async () => {
+it('con el permiso denegado no cierra: el mapa se abre y confirmar avisa el bloqueo', async () => {
+    // El mapa ya no espera una captura para abrirse. Sin ninguna lectura, confirmar pide la
+    // posición en ese momento, y el permiso denegado corta ahí, como en cualquier cierre.
     ;(geo.capturarUbicacion as any).mockResolvedValue({ ok: false, motivo: 'denegado' })
     const { onGeoBloqueada } = renderFlow({ cliente: clienteConCoords })
 
     fireEvent.click(await screen.findByRole('button', { name: /cerrar visita/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /buscando tu ubicación/i }))
+    const dialogo = await screen.findByRole('alertdialog')
+    fireEvent.click(within(dialogo).getByRole('button', { name: /^cerrar igual$/i }))
+
     await waitFor(() => expect(onGeoBloqueada).toHaveBeenCalledWith('denegado'))
     expect(api.cerrarVisita).not.toHaveBeenCalled()
-    expect(screen.queryByTestId('mapa-iniciar-visita')).not.toBeInTheDocument()
 })
 
 it('cerrar igual desde el mapa exige confirmar, y confirmar cierra una sola vez', async () => {
@@ -1763,7 +1827,12 @@ it('cerrar igual desde el mapa exige confirmar, y confirmar cierra una sola vez'
 
     fireEvent.click(screen.getByRole('button', { name: /^cerrar igual$/i }))
     await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledTimes(1))
-    expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.61,-58.4' })
+    // La del watch del mapa (formateada), no la de `capturarUbicacion`, que ni se llama.
+    expect(api.cerrarVisita).toHaveBeenCalledWith(55, {
+        coordFinal: '-34.61000000,-58.40000000',
+        precisionM: 10,
+    })
+    expect(geo.capturarUbicacion).not.toHaveBeenCalled()
 })
 
 // Este test usa `within`: agregarlo al import de '@testing-library/react' de la cabecera.
@@ -1964,7 +2033,7 @@ describe('Plan CUPO al registrar la visita', () => {
         fireEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
 
         await waitFor(() =>
-            expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4', cupo: true }),
+            expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4', precisionM: 10, cupo: true }),
         )
     })
 
@@ -1975,7 +2044,7 @@ describe('Plan CUPO al registrar la visita', () => {
         await screen.findByRole('checkbox', { name: 'Acepta' })
         fireEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
 
-        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }))
+        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4', precisionM: 10 }))
     })
 
     it('al cerrar con cupo vuelve a pedir el CUPO del cliente', async () => {
@@ -2003,7 +2072,7 @@ describe('Plan CUPO al registrar la visita', () => {
         fireEvent.click(screen.getByRole('button', { name: /^cerrar igual$/i }))
 
         await waitFor(() =>
-            expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.61,-58.4', cupo: true }),
+            expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.61000000,-58.40000000', precisionM: 10, cupo: true }),
         )
     })
 
@@ -2022,7 +2091,7 @@ describe('Plan CUPO al registrar la visita', () => {
         expect(within(objetivos).getByLabelText('Tramo proyectado')).toBeInTheDocument()
 
         fireEvent.click(screen.getByRole('button', { name: /cerrar visita/i }))
-        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }))
+        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4', precisionM: 10 }))
     })
 
     it('si el CUPO falla no aparece el recuadro y la visita se cierra igual', async () => {
@@ -2033,7 +2102,7 @@ describe('Plan CUPO al registrar la visita', () => {
         await waitFor(() => expect(api.getCupoCliente).toHaveBeenCalled())
         expect(screen.queryByRole('group', { name: 'CUPO' })).not.toBeInTheDocument()
         fireEvent.click(cerrar)
-        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4' }))
+        await waitFor(() => expect(api.cerrarVisita).toHaveBeenCalledWith(55, { coordFinal: '-34.6,-58.4', precisionM: 10 }))
     })
 
     it('mientras el CUPO carga no aparece el recuadro', async () => {

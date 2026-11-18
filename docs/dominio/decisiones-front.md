@@ -129,15 +129,31 @@ estado actual.
 
 ## Cerrar la visita
 
-- **Cerrar no tiene gate de distancia, pero pasa por el mapa si la coordenada definitiva lo ubica
-  lejos.** `VisitaFlow.onCerrarVisita` mide con el `geo` de `capturarUbicacion()` (el mismo que se
-  persiste como `coord_final`) y `estaFueraDeRango`: cerca cierra directo; lejos abre `MapaVisita`
-  en `modo='cerrar'` y llama a `evaluarFix`. El disparador **no** es `alejado` (su watch se congela
-  en background). El CTA de `'cerrar'` **nunca se deshabilita**: dice `Cerrar igual · estás a N m`
-  (o `Cerrar igual` si el fix no prueba lejanía) con `ConfirmDialog`, o `Cerrar visita` directo si
-  el punto cae dentro del círculo (`cercaSegunFix`, `distancia ≤ radio`; `avisarLejos`,
-  `fixNoConcluyente`). La decisión viaja por `onCerrar(requiereConfirmacion)`; no recalcularla en
-  `VisitaFlow`.
+- **Cerrar no tiene gate de distancia, pero todo cierre pasa por el mapa, y se graba el punto que
+  el vendedor ve.** `VisitaFlow.onCerrarVisita` abre siempre `MapaVisita` en `modo='cerrar'` si el
+  cliente de la visita en curso tiene coordenada (sin coordenada captura con `conUbicacion` y
+  cierra directo). Antes capturaba y desviaba solo si `estaFueraDeRango`, y al confirmar en el mapa
+  recapturaba: un salto del GPS (150–250 m con buena precisión aparente) cerraba fuera del radio
+  sin que el vendedor lo viera, y la segunda lectura podía saltar de nuevo.
+- **El CTA de `'cerrar'` sale del fix que el mapa muestra** (`estadoCierre`), no de `alejado`, y
+  **nunca se deshabilita**: `d + p ≤ radio` (`cercaProbada`) → `Cerrar visita` verde, sin
+  confirmación; `d − p > radio` → `Cerrar igual · estás a N m` con `ConfirmDialog`; cualquier otra
+  lectura, o ninguna todavía → `Buscando tu ubicación… · Cerrar igual`, también con confirmación.
+  El verde exige `d + p` y no `d ≤ radio` porque ese punto es el que se graba: un fix de red con
+  cientos de metros de margen no prueba que el vendedor esté en el local aunque caiga adentro.
+  El costo es un toque más (la confirmación) bajo techo con un fix grueso.
+- **`onCerrar(requiereConfirmacion, fix)` entrega el fix que se ve**: `vendedorFixRef`, el que
+  eligió `aceptarFix` y pinta el punto y la distancia (no el último crudo del watch, que pudo
+  haberse descartado). `VisitaFlow` lo congela al tocar el CTA (`lecturaCierre`; el watch sigue
+  debajo del diálogo) y lo graba como `coord_final` con su precisión, sin pedir otra posición. Si
+  el último refresco falló (`errorActualizando`), se graba igual el que se ve: el cartel ya avisa
+  que es la última conocida. Única excepción: sin ningún fix en el mapa (GPS mudo o fallado),
+  confirmar captura con `conUbicacion`, que además maneja el permiso denegado. El diálogo arma su
+  texto con esa misma lectura. No recalcular la decisión ni el fix en `VisitaFlow`.
+- **La precisión viaja con la coordenada**: `precisionM` (metros enteros, `Math.round` de
+  `coords.accuracy`) en el body de iniciar (`POST /visitas`, junto a `coordInicio`) y de
+  `PUT /visitas/:id/cerrar` (junto a `coordFinal`). Es opcional en el back: si la lectura no la
+  trae, la clave se omite (`conPrecision`).
 - **No hay tiempo mínimo para cerrar.** El gate de 15 minutos se sacó a propósito; no reponerlo.
   `useVisitaActiva` / `GET /planificacion/visitas/activa` siguen existiendo para el cronómetro y
   la agenda. La validez por duración es post-hoc, de analítica: el criterio vive en
@@ -170,7 +186,7 @@ estado actual.
 - **Plan CUPO a nivel visita, en el pie de `VisitaSheet`** (`RecuadroCupo`, mismo diseño que
   "Registrar contacto" de televentas). Los objetivos vienen de `GET /planificacion/cupo`; el front
   no calcula nada. La aceptación viaja con el cierre (`cupo: true`, solo si tildó Acepta y el
-  cliente no estaba adherido; si no, la clave se omite) y sobrevive al desvío por el mapa
+  cliente no estaba adherido; si no, la clave se omite) y sobrevive al paso por el mapa
   (`cierrePendiente`). El tilde es por `visitaId`: minimizar no lo pierde. CUPO no cambia el gate
   de cierre: si el GET carga o falla, el recuadro no aparece. En "No visité" solo se ve el de un
   cliente adherido, informativo. Al cerrar con `cupo` se invalida la query del cupo.

@@ -24,11 +24,11 @@ interface MapaVisitaProps {
      *  sin círculo de rango. El punto elegido sale por `onReposicionar`, igual que un
      *  ajuste manual, así el llamador recibe una coordenada aunque el vendedor no toque
      *  nada.
-     *  'cerrar' = el vendedor tocó "Cerrar visita" y la coordenada definitiva lo ubica
-     *  lejos del cliente. Es 'consulta' con CTA: se le impone para que no cierre lejos
-     *  sin darse cuenta, y "Recalcular posición" es su salida si el GPS se equivocó.
-     *  NO es un gate — el CTA nunca se deshabilita por distancia. Ver
-     *  docs/superpowers/specs/2026-09-21-confirmar-cierre-alejado-en-el-mapa-design.md. */
+     *  'cerrar' = el vendedor tocó "Cerrar visita" (todo cierre de un cliente con
+     *  coordenada pasa por acá). Es 'consulta' con CTA: ve dónde lo ubica el GPS respecto
+     *  del círculo, y el fix que se ve es el que se graba (`onCerrar`). "Recalcular
+     *  posición" es su salida si el GPS se equivocó. NO es un gate — el CTA nunca se
+     *  deshabilita. Ver docs/dominio/decisiones-front.md, "Cerrar la visita". */
     modo?: 'iniciar' | 'consulta' | 'ubicar' | 'cerrar'
     nombreCliente: string
     /** Línea de identidad bajo el título: `#10034 · DERQUI AUTOPARTES SRL`. La arma
@@ -46,15 +46,16 @@ interface MapaVisitaProps {
     error?: string | null
     /** Sólo se usa en modo 'iniciar'. */
     onIniciar?: () => void
-    /** Sólo en modo 'cerrar'. Recibe si el cierre necesita confirmarse: la decisión la
-     *  toma ESTE componente (ver `avisarLejos`) y no el llamador, porque es la misma que
-     *  pinta el CTA — separarlas es lo que dejaba un botón verde "Cerrar visita" abriendo
-     *  igual el diálogo de "¿cerrar lejos?". El diálogo lo muestra el llamador. */
-    onCerrar?: (requiereConfirmacion: boolean) => void
-    /** El aviso de "te alejaste" vigente, de `useAlejadoDelCliente`. Es condición
-     *  NECESARIA para advertir, no suficiente: si el fix ubica al vendedor dentro del
-     *  círculo, el mapa no advierte nada por más que el aviso siga prendido. Ver
-     *  `cercaSegunFix`. */
+    /** Sólo en modo 'cerrar'. Recibe si el cierre necesita confirmarse y el fix que el
+     *  mapa estaba mostrando (null = todavía ninguno). Las dos cosas las da ESTE componente
+     *  (ver `estadoCierre`) y no el llamador, porque son las que pintan el CTA y el punto:
+     *  el llamador graba ese fix tal cual, sin pedir otra posición. El diálogo lo muestra
+     *  el llamador. */
+    onCerrar?: (requiereConfirmacion: boolean, fix: Fix | null) => void
+    /** Sólo en modo 'consulta': el aviso de "te alejaste" vigente, de
+     *  `useAlejadoDelCliente`. Es condición NECESARIA para advertir, no suficiente: si el
+     *  fix ubica al vendedor dentro del círculo, el mapa no advierte nada por más que el
+     *  aviso siga prendido. Ver `cercaSegunFix`. 'cerrar' no lo usa: decide con su fix. */
     alejado?: boolean
     /** Sólo en modo 'cerrar': el cierre está en vuelo. Paralelo a `iniciando` y no un
      *  renombre — los dos modos nunca están montados a la vez, pero un prop compartido
@@ -91,9 +92,10 @@ const ICONO_VENDEDOR = L.divIcon({
 })
 
 /**
- * Mapa full-screen previo a iniciar la visita: pin del cliente + ubicación propia en vivo
- * (`watchPosition`), solo visual — no se persiste ni se manda al backend. La coordenada real
- * que sí se guarda se sigue capturando con `capturarUbicacion()` al tocar "Iniciar visita".
+ * Mapa full-screen de la visita: pin del cliente + ubicación propia en vivo
+ * (`watchPosition`). Al iniciar es solo visual: la coordenada que se guarda se captura con
+ * `capturarUbicacion()` al tocar "Iniciar visita". Al cerrar ('cerrar'), en cambio, el fix
+ * que se ve ES el que se graba: viaja por `onCerrar`.
  */
 export default function MapaVisita({
     open,
@@ -255,14 +257,34 @@ export default function MapaVisita({
      * y el aviso de "te alejaste" siguen con la histéresis intacta.
      */
     const cercaSegunFix = posicion !== null && posicion.distanciaM <= RADIO_INICIO_METROS
-    /** Hay aviso vigente y este fix no lo desmiente: recién ahí se advierte. */
+    /** Hay aviso vigente y este fix no lo desmiente: recién ahí se advierte. Solo en
+     *  'consulta': 'cerrar' decide con su propio fix (`cercaProbada`). */
     const avisarLejos = alejado === true && !cercaSegunFix
+    /**
+     * 'cerrar': el punto Y todo su margen caen dentro del círculo (`d + p <= radio`, la misma
+     * salida que la histéresis de `useAlejadoDelCliente`). Más estricto que `cercaSegunFix`
+     * a propósito: acá el fix que se ve es el que se graba como `coord_final`, así que el
+     * verde tiene que significar que la lectura prueba la cercanía, no que cayó adentro por
+     * casualidad con cientos de metros de margen.
+     */
+    const cercaProbada =
+        posicion !== null && posicion.distanciaM + posicion.precisionM <= RADIO_INICIO_METROS
     /**
      * Está fuera del círculo pero el fix no alcanza para afirmarlo (`d − p <= radio`): se
      * muestra la distancia CON su margen en vez de darla por buena en verde, que era la
      * otra mitad de la contradicción. Explica además para qué sirve "Recalcular posición".
+     * En 'cerrar' es todo fix que no prueba ni cerca ni lejos.
      */
-    const fixNoConcluyente = avisarLejos && posicion !== null && !posicion.fueraDeRango
+    const fixNoConcluyente = esCerrar
+        ? posicion !== null && !cercaProbada && !posicion.fueraDeRango
+        : avisarLejos && posicion !== null && !posicion.fueraDeRango
+    /** Estado del CTA de 'cerrar', del fix que se ve: 'buscando' cubre también "todavía
+     *  ningún fix" (calculando o GPS fallado). */
+    const estadoCierre: 'cerca' | 'lejos' | 'buscando' = cercaProbada
+        ? 'cerca'
+        : posicion?.fueraDeRango
+          ? 'lejos'
+          : 'buscando'
 
     useEffect(() => {
         if (!open || !mapRef.current) return
@@ -702,29 +724,33 @@ export default function MapaVisita({
                  *  vendedor pudo irse del local por motivos legítimos, y bloquearlo dejaría
                  *  visitas abiertas para siempre), y un GPS que no responde no puede trabar
                  *  un cierre. El desvío hasta acá ya cumplió su función: que lo vea. */}
+                {/* Le pasa al llamador el fix que está mostrando (`vendedorFixRef`, el que
+                 *  eligió `aceptarFix` y pinta el punto): ese es el que se graba. */}
                 {esCerrar && (
                     <Button
-                        onClick={() => onCerrar?.(avisarLejos)}
+                        onClick={() =>
+                            onCerrar?.(estadoCierre !== 'cerca', vendedorFixRef.current)
+                        }
                         loading={cerrando}
                         className={
-                            avisarLejos
-                                ? 'h-12 w-full bg-[#B45309] text-[15px] hover:bg-[#92400E]'
-                                : 'h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90'
+                            estadoCierre === 'cerca'
+                                ? 'h-12 w-full bg-dsgreen text-[15px] hover:bg-dsgreen/90'
+                                : estadoCierre === 'lejos'
+                                  ? 'h-12 w-full bg-[#B45309] text-[15px] hover:bg-[#92400E]'
+                                  : 'h-12 w-full bg-[#213D82] text-[15px] hover:bg-[#213D82]/90'
                         }
                     >
                         {cerrando
                             ? 'Cerrando…'
-                            : avisarLejos
-                              ? // Los metros van en el botón solo cuando ESTE fix prueba
-                                // la lejanía. Sin fix todavía no hay ninguno que mostrar,
-                                // y con un fix no concluyente mostrarlo daba el absurdo
-                                // "Cerrar igual · estás a 0 m" — ahí el margen ya lo
-                                // explica el texto de arriba. El botón igual va en su cara
-                                // de "lejos": es el estado con el que se entró al mapa.
-                                posicion && posicion.fueraDeRango
-                                  ? `Cerrar igual · estás a ${formatDistancia(posicion.distanciaM)}`
-                                  : 'Cerrar igual'
-                              : 'Cerrar visita'}
+                            : estadoCierre === 'cerca'
+                              ? 'Cerrar visita'
+                              : // Los metros van en el botón solo cuando ESTE fix prueba la
+                                // lejanía. Con un fix no concluyente (o ninguno) mostrarlos
+                                // daba el absurdo "Cerrar igual · estás a 0 m": el botón
+                                // dice que sigue buscando y el margen lo explica el texto.
+                                estadoCierre === 'lejos' && posicion
+                                ? `Cerrar igual · estás a ${formatDistancia(posicion.distanciaM)}`
+                                : 'Buscando tu ubicación… · Cerrar igual'}
                     </Button>
                 )}
             </div>
