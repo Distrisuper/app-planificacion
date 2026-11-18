@@ -19,4 +19,9 @@ visita: mapa y GPS" y "Cerrar la visita". Lo que más se rompe:
 - Todo fix pasa por `aceptarFix` (gana el mejor, no el último); toda posición a demanda pasa por
   `obtenerFix()`. El `maximumAge > 0` de `geolocation.ts` no se toca.
 - El aviso "te alejaste" tiene histéresis simétrica (entra con `d − p > radio`, sale con
-  `d + p ≤ radio`). El desvío al mapa al cerrar lo decide la coordenada definitiva, no `alejado`.
+  `d + p ≤ radio`).
+- Todo cierre de un cliente con coordenada pasa por el mapa `'cerrar'`, y se graba el fix que el
+  mapa muestra (`onCerrar(requiereConfirmacion, fix)`): no recapturar al confirmar. Solo sin
+  ningún fix se captura con `conUbicacion`. El CTA sale de ese fix, no de `alejado`.
+- `precisionM` (metros enteros) viaja en iniciar y cerrar junto a la coordenada; se omite si
+  no hay.

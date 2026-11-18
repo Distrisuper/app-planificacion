@@ -540,6 +540,9 @@ export interface IIniciarVisitaDTO {
     rotacionClienteId: number
     /** Obligatoria: el backend rechaza null con COORD_REQUERIDA. */
     coordInicio: string
+    /** Precisión de `coordInicio` en metros enteros (`coords.accuracy` redondeado). Opcional
+     *  en el back; se omite si la lectura no la trajo. */
+    precisionM?: number
     /** Solo si el vendedor reposicionó al cliente en el mapa (MapaVisita) — la
      *  posición que ÉL confirmó, no la del warehouse. Formato "lat,lng", igual que
      *  coordInicio. */
@@ -551,6 +554,9 @@ export interface IIniciarVisitaDTO {
 /** Sin motivoIds: al cerrar una visita el resultado comercial vive en los ofrecimientos. */
 export interface ICerrarVisitaDTO {
     coordFinal: string
+    /** Precisión de `coordFinal` en metros enteros: la del fix que el mapa mostraba al
+     *  cerrar. Opcional en el back; se omite si la lectura no la trajo. */
+    precisionM?: number
     /** Texto libre del vendedor. Se omite cuando no escribió nada — ver useCerrarVisita.
      *  Este es el ÚNICO momento en que se puede mandar: `pl_resolucion` es inmutable. */
     observaciones?: string
