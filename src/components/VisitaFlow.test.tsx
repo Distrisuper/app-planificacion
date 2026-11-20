@@ -1956,6 +1956,22 @@ describe('Plan CUPO al registrar la visita', () => {
         expect(within(objetivos).getByText('$ 2.250.000')).toBeInTheDocument()
     })
 
+    it('al tildar Acepta el recuadro CUPO se pone verde y al destildar vuelve a blanco', async () => {
+        ;(api.getCupoCliente as any).mockResolvedValue(cupoSinAdherir)
+        renderFlow({ cliente: enCurso })
+
+        const recuadro = await screen.findByRole('group', { name: 'CUPO' })
+        const acepta = within(recuadro).getByRole('checkbox', { name: 'Acepta' })
+        expect(recuadro).not.toHaveClass('bg-estado-ok-fondo')
+
+        fireEvent.click(acepta)
+        expect(recuadro).toHaveClass('bg-estado-ok-fondo')
+        expect(acepta).toBeChecked()
+
+        fireEvent.click(acepta)
+        expect(recuadro).not.toHaveClass('bg-estado-ok-fondo')
+    })
+
     it('con Acepta tildado el cierre manda cupo: true', async () => {
         ;(api.getCupoCliente as any).mockResolvedValue(cupoSinAdherir)
         renderFlow({ cliente: enCurso })

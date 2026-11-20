@@ -33,6 +33,8 @@ export default function RecuadroCupo({ cupo, acepta = false, onAcepta, className
     if (!cupo) return null
     const adherido = cupo.adherido
     if (!adherido && !onAcepta) return null
+    // Tildar Acepta lo pinta igual que adherido, para que el vendedor vea que quedó aceptado.
+    const verde = adherido || acepta
 
     return (
         <div className={className}>
@@ -41,12 +43,12 @@ export default function RecuadroCupo({ cupo, acepta = false, onAcepta, className
                 aria-label="CUPO"
                 className={cn(
                     'flex h-9 items-center gap-2.5 rounded-lg border-[1.5px] pl-2.5 pr-1',
-                    adherido
+                    verde
                         ? 'border-estado-ok-texto bg-estado-ok-fondo text-estado-ok-texto'
                         : 'border-primario bg-tarjeta text-tinta',
                 )}
             >
-                <span className={cn('text-[13px] font-bold tracking-wide', !adherido && 'text-primario')}>
+                <span className={cn('text-[13px] font-bold tracking-wide', !verde && 'text-primario')}>
                     CUPO
                 </span>
                 {adherido ? (
@@ -57,7 +59,7 @@ export default function RecuadroCupo({ cupo, acepta = false, onAcepta, className
                     <label className="flex items-center gap-1.5 text-[12.5px] font-semibold">
                         <input
                             type="checkbox"
-                            className="h-4 w-4 accent-primario"
+                            className={cn('h-4 w-4', acepta ? 'accent-estado-ok-texto' : 'accent-primario')}
                             checked={acepta}
                             onChange={e => onAcepta?.(e.target.checked)}
                         />
