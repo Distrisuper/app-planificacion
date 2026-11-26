@@ -16,6 +16,10 @@ export default defineConfig({
         // corrida. Con la mitad de los cores la suite tarda parecido y da el mismo
         // resultado siempre. Porcentaje y no un número fijo, para que escale en CI.
         maxWorkers: '50%',
+        // Node 26 trae su propio localStorage global (Web Storage) y tapa el de jsdom: sin
+        // este flag, todo test que toca localStorage falla con "Cannot read properties of
+        // undefined (reading 'setItem')". Requiere Node >= 25 (ver .nvmrc).
+        execArgv: ['--no-webstorage'],
         // Los 5000ms que trae vitest de fábrica son para tests unitarios; acá cada test
         // monta React + jsdom + React Query, y sumados dan ~170s de trabajo repartidos
         // entre workers. Con la máquina ocupada, un test que aislado corre en 200ms
