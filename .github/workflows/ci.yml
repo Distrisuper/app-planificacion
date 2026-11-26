@@ -1,18 +1,44 @@
 name: CI
 
-# Corre en todo pull_request (drafts incluidos) y en push a master.
+# Corre en los PR listos para revisión (al abrirlos, al pasar de draft a ready y en cada commit
+# posterior); mientras el PR es draft los jobs se saltean. No corre en push a master: el check ya
+# pasó en el PR y Vercel buildea al desplegar.
 # Lo mismo que hay que tener en verde antes de abrir el PR: npm run check (lint, tsc, vitest,
 # tests del guard) y el build de producción. Playwright (e2e) no entra: necesita levantar la app.
 on:
   pull_request:
-  push:
-    branches: [master]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+# Un commit nuevo cancela la corrida anterior del mismo PR.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check:
+    if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
+    outputs:
+      hooks: ${{ steps.cambios.outputs.hooks }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # El merge commit del PR y su primer padre (la base): alcanza para saber qué cambió.
+          fetch-depth: 2
+
+      - id: cambios
+        name: ¿Cambian los hooks?
+        # También este workflow: un cambio acá tiene que probarse en Windows.
+        run: |
+          cambios=$(git diff --name-only HEAD^1 HEAD)
+          if grep -qE '^(\.claude/hooks/|\.githooks/|\.github/workflows/ci\.yml$)' <<< "$cambios"; then
+            echo "hooks=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "hooks=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: actions/setup-node@v4
         with:
@@ -24,8 +50,13 @@ jobs:
       - run: npm run build
 
   # El guard y el pre-push corren en las máquinas de quien trabaja, también en Windows (Git
-  # Bash, PowerShell). Solo sus tests: lint, tsc y vitest no dependen del sistema.
+  # Bash, PowerShell). Solo sus tests (node --test, sin dependencias: no hace falta npm ci), y
+  # solo si el PR toca .claude/hooks/, .githooks/ o este workflow. Es un job salteado, no un workflow filtrado
+  # por paths, para que si algún día es check requerido no quede "pending": salteado cuenta como
+  # aprobado.
   hooks-windows:
+    needs: check
+    if: ${{ needs.check.outputs.hooks == 'true' }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +64,5 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 26
-          cache: npm
 
-      - run: npm ci
       - run: npm run check:hooks
